@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-height: 100vh;
+  --vh: 1vh;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Ensure proper height on mobile */
+.h-screen {
+  height: var(--app-height);
+}
+
+.min-h-screen {
+  min-height: var(--app-height);
+}
+
+/* Custom height calculation using CSS custom property */
+.h-dynamic {
+  height: calc(var(--vh, 1vh) * 100);
+}
+
+/* Prevent pull-to-refresh and other unwanted behaviors */
+* {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure content is properly centered and scaled */
+.responsive-container {
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+/* Proper scaling for game elements */
+.game-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure proper aspect ratio maintenance */
+.aspect-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 150%; /* 2:3 aspect ratio */
+  height: 0;
+  aspect-ratio: 1;
+  height: auto;
+}
+
+.aspect-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Animation keyframes */
+@keyframes pulse {
+  0% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+}
+
+/* Drop shadow effects */
+.drop-shadow-glow {
+  filter: drop-shadow(0 0 8px rgba(0, 255, 0, 0.5));
+}
+
+.drop-shadow-glow-sm {
+  filter: drop-shadow(0 0 4px rgba(0, 255, 0, 0.3));
+}
+
+.drop-shadow-glow-green {
+  filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.5));
+}
+
+.drop-shadow-glow-yellow {
+  filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.5));
+}
+
+/* Prevent text selection */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Smooth transitions */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Responsive text sizes */
+@media (max-width: 640px) {
+  .text-responsive {
+    font-size: calc(14px + (16 - 14) * ((100vw - 300px) / (640 - 300)));
+  }
+}
+
+/* Fix for iOS height issues */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available;
+  }
+
+  .min-h-screen {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Ensure text scales appropriately */
+@media (max-width: 640px) {
+  .text-xl {
+    font-size: 1rem;
+  }
+  .text-2xl {
+    font-size: 1.25rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .text-xl {
+    font-size: 1.25rem;
+  }
+  .text-2xl {
+    font-size: 1.5rem;
+  }
+}
+
+/* Vertical height-based responsive adjustments */
+
+@media (max-aspect-ratio: 1 / 1) {
+  .w-[80vmin] {
+    width: 80vw;
+  }
+  .h-[80vmin] {
+    height: 80vw;
+  }
+}
+
+@media (min-aspect-ratio: 1 / 1) {
+  .w-[80vmin] {
+    width: 80vh;
+  }
+  .h-[80vmin] {
+    height: 80vh;
+  }
+}
+
