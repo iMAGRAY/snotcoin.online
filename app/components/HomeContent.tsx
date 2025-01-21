@@ -124,7 +124,11 @@ function HomeContentInner() {
     const initializeGame = async () => {
       if (isBrowser) {
         try {
-          if (typeof window === "undefined" || !window.Telegram?.WebApp) {
+          if (typeof window === "undefined") {
+            throw new Error("Window is undefined")
+          }
+
+          if (!window.Telegram?.WebApp) {
             throw new Error("Telegram WebApp is not available")
           }
 

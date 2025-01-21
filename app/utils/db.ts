@@ -274,18 +274,15 @@ export async function updateGameState(telegramId: number, updates: Partial<GameS
 export async function saveOrUpdateUser(user: User): Promise<User> {
   const { data, error } = await supabase
     .from("users")
-    .upsert(
-      {
-        telegram_id: user.telegram_id,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        photo_url: user.photo_url,
-        language_code: user.language_code,
-        auth_date: user.auth_date,
-      },
-      { onConflict: "telegram_id" },
-    )
+    .upsert({
+      telegram_id: user.telegram_id,
+      username: user.username,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      photo_url: user.photo_url,
+      language_code: user.language_code,
+      auth_date: user.auth_date,
+    })
     .select()
     .single()
 

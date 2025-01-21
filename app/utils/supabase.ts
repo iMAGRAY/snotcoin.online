@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import type { GameState } from "../types/gameTypes"
+import type { GameState, GameStateChange } from "../types/gameTypes"
 import { compress, decompress } from "lz-string"
 import { encrypt, decrypt } from "./encryption"
 
@@ -70,7 +70,7 @@ export async function loadGameStateFromSupabase(userId: string): Promise<GameSta
   }
 }
 
-export async function syncChangesToSupabase(userId: string, changes: any[]): Promise<void> {
+export async function syncChangesToSupabase(userId: string, changes: GameStateChange[]): Promise<void> {
   try {
     const { error } = await supabase.from("game_state_changes").insert(
       changes.map((change) => ({
