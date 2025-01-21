@@ -1,4 +1,4 @@
-import type { GameState, GameStateChange } from "../types/gameTypes"
+import type { GameState } from "../types/gameTypes"
 import { compress, decompress } from "lz-string"
 import { encrypt, decrypt } from "./encryption"
 import { openDB, type DBSchema, type IDBPDatabase } from "idb"
@@ -48,7 +48,7 @@ export async function saveGameState(gameState: GameState): Promise<void> {
   const compressedState = compress(serializedState)
   const encryptedState = encrypt(compressedState)
 
-  await db.put("gameState", stateToSave, "current")
+  await db.put("gameState", { key: "current", value: stateToSave })
 
   if (typeof window !== "undefined" && window.Telegram?.WebApp?.CloudStorage) {
     try {

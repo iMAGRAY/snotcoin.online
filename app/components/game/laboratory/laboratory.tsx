@@ -28,7 +28,7 @@ const Laboratory: React.FC = () => {
   const [notification, setNotification] = useState<NotificationType>(null)
   const [isContainerClicked, setIsContainerClicked] = useState(false)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const { state, dispatch } = useGameContext()
+  const { dispatch } = useGameContext()
 
   const handleContainerClick = useCallback(() => {
     if (gameState.energy > 0) {

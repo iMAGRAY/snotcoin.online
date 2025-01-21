@@ -18,19 +18,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(gameReducer, initialState)
 
   const saveGame = useCallback(async () => {
-    if (state.user) {
-      await saveGameState(state.user.telegram_id.toString())
-    }
-  }, [state.user])
+    await saveGameState(state)
+  }, [state])
 
   const loadGame = useCallback(async () => {
-    if (state.user) {
-      const loadedState = await loadGameState()
-      if (loadedState) {
-        dispatch({ type: "LOAD_GAME_STATE", payload: loadedState })
-      }
+    const loadedState = await loadGameState()
+    if (loadedState) {
+      dispatch({ type: "LOAD_GAME_STATE", payload: loadedState })
     }
-  }, [state.user, dispatch])
+  }, [dispatch])
 
   useEffect(() => {
     const user = getTelegramUser()
@@ -92,5 +88,20 @@ export const useGameContext = () => {
     throw new Error("useGameContext must be used within a GameProvider")
   }
   return context
+}
+
+export const useWallet = () => {
+  const { state } = useGameContext()
+  return {
+    wallet: state.wallet,
+    generateWallet: async () => {
+      // Implement wallet generation logic here
+      console.log("Generating wallet...")
+    },
+    getEthBalance: async () => {
+      // Implement balance fetching logic here
+      console.log("Fetching ETH balance...")
+    },
+  }
 }
 

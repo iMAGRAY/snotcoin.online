@@ -29,10 +29,12 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const { wallet, generateWallet, getEthBalance } = {
-    wallet: null,
-    generateWallet: async () => {},
-    getEthBalance: async () => {},
+  const wallet = gameState.wallet
+  const generateWallet = async () => {
+    /* Implement wallet generation logic */
+  }
+  const getEthBalance = async (address: string) => {
+    /* Implement balance fetching logic */
   }
   const [activeSection, setActiveSection] = useState<string | null>(null)
 
@@ -82,7 +84,7 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
 
   useEffect(() => {
     if (wallet && wallet.address) {
-      getEthBalance(wallet.address).catch((error) => {
+      getEthBalance(wallet.address).catch((error: Error) => {
         console.error("Failed to get ETH balance:", error)
         // You might want to show an error message to the user here
       })
@@ -149,6 +151,8 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                   src={
                     gameState.user?.photo_url ||
                     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile-usMOz4iK8UmmhBOtQJI34mXX8uXQhT.webp" ||
+                    "/placeholder.svg" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||

@@ -2,12 +2,12 @@ import type React from "react"
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../../../contexts/TranslationContext"
-// import { useWallet } from '../../../../contexts/GameContext';
+import { useWallet } from "../../../../contexts/GameContext"
 import { Eye, EyeOff } from "lucide-react"
 
 const SettingsModal: React.FC = () => {
   const { t } = useTranslation()
-  const { wallet } = { wallet: null } // Dummy wallet implementation
+  const { wallet } = useWallet()
   const [showSeedPhrase, setShowSeedPhrase] = useState(false)
 
   const toggleSeedPhrase = () => {

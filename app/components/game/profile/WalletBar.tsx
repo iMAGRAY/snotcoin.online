@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import Image from "next/image"
 import { RefreshCw, Zap, ArrowDownCircle } from "lucide-react"
 import { useTranslation } from "../../../contexts/TranslationContext"
-import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { useGameState, useGameDispatch, useWallet } from "../../../contexts/GameContext"
 import { formatSnotValue } from "../../../utils/gameUtils"
 
 interface WalletBarProps {
@@ -14,7 +14,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const { wallet, getEthBalance, ethBalance } = { wallet: null, getEthBalance: async () => {}, ethBalance: "0" }
+  const { wallet, getEthBalance, ethBalance } = useWallet()
 
   return (
     <motion.div
