@@ -1,7 +1,7 @@
 import type React from "react"
 import { createContext, useContext, useReducer, useEffect, useCallback } from "react"
 import { gameReducer } from "../reducers/gameReducer"
-import { type GameState, type Action, initialState } from "../types/gameTypes"
+import { type GameState, type Action, initialState, User } from "../types/gameTypes"
 import { getTelegramUser, getTelegramThemeParams } from "../utils/telegramAuth"
 import { saveGameState, loadGameState } from "../utils/storage"
 
@@ -29,10 +29,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [dispatch])
 
   useEffect(() => {
-    const user = getTelegramUser()
-    if (user) {
-      dispatch({ type: "SET_USER", payload: user })
+    const initUser = async () => {
+      const user = await getTelegramUser()
+      if (user) {
+        dispatch({ type: "SET_USER", payload: user })
+      }
     }
+
+    initUser()
 
     const themeParams = getTelegramThemeParams()
     if (themeParams) {

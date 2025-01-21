@@ -16,7 +16,7 @@ interface GameDB extends DBSchema {
   changes: {
     key: string
     value: {
-      change: any // Updated to any since GameStateChange is removed
+      change: unknown
       timestamp: string
     }
   }
@@ -27,7 +27,7 @@ let db: IDBPDatabase<GameDB>
 async function getDB() {
   if (!db) {
     db = await openDB<GameDB>("gameDB", 1, {
-      upgrade(db) {
+      upgrade(db: IDBPDatabase<GameDB>) {
         db.createObjectStore("gameState")
         db.createObjectStore("changes", { keyPath: "timestamp" })
       },
@@ -46,7 +46,7 @@ export async function saveGameState(gameState: GameState): Promise<void> {
   const serializedState = JSON.stringify(stateToSave)
   const encryptedState = encrypt(serializedState)
 
-  await db.put("gameState", stateToSave, "current") //Updated put method
+  await db.put("gameState", stateToSave, "current")
 
   if (typeof window !== "undefined" && window.Telegram?.WebApp?.CloudStorage) {
     try {
@@ -89,8 +89,7 @@ export async function loadGameState(): Promise<GameState | null> {
   return null
 }
 
-export async function saveGameStateChange(change: any): Promise<void> {
-  // Updated to any
+export async function saveGameStateChange(change: unknown): Promise<void> {
   const db = await getDB()
   await db.add("changes", {
     change,
@@ -98,10 +97,9 @@ export async function saveGameStateChange(change: any): Promise<void> {
   })
 }
 
-export async function getUnsyncedChanges(): Promise<any[]> {
-  // Updated to any
+export async function getUnsyncedChanges(): Promise<unknown[]> {
   const db = await getDB()
-  return (await db.getAll("changes")).map((item) => item.change)
+  return (await db.getAll("changes")).map((item: { change: unknown }) => item.change)
 }
 
 export async function clearUnsyncedChanges(): Promise<void> {
@@ -109,7 +107,7 @@ export async function clearUnsyncedChanges(): Promise<void> {
   await db.clear("changes")
 }
 
-function migrateGameState(oldState: any, oldVersion: string): GameState {
+function migrateGameState(oldState: unknown, oldVersion: string): GameState {
   // Implement migration logic here
   return oldState as GameState
 }

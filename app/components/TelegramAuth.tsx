@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback } from "react"
 import { useGameDispatch } from "../contexts/GameContext"
 import { createNewUser, getUserByTelegramId } from "../utils/db"
 import Image from "next/image"
-import { parseInitDataUnsafe } from "../utils/telegramUtils"
 
 const TelegramAuth: React.FC = () => {
   const [user, setUser] = useState<any>(null)

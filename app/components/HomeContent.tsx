@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from "framer-motion"
 import LoadingScreen from "./LoadingScreen"
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import dynamic from "next/dynamic"
-import { GameProvider, useGameContext } from "../contexts/GameContext"
+import { GameProvider, useGameContext, useGameState } from "../contexts/GameContext"
 import { TranslationProvider } from "../contexts/TranslationContext"
 import Resources from "./common/Resources"
-import { parseInitDataUnsafe } from "../utils/telegramUtils"
+import { validateTelegramUser, getTelegramUser } from "../utils/telegramAuth"
 import { getOrCreateUserGameState, updateGameState, saveOrUpdateUser } from "../utils/db"
 import type { User, GameState } from "../types/gameTypes"
 
@@ -107,6 +107,10 @@ function HomeContentInner() {
   const [error, setError] = useState<string | null>(null)
   const [initializationAttempts, setInitializationAttempts] = useState(0)
 
+  const closeSettings = useCallback(() => {
+    setIsSettingsOpen(false)
+  }, [])
+
   useEffect(() => {
     if (isBrowser) {
       const setAppHeight = () => {
@@ -147,20 +151,11 @@ function HomeContentInner() {
       // Expand the Web App to full height
       webApp.expand()
 
-      // Get the init data
+      // Get the init data and validate the user
       const initData = webApp.initData
-      const initDataUnsafe = webApp.initDataUnsafe
-
-      console.log("Init Data:", initData)
-      console.log("Init Data Unsafe:", initDataUnsafe)
-
-      if (!initDataUnsafe || !initDataUnsafe.user) {
-        throw new Error("No user data available in initDataUnsafe")
-      }
-
-      const telegramUser = parseInitDataUnsafe(initDataUnsafe)
+      const telegramUser = await validateTelegramUser(initData)
       if (!telegramUser) {
-        throw new Error("Failed to parse user data")
+        throw new Error("Failed to validate user data")
       }
 
       // Save or update user in database
@@ -211,11 +206,6 @@ function HomeContentInner() {
     }
   }, [state, isGameLoaded])
 
-  const closeSettings = useCallback(() => {
-    setIsSettingsOpen(false)
-  }, [])
-
-  // Move renderActivePage inside the component and memoize it
   const renderActivePage = useCallback(() => {
     switch (state.activeTab) {
       case "fusion":
@@ -329,25 +319,6 @@ function HomeContentInner() {
       </div>
     </main>
   )
-}
-
-const renderActivePage = () => {
-  switch (state.activeTab) {
-    case "fusion":
-      return <Fusion />
-    case "laboratory":
-      return <Laboratory />
-    case "storage":
-      return <Storage />
-    case "games":
-      return <Games />
-    case "profile":
-      return <ProfilePage />
-    case "settings":
-      return <Settings onClose={closeSettings} />
-    default:
-      return <Laboratory />
-  }
 }
 
 export default function HomeContent() {

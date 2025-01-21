@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Image from "next/image"
 import { useTranslation } from "../../../contexts/TranslationContext"
-import { X, Star, BarChart2, Package, Award, TypeIcon as type, type LucideIcon } from "lucide-react"
+import { X, Star, BarChart2, Package, Award, TypeIcon as type, LucideIcon } from "lucide-react"
 import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
 import Resources from "../../common/Resources"
@@ -151,6 +151,7 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                   src={
                     gameState.user?.photo_url ||
                     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile-usMOz4iK8UmmhBOtQJI34mXX8uXQhT.webp" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
