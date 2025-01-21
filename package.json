@@ -66,6 +66,7 @@
     "url": "latest",
     "path": "latest",
     "@supabase/supabase-js": "latest",
+    "axios": "latest",
     "idb": "latest"
   },
   "devDependencies": {
