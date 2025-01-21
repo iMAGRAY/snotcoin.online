@@ -63,11 +63,11 @@
     "next-i18next": "latest",
     "zustand": "latest",
     "axios": "latest",
-    "ethers": "latest",
     "@headlessui/react": "latest",
     "url": "latest",
     "path": "latest",
-    "@supabase/supabase-js": "latest"
+    "@supabase/supabase-js": "latest",
+    "ethers": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

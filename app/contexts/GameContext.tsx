@@ -5,7 +5,13 @@ import { createContext, useContext, useReducer, useCallback, useMemo, useEffect 
 import { gameReducer } from "../reducers/gameReducer"
 import { type GameState, type Action, initialState } from "../types/gameTypes"
 import { formatEther, JsonRpcProvider, Wallet } from "ethers"
-import { updateGameProgress, createTransaction, getUserByTelegramId, updateUserGameState } from "../utils/db"
+import {
+  updateGameProgress,
+  createTransaction,
+  getUserByTelegramId,
+  updateUserGameState,
+  updateGameState,
+} from "../utils/db"
 import { supabase } from "../utils/supabase"
 
 const GameContext = createContext<GameContextType | undefined>(undefined)
@@ -185,6 +191,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
     return () => clearInterval(saveInterval)
   }, [saveGameState])
+
+  useEffect(() => {
+    if (state.user) {
+      const saveGameState = async () => {
+        try {
+          await updateGameState(state.user.telegram_id, state)
+        } catch (error) {
+          console.error("Error saving game state:", error)
+        }
+      }
+
+      saveGameState()
+    }
+  }, [state])
 
   const contextValue = useMemo(
     () => ({

@@ -8,10 +8,9 @@ import dynamic from "next/dynamic"
 import { GameProvider, useGameContext } from "../contexts/GameContext"
 import { TranslationProvider } from "../contexts/TranslationContext"
 import Resources from "./common/Resources"
-import { audioManager } from "../utils/AudioManager"
-import { parseInitDataUnsafe, isTokenExpired } from "../utils/telegramUtils"
-import { createNewUser, getUserByTelegramId, compareAndUpdateUserData } from "../utils/db"
-import type { TelegramUser } from "../types/gameTypes"
+import { parseInitDataUnsafe } from "../utils/telegramUtils"
+import { getOrCreateUserGameState, updateGameState, saveOrUpdateUser } from "../utils/db"
+import type { User, GameState } from "../types/gameTypes"
 
 // Import all main components
 const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
@@ -70,49 +69,29 @@ function HomeContentInner() {
     const initializeGame = async () => {
       if (isBrowser) {
         try {
-          const initAuth = async () => {
-            if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-              try {
-                const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
-                const telegramUser: TelegramUser = parseInitDataUnsafe(initDataUnsafe)
+          if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+            const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
+            console.log("Raw initDataUnsafe:", initDataUnsafe)
+            const telegramUser = parseInitDataUnsafe(initDataUnsafe)
 
-                if (isTokenExpired(telegramUser.auth_date)) {
-                  throw new Error("Authentication expired")
-                }
-
-                dispatch({ type: "SET_USER", payload: telegramUser })
-
-                let dbUser = await getUserByTelegramId(telegramUser.id)
-                if (!dbUser) {
-                  dbUser = await createNewUser(telegramUser)
-                } else {
-                  dbUser = await compareAndUpdateUserData(dbUser, telegramUser)
-                }
-
-                dispatch({
-                  type: "LOAD_GAME_STATE",
-                  payload: {
-                    inventory: dbUser.inventories,
-                    ...dbUser.game_progress,
-                    wallet: dbUser.wallets[0],
-                  },
-                })
-
-                setIsGameLoaded(true)
-              } catch (err) {
-                console.error("Error during authentication:", err)
-                setError("An error occurred during authentication")
-              }
-            } else {
-              setError("Telegram WebApp is not available")
+            if (!telegramUser) {
+              throw new Error("Invalid user data")
             }
+
+            console.log("Parsed Telegram user:", telegramUser)
+
+            // Save or update user in Supabase
+            const savedUser = await saveOrUpdateUser(telegramUser)
+            dispatch({ type: "SET_USER", payload: savedUser })
+
+            // Get or create game state
+            const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
+            dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
+
+            setIsGameLoaded(true)
+          } else {
+            setError("Telegram WebApp is not available")
           }
-
-          await initAuth()
-
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-
-          dispatch({ type: "SET_GAME_STARTED", payload: true })
         } catch (err) {
           console.error("Error in game initialization:", err)
           setError(err instanceof Error ? err.message : "An unknown error occurred during initialization")
@@ -121,11 +100,22 @@ function HomeContentInner() {
     }
 
     initializeGame()
-
-    return () => {
-      // Cleanup function
-    }
   }, [dispatch])
+
+  // Add a new effect to save game state when it changes
+  useEffect(() => {
+    if (state.user && isGameLoaded) {
+      const saveGameState = async () => {
+        try {
+          await updateGameState(state.user.telegram_id, state)
+        } catch (error) {
+          console.error("Error saving game state:", error)
+        }
+      }
+
+      saveGameState()
+    }
+  }, [state, isGameLoaded])
 
   const closeSettings = useCallback(() => {
     setIsSettingsOpen(false)

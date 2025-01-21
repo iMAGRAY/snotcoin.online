@@ -21,6 +21,7 @@ export const FILLING_SPEED_UPGRADES = Array.from({ length: 100 }, (_, index) => 
 
 // GameState interface
 export interface GameState {
+  telegram_id: number
   containerLevel: number
   Cap: number
   fillingSpeedLevel: number
@@ -135,6 +136,7 @@ export interface TelegramUser {
 }
 
 export const initialState: GameState = {
+  telegram_id: 0,
   containerLevel: 1,
   Cap: 10,
   fillingSpeedLevel: 1,

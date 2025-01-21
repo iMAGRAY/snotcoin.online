@@ -78,7 +78,7 @@ const ResourceItem: React.FC<{
                     : ""
             }`}
           >
-            {label === "Energy" ? `${Math.floor(value)}/${maxValue}` : formatSnotValue(value, 0)}
+            {label === "Energy" ? `${Math.floor(value ?? 0)}/${maxValue}` : formatSnotValue(value ?? 0, 0)}
           </span>
           {label === "Energy" && recoveryTime && (
             <span className="text-xs sm:text-sm text-blue-300 leading-tight font-medium ml-1">({recoveryTime})</span>

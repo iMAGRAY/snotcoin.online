@@ -2,30 +2,19 @@ import type React from "react"
 import { useEffect, useState, useCallback } from "react"
 import { useGameDispatch } from "../contexts/GameContext"
 import { createNewUser, getUserByTelegramId } from "../utils/db"
-import { compareAndUpdateUserData, isTokenExpired, parseInitDataUnsafe } from "../utils/telegramUtils"
+import { compareAndUpdateUserData, parseInitDataUnsafe } from "../utils/telegramUtils"
 import Image from "next/image"
 
-interface TelegramUser {
-  id: number
-  telegram_id: number
-  first_name?: string
-  last_name?: string
-  username?: string
-  language_code?: string
-  photo_url?: string
-  auth_date: number
-}
-
 const TelegramAuth: React.FC = () => {
-  const [user, setUser] = useState<TelegramUser | null>(null)
+  const [user, setUser] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const dispatch = useGameDispatch()
 
   const updateUserData = useCallback(
-    async (telegramUser: TelegramUser) => {
+    async (telegramUser: any) => {
       try {
-        let dbUser = await getUserByTelegramId(telegramUser.telegram_id)
+        let dbUser = await getUserByTelegramId(telegramUser.id)
         if (!dbUser) {
           dbUser = await createNewUser(telegramUser)
         } else {
@@ -56,10 +45,6 @@ const TelegramAuth: React.FC = () => {
           console.log("InitData:", initDataUnsafe)
           const telegramUser = parseInitDataUnsafe(initDataUnsafe)
 
-          if (isTokenExpired(telegramUser.auth_date)) {
-            throw new Error("Authentication expired")
-          }
-
           setUser(telegramUser)
           await updateUserData(telegramUser)
         } catch (err) {
@@ -74,15 +59,7 @@ const TelegramAuth: React.FC = () => {
       }
     }
 
-    const storedUser = localStorage.getItem("telegramUser")
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser)
-      setUser(parsedUser)
-      updateUserData(parsedUser)
-      setIsLoading(false)
-    } else {
-      initAuth()
-    }
+    initAuth()
   }, [updateUserData])
 
   if (isLoading) {

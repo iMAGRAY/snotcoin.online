@@ -1,45 +1,56 @@
 import { supabase } from "./supabase"
 import type { User } from "../types/gameTypes"
 
-export function isTokenExpired(authDate: number): boolean {
-  const currentTime = Math.floor(Date.now() / 1000)
-  return currentTime - authDate > 3600 // Token expires after 1 hour
-}
+export function parseInitDataUnsafe(initDataUnsafe: any): User | null {
+  if (typeof initDataUnsafe === "string") {
+    try {
+      initDataUnsafe = JSON.parse(initDataUnsafe)
+    } catch (e) {
+      console.error("Error parsing initDataUnsafe:", e)
+      return null
+    }
+  }
 
-export function parseInitDataUnsafe(initDataUnsafe: any): User {
+  if (!initDataUnsafe || !initDataUnsafe.user) {
+    console.error("Invalid initDataUnsafe structure:", initDataUnsafe)
+    return null
+  }
+
   return {
     id: Number.parseInt(initDataUnsafe.user.id || "0", 10),
     telegram_id: Number.parseInt(initDataUnsafe.user.id || "0", 10),
-    first_name: initDataUnsafe.user.first_name || undefined,
-    last_name: initDataUnsafe.user.last_name || undefined,
-    username: initDataUnsafe.user.username || undefined,
-    language_code: initDataUnsafe.user.language_code || undefined,
-    photo_url: initDataUnsafe.user.photo_url || undefined,
+    first_name: initDataUnsafe.user.first_name,
+    last_name: initDataUnsafe.user.last_name,
+    username: initDataUnsafe.user.username,
+    language_code: initDataUnsafe.user.language_code,
+    photo_url: initDataUnsafe.user.photo_url,
     auth_date: Number.parseInt(initDataUnsafe.auth_date || "0", 10),
   }
 }
 
-export async function compareAndUpdateUserData(dbUser: User, telegramUser: User): Promise<User> {
-  const updates: Partial<User> = {}
+export async function saveOrUpdateUser(user: User): Promise<User> {
+  const { data, error } = await supabase
+    .from("users")
+    .upsert(
+      {
+        telegram_id: user.telegram_id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        photo_url: user.photo_url,
+        language_code: user.language_code,
+        auth_date: user.auth_date,
+      },
+      { onConflict: "telegram_id" },
+    )
+    .select()
+    .single()
 
-  if (dbUser.username !== telegramUser.username) updates.username = telegramUser.username
-  if (dbUser.first_name !== telegramUser.first_name) updates.first_name = telegramUser.first_name
-  if (dbUser.last_name !== telegramUser.last_name) updates.last_name = telegramUser.last_name
-  if (dbUser.photo_url !== telegramUser.photo_url) updates.photo_url = telegramUser.photo_url
-  if (dbUser.language_code !== telegramUser.language_code) updates.language_code = telegramUser.language_code
-
-  if (Object.keys(updates).length > 0) {
-    const { data, error } = await supabase
-      .from("users")
-      .update(updates)
-      .eq("telegram_id", telegramUser.telegram_id)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+  if (error) {
+    console.error("Error saving/updating user:", error)
+    throw error
   }
 
-  return dbUser
+  return data
 }
 
