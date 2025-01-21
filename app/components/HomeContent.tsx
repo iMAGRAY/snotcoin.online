@@ -105,6 +105,7 @@ function HomeContentInner() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isGameLoaded, setIsGameLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [initializationAttempts, setInitializationAttempts] = useState(0)
 
   useEffect(() => {
     if (isBrowser) {
@@ -120,53 +121,80 @@ function HomeContentInner() {
     }
   }, [])
 
-  useEffect(() => {
-    const initializeGame = async () => {
-      if (isBrowser) {
-        try {
-          if (typeof window === "undefined") {
-            throw new Error("Window is undefined")
-          }
+  const initializeGame = useCallback(async () => {
+    if (typeof window === "undefined") return
 
-          if (!window.Telegram?.WebApp) {
-            throw new Error("Telegram WebApp is not available")
-          }
-
-          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
-          console.log("Raw initDataUnsafe:", initDataUnsafe)
-
-          if (!initDataUnsafe || typeof initDataUnsafe !== "object") {
-            throw new Error("Invalid initDataUnsafe")
-          }
-
-          const telegramUser = parseInitDataUnsafe(initDataUnsafe)
-
-          if (!telegramUser) {
-            throw new Error("Invalid user data")
-          }
-
-          console.log("Parsed Telegram user:", telegramUser)
-
-          // Save or update user in Supabase
-          const savedUser = await saveOrUpdateUser(telegramUser)
-          dispatch({ type: "SET_USER", payload: savedUser })
-
-          // Get or create game state
-          const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
-          dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
-
-          setIsGameLoaded(true)
-        } catch (err) {
-          console.error("Error in game initialization:", err)
-          setError(err instanceof Error ? err.message : "An unknown error occurred during initialization")
+    try {
+      // Wait for Telegram Web App to be available
+      if (!window.Telegram?.WebApp) {
+        console.log("Waiting for Telegram WebApp to initialize...")
+        if (initializationAttempts < 5) {
+          setTimeout(() => {
+            setInitializationAttempts((prev) => prev + 1)
+          }, 1000)
+          return
+        } else {
+          throw new Error("Telegram WebApp initialization timeout")
         }
       }
+
+      // Ensure we're running in Telegram environment
+      const webApp = window.Telegram.WebApp
+      if (!webApp) {
+        throw new Error("Telegram WebApp is not available")
+      }
+
+      // Expand the Web App to full height
+      webApp.expand()
+
+      // Get the init data
+      const initData = webApp.initData
+      const initDataUnsafe = webApp.initDataUnsafe
+
+      console.log("Init Data:", initData)
+      console.log("Init Data Unsafe:", initDataUnsafe)
+
+      if (!initDataUnsafe || !initDataUnsafe.user) {
+        throw new Error("No user data available in initDataUnsafe")
+      }
+
+      const telegramUser = parseInitDataUnsafe(initDataUnsafe)
+      if (!telegramUser) {
+        throw new Error("Failed to parse user data")
+      }
+
+      // Save or update user in database
+      const savedUser = await saveOrUpdateUser(telegramUser)
+      dispatch({ type: "SET_USER", payload: savedUser })
+
+      // Get or create game state
+      const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
+      dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
+
+      setIsGameLoaded(true)
+      setError(null)
+    } catch (err) {
+      console.error("Error in game initialization:", err)
+      setError(err instanceof Error ? err.message : "An unknown error occurred")
     }
+  }, [dispatch, initializationAttempts])
 
+  useEffect(() => {
     initializeGame()
-  }, [dispatch])
+  }, [initializeGame, initializationAttempts])
 
-  // Add a new effect to save game state when it changes
+  // Add auto-retry logic for initialization errors
+  useEffect(() => {
+    if (error && initializationAttempts < 5) {
+      const timer = setTimeout(() => {
+        console.log(`Retrying initialization (attempt ${initializationAttempts + 1})...`)
+        setInitializationAttempts((prev) => prev + 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [error, initializationAttempts])
+
+  // Save game state when it changes
   useEffect(() => {
     if (state.user && isGameLoaded) {
       const saveGameState = async () => {
@@ -187,7 +215,8 @@ function HomeContentInner() {
     setIsSettingsOpen(false)
   }, [])
 
-  const renderActivePage = () => {
+  // Move renderActivePage inside the component and memoize it
+  const renderActivePage = useCallback(() => {
     switch (state.activeTab) {
       case "fusion":
         return <Fusion />
@@ -204,28 +233,39 @@ function HomeContentInner() {
       default:
         return <Laboratory />
     }
-  }
+  }, [state.activeTab, closeSettings])
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
         <h1 className="text-2xl font-bold mb-4">Error</h1>
         <p className="text-center mb-4">{error}</p>
-        <p className="text-center mb-4">Additional error details have been logged to the console.</p>
-        {error === "Telegram WebApp is not available" && (
-          <div className="text-center">
-            <p className="mb-2">This application is designed to run within the Telegram Web App environment.</p>
-            <p className="mb-4">Please ensure you're opening this app through Telegram.</p>
-            <a
-              href="https://core.telegram.org/bots/webapps"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline"
+        {initializationAttempts >= 5 ? (
+          <>
+            <p className="text-center mb-4">
+              Unable to initialize the game after multiple attempts. Please ensure you're opening this app through
+              Telegram.
+            </p>
+            <button
+              onClick={() => setInitializationAttempts(0)}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
-              Learn more about Telegram Web Apps
-            </a>
-          </div>
+              Try Again
+            </button>
+          </>
+        ) : (
+          <p className="text-center animate-pulse">Attempting to initialize... ({initializationAttempts}/5)</p>
         )}
+        <div className="mt-4 text-center">
+          <a
+            href="https://core.telegram.org/bots/webapps"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            Learn more about Telegram Web Apps
+          </a>
+        </div>
       </div>
     )
   }
@@ -271,6 +311,7 @@ function HomeContentInner() {
           <div className="relative z-20 h-full overflow-y-auto">
             <AnimatePresence mode="wait">
               <ErrorBoundary
+                key={state.activeTab}
                 fallback={<ErrorDisplay message="An error occurred in the main content. Please try again." />}
               >
                 <Suspense fallback={<LoadingScreen />}>{renderActivePage()}</Suspense>
@@ -288,6 +329,25 @@ function HomeContentInner() {
       </div>
     </main>
   )
+}
+
+const renderActivePage = () => {
+  switch (state.activeTab) {
+    case "fusion":
+      return <Fusion />
+    case "laboratory":
+      return <Laboratory />
+    case "storage":
+      return <Storage />
+    case "games":
+      return <Games />
+    case "profile":
+      return <ProfilePage />
+    case "settings":
+      return <Settings onClose={closeSettings} />
+    default:
+      return <Laboratory />
+  }
 }
 
 export default function HomeContent() {

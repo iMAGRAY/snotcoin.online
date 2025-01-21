@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 import { type Ball, GAME_CONSTANTS, BALL_LEVELS, EXPLOSIVE_BALL, BULL_BALL } from "../types/fusion-game"
 import { resolveCollision } from "../utils/fusion-game-utils"
+import { useGameState, useGameDispatch } from "../contexts/GameContext"
 
 const FLOOR_OFFSET = 0.1 // Small offset to keep balls above the floor
 

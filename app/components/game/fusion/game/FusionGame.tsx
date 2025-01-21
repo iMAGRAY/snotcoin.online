@@ -16,11 +16,13 @@ import { useFusionGame } from "../../../../hooks/useFusionGame"
 import ExplosiveBall from "./power-ups/explosive-ball"
 import Joy from "./power-ups/joy"
 import Bull from "./power-ups/bull"
+import { useGameState, useGameDispatch } from "../../../../contexts/GameContext"
 
 const FusionGame: React.FC = () => {
   const gameDispatch = useGameDispatch()
   const { t } = useTranslation()
   const router = useRouter()
+  const gameState = useGameState()
 
   const {
     thrownBalls,

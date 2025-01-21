@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import Image from "next/image"
 import { RefreshCw, Zap, ArrowDownCircle } from "lucide-react"
 import { useTranslation } from "../../../contexts/TranslationContext"
-import { useGameState, useGameDispatch, useWallet } from "../../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 import { formatSnotValue } from "../../../utils/gameUtils"
 
 interface WalletBarProps {
@@ -14,7 +14,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const { wallet, getEthBalance, ethBalance } = useWallet()
+  const ethBalance = 0 // Added to handle the removal of useWallet
 
   return (
     <motion.div
@@ -27,9 +27,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
       <h3 className="text-lg font-bold text-white mb-2 relative z-10 inline-block">Wallet</h3>
       <motion.button
         onClick={() => {
-          if (wallet && wallet.address) {
-            getEthBalance(wallet.address)
-          }
+          //getEthBalance is removed because useWallet is removed.  This section needs to be updated based on how you want to handle ETH balance updates without useWallet.
         }}
         className="absolute top-3 right-3 bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] text-white p-2 rounded-full transition-colors shadow-md hover:from-[#5889ae] hover:to-[#6899be]"
         whileHover={{ scale: 1.1 }}

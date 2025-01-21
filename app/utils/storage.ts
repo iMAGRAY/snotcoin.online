@@ -1,5 +1,4 @@
 import type { GameState } from "../types/gameTypes"
-import { compress, decompress } from "lz-string"
 import { encrypt, decrypt } from "./encryption"
 import { openDB, type DBSchema, type IDBPDatabase } from "idb"
 
@@ -17,7 +16,7 @@ interface GameDB extends DBSchema {
   changes: {
     key: string
     value: {
-      change: GameStateChange
+      change: any // Updated to any since GameStateChange is removed
       timestamp: string
     }
   }
@@ -45,10 +44,9 @@ export async function saveGameState(gameState: GameState): Promise<void> {
     lastUpdated: new Date().toISOString(),
   }
   const serializedState = JSON.stringify(stateToSave)
-  const compressedState = compress(serializedState)
-  const encryptedState = encrypt(compressedState)
+  const encryptedState = encrypt(serializedState)
 
-  await db.put("gameState", { key: "current", value: stateToSave })
+  await db.put("gameState", stateToSave, "current") //Updated put method
 
   if (typeof window !== "undefined" && window.Telegram?.WebApp?.CloudStorage) {
     try {
@@ -68,10 +66,11 @@ export async function loadGameState(): Promise<GameState | null> {
     try {
       const encryptedState = await window.Telegram.WebApp.CloudStorage.getItem("gameState")
       if (encryptedState) {
-        const compressedState = decrypt(encryptedState)
-        const serializedState = decompress(compressedState)
+        const serializedState = decrypt(encryptedState)
         state = JSON.parse(serializedState)
-        await db.put("gameState", { key: "current", value: state })
+        if (state) {
+          await db.put("gameState", state, "current")
+        }
       }
     } catch (error) {
       console.error("Error loading game state from Telegram CloudStorage:", error)
@@ -79,18 +78,19 @@ export async function loadGameState(): Promise<GameState | null> {
   }
 
   if (state) {
-    if (state.value.version === STORAGE_VERSION) {
-      return state.value.state as GameState
+    if (state.version === STORAGE_VERSION) {
+      return state.state as GameState
     } else {
       console.warn("Outdated game state version, migrating...")
-      return migrateGameState(state.value.state, state.value.version)
+      return migrateGameState(state.state, state.version)
     }
   }
 
   return null
 }
 
-export async function saveGameStateChange(change: GameStateChange): Promise<void> {
+export async function saveGameStateChange(change: any): Promise<void> {
+  // Updated to any
   const db = await getDB()
   await db.add("changes", {
     change,
@@ -98,7 +98,8 @@ export async function saveGameStateChange(change: GameStateChange): Promise<void
   })
 }
 
-export async function getUnsyncedChanges(): Promise<GameStateChange[]> {
+export async function getUnsyncedChanges(): Promise<any[]> {
+  // Updated to any
   const db = await getDB()
   return (await db.getAll("changes")).map((item) => item.change)
 }

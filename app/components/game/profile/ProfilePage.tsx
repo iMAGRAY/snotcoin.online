@@ -11,6 +11,7 @@ import Resources from "../../common/Resources"
 import WalletBar from "./WalletBar"
 import { supabase } from "../../../utils/supabase"
 import type { User } from "../../../types/gameTypes"
+import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -150,6 +151,8 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                   src={
                     gameState.user?.photo_url ||
                     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile-usMOz4iK8UmmhBOtQJI34mXX8uXQhT.webp" ||
+                    "/placeholder.svg" ||
+                    "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||

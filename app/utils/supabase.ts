@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
 import type { GameState } from "../types/gameTypes"
-import { compress, decompress } from "lz-string"
 import { encrypt, decrypt } from "./encryption"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -20,8 +19,7 @@ export async function saveGameStateToSupabase(userId: string, gameState: GameSta
       lastUpdated: new Date().toISOString(),
     }
     const serializedState = JSON.stringify(stateToSave)
-    const compressedState = compress(serializedState)
-    const encryptedState = encrypt(compressedState)
+    const encryptedState = encrypt(serializedState)
 
     const { error } = await supabase.from("game_states").upsert(
       {
@@ -52,8 +50,7 @@ export async function loadGameStateFromSupabase(userId: string): Promise<GameSta
     if (error) throw error
 
     if (data) {
-      const compressedState = decrypt(data.encrypted_state)
-      const serializedState = decompress(compressedState)
+      const serializedState = decrypt(data.encrypted_state)
       const parsedState = JSON.parse(serializedState)
 
       if (parsedState.version === "1.2") {
@@ -71,6 +68,7 @@ export async function loadGameStateFromSupabase(userId: string): Promise<GameSta
 }
 
 export async function syncChangesToSupabase(userId: string, changes: any[]): Promise<void> {
+  // Updated to use any[]
   try {
     const { error } = await supabase.from("game_state_changes").insert(
       changes.map((change) => ({

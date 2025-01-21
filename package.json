@@ -65,9 +65,8 @@
     "@headlessui/react": "latest",
     "url": "latest",
     "path": "latest",
-    "lz-string": "latest",
-    "idb": "latest",
-    "@supabase/supabase-js": "latest"
+    "@supabase/supabase-js": "latest",
+    "idb": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

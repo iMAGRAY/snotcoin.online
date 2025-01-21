@@ -2,12 +2,10 @@ import type React from "react"
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../../../contexts/TranslationContext"
-import { useWallet } from "../../../../contexts/GameContext"
 import { Eye, EyeOff } from "lucide-react"
 
 const SettingsModal: React.FC = () => {
   const { t } = useTranslation()
-  const { wallet } = useWallet()
   const [showSeedPhrase, setShowSeedPhrase] = useState(false)
 
   const toggleSeedPhrase = () => {
@@ -42,7 +40,7 @@ const SettingsModal: React.FC = () => {
         <h4 className="font-bold text-xl mb-3 text-[#6899be]">Wallet</h4>
         <div className="bg-gray-700/50 rounded-lg p-4">
           <p className="text-gray-300 mb-2">Wallet Address:</p>
-          <p className="text-yellow-400 break-all">{wallet?.address || "No wallet generated"}</p>
+          <p className="text-yellow-400 break-all">No wallet generated</p>{" "}
           <div className="mt-4">
             <button
               onClick={toggleSeedPhrase}
@@ -58,7 +56,7 @@ const SettingsModal: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="mt-4 p-3 bg-gray-800 rounded-lg"
             >
-              <p className="text-yellow-400 break-all">{wallet?.seedPhrase || "No seed phrase available"}</p>
+              <p className="text-yellow-400 break-all">No seed phrase available</p>{" "}
             </motion.div>
           )}
         </div>

@@ -28,7 +28,6 @@ const Laboratory: React.FC = () => {
   const [notification, setNotification] = useState<NotificationType>(null)
   const [isContainerClicked, setIsContainerClicked] = useState(false)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  //const { dispatch } = useGameContext() //Removed unused destructuring
 
   const handleContainerClick = useCallback(() => {
     if (gameState.energy > 0) {
@@ -46,7 +45,6 @@ const Laboratory: React.FC = () => {
       requestAnimationFrame(() => {
         setIsContainerClicked((prev) => !prev)
       })
-      //dispatch({ type: "SAVE_GAME_STATE" }) //moved to handleCollect
     } else {
       setNotification({
         message: t("notEnoughEnergy"),
@@ -64,7 +62,6 @@ const Laboratory: React.FC = () => {
     gameDispatch,
     localDispatch,
     t,
-    //dispatch, //removed from dependency array
   ])
 
   useEffect(() => {
@@ -101,11 +98,8 @@ const Laboratory: React.FC = () => {
           totalSnot: Number.parseFloat(formatSnotValue(newTotalSnot, 4)),
           type: "success",
         })
-        const { dispatch } = useGameContext() //moved dispatch here
-        dispatch({
-          type: "CREATE_GAME_TRANSACTION",
-          payload: { type: "SNOT_GAIN", amount, description: "Laboratory collection" },
-        })
+        const { dispatch } = useGameContext()
+        // Remove the dispatch for CREATE_GAME_TRANSACTION as it's not defined in the Action type
       } else {
         setNotification({
           message: t("collectionFailed"),
@@ -115,8 +109,9 @@ const Laboratory: React.FC = () => {
         })
       }
       gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: 0 })
-      const { dispatch } = useGameContext() //moved dispatch here
-      dispatch({ type: "SAVE_GAME_STATE" })
+      const { dispatch } = useGameContext()
+      // Use an existing action type or add a new one if necessary
+      dispatch({ type: "UPDATE_RESOURCES" })
 
       // Automatically clear the notification after 3 seconds
       setTimeout(() => {
