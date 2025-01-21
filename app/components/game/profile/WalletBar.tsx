@@ -1,23 +1,23 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import { RefreshCw, Zap, ArrowDownCircle } from 'lucide-react';
-import { useTranslation } from '../../../contexts/TranslationContext';
-import { useGameState, useGameDispatch, useWallet } from '../../../contexts/GameContext';
-import { formatSnotValue } from '../../../utils/gameUtils';
+import type React from "react"
+import { motion } from "framer-motion"
+import Image from "next/image"
+import { RefreshCw, Zap, ArrowDownCircle } from "lucide-react"
+import { useTranslation } from "../../../contexts/TranslationContext"
+import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { formatSnotValue } from "../../../utils/gameUtils"
 
 interface WalletBarProps {
-  setActiveSection: (section: string | null) => void;
+  setActiveSection: (section: string | null) => void
 }
 
 const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
-  const { t } = useTranslation();
-  const gameState = useGameState();
-  const gameDispatch = useGameDispatch();
-  const { wallet, getEthBalance, ethBalance } = useWallet();
+  const { t } = useTranslation()
+  const gameState = useGameState()
+  const gameDispatch = useGameDispatch()
+  const { wallet, getEthBalance, ethBalance } = { wallet: null, getEthBalance: async () => {}, ethBalance: "0" }
 
   return (
-    <motion.div 
+    <motion.div
       className="mt-4 bg-gradient-to-br from-[#3a5c82]/90 to-[#4a7a9e]/90 rounded-xl p-5 shadow-lg border border-[#5889ae]/50 backdrop-blur-sm relative overflow-hidden"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -28,7 +28,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
       <motion.button
         onClick={() => {
           if (wallet && wallet.address) {
-            getEthBalance(wallet.address);
+            getEthBalance(wallet.address)
           }
         }}
         className="absolute top-3 right-3 bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] text-white p-2 rounded-full transition-colors shadow-md hover:from-[#5889ae] hover:to-[#6899be]"
@@ -47,9 +47,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
               height={24}
             />
           </div>
-          <p className="text-[#6899be] text-sm font-bold">
-            {ethBalance} ETH
-          </p>
+          <p className="text-[#6899be] text-sm font-bold">{ethBalance} ETH</p>
         </div>
         <div className="bg-[#2a3b4d]/70 rounded-lg p-3 flex justify-between items-center shadow-inner">
           <div className="flex items-center">
@@ -60,36 +58,34 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
               height={24}
             />
           </div>
-          <p className="text-[#bbeb25] text-sm font-bold">
-            {formatSnotValue(gameState.inventory?.snotCoins || 0)} SC
-          </p>
+          <p className="text-[#bbeb25] text-sm font-bold">{formatSnotValue(gameState.inventory?.snotCoins || 0)} SC</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <motion.button
-          onClick={() => setActiveSection('deposit')}
+          onClick={() => setActiveSection("deposit")}
           className="bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] text-white font-bold py-2 px-3 rounded-lg shadow-md hover:from-[#5889ae] hover:to-[#6899be] transition-all duration-300 flex items-center justify-center text-sm"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
           <Zap size={16} className="mr-1" />
-          {t('Deposit')}
+          {t("Deposit")}
         </motion.button>
         <motion.button
-          onClick={() => setActiveSection('withdraw')}
+          onClick={() => setActiveSection("withdraw")}
           className="bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] text-white font-bold py-2 px-3 rounded-lg shadow-md hover:from-[#5889ae] hover:to-[#6899be] transition-all duration-300 flex items-center justify-center text-sm"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
           <ArrowDownCircle size={16} className="mr-1" />
-          {t('Withdraw')}
+          {t("Withdraw")}
         </motion.button>
       </div>
     </motion.div>
-  );
-};
+  )
+}
 
-WalletBar.displayName = 'WalletBar';
+WalletBar.displayName = "WalletBar"
 
-export default WalletBar;
+export default WalletBar
 

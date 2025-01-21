@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react"
 import { AnimatePresence } from "framer-motion"
-import { useGameState, useGameDispatch, useInventory } from "../../../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../../../contexts/GameContext"
 import { useTranslation } from "../../../../contexts/TranslationContext"
 import { useRouter } from "next/navigation"
 import Header from "./Header"
@@ -21,7 +21,6 @@ import Bull from "./power-ups/bull"
 const FusionGame: React.FC = () => {
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const { getInventoryItemCount } = useInventory()
   const { t } = useTranslation()
   const router = useRouter()
 
@@ -63,12 +62,12 @@ const FusionGame: React.FC = () => {
 
   // Memo hooks
   const currentSnot = useMemo(() => {
-    return gameState.inventory ? getInventoryItemCount("snot") : 0
-  }, [gameState.inventory, getInventoryItemCount])
+    return gameState.inventory ? gameState.inventory.snot : 0
+  }, [gameState.inventory])
 
   const calculateEarnedSnot = useMemo(() => {
-    return getInventoryItemCount("snot") - initialSnot
-  }, [getInventoryItemCount, initialSnot])
+    return gameState.inventory ? gameState.inventory.snot - initialSnot : 0 - initialSnot
+  }, [gameState.inventory, initialSnot])
 
   const currentBall = useMemo(() => {
     if (isBullActive) {
@@ -97,7 +96,7 @@ const FusionGame: React.FC = () => {
   const handleRestart = useCallback(() => {
     if (gameState.fusionAttemptsUsed < 2) {
       resetGame()
-      setInitialSnot(getInventoryItemCount("snot"))
+      setInitialSnot(gameState.inventory ? gameState.inventory.snot : 0)
       setIsGameOver(false)
       setFinalScore(0)
       startGameLoop()
@@ -113,7 +112,7 @@ const FusionGame: React.FC = () => {
     }
   }, [
     resetGame,
-    getInventoryItemCount,
+    gameState.inventory,
     startGameLoop,
     gameOverTimer,
     gameState.fusionAttemptsUsed,
@@ -278,13 +277,13 @@ const FusionGame: React.FC = () => {
       stopGameLoop()
     }
     try {
-      const initialSnotCount = getInventoryItemCount("snot")
+      const initialSnotCount = gameState.inventory ? gameState.inventory.snot : 0
       setInitialSnot(initialSnotCount)
     } catch (err) {
       console.error("Error initializing game:", err)
       setError("Failed to initialize game. Please try again.")
     }
-  }, [gameState.fusionGameActive, getInventoryItemCount, startGameLoop, stopGameLoop])
+  }, [gameState.fusionGameActive, startGameLoop, stopGameLoop, gameState.inventory])
 
   useEffect(() => {
     if (gameState.fusionAttemptsUsed >= 2 && !isGameStarted) {

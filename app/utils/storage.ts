@@ -1,4 +1,4 @@
-import type { GameState, GameStateChange } from "../types/gameTypes"
+import type { GameState } from "../types/gameTypes"
 import { compress, decompress } from "lz-string"
 import { encrypt, decrypt } from "./encryption"
 import { openDB, type DBSchema, type IDBPDatabase } from "idb"

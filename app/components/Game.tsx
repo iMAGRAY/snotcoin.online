@@ -69,7 +69,7 @@ const Game: React.FC = () => {
       case "games":
         return <Games />
       case "settings":
-        return <Settings />
+        return <Settings onClose={() => {}} />
       default:
         return <Laboratory />
     }

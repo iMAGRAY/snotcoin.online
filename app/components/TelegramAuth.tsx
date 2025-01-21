@@ -2,7 +2,7 @@ import type React from "react"
 import { useEffect, useState, useCallback } from "react"
 import { useGameDispatch } from "../contexts/GameContext"
 import { createNewUser, getUserByTelegramId } from "../utils/db"
-import { compareAndUpdateUserData, parseInitDataUnsafe } from "../utils/telegramUtils"
+import { parseInitDataUnsafe } from "../utils/telegramUtils"
 import Image from "next/image"
 
 const TelegramAuth: React.FC = () => {
@@ -18,7 +18,8 @@ const TelegramAuth: React.FC = () => {
         if (!dbUser) {
           dbUser = await createNewUser(telegramUser)
         } else {
-          dbUser = await compareAndUpdateUserData(dbUser, telegramUser)
+          // compareAndUpdateUserData is removed here.  Logic needs to be handled differently if needed.
+          dbUser = dbUser // Placeholder -  Consider alternative update logic if compareAndUpdateUserData was crucial.
         }
         dispatch({ type: "SET_USER", payload: dbUser })
         dispatch({

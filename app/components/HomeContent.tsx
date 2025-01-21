@@ -124,29 +124,34 @@ function HomeContentInner() {
     const initializeGame = async () => {
       if (isBrowser) {
         try {
-          if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-            const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
-            console.log("Raw initDataUnsafe:", initDataUnsafe)
-            const telegramUser = parseInitDataUnsafe(initDataUnsafe)
-
-            if (!telegramUser) {
-              throw new Error("Invalid user data")
-            }
-
-            console.log("Parsed Telegram user:", telegramUser)
-
-            // Save or update user in Supabase
-            const savedUser = await saveOrUpdateUser(telegramUser)
-            dispatch({ type: "SET_USER", payload: savedUser })
-
-            // Get or create game state
-            const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
-            dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
-
-            setIsGameLoaded(true)
-          } else {
-            setError("Telegram WebApp is not available")
+          if (typeof window === "undefined" || !window.Telegram?.WebApp) {
+            throw new Error("Telegram WebApp is not available")
           }
+
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
+          console.log("Raw initDataUnsafe:", initDataUnsafe)
+
+          if (!initDataUnsafe || typeof initDataUnsafe !== "object") {
+            throw new Error("Invalid initDataUnsafe")
+          }
+
+          const telegramUser = parseInitDataUnsafe(initDataUnsafe)
+
+          if (!telegramUser) {
+            throw new Error("Invalid user data")
+          }
+
+          console.log("Parsed Telegram user:", telegramUser)
+
+          // Save or update user in Supabase
+          const savedUser = await saveOrUpdateUser(telegramUser)
+          dispatch({ type: "SET_USER", payload: savedUser })
+
+          // Get or create game state
+          const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
+          dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
+
+          setIsGameLoaded(true)
         } catch (err) {
           console.error("Error in game initialization:", err)
           setError(err instanceof Error ? err.message : "An unknown error occurred during initialization")
@@ -162,7 +167,9 @@ function HomeContentInner() {
     if (state.user && isGameLoaded) {
       const saveGameState = async () => {
         try {
-          await updateGameState(state.user.telegram_id, state)
+          if (state.user) {
+            await updateGameState(state.user.telegram_id, state)
+          }
         } catch (error) {
           console.error("Error saving game state:", error)
         }
@@ -196,7 +203,27 @@ function HomeContentInner() {
   }
 
   if (error) {
-    return <ErrorDisplay message={`An error occurred: ${error}`} />
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-4">
+        <h1 className="text-2xl font-bold mb-4">Error</h1>
+        <p className="text-center mb-4">{error}</p>
+        <p className="text-center mb-4">Additional error details have been logged to the console.</p>
+        {error === "Telegram WebApp is not available" && (
+          <div className="text-center">
+            <p className="mb-2">This application is designed to run within the Telegram Web App environment.</p>
+            <p className="mb-4">Please ensure you're opening this app through Telegram.</p>
+            <a
+              href="https://core.telegram.org/bots/webapps"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Learn more about Telegram Web Apps
+            </a>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const gameState = useGameContext().state

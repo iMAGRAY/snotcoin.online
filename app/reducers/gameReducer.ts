@@ -6,6 +6,7 @@ const calculateFillingSpeed = (level: number): number => {
 }
 
 export const initialState: GameState = {
+  telegram_id: 0,
   containerLevel: 1,
   fillingSpeedLevel: 1,
   containerSnot: 0,

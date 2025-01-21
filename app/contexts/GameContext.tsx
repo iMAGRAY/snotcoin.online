@@ -19,18 +19,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saveGame = useCallback(async () => {
     if (state.user) {
-      await saveGameState(state.user.telegram_id.toString(), state)
+      await saveGameState(state.user.telegram_id.toString())
     }
-  }, [state])
+  }, [state.user])
 
   const loadGame = useCallback(async () => {
     if (state.user) {
-      const loadedState = await loadGameState(state.user.telegram_id.toString())
+      const loadedState = await loadGameState()
       if (loadedState) {
         dispatch({ type: "LOAD_GAME_STATE", payload: loadedState })
       }
     }
-  }, [state.user])
+  }, [state.user, dispatch])
 
   useEffect(() => {
     const user = getTelegramUser()
