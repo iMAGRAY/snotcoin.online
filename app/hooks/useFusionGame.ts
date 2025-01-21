@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from "react"
-import { useGameState, useGameDispatch } from "../contexts/GameContext"
 import { type Ball, GAME_CONSTANTS, BALL_LEVELS, EXPLOSIVE_BALL, BULL_BALL } from "../types/fusion-game"
 import { resolveCollision } from "../utils/fusion-game-utils"
 
@@ -22,10 +21,9 @@ export const useFusionGame = () => {
   const [ballsInTransparentZone, setBallsInTransparentZone] = useState(0)
   const [isPaused, setIsPaused] = useState(false) // Added isPaused state
 
-  const gameState = useGameState()
+  const { inventory } = useGameState()
   const gameDispatch = useGameDispatch()
   const getInventoryItemCount = (item: string) => 0
-  const { inventory } = useGameState()
   const nextBallId = useRef(0)
   const animationFrameId = useRef<number | null>(null)
 
@@ -214,7 +212,7 @@ export const useFusionGame = () => {
       setPendingScoreIncrease(0)
       setPendingSnotReward(0)
     }
-  }, [pendingScoreIncrease, pendingSnotReward, gameDispatch, gameState.inventory.snot])
+  }, [pendingScoreIncrease, pendingSnotReward, gameDispatch, inventory.snot])
 
   useEffect(() => {
     if (isJoyActive) {

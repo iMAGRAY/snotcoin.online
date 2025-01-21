@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react"
 import { AnimatePresence } from "framer-motion"
-import { useGameState, useGameDispatch } from "../../../../contexts/GameContext"
 import { useTranslation } from "../../../../contexts/TranslationContext"
 import { useRouter } from "next/navigation"
 import Header from "./Header"
@@ -19,7 +18,6 @@ import Joy from "./power-ups/joy"
 import Bull from "./power-ups/bull"
 
 const FusionGame: React.FC = () => {
-  const gameState = useGameState()
   const gameDispatch = useGameDispatch()
   const { t } = useTranslation()
   const router = useRouter()

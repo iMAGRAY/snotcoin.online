@@ -71,7 +71,7 @@ export async function loadGameState(): Promise<GameState | null> {
         const compressedState = decrypt(encryptedState)
         const serializedState = decompress(compressedState)
         state = JSON.parse(serializedState)
-        await db.put("gameState", state, "current")
+        await db.put("gameState", { key: "current", value: state })
       }
     } catch (error) {
       console.error("Error loading game state from Telegram CloudStorage:", error)
@@ -79,11 +79,11 @@ export async function loadGameState(): Promise<GameState | null> {
   }
 
   if (state) {
-    if (state.version === STORAGE_VERSION) {
-      return state.state as GameState
+    if (state.value.version === STORAGE_VERSION) {
+      return state.value.state as GameState
     } else {
       console.warn("Outdated game state version, migrating...")
-      return migrateGameState(state.state, state.version)
+      return migrateGameState(state.value.state, state.value.version)
     }
   }
 

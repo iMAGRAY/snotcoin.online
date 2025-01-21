@@ -2,7 +2,6 @@ import type React from "react"
 import { useEffect, useState, useCallback } from "react"
 import { useGameDispatch } from "../contexts/GameContext"
 import { createNewUser, getUserByTelegramId } from "../utils/db"
-import { parseInitDataUnsafe } from "../utils/telegramUtils"
 import Image from "next/image"
 
 const TelegramAuth: React.FC = () => {
@@ -44,7 +43,7 @@ const TelegramAuth: React.FC = () => {
         try {
           const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe
           console.log("InitData:", initDataUnsafe)
-          const telegramUser = parseInitDataUnsafe(initDataUnsafe)
+          const telegramUser = JSON.parse(initDataUnsafe) // Assuming initDataUnsafe is a JSON string
 
           setUser(telegramUser)
           await updateUserData(telegramUser)

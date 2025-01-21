@@ -65,7 +65,6 @@
     "@headlessui/react": "latest",
     "url": "latest",
     "path": "latest",
-    "crypto-js": "latest",
     "lz-string": "latest",
     "idb": "latest",
     "@supabase/supabase-js": "latest"

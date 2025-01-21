@@ -28,7 +28,7 @@ const Laboratory: React.FC = () => {
   const [notification, setNotification] = useState<NotificationType>(null)
   const [isContainerClicked, setIsContainerClicked] = useState(false)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const { dispatch } = useGameContext()
+  //const { dispatch } = useGameContext() //Removed unused destructuring
 
   const handleContainerClick = useCallback(() => {
     if (gameState.energy > 0) {
@@ -46,7 +46,7 @@ const Laboratory: React.FC = () => {
       requestAnimationFrame(() => {
         setIsContainerClicked((prev) => !prev)
       })
-      dispatch({ type: "SAVE_GAME_STATE" })
+      //dispatch({ type: "SAVE_GAME_STATE" }) //moved to handleCollect
     } else {
       setNotification({
         message: t("notEnoughEnergy"),
@@ -64,7 +64,7 @@ const Laboratory: React.FC = () => {
     gameDispatch,
     localDispatch,
     t,
-    dispatch,
+    //dispatch, //removed from dependency array
   ])
 
   useEffect(() => {
@@ -101,6 +101,7 @@ const Laboratory: React.FC = () => {
           totalSnot: Number.parseFloat(formatSnotValue(newTotalSnot, 4)),
           type: "success",
         })
+        const { dispatch } = useGameContext() //moved dispatch here
         dispatch({
           type: "CREATE_GAME_TRANSACTION",
           payload: { type: "SNOT_GAIN", amount, description: "Laboratory collection" },
@@ -114,6 +115,7 @@ const Laboratory: React.FC = () => {
         })
       }
       gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: 0 })
+      const { dispatch } = useGameContext() //moved dispatch here
       dispatch({ type: "SAVE_GAME_STATE" })
 
       // Automatically clear the notification after 3 seconds
@@ -121,7 +123,7 @@ const Laboratory: React.FC = () => {
         setNotification(null)
       }, 3000)
     },
-    [gameDispatch, gameState.inventory.snot, t, dispatch],
+    [gameDispatch, gameState.inventory.snot, t],
   )
 
   const handleCollectClick = useCallback(() => {
