@@ -1,33 +1,88 @@
-import axios from "axios"
+import type { User } from "../types/gameTypes"
 
-export interface TelegramAuthResponse {
-  verified: boolean
-  user?: {
-    id: number
-    first_name?: string
-    last_name?: string
-    username?: string
-    language_code?: string
-    photo_url?: string
+export function getTelegramUser(): User | null {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe) {
+    const { user } = window.Telegram.WebApp.initDataUnsafe
+    if (user) {
+      return {
+        id: user.id,
+        telegram_id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        username: user.username,
+        language_code: user.language_code,
+        photo_url: user.photo_url,
+        auth_date: Math.floor(Date.now() / 1000),
+      }
+    }
   }
-  error?: string
+  return null
 }
 
-export async function verifyTelegramAuth(initData: string): Promise<TelegramAuthResponse> {
-  try {
-    console.log("Verifying Telegram auth with initData:", initData) // Добавлено для отладки
-    const response = await axios.post("/api/auth/verify-telegram", { initData })
-    console.log("Verification response:", response.data) // Добавлено для отладки
-    return response.data
-  } catch (error) {
-    console.error("Error verifying Telegram auth:", error)
-    if (axios.isAxiosError(error)) {
-      console.error("Axios error details:", error.response?.data) // Добавлено для отладки
+export function isTelegramWebAppAvailable(): boolean {
+  return typeof window !== "undefined" && !!window.Telegram?.WebApp
+}
+
+export function getTelegramInitData(): string | null {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    return window.Telegram.WebApp.initData
+  }
+  return null
+}
+
+export function getTelegramThemeParams(): any {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    return window.Telegram.WebApp.themeParams
+  }
+  return null
+}
+
+export function setTelegramBackButton(show: boolean): void {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    if (show) {
+      window.Telegram.WebApp.BackButton.show()
+    } else {
+      window.Telegram.WebApp.BackButton.hide()
     }
-    return {
-      verified: false,
-      error: error instanceof Error ? error.message : "An unknown error occurred",
+  }
+}
+
+export function closeTelegramWebApp(): void {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    window.Telegram.WebApp.close()
+  }
+}
+
+export function expandTelegramWebApp(): void {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    window.Telegram.WebApp.expand()
+  }
+}
+
+export function setTelegramMainButton(params: {
+  text: string
+  color: string
+  textColor: string
+  isVisible: boolean
+  isActive: boolean
+  onClick: () => void
+}): void {
+  if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+    const { MainButton } = window.Telegram.WebApp
+    MainButton.text = params.text
+    MainButton.color = params.color
+    MainButton.textColor = params.textColor
+    if (params.isVisible) {
+      MainButton.show()
+    } else {
+      MainButton.hide()
     }
+    if (params.isActive) {
+      MainButton.enable()
+    } else {
+      MainButton.disable()
+    }
+    MainButton.onClick(params.onClick)
   }
 }
 

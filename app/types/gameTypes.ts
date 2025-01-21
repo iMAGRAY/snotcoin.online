@@ -65,6 +65,12 @@ export interface GameState {
   effectsSoundVolume: number
   containerCapacity: number
   snotCoins: number
+  theme: {
+    backgroundColor?: string
+    textColor?: string
+    buttonColor?: string
+    buttonTextColor?: string
+  }
 }
 
 // Action types
@@ -108,6 +114,7 @@ export type Action =
   | { type: "SET_MUTE"; payload: boolean }
   | { type: "UPGRADE_COLLECTION_EFFICIENCY"; payload: number }
   | { type: "SET_EFFECTS_SOUND_VOLUME"; payload: number }
+  | { type: "SET_THEME"; payload: GameState["theme"] }
 
 // Resource type
 export type Resource = keyof Pick<GameState, "containerSnot">
@@ -175,5 +182,6 @@ export const initialState: GameState = {
   effectsSoundVolume: 0.5,
   containerCapacity: 10,
   snotCoins: 0,
+  theme: {},
 }
 

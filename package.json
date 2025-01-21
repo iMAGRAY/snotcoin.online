@@ -62,12 +62,13 @@
     "@react-spring/web": "latest",
     "next-i18next": "latest",
     "zustand": "latest",
-    "axios": "latest",
     "@headlessui/react": "latest",
     "url": "latest",
     "path": "latest",
-    "@supabase/supabase-js": "latest",
-    "ethers": "latest"
+    "crypto-js": "latest",
+    "lz-string": "latest",
+    "idb": "latest",
+    "@supabase/supabase-js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

@@ -44,6 +44,9 @@ export const initialState: GameState = {
   isEffectsMuted: false,
   effectsSoundVolume: 0.5,
   snotCoins: 0,
+  theme: {
+    // Add default theme properties here
+  },
 }
 
 export function gameReducer(state: GameState, action: Action): GameState {
@@ -139,11 +142,6 @@ export function gameReducer(state: GameState, action: Action): GameState {
       return {
         ...state,
         containerSnot: newContainerSnot,
-      }
-    case "SET_BACKGROUND_MUSIC_MUTE":
-      return {
-        ...state,
-        isBackgroundMusicMuted: action.payload,
       }
     case "SET_EFFECTS_MUTE":
       return {
@@ -251,6 +249,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
       }
     case "SET_USER":
       return { ...state, user: action.payload }
+    case "SET_THEME":
+      return { ...state, theme: { ...state.theme, ...action.payload } }
     case "INCREMENT_FUSION_GAMES_PLAYED":
       return {
         ...state,

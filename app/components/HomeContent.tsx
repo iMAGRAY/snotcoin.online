@@ -12,35 +12,90 @@ import { parseInitDataUnsafe } from "../utils/telegramUtils"
 import { getOrCreateUserGameState, updateGameState, saveOrUpdateUser } from "../utils/db"
 import type { User, GameState } from "../types/gameTypes"
 
-// Import all main components
-const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const Storage = dynamic(() => import("./game/Storage"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const Games = dynamic(() => import("./game/Games"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const TabBar = dynamic(() => import("./TabBar/TabBar"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const Fusion = dynamic(() => import("./game/fusion/Fusion"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const Settings = dynamic(() => import("./game/Settings"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
-const ProfilePage = dynamic(() => import("./game/profile/ProfilePage"), {
-  loading: () => <LoadingScreen />,
-  ssr: false,
-})
+// Import all main components with error handling
+const Laboratory = dynamic(
+  () =>
+    import("./game/laboratory/laboratory").catch((err) => {
+      console.error("Error loading Laboratory:", err)
+      return () => <ErrorDisplay message="Failed to load Laboratory component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const Storage = dynamic(
+  () =>
+    import("./game/Storage").catch((err) => {
+      console.error("Error loading Storage:", err)
+      return () => <ErrorDisplay message="Failed to load Storage component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const Games = dynamic(
+  () =>
+    import("./game/Games").catch((err) => {
+      console.error("Error loading Games:", err)
+      return () => <ErrorDisplay message="Failed to load Games component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const TabBar = dynamic(
+  () =>
+    import("./TabBar/TabBar").catch((err) => {
+      console.error("Error loading TabBar:", err)
+      return () => <ErrorDisplay message="Failed to load TabBar component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const Fusion = dynamic(
+  () =>
+    import("./game/fusion/Fusion").catch((err) => {
+      console.error("Error loading Fusion:", err)
+      return () => <ErrorDisplay message="Failed to load Fusion component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const Settings = dynamic(
+  () =>
+    import("./game/Settings").catch((err) => {
+      console.error("Error loading Settings:", err)
+      return () => <ErrorDisplay message="Failed to load Settings component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
+
+const ProfilePage = dynamic(
+  () =>
+    import("./game/profile/ProfilePage").catch((err) => {
+      console.error("Error loading ProfilePage:", err)
+      return () => <ErrorDisplay message="Failed to load ProfilePage component" />
+    }),
+  {
+    loading: () => <LoadingScreen />,
+    ssr: false,
+  },
+)
 
 const isBrowser = typeof window !== "undefined"
 
@@ -140,67 +195,67 @@ function HomeContentInner() {
     }
   }
 
+  if (error) {
+    return <ErrorDisplay message={`An error occurred: ${error}`} />
+  }
+
   const gameState = useGameContext().state
 
   return (
-    <ErrorBoundary
-      fallback={<ErrorDisplay message="An unexpected error occurred in the game provider. Please try again." />}
+    <main
+      className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black"
+      style={{
+        height: viewportHeight,
+        maxHeight: viewportHeight,
+        maxWidth: "100vw",
+        margin: "0 auto",
+        backgroundColor: "var(--tg-theme-bg-color, #1c1c1e)",
+        color: "var(--tg-theme-text-color, #ffffff)",
+      }}
     >
-      <main
-        className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black"
-        style={{
-          height: viewportHeight,
-          maxHeight: viewportHeight,
-          maxWidth: "100vw",
-          margin: "0 auto",
-          backgroundColor: "var(--tg-theme-bg-color, #1c1c1e)",
-          color: "var(--tg-theme-text-color, #ffffff)",
-        }}
-      >
-        <div className="flex flex-col h-full">
-          {state.activeTab !== "profile" && (
-            <ErrorBoundary
-              fallback={<ErrorDisplay message="An error occurred while loading resources. Please try again." />}
-            >
-              <Suspense fallback={<LoadingScreen />}>
-                <Resources
-                  isVisible={true}
-                  isSettingsOpen={isSettingsOpen}
-                  setIsSettingsOpen={setIsSettingsOpen}
-                  closeSettings={closeSettings}
-                  showStatusPanel={true}
-                  activeTab={state.activeTab}
-                  energy={gameState.energy}
-                  maxEnergy={gameState.maxEnergy}
-                  energyRecoveryTime={gameState.energyRecoveryTime}
-                  snotCoins={gameState.inventory.snotCoins}
-                  snot={gameState.inventory.snot}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
-          <div className="flex-grow relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50 z-10" />
-            <div className="relative z-20 h-full overflow-y-auto">
-              <AnimatePresence mode="wait">
-                <ErrorBoundary
-                  fallback={<ErrorDisplay message="An error occurred in the main content. Please try again." />}
-                >
-                  <Suspense fallback={<LoadingScreen />}>{renderActivePage()}</Suspense>
-                </ErrorBoundary>
-              </AnimatePresence>
-            </div>
-          </div>
+      <div className="flex flex-col h-full">
+        {state.activeTab !== "profile" && (
           <ErrorBoundary
-            fallback={<ErrorDisplay message="An error occurred while loading the tab bar. Please try again." />}
+            fallback={<ErrorDisplay message="An error occurred while loading resources. Please try again." />}
           >
             <Suspense fallback={<LoadingScreen />}>
-              <TabBar setIsSettingsOpen={setIsSettingsOpen} closeSettings={closeSettings} />
+              <Resources
+                isVisible={true}
+                isSettingsOpen={isSettingsOpen}
+                setIsSettingsOpen={setIsSettingsOpen}
+                closeSettings={closeSettings}
+                showStatusPanel={true}
+                activeTab={state.activeTab}
+                energy={state.energy}
+                maxEnergy={state.maxEnergy}
+                energyRecoveryTime={state.energyRecoveryTime}
+                snotCoins={state.inventory.snotCoins}
+                snot={state.inventory.snot}
+              />
             </Suspense>
           </ErrorBoundary>
+        )}
+        <div className="flex-grow relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50 z-10" />
+          <div className="relative z-20 h-full overflow-y-auto">
+            <AnimatePresence mode="wait">
+              <ErrorBoundary
+                fallback={<ErrorDisplay message="An error occurred in the main content. Please try again." />}
+              >
+                <Suspense fallback={<LoadingScreen />}>{renderActivePage()}</Suspense>
+              </ErrorBoundary>
+            </AnimatePresence>
+          </div>
         </div>
-      </main>
-    </ErrorBoundary>
+        <ErrorBoundary
+          fallback={<ErrorDisplay message="An error occurred while loading the tab bar. Please try again." />}
+        >
+          <Suspense fallback={<LoadingScreen />}>
+            <TabBar setIsSettingsOpen={setIsSettingsOpen} closeSettings={closeSettings} />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    </main>
   )
 }
 
