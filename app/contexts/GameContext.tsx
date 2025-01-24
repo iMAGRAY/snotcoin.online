@@ -1,13 +1,18 @@
 "use client"
 
+import type React from "react"
 import { createContext, useContext, useReducer, useCallback, useMemo, useEffect } from "react"
 import { gameReducer, initialState } from "../reducers/gameReducer"
 import type { GameState, Action } from "../types/gameTypes"
+import {
+  saveToLocalStorage,
+  loadFromLocalStorage,
+  loadUserFromLocalStorage,
+  saveUserToLocalStorage,
+  clearLocalStorage,
+} from "../utils/localStorage"
 import { AuthProvider } from "./AuthContext"
 import { calculateEnergyReplenishment } from "../utils/energyUtils"
-import { saveGameState, loadGameState } from "../utils/gameStateManager"
-import { getCurrentUser } from "../utils/auth"
-import { debounce } from "lodash"
 
 const GameContext = createContext<GameContextType | undefined>(undefined)
 
@@ -22,74 +27,69 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const contextValue = useMemo(() => ({ state, dispatch }), [state])
 
   useEffect(() => {
-    const loadInitialState = async () => {
-      const {
-        data: { user },
-      } = await getCurrentUser()
-      if (user) {
+    const loadInitialState = () => {
+      const authToken = localStorage.getItem("authToken")
+      if (authToken) {
         try {
-          const savedState = await loadGameState(user.id)
-          if (savedState) {
-            dispatch({ type: "LOAD_GAME_STATE", payload: savedState })
+          let userData
+          try {
+            const decodedToken = atob(authToken)
+            userData = JSON.parse(decodedToken)
+          } catch (error) {
+            console.error("Error decoding auth token:", error)
+            userData = null
+          }
+
+          if (userData) {
+            console.log("Loading initial user data:", userData)
+            dispatch({ type: "LOAD_USER_DATA", payload: userData } as Action)
+          } else {
+            console.error("Invalid user data in auth token")
           }
         } catch (error) {
-          console.error("Error loading initial game state:", error)
+          console.error("Error loading initial user data:", error)
         }
+      } else {
+        console.log("No auth token found in localStorage")
       }
     }
 
     loadInitialState()
   }, [])
 
-  const saveState = async () => {
-    try {
-      if (!state.user?.id) {
-        console.error("User ID is missing, cannot save game state")
-        return
-      }
-      await saveGameState(state.user.id, state)
-      console.log("Game state saved successfully")
-    } catch (error) {
-      console.error("Error saving game state:", error)
-      dispatch({ type: "SAVE_GAME_STATE_ERROR", payload: "Failed to save game state. Please try again later." })
-    }
-  }
-
-  const debouncedSaveState = useMemo(
-    () => debounce(saveState, 5000, { leading: false, trailing: true }),
-    [state.user?.id],
-  )
-
   useEffect(() => {
     if (state.user) {
-      debouncedSaveState()
+      console.log("GameContext updated:", state)
+
+      // Calculate energy replenishment
+      const lastLoginTime = state.lastLoginTime || Date.now()
+      const replenishedEnergy = calculateEnergyReplenishment(
+        lastLoginTime,
+        state.energy,
+        state.maxEnergy,
+        1, // Replenish 1 energy per minute
+      )
+
+      // Update state with replenished energy and new login time
+      if (replenishedEnergy !== state.energy) {
+        dispatch({ type: "SET_ENERGY", payload: replenishedEnergy } as Action)
+        dispatch({ type: "SET_LAST_LOGIN_TIME", payload: Date.now() } as Action)
+      }
+
+      const intervalId = setInterval(() => {
+        dispatch({ type: "UPDATE_RESOURCES" } as Action)
+      }, 1000)
+
+      return () => clearInterval(intervalId)
     }
-    return () => {
-      debouncedSaveState.cancel()
-    }
-  }, [state, debouncedSaveState])
+  }, [state.user, state.lastLoginTime, state.energy, state.maxEnergy])
 
   useEffect(() => {
-    const lastLoginTime = state.lastLoginTime || Date.now()
-    const replenishedEnergy = calculateEnergyReplenishment(
-      lastLoginTime,
-      state.energy,
-      state.maxEnergy,
-      1, // Replenish 1 energy per minute
-    )
-
-    // Update state with replenished energy and new login time
-    if (replenishedEnergy !== state.energy) {
-      dispatch({ type: "SET_ENERGY", payload: replenishedEnergy })
-      dispatch({ type: "SET_LAST_LOGIN_TIME", payload: new Date().toISOString() })
+    const authToken = localStorage.getItem("authToken")
+    if (authToken && !state.user) {
+      dispatch({ type: "LOAD_USER_DATA", payload: authToken } as Action)
     }
-
-    const intervalId = setInterval(() => {
-      dispatch({ type: "UPDATE_RESOURCES" })
-    }, 1000)
-
-    return () => clearInterval(intervalId)
-  }, [state.lastLoginTime, state.energy, state.maxEnergy])
+  }, [state.user])
 
   return (
     <AuthProvider>
@@ -121,16 +121,20 @@ export const useInventory = () => {
 
   const addToInventory = useCallback(
     (item: keyof GameState["inventory"], amount: number) => {
-      dispatch({ type: "ADD_TO_INVENTORY", item, amount })
+      if (state.user) {
+        dispatch({ type: "ADD_TO_INVENTORY", item, amount })
+      }
     },
-    [dispatch],
+    [dispatch, state.user],
   )
 
   const removeFromInventory = useCallback(
     (item: keyof GameState["inventory"], amount: number) => {
-      dispatch({ type: "REMOVE_FROM_INVENTORY", item, amount })
+      if (state.user) {
+        dispatch({ type: "REMOVE_FROM_INVENTORY", item, amount })
+      }
     },
-    [dispatch],
+    [dispatch, state.user],
   )
 
   return {
@@ -157,9 +161,11 @@ export const useEnergy = () => {
 
   const consumeEnergy = useCallback(
     (amount: number) => {
-      dispatch({ type: "CONSUME_ENERGY", payload: amount })
+      if (state.user) {
+        dispatch({ type: "CONSUME_ENERGY", payload: amount })
+      }
     },
-    [dispatch],
+    [dispatch, state.user],
   )
 
   return {
@@ -174,12 +180,16 @@ export const useFusionGame = () => {
   const { state, dispatch } = useGameContext()
 
   const startFusionGame = useCallback(() => {
-    dispatch({ type: "START_FUSION_GAME" })
-  }, [dispatch])
+    if (state.user) {
+      dispatch({ type: "START_FUSION_GAME" })
+    }
+  }, [dispatch, state.user])
 
   const resetFusionGame = useCallback(() => {
-    dispatch({ type: "RESET_FUSION_GAME" })
-  }, [dispatch])
+    if (state.user) {
+      dispatch({ type: "RESET_FUSION_GAME" })
+    }
+  }, [dispatch, state.user])
 
   return {
     fusionGameActive: state.fusionGameActive,
@@ -196,7 +206,7 @@ export const useWallet = () => {
   const { state } = useGameContext()
   return {
     wallet: state.wallet,
-    ethBalance: state.ethBalance,
+    ethBalance: state.wallet?.balance || "0",
   }
 }
 

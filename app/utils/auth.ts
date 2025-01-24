@@ -1,26 +1,17 @@
-import { supabase } from "./supabase"
+import { sign, verify } from "jsonwebtoken"
+import type { TelegramUser } from "../types/gameTypes"
 
-export async function signIn(token: string) {
-  const { data, error } = await supabase.auth.signInWithIdToken({
-    provider: "telegram",
-    token,
-  })
-  if (error) throw error
-  return data
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
+export function generateToken(user: TelegramUser): string {
+  return sign({ user }, JWT_SECRET, { expiresIn: "7d" })
 }
 
-export async function signOut() {
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
-}
-
-export function getCurrentUser() {
-  return supabase.auth.getUser()
-}
-
-export function verifyToken(token: string) {
-  // Implement token verification logic here
-  // This is a placeholder and should be replaced with actual token verification
-  return true
+export function verifyToken(token: string): { user: TelegramUser } | null {
+  try {
+    return verify(token, JWT_SECRET) as { user: TelegramUser }
+  } catch (error) {
+    return null
+  }
 }
 

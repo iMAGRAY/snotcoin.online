@@ -6,7 +6,7 @@ import {
   CONTAINER_UPGRADES,
   FILLING_SPEED_UPGRADES,
 } from "../types/gameTypes"
-import { saveToLocalStorage } from "../utils/localStorage"
+import { saveToLocalStorage, saveUserToLocalStorage } from "../utils/localStorage"
 
 const calculateFillingSpeed = (level: number): number => {
   return BASE_FILLING_SPEED * level
@@ -29,7 +29,7 @@ export const initialState: GameState = {
     snot: 0,
     snotCoins: 0,
     collectionEfficiency: 1.0,
-    Cap: 1,
+    containerCapacity: 1,
     containerCapacityLevel: 1,
     fillingSpeedLevel: 1,
   },
@@ -45,7 +45,6 @@ export const initialState: GameState = {
   backgroundMusicVolume: 0.5,
   isMuted: false,
   isBackgroundMusicMuted: false,
-  Cap: 1,
   containerCapacity: 1,
   containerCapacityLevel: 1,
   ethBalance: "0",
@@ -71,8 +70,6 @@ export const initialState: GameState = {
     },
   },
   miniGamesProgress: {},
-  error: null,
-  lastLoginTime: Date.now(),
 }
 
 export function gameReducer(state: GameState, action: Action): GameState {
@@ -81,7 +78,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
       if (action.resource === "containerSnot") {
         return {
           ...state,
-          containerSnot: Math.min(action.payload, state.inventory.Cap),
+          containerSnot: Math.min(action.payload, state.inventory.containerCapacity),
         }
       }
       return { ...state, [action.resource]: action.payload }
@@ -89,7 +86,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
     case "UPDATE_RESOURCES":
       return {
         ...state,
-        containerSnot: Math.min(state.containerSnot + state.fillingSpeed, state.inventory.Cap),
+        containerSnot: Math.min(state.containerSnot + state.fillingSpeed, state.inventory.containerCapacity),
       }
 
     case "UPDATE_ENERGY":
@@ -140,7 +137,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
             containerLevel: state.containerLevel + 1,
             inventory: {
               ...state.inventory,
-              Cap: state.inventory.Cap + upgrade.capacityIncrease,
+              containerCapacity: state.inventory.containerCapacity + upgrade.capacityIncrease,
               snotCoins: state.inventory.snotCoins - upgrade.cost,
             },
           }
@@ -216,23 +213,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
       }
 
     case "SET_USER":
-      return {
-        ...state,
-        user: action.payload,
-      }
-
-    case "LOAD_GAME_STATE":
-      const loadedState = localStorage.getItem("gameState")
-      if (loadedState) {
-        try {
-          const parsedState = JSON.parse(loadedState)
-          return { ...state, ...parsedState }
-        } catch (error) {
-          console.error("Error parsing saved game state:", error)
-          return state
-        }
-      }
-      return state
+      return { ...state, user: action.payload }
 
     case "UPDATE_VALIDATION_STATUS":
       return {
@@ -246,12 +227,27 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
     case "LOAD_USER_DATA":
       try {
-        if (typeof action.payload !== "string" && typeof action.payload !== "object") {
-          console.error("LOAD_USER_DATA: Invalid payload type")
+        if (!action.payload) {
+          console.error("LOAD_USER_DATA: Payload is empty")
           return state
         }
 
-        const userData = typeof action.payload === "string" ? JSON.parse(atob(action.payload)) : action.payload
+        let userData
+        if (typeof action.payload === "string") {
+          // If payload is a string (likely a token), try to decode it
+          const decodedData = atob(action.payload)
+          if (!decodedData) {
+            console.error("LOAD_USER_DATA: Decoded data is empty")
+            return state
+          }
+          userData = JSON.parse(decodedData)
+        } else if (typeof action.payload === "object") {
+          // If payload is already an object, use it directly
+          userData = action.payload
+        } else {
+          console.error("LOAD_USER_DATA: Invalid payload type")
+          return state
+        }
 
         if (!userData || typeof userData !== "object") {
           console.error("LOAD_USER_DATA: Invalid user data format")
@@ -271,22 +267,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
     case "SET_ENERGY":
       return { ...state, energy: Math.min(action.payload, state.maxEnergy) }
 
-    case "SET_LAST_LOGIN_TIME":
-      return { ...state, lastLoginTime: Date.parse(action.payload) }
-
-    case "SET_ERROR":
-      console.error(action.payload)
-      return { ...state, error: action.payload }
-
     case "REPLENISH_ENERGY":
       return { ...state, energy: Math.min(state.energy + action.payload, state.maxEnergy) }
-
-    case "SAVE_GAME_STATE_ERROR":
-      console.error("Error saving game state:", action.payload)
-      return {
-        ...state,
-        error: action.payload,
-      }
 
     default:
       return state

@@ -1,11 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { verifyData, decryptData } from "../utils/security"
+import type { AuthenticatedRequest } from "../middleware/authMiddleware"
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method === "GET") {
     try {
       // Проверка аутентификации (предполагается, что у вас есть middleware для этого)
-      if (!(req as any).user) {
+      if (!("user" in req)) {
         return res.status(401).json({ error: "Unauthorized" })
       }
 

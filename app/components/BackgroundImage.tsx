@@ -92,7 +92,7 @@ const BackgroundImage: React.FC = React.memo(() => {
     energy = 0,
     maxEnergy = 100,
     containerSnot = 0,
-    Cap: maxContainerSnot = 10,
+    containerCapacity = 10,
     fillingSpeed = 1 / (24 * 60 * 60),
     energyRecoveryTime = 0,
     fusionGameActive = false,
@@ -119,7 +119,7 @@ const BackgroundImage: React.FC = React.memo(() => {
     if (now - lastClickTime > 100 && consumeEnergy()) {
       setLastClickTime(now)
       const amountToAdd = fillingSpeed
-      const newContainerSnot = Math.min(containerSnot + amountToAdd, maxContainerSnot)
+      const newContainerSnot = Math.min(containerSnot + amountToAdd, containerCapacity)
 
       dispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
 
@@ -140,7 +140,7 @@ const BackgroundImage: React.FC = React.memo(() => {
     consumeEnergy,
     dispatch,
     containerSnot,
-    maxContainerSnot,
+    containerCapacity,
     fillingSpeed,
     lastClickTime,
     flyingNumberId,
@@ -149,12 +149,12 @@ const BackgroundImage: React.FC = React.memo(() => {
   ])
 
   const handleCollectClick = useCallback(() => {
-    if (containerSnot >= maxContainerSnot) {
+    if (containerSnot >= containerCapacity) {
       localDispatch({ type: "SET_LOCAL_STATE", payload: { showColorButtons: true } })
     } else {
       console.log(t("containerNotFullYet"))
     }
-  }, [containerSnot, maxContainerSnot, t])
+  }, [containerSnot, containerCapacity, t])
 
   const handleColorSelect = useCallback(
     (button: (typeof collectButtons)[0]) => {
@@ -247,14 +247,14 @@ const BackgroundImage: React.FC = React.memo(() => {
     () => (
       <motion.button
         onClick={handleCollectClick}
-        disabled={containerSnot < maxContainerSnot}
+        disabled={containerSnot < containerCapacity}
         className={`${buttonBaseStyles} ${
-          containerSnot >= maxContainerSnot
+          containerSnot >= containerCapacity
             ? "from-yellow-400 to-yellow-600 border-yellow-300 hover:from-yellow-500 hover:to-yellow-700"
             : "from-gray-400 to-gray-500 border-gray-400"
         }`}
-        whileHover={containerSnot >= maxContainerSnot ? { scale: 1.05 } : {}}
-        whileTap={containerSnot >= maxContainerSnot ? { scale: 0.95 } : {}}
+        whileHover={containerSnot >= containerCapacity ? { scale: 1.05 } : {}}
+        whileTap={containerSnot >= containerCapacity ? { scale: 0.95 } : {}}
         transition={{ type: "spring", stiffness: 300, damping: 15 }}
       >
         <span
@@ -265,7 +265,7 @@ const BackgroundImage: React.FC = React.memo(() => {
           <Sparkles className="ml-2 h-5 w-5" />
         </span>
         <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
-        {containerSnot >= maxContainerSnot && (
+        {containerSnot >= containerCapacity && (
           <div
             className="absolute inset-0 rounded-xl"
             style={{ boxShadow: "inset 0 0 20px 5px rgba(255,215,0,0.5)" }}
@@ -273,7 +273,7 @@ const BackgroundImage: React.FC = React.memo(() => {
         )}
       </motion.button>
     ),
-    [buttonBaseStyles, containerSnot, maxContainerSnot, handleCollectClick, t],
+    [buttonBaseStyles, containerSnot, containerCapacity, handleCollectClick, t],
   )
 
   const renderUpgradeButton = useMemo(
@@ -337,7 +337,7 @@ const BackgroundImage: React.FC = React.memo(() => {
               <motion.div
                 className="w-full transition-all duration-300 ease-in-out"
                 style={{
-                  height: `${(containerSnot / maxContainerSnot) * 100}%`,
+                  height: `${(containerSnot / containerCapacity) * 100}%`,
                   background: "rgb(16, 165, 109)",
                   borderRadius: "0 0 1rem 1rem",
                 }}

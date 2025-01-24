@@ -157,7 +157,7 @@ export const useFusionGame = () => {
                 ball1,
                 ball2,
                 nextBallId,
-                gameInventory.Cap,
+                gameInventory.containerCapacity,
               )
 
               if (mergedBall) {
@@ -205,7 +205,7 @@ export const useFusionGame = () => {
 
       return updatedBalls
     })
-  }, [isJoyActive, nextBallId, setHighestMergedLevel, gameInventory.Cap])
+  }, [isJoyActive, nextBallId, setHighestMergedLevel, gameInventory.containerCapacity])
 
   useEffect(() => {
     if (pendingScoreIncrease > 0 || pendingSnotReward > 0) {

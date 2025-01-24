@@ -90,7 +90,7 @@ const FusionGame: React.FC = () => {
   const handleHome = useCallback(() => {
     resetGame()
     gameDispatch({ type: "RESET_FUSION_GAME" })
-    gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+    gameDispatch({ type: "SET_ACTIVE_TAB", payload: "fusion" })
     router.push("/")
   }, [resetGame, gameDispatch, router])
 
@@ -331,7 +331,7 @@ const FusionGame: React.FC = () => {
   useEffect(() => {
     return () => {
       gameDispatch({ type: "RESET_FUSION_GAME" })
-      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "fusion" })
       gameDispatch({ type: "SET_FUSION_GAME_ACTIVE", payload: false })
     }
   }, [gameDispatch])

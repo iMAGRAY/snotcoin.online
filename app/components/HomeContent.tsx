@@ -6,7 +6,7 @@ import LoadingScreen from "./LoadingScreen"
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import dynamic from "next/dynamic"
 import { GameProvider, useGameContext, useGameState } from "../contexts/GameContext"
-import { TranslationProvider, useTranslation } from "../contexts/TranslationContext"
+import { TranslationProvider } from "../contexts/TranslationContext"
 import Resources from "./common/Resources"
 import AuthenticationWindow from "./auth/AuthenticationWindow"
 import { loadFromLocalStorage, clearUserFromLocalStorage } from "../utils/localStorage"
@@ -50,44 +50,24 @@ function HomeContent() {
   const [viewportHeight, setViewportHeight] = useState("100vh")
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { user, login } = useAuth() // Use useAuth hook
-  const { t } = useTranslation()
-  const [error, setError] = useState<string | null>(null)
-  const [isDeveloperMode, setIsDeveloperMode] = useState(false) // Added state variable
 
   useEffect(() => {
     const checkAuth = () => {
-      try {
-        if (typeof window !== "undefined" && window.localStorage) {
-          const authToken = localStorage.getItem("authToken")
-          if (authToken && !user) {
-            // If there's a token but no user data, load it
-            const userData = JSON.parse(atob(authToken))
-            login(userData)
-            dispatch({ type: "LOAD_USER_DATA", payload: userData })
-          } else if (!authToken && user) {
-            // User is logged out, clear the game state
-            handleLogout()
-          }
-        }
-      } catch (err) {
-        console.error("Error checking authentication:", err)
-        setError("Authentication error. Please try logging in again.")
-        // Clear the invalid auth token
-        if (typeof window !== "undefined" && window.localStorage) {
-          localStorage.removeItem("authToken")
-        }
-        handleLogout()
+      const authToken = localStorage.getItem("authToken")
+      if (authToken && !user) {
+        // If there's a token but no user data, load it
+        const userData = JSON.parse(atob(authToken))
+        login(userData)
+        dispatch({ type: "LOAD_USER_DATA", payload: userData })
       }
     }
     checkAuth()
-    if (typeof window !== "undefined") {
-      window.addEventListener("storage", checkAuth)
-      return () => window.removeEventListener("storage", checkAuth)
-    }
+    window.addEventListener("storage", checkAuth)
+    return () => window.removeEventListener("storage", checkAuth)
   }, [dispatch, user, login]) // Updated dependencies
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (isBrowser) {
       const setAppHeight = () => {
         const vh = window.innerHeight * 0.01
         document.documentElement.style.setProperty("--vh", `${vh}px`)
@@ -108,32 +88,16 @@ function HomeContent() {
     setIsSettingsOpen(false)
   }, [])
 
-  const handleLogout = useCallback(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem("authToken")
-    }
-    login(null)
-    dispatch({ type: "RESET_GAME_STATE" })
-    dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
-  }, [login, dispatch])
-
   const handleAuthentication = useCallback(
-    (userData?: any, token?: string, devMode = false) => {
-      // Modified handleAuthentication
-      try {
-        console.log("Handling authentication, userData:", userData)
-        if (token && typeof window !== "undefined" && window.localStorage) {
-          localStorage.setItem("authToken", token)
-        }
-        if (userData) {
-          console.log("Logging in user")
-          login(userData)
-          dispatch({ type: "SET_USER", payload: userData })
-        }
-        setIsDeveloperMode(devMode) // Added setIsDeveloperMode
-      } catch (err) {
-        console.error("Authentication error:", err)
-        setError("Failed to authenticate. Please try again.")
+    (userData?: any, token?: string) => {
+      console.log("Handling authentication, userData:", userData)
+      if (token) {
+        localStorage.setItem("authToken", token)
+      }
+      if (userData) {
+        console.log("Logging in user")
+        login(userData)
+        dispatch({ type: "SET_USER", payload: userData })
       }
     },
     [dispatch, login],
@@ -150,7 +114,7 @@ function HomeContent() {
       case "games":
         return <Games />
       case "profile":
-        return <ProfilePage onLogout={handleLogout} />
+        return <ProfilePage />
       case "settings":
         return <Settings onClose={closeSettings} />
       default:
@@ -158,20 +122,11 @@ function HomeContent() {
     }
   }
 
-  if (error) {
-    return <ErrorDisplay message={error} onRetry={() => setError(null)} />
-  }
-
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
       <Suspense fallback={<LoadingScreen />}>
-        {gameState.error && (
-          <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-2 text-center z-50">{gameState.error}</div>
-        )}
-        {!user && !isDeveloperMode ? ( // Modified condition
-          <AuthenticationWindow
-            onAuthenticate={(userData, token) => handleAuthentication(userData, token as string | undefined, true)}
-          />
+        {!user ? ( // Condition changed to check for user from useAuth
+          <AuthenticationWindow onAuthenticate={handleAuthentication} />
         ) : (
           <main
             className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black"
@@ -234,15 +189,15 @@ function HomeContent() {
 
 export default function HomeContentWrapper() {
   return (
-    <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
-      <GameProvider>
-        <TranslationProvider>
+    <GameProvider>
+      <TranslationProvider>
+        <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
           <Suspense fallback={<LoadingScreen />}>
             <HomeContent />
           </Suspense>
-        </TranslationProvider>
-      </GameProvider>
-    </ErrorBoundary>
+        </ErrorBoundary>
+      </TranslationProvider>
+    </GameProvider>
   )
 }
 

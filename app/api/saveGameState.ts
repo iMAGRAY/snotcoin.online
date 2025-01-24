@@ -22,13 +22,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     gameState.lastUpdated = new Date().toISOString()
 
     // Шифрование данных
-    const encryptedData = encryptData(gameState)
-
     // Подпись данных
-    const signature = signData(gameState)
-
-    // Сохранение в базу данных
-    await saveGameStateToDatabase(userId, encryptedData, signature)
+    await saveGameStateToDatabase(userId, await encryptData(gameState), await signData(gameState))
 
     res.status(200).json({ message: "Game state saved successfully" })
   } catch (error) {

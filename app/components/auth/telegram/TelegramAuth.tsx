@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { motion } from "framer-motion"
 import WebApp from "@twa-dev/sdk"
 import { useGameDispatch } from "../../../contexts/GameContext"
+import { validateTelegramAuth } from "../../../utils/validation"
 import Image from "next/image"
 
 interface UserData {
@@ -9,54 +10,131 @@ interface UserData {
   first_name: string
   last_name?: string
   username?: string
-  photo_url?: string
-  auth_date: number
-  hash: string
 }
 
 interface TelegramAuthProps {
   onAuthenticate: (userData: UserData) => void
 }
 
+const VALIDATION_INTERVAL = 5 * 60 * 1000 // 5 minutes
+const MAX_RETRIES = 3
+const RETRY_DELAY = 5000 // 5 seconds
+
 const TelegramAuth: React.FC<TelegramAuthProps> = ({ onAuthenticate }) => {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isWebAppReady, setIsWebAppReady] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const validationIntervalRef = useRef<NodeJS.Timeout>()
   const dispatch = useGameDispatch()
 
-  const handleTelegramAuth = useCallback(async () => {
+  const handleValidationError = useCallback(
+    (error: string) => {
+      console.error("Validation error:", error)
+      setError(error)
+
+      if (retryCount < MAX_RETRIES) {
+        setTimeout(() => {
+          setRetryCount((prev) => prev + 1)
+          validateAuth()
+        }, RETRY_DELAY)
+      } else {
+        // Reset authentication state
+        localStorage.removeItem("isAuthenticated")
+        dispatch({ type: "SET_USER", payload: null })
+        window.location.reload() // Force re-authentication
+      }
+    },
+    [retryCount, dispatch],
+  )
+
+  const validateAuth = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
-    try {
-      if (!WebApp.initDataUnsafe || !WebApp.initDataUnsafe.user) {
-        throw new Error("Telegram WebApp data not available")
-      }
+    const result = await validateTelegramAuth()
 
-      const userData: UserData = {
-        id: WebApp.initDataUnsafe.user.id,
-        first_name: WebApp.initDataUnsafe.user.first_name,
-        last_name: WebApp.initDataUnsafe.user.last_name,
-        username: WebApp.initDataUnsafe.user.username,
-        photo_url: WebApp.initDataUnsafe.user.photo_url,
-        auth_date: WebApp.initDataUnsafe.auth_date,
-        hash: WebApp.initDataUnsafe.hash,
-      }
+    console.log("Validation result:", result)
 
-      dispatch({ type: "SET_USER", payload: { ...userData, id: userData.id.toString() } })
-      onAuthenticate(userData)
-    } catch (error) {
-      console.error("Telegram auth error:", error)
-      setError("Authentication failed. Please try again.")
-    } finally {
-      setIsLoading(false)
+    if (result.success && result.data?.user) {
+      dispatch({ type: "SET_USER", payload: result.data.user })
+      localStorage.setItem("isAuthenticated", "true")
+      localStorage.setItem("lastValidation", Date.now().toString())
+      setRetryCount(0) // Reset retry count on successful validation
+    } else {
+      handleValidationError(result.error || "Validation failed")
     }
-  }, [dispatch, onAuthenticate])
+
+    setIsLoading(false)
+  }, [dispatch, handleValidationError])
+
+  // Initial WebApp ready check
+  useEffect(() => {
+    const checkWebAppReady = () => {
+      if (WebApp.initData) {
+        setIsWebAppReady(true)
+      } else {
+        setTimeout(checkWebAppReady, 100)
+      }
+    }
+    checkWebAppReady()
+  }, [])
+
+  // Setup periodic validation
+  useEffect(() => {
+    if (isWebAppReady) {
+      // Validate on mount
+      validateAuth()
+
+      // Setup interval for periodic validation
+      validationIntervalRef.current = setInterval(validateAuth, VALIDATION_INTERVAL)
+
+      return () => {
+        if (validationIntervalRef.current) {
+          clearInterval(validationIntervalRef.current)
+        }
+      }
+    }
+  }, [isWebAppReady, validateAuth])
+
+  // Check last validation time on focus
+  useEffect(() => {
+    const handleFocus = () => {
+      const lastValidation = localStorage.getItem("lastValidation")
+      if (lastValidation) {
+        const timeSinceLastValidation = Date.now() - Number.parseInt(lastValidation)
+        if (timeSinceLastValidation > VALIDATION_INTERVAL) {
+          validateAuth()
+        }
+      }
+    }
+
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
+  }, [validateAuth])
+
+  const handleTelegramAuth = async () => {
+    setIsLoading(true)
+    setError(null)
+
+    const result = await validateTelegramAuth()
+
+    console.log("Telegram auth result:", result)
+
+    if (result.success && result.data?.user) {
+      onAuthenticate(result.data.user)
+    } else {
+      setError(result.error || "Authentication failed")
+    }
+
+    setIsLoading(false)
+  }
 
   return (
     <div>
       <motion.button
         onClick={handleTelegramAuth}
-        disabled={isLoading}
+        disabled={!isWebAppReady || isLoading}
         className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white py-3 px-4 rounded-xl hover:from-blue-600 hover:to-blue-800 transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}

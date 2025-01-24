@@ -32,7 +32,7 @@ const Laboratory: React.FC = () => {
   const handleContainerClick = useCallback(() => {
     if (gameState.energy > 0) {
       const increaseAmount = 0.0005
-      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.Cap)
+      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.containerCapacity)
 
       gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
       gameDispatch({ type: "CONSUME_ENERGY", payload: 1 })
@@ -50,7 +50,7 @@ const Laboratory: React.FC = () => {
         type: "warning",
       })
     }
-  }, [gameState.energy, gameState.containerSnot, gameState.inventory.Cap, gameDispatch, localDispatch, t])
+  }, [gameState.energy, gameState.containerSnot, gameState.inventory.containerCapacity, gameDispatch, localDispatch, t])
 
   useEffect(() => {
     const containerElement = document.getElementById("container-element")
@@ -76,7 +76,7 @@ const Laboratory: React.FC = () => {
   useEffect(() => {
     const intervalId = setInterval(() => {
       const increaseAmount = gameState.fillingSpeed
-      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.Cap)
+      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.containerCapacity)
 
       if (newContainerSnot !== gameState.containerSnot) {
         gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
@@ -84,7 +84,7 @@ const Laboratory: React.FC = () => {
     }, 1000) // Update every second
 
     return () => clearInterval(intervalId)
-  }, [gameState.fillingSpeed, gameState.inventory.Cap, gameState.containerSnot, gameDispatch])
+  }, [gameState.fillingSpeed, gameState.inventory.containerCapacity, gameState.containerSnot, gameDispatch])
 
   const handleCollect = useCallback(
     (amount: number, success: boolean) => {
@@ -152,8 +152,8 @@ const Laboratory: React.FC = () => {
   const containerSnotValue = useMemo(() => formatSnotValue(gameState.containerSnot, 4), [gameState.containerSnot])
 
   const containerFilling = useMemo(() => {
-    return (gameState.containerSnot / gameState.inventory.Cap) * 100
-  }, [gameState.containerSnot, gameState.inventory.Cap])
+    return (gameState.containerSnot / gameState.inventory.containerCapacity) * 100
+  }, [gameState.containerSnot, gameState.inventory.containerCapacity])
 
   return (
     <div

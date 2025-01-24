@@ -134,8 +134,8 @@ const UpgradePageContent: React.FC = React.memo(() => {
   const [showUpgradeEffect, setShowUpgradeEffect] = React.useState(false)
 
   const capacityCost = useMemo(
-    () => Math.floor(100 * Math.pow(1.1, (gameState.containerCapacityLevel || 1) - 1)),
-    [gameState.containerCapacityLevel],
+    () => Math.floor(100 * Math.pow(1.1, (gameState.containerLevel || 1) - 1)),
+    [gameState.containerLevel],
   )
   const speedCost = useMemo(
     () => Math.floor(100 * Math.pow(1.5, gameState.fillingSpeedLevel - 1)),
@@ -210,7 +210,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
               description={t("containerCapacityDescription")}
               cost={capacityCost}
               currentLevel={gameState.containerLevel}
-              currentEffect={gameState.inventory.Cap}
+              currentEffect={gameState.inventory.containerCapacity}
               nextEffect={gameState.containerLevel + 1}
               onUpgrade={handleCapacityUpgrade}
               canAfford={(gameState.inventory?.snotCoins ?? 0) >= capacityCost}

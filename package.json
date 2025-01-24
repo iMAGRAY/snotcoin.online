@@ -62,15 +62,15 @@
     "@react-spring/web": "latest",
     "next-i18next": "latest",
     "zustand": "latest",
-    "url": "latest",
-    "path": "latest",
     "@twa-dev/sdk": "latest",
     "@headlessui/react": "latest",
     "react-spring": "latest",
     "crypto": "latest",
     "express-rate-limit": "latest",
-    "@supabase/supabase-js": "latest",
-    "lodash": "latest"
+    "url": "latest",
+    "path": "latest",
+    "jsonwebtoken": "latest",
+    "@supabase/supabase-js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

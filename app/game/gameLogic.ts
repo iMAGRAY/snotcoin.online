@@ -2,7 +2,7 @@ import type { GameState, Action } from "../types/gameTypes"
 import { CONTAINER_UPGRADES, FILLING_SPEED_UPGRADES } from "../types/gameTypes"
 
 export function updateResources(state: GameState): GameState {
-  const newContainerSnot = Math.min(state.containerSnot + state.fillingSpeed, state.inventory.Cap)
+  const newContainerSnot = Math.min(state.containerSnot + state.fillingSpeed, state.inventory.containerCapacity)
   return { ...state, containerSnot: newContainerSnot }
 }
 
@@ -23,7 +23,7 @@ export function upgradeContainerCapacity(state: GameState): GameState {
         inventory: {
           ...state.inventory,
           containerCapacityLevel: nextLevel,
-          Cap: state.inventory.Cap + upgrade.capacityIncrease,
+          containerCapacity: state.inventory.containerCapacity + upgrade.capacityIncrease,
           snotCoins: state.inventory.snotCoins - upgrade.cost,
         },
       }
@@ -189,8 +189,6 @@ export function gameReducer(state: GameState, action: Action): GameState {
       return { ...state, fusionGameActive: true, fusionGameStarted: true }
     case "SET_WALLET":
       return { ...state, wallet: action.payload }
-    case "SET_ETH_BALANCE":
-      return { ...state, ethBalance: action.payload }
     case "MOVE_SC_TO_GAME":
       return {
         ...state,

@@ -65,8 +65,8 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
     containerFilling,
   }) => {
     const containerFillingMemo = useMemo(() => {
-      return (store.containerSnot / store.Cap) * 100
-    }, [store.containerSnot, store.Cap])
+      return (store.containerSnot / store.containerCapacity) * 100
+    }, [store.containerSnot, store.containerCapacity])
 
     const containerSnotValueMemo = useMemo(() => formatSnotValue(store.containerSnot, 4), [store.containerSnot])
 

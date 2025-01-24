@@ -273,7 +273,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
                 className="w-full"
               >
                 <StatusPanel
-                  containerCapacity={gameState.inventory.Cap ?? 0}
+                  containerCapacity={gameState.inventory.containerCapacity ?? 0}
                   containerLevel={gameState?.containerLevel ?? 1}
                   containerSnot={gameState?.containerSnot ?? 0}
                   containerFillingSpeed={gameState?.fillingSpeed ?? 0}

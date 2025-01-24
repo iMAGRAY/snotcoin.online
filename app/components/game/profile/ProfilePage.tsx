@@ -22,11 +22,9 @@ import DepositModal from "./modals/DepositModal"
 import WithdrawModal from "./withdraw/WithdrawModal"
 import SettingsModal from "./modals/SettingsModal"
 
-type ProfilePageProps = {
-  onLogout: () => void
-}
+type ProfilePageProps = {}
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
+const ProfilePage: React.FC = () => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
@@ -63,9 +61,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
   }
 
   const handleLogout = useCallback(() => {
-    onLogout()
+    localStorage.removeItem("authToken")
+    gameDispatch({ type: "RESET_GAME_STATE" })
     router.push("/")
-  }, [onLogout, router])
+  }, [gameDispatch, router])
 
   const profileSectionsData: ProfileSection[] = [
     { label: "stats", icon: BarChart2, color: "from-indigo-500 to-indigo-700", content: <StatsSection /> },
@@ -114,7 +113,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
                   src={
                     gameState.user?.photo_url ||
                     "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ZeroAvatar-9ZXTxf5fMhIXgOiSYaLod3n9bNIiGv.webp" ||
-                    "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||

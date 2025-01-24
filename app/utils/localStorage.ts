@@ -21,7 +21,7 @@ export const saveToLocalStorage = (state: GameState): void => {
         fusionHistory: state.fusionHistory,
         chestOpeningStats: state.chestOpeningStats,
         totalPlayTime: state.totalPlayTime,
-        lastLoginDate: state.lastLoginDate,
+        lastLoginDate: new Date().toISOString(),
         settings: {
           language: state.settings.language,
           soundSettings: state.settings.soundSettings,
