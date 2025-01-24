@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
+import { useGameState, useGameDispatch, useInventory } from "../contexts/GameContext"
 import { type Ball, GAME_CONSTANTS, BALL_LEVELS, EXPLOSIVE_BALL, BULL_BALL } from "../types/fusion-game"
 import { resolveCollision } from "../utils/fusion-game-utils"
-import { useGameState, useGameDispatch } from "../contexts/GameContext"
 
 const FLOOR_OFFSET = 0.1 // Small offset to keep balls above the floor
 
@@ -22,9 +22,10 @@ export const useFusionGame = () => {
   const [ballsInTransparentZone, setBallsInTransparentZone] = useState(0)
   const [isPaused, setIsPaused] = useState(false) // Added isPaused state
 
-  const { inventory } = useGameState()
+  const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const getInventoryItemCount = (item: string) => 0
+  const { inventory } = useInventory()
+  const { inventory: gameInventory } = useGameState()
   const nextBallId = useRef(0)
   const animationFrameId = useRef<number | null>(null)
 
@@ -156,7 +157,7 @@ export const useFusionGame = () => {
                 ball1,
                 ball2,
                 nextBallId,
-                inventory.Cap,
+                gameInventory.Cap,
               )
 
               if (mergedBall) {
@@ -204,7 +205,7 @@ export const useFusionGame = () => {
 
       return updatedBalls
     })
-  }, [isJoyActive, nextBallId, setHighestMergedLevel, inventory.Cap])
+  }, [isJoyActive, nextBallId, setHighestMergedLevel, gameInventory.Cap])
 
   useEffect(() => {
     if (pendingScoreIncrease > 0 || pendingSnotReward > 0) {
@@ -213,7 +214,7 @@ export const useFusionGame = () => {
       setPendingScoreIncrease(0)
       setPendingSnotReward(0)
     }
-  }, [pendingScoreIncrease, pendingSnotReward, gameDispatch, inventory.snot])
+  }, [pendingScoreIncrease, pendingSnotReward, gameDispatch, gameInventory.snot])
 
   useEffect(() => {
     if (isJoyActive) {

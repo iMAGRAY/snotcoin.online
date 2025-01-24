@@ -1,9 +1,9 @@
-import React from 'react';
-import Image from 'next/image';
-import { motion } from 'framer-motion';
+import type React from "react"
+import Image from "next/image"
+import { motion } from "framer-motion"
 
 interface ExplosiveBallProps {
-  onClick: () => void;
+  onClick: () => void
 }
 
 const ExplosiveBall: React.FC<ExplosiveBallProps> = ({ onClick }) => {
@@ -16,16 +16,16 @@ const ExplosiveBall: React.FC<ExplosiveBallProps> = ({ onClick }) => {
       aria-label="Explosive Ball"
     >
       <div className="relative w-full h-full">
-        <Image 
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Explosive%20Ball-sjrLf6zoy5XPpVdvL9FXTIe01cN2Hn.webp" 
-          alt="Explosive Ball" 
+        <Image
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Explosive%20Ball-sjrLf6zoy5XPpVdvL9FXTIe01cN2Hn.webp"
+          alt="Explosive Ball"
           fill
           className="object-contain"
         />
       </div>
     </motion.button>
-  );
-};
+  )
+}
 
-export default ExplosiveBall;
+export default ExplosiveBall
 

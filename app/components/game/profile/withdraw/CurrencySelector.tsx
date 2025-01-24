@@ -1,25 +1,25 @@
-import type React from "react"
-import { motion } from "framer-motion"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import React from 'react';
+import { motion } from 'framer-motion';
+import { useTranslation } from '../../../../contexts/TranslationContext';
 
 interface CurrencySelectorProps {
-  selectedCurrency: "ETH" | "SnotCoin"
-  onCurrencyChange: (currency: "ETH" | "SnotCoin") => void
+  selectedCurrency: 'ETH' | 'SnotCoin';
+  onCurrencyChange: (currency: 'ETH' | 'SnotCoin') => void;
 }
 
-const CurrencySelector: React.FC<CurrencySelectorProps> = ({ selectedCurrency, onCurrencyChange }) => {
-  const { t } = useTranslation()
+const CurrencySelector: React.FC<CurrencySelectorProps> = React.memo(({ selectedCurrency, onCurrencyChange }) => {
+  const { t } = useTranslation();
 
   return (
     <div className="flex space-x-4">
       <motion.button
         type="button"
         className={`flex-1 py-3 px-4 rounded-xl font-bold text-lg shadow-lg ${
-          selectedCurrency === "ETH"
-            ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-            : "bg-gray-700 text-gray-300"
+          selectedCurrency === 'ETH'
+            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+            : 'bg-gray-700 text-gray-300'
         }`}
-        onClick={() => onCurrencyChange("ETH")}
+        onClick={() => onCurrencyChange('ETH')}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
@@ -28,21 +28,19 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({ selectedCurrency, o
       <motion.button
         type="button"
         className={`flex-1 py-3 px-4 rounded-xl font-bold text-lg shadow-lg ${
-          selectedCurrency === "SnotCoin"
-            ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
-            : "bg-gray-700 text-gray-300"
+          selectedCurrency === 'SnotCoin'
+            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+            : 'bg-gray-700 text-gray-300'
         }`}
-        onClick={() => onCurrencyChange("SnotCoin")}
+        onClick={() => onCurrencyChange('SnotCoin')}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
         SnotCoin
       </motion.button>
     </div>
-  )
-}
+  );
+});
 
-CurrencySelector.displayName = "CurrencySelector"
-
-export default CurrencySelector
+export default CurrencySelector;
 

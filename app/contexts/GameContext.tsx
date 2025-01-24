@@ -1,89 +1,101 @@
-import type React from "react"
-import { createContext, useContext, useReducer, useEffect, useCallback } from "react"
-import { gameReducer } from "../reducers/gameReducer"
-import { type GameState, type Action, initialState, User } from "../types/gameTypes"
-import { getTelegramUser, getTelegramThemeParams } from "../utils/telegramAuth"
-import { saveGameState, loadGameState } from "../utils/storage"
+"use client"
+
+import { createContext, useContext, useReducer, useCallback, useMemo, useEffect } from "react"
+import { gameReducer, initialState } from "../reducers/gameReducer"
+import type { GameState, Action } from "../types/gameTypes"
+import { AuthProvider } from "./AuthContext"
+import { calculateEnergyReplenishment } from "../utils/energyUtils"
+import { saveGameState, loadGameState } from "../utils/gameStateManager"
+import { getCurrentUser } from "../utils/auth"
+import { debounce } from "lodash"
+
+const GameContext = createContext<GameContextType | undefined>(undefined)
 
 interface GameContextType {
   state: GameState
   dispatch: React.Dispatch<Action>
-  saveGame: () => Promise<void>
-  loadGame: () => Promise<void>
 }
 
-const GameContext = createContext<GameContextType | undefined>(undefined)
-
-export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
 
-  const saveGame = useCallback(async () => {
-    await saveGameState(state)
-  }, [state])
-
-  const loadGame = useCallback(async () => {
-    const loadedState = await loadGameState()
-    if (loadedState) {
-      dispatch({ type: "LOAD_GAME_STATE", payload: loadedState })
-    }
-  }, [dispatch])
+  const contextValue = useMemo(() => ({ state, dispatch }), [state])
 
   useEffect(() => {
-    const initUser = async () => {
-      const user = await getTelegramUser()
+    const loadInitialState = async () => {
+      const {
+        data: { user },
+      } = await getCurrentUser()
       if (user) {
-        dispatch({ type: "SET_USER", payload: user })
+        try {
+          const savedState = await loadGameState(user.id)
+          if (savedState) {
+            dispatch({ type: "LOAD_GAME_STATE", payload: savedState })
+          }
+        } catch (error) {
+          console.error("Error loading initial game state:", error)
+        }
       }
     }
 
-    initUser()
+    loadInitialState()
+  }, [])
 
-    const themeParams = getTelegramThemeParams()
-    if (themeParams) {
-      dispatch({
-        type: "SET_THEME",
-        payload: {
-          backgroundColor: themeParams.bg_color,
-          textColor: themeParams.text_color,
-          buttonColor: themeParams.button_color,
-          buttonTextColor: themeParams.button_text_color,
-        },
-      })
+  const saveState = async () => {
+    try {
+      if (!state.user?.id) {
+        console.error("User ID is missing, cannot save game state")
+        return
+      }
+      await saveGameState(state.user.id, state)
+      console.log("Game state saved successfully")
+    } catch (error) {
+      console.error("Error saving game state:", error)
+      dispatch({ type: "SAVE_GAME_STATE_ERROR", payload: "Failed to save game state. Please try again later." })
     }
+  }
 
-    loadGame()
-  }, [loadGame])
+  const debouncedSaveState = useMemo(
+    () => debounce(saveState, 5000, { leading: false, trailing: true }),
+    [state.user?.id],
+  )
 
   useEffect(() => {
-    const saveInterval = setInterval(saveGame, 60000) // Save every minute
-    return () => clearInterval(saveInterval)
-  }, [saveGame])
+    if (state.user) {
+      debouncedSaveState()
+    }
+    return () => {
+      debouncedSaveState.cancel()
+    }
+  }, [state, debouncedSaveState])
 
-  return <GameContext.Provider value={{ state, dispatch, saveGame, loadGame }}>{children}</GameContext.Provider>
-}
+  useEffect(() => {
+    const lastLoginTime = state.lastLoginTime || Date.now()
+    const replenishedEnergy = calculateEnergyReplenishment(
+      lastLoginTime,
+      state.energy,
+      state.maxEnergy,
+      1, // Replenish 1 energy per minute
+    )
 
-export const useGameState = () => {
-  const context = useContext(GameContext)
-  if (context === undefined) {
-    throw new Error("useGameState must be used within a GameProvider")
-  }
-  return context.state
-}
+    // Update state with replenished energy and new login time
+    if (replenishedEnergy !== state.energy) {
+      dispatch({ type: "SET_ENERGY", payload: replenishedEnergy })
+      dispatch({ type: "SET_LAST_LOGIN_TIME", payload: new Date().toISOString() })
+    }
 
-export const useGameDispatch = () => {
-  const context = useContext(GameContext)
-  if (context === undefined) {
-    throw new Error("useGameDispatch must be used within a GameProvider")
-  }
-  return context.dispatch
-}
+    const intervalId = setInterval(() => {
+      dispatch({ type: "UPDATE_RESOURCES" })
+    }, 1000)
 
-export const useGameActions = () => {
-  const context = useContext(GameContext)
-  if (context === undefined) {
-    throw new Error("useGameActions must be used within a GameProvider")
-  }
-  return { saveGame: context.saveGame, loadGame: context.loadGame }
+    return () => clearInterval(intervalId)
+  }, [state.lastLoginTime, state.energy, state.maxEnergy])
+
+  return (
+    <AuthProvider>
+      <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>
+    </AuthProvider>
+  )
 }
 
 export const useGameContext = () => {
@@ -94,18 +106,97 @@ export const useGameContext = () => {
   return context
 }
 
+export const useGameState = (): GameState => {
+  const { state } = useGameContext()
+  return state
+}
+
+export const useGameDispatch = (): React.Dispatch<Action> => {
+  const { dispatch } = useGameContext()
+  return dispatch
+}
+
+export const useInventory = () => {
+  const { state, dispatch } = useGameContext()
+
+  const addToInventory = useCallback(
+    (item: keyof GameState["inventory"], amount: number) => {
+      dispatch({ type: "ADD_TO_INVENTORY", item, amount })
+    },
+    [dispatch],
+  )
+
+  const removeFromInventory = useCallback(
+    (item: keyof GameState["inventory"], amount: number) => {
+      dispatch({ type: "REMOVE_FROM_INVENTORY", item, amount })
+    },
+    [dispatch],
+  )
+
+  return {
+    inventory: state.inventory,
+    addToInventory,
+    removeFromInventory,
+  }
+}
+
+export const useContainer = () => {
+  const { state } = useGameContext()
+
+  return {
+    containerLevel: state.containerLevel,
+    containerCapacity: state.containerCapacity,
+    containerSnot: state.containerSnot,
+    fillingSpeedLevel: state.fillingSpeedLevel,
+    fillingSpeed: state.fillingSpeed,
+  }
+}
+
+export const useEnergy = () => {
+  const { state, dispatch } = useGameContext()
+
+  const consumeEnergy = useCallback(
+    (amount: number) => {
+      dispatch({ type: "CONSUME_ENERGY", payload: amount })
+    },
+    [dispatch],
+  )
+
+  return {
+    energy: state.energy,
+    maxEnergy: state.maxEnergy,
+    energyRecoveryTime: state.energyRecoveryTime,
+    consumeEnergy,
+  }
+}
+
+export const useFusionGame = () => {
+  const { state, dispatch } = useGameContext()
+
+  const startFusionGame = useCallback(() => {
+    dispatch({ type: "START_FUSION_GAME" })
+  }, [dispatch])
+
+  const resetFusionGame = useCallback(() => {
+    dispatch({ type: "RESET_FUSION_GAME" })
+  }, [dispatch])
+
+  return {
+    fusionGameActive: state.fusionGameActive,
+    fusionGameStarted: state.fusionGameStarted,
+    fusionAttemptsUsed: state.fusionAttemptsUsed,
+    fusionGamesPlayed: state.fusionGamesPlayed,
+    fusionGamesAvailable: state.fusionGamesAvailable,
+    startFusionGame,
+    resetFusionGame,
+  }
+}
+
 export const useWallet = () => {
   const { state } = useGameContext()
   return {
     wallet: state.wallet,
-    generateWallet: async () => {
-      // Implement wallet generation logic here
-      console.log("Generating wallet...")
-    },
-    getEthBalance: async () => {
-      // Implement balance fetching logic here
-      console.log("Fetching ETH balance...")
-    },
+    ethBalance: state.ethBalance,
   }
 }
 

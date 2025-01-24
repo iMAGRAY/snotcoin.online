@@ -4,14 +4,13 @@ import React, { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Image from "next/image"
 import { useTranslation } from "../../../contexts/TranslationContext"
-import { X, Star, BarChart2, Package, Award, TypeIcon as type, LucideIcon } from "lucide-react"
+import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { X, Star, BarChart2, Package, Award, LogOut } from "lucide-react"
 import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
 import Resources from "../../common/Resources"
 import WalletBar from "./WalletBar"
-import { supabase } from "../../../utils/supabase"
-import type { User } from "../../../types/gameTypes"
-import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { useRouter } from "next/navigation"
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -23,51 +22,22 @@ import DepositModal from "./modals/DepositModal"
 import WithdrawModal from "./withdraw/WithdrawModal"
 import SettingsModal from "./modals/SettingsModal"
 
-type ProfilePageProps = {}
+type ProfilePageProps = {
+  onLogout: () => void
+}
 
-const ProfilePage: React.FC<ProfilePageProps> = () => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ onLogout }) => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const wallet = gameState.wallet
-  const generateWallet = async () => {
-    /* Implement wallet generation logic */
-  }
-  const getEthBalance = async (address: string) => {
-    /* Implement balance fetching logic */
-  }
   const [activeSection, setActiveSection] = useState<string | null>(null)
+  const router = useRouter()
+
+  console.log("ProfilePage rendered, gameState:", gameState)
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!wallet) {
-        await generateWallet()
-      }
-      if (gameState.user) {
-        try {
-          const { data: dbUser, error } = await supabase
-            .from("users")
-            .select("*, inventories(*), game_progress(*), wallets(*)")
-            .eq("telegram_id", gameState.user.telegram_id)
-            .single()
-
-          if (error) throw error
-
-          await gameDispatch({
-            type: "LOAD_GAME_STATE",
-            payload: {
-              inventory: dbUser.inventories,
-              ...dbUser.game_progress,
-              wallet: dbUser.wallets[0],
-            },
-          })
-        } catch (error) {
-          console.error("Error loading user data:", error)
-        }
-      }
-    }
-    loadData()
-  }, [wallet, generateWallet, gameState.user, gameDispatch])
+    console.log("ProfilePage useEffect, user:", gameState.user)
+  }, [gameState.user])
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
@@ -82,27 +52,20 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
     }
   }, [])
 
-  useEffect(() => {
-    if (wallet && wallet.address) {
-      getEthBalance(wallet.address).catch((error: Error) => {
-        console.error("Failed to get ETH balance:", error)
-        // You might want to show an error message to the user here
-      })
-    }
-  }, [wallet, getEthBalance])
-
   const getUserDisplayName = () => {
-    if (gameState.user) {
-      if (gameState.user.first_name && gameState.user.last_name) {
-        return `${gameState.user.first_name} ${gameState.user.last_name}`
-      } else if (gameState.user.first_name) {
-        return gameState.user.first_name
-      } else if (gameState.user.username) {
-        return gameState.user.username
-      }
+    if (!gameState.user) return "Player"
+
+    const { first_name, last_name, username } = gameState.user
+    if (first_name || last_name) {
+      return `${first_name || ""} ${last_name || ""}`.trim()
     }
-    return "Anonymous Player"
+    return username || "Player"
   }
+
+  const handleLogout = useCallback(() => {
+    onLogout()
+    router.push("/")
+  }, [onLogout, router])
 
   const profileSectionsData: ProfileSection[] = [
     { label: "stats", icon: BarChart2, color: "from-indigo-500 to-indigo-700", content: <StatsSection /> },
@@ -150,11 +113,7 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                 <Image
                   src={
                     gameState.user?.photo_url ||
-                    "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile-usMOz4iK8UmmhBOtQJI34mXX8uXQhT.webp" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
+                    "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ZeroAvatar-9ZXTxf5fMhIXgOiSYaLod3n9bNIiGv.webp" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
                     "/placeholder.svg" ||
@@ -180,7 +139,7 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>
-                      Level {gameState.highestLevel || 1}
+                      ID: {gameState.user?.id || "N/A"}
                     </motion.p>
                   </div>
                 </motion.div>
@@ -233,13 +192,25 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
           {/* WalletBar */}
           <WalletBar setActiveSection={setActiveSection} />
 
+          {/* Logout Button */}
+          <motion.button
+            onClick={handleLogout}
+            className="w-full bg-gradient-to-r from-red-500 to-red-700 text-white py-3 px-4 rounded-xl hover:from-red-600 hover:to-red-800 transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-red-500/20 mt-4"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-red-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <LogOut className="w-5 h-5 mr-2" />
+            <span className="font-semibold">{t("logout")}</span>
+          </motion.button>
+
           {/* Tabs */}
           <Tab.Group as={React.Fragment} key="profile-tabs">
             <Tab.List className="flex space-x-2 rounded-xl bg-[#3a5c82]/50 p-2">
               {profileSectionsData.map((section) => (
                 <Tab
                   key={section.label}
-                  className={({ selected }: { selected: boolean }) =>
+                  className={({ selected }) =>
                     `w-full rounded-lg py-3 text-sm font-medium leading-5 text-white transition-all duration-300
                     ${
                       selected
@@ -305,7 +276,7 @@ const ProfilePage: React.FC<ProfilePageProps> = () => {
                 {t(activeSection)}
               </h2>
               {activeSection === "deposit" ? (
-                <DepositModal userEthAddress={wallet?.address} />
+                <DepositModal userEthAddress={gameState.wallet?.address || undefined} />
               ) : activeSection === "withdraw" ? (
                 <WithdrawModal />
               ) : activeSection === "settings" ? (

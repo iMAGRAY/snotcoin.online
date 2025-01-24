@@ -1,9 +1,9 @@
-import React from 'react';
-import Image from 'next/image';
-import { motion } from 'framer-motion';
+import type React from "react"
+import Image from "next/image"
+import { motion } from "framer-motion"
 
 interface JoyProps {
-  onClick: () => void;
+  onClick: () => void
 }
 
 const Joy: React.FC<JoyProps> = ({ onClick }) => {
@@ -16,16 +16,16 @@ const Joy: React.FC<JoyProps> = ({ onClick }) => {
       aria-label="Joy"
     >
       <div className="relative w-full h-full">
-        <Image 
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/joy-OWpAzEIVzAHXU2321a9iKQq7uzZf7Q.webp" 
-          alt="Joy" 
+        <Image
+          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/joy-OWpAzEIVzAHXU2321a9iKQq7uzZf7Q.webp"
+          alt="Joy"
           fill
           className="object-contain"
         />
       </div>
     </motion.button>
-  );
-};
+  )
+}
 
-export default Joy;
+export default Joy
 

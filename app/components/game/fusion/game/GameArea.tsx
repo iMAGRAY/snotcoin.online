@@ -12,7 +12,6 @@ import {
 import GameWalls from "./GameWalls"
 import BallComponent from "../Ball"
 import ExplosionAnimation from "./ExplosionAnimation"
-import Launcher from "./Launcher" // Added import for Launcher
 
 interface GameAreaProps {
   gameAreaRef: React.RefObject<HTMLDivElement>
@@ -120,7 +119,16 @@ const GameArea: React.FC<GameAreaProps> = React.memo(
     )
 
     const currentBallStyle = useMemo(() => {
-      const size = currentBall?.size ?? BALL_LEVELS[0].size
+      let size
+      if (isBullActive) {
+        size = BULL_BALL.size
+      } else if (isExplosiveBallActive) {
+        size = EXPLOSIVE_BALL.size
+      } else if (currentBall) {
+        size = currentBall.size
+      } else {
+        size = BALL_LEVELS[0].size // Use the size of the first ball level as default
+      }
 
       return {
         left: `${(coinPosition + 28) * scaleFactor}px`,
@@ -129,7 +137,7 @@ const GameArea: React.FC<GameAreaProps> = React.memo(
         height: `${size * scaleFactor}px`,
         transform: "translate(-50%, -50%)",
       }
-    }, [coinPosition, currentBall, scaleFactor])
+    }, [coinPosition, currentBall, scaleFactor, isExplosiveBallActive, isBullActive])
 
     const checkBallsInTransparentZone = useCallback(() => {
       const ballsInZone = thrownBalls.some((ball) => ball.y - ball.radius <= TRANSPARENT_ZONE_HEIGHT)
@@ -162,15 +170,6 @@ const GameArea: React.FC<GameAreaProps> = React.memo(
           onClick={throwBall}
         >
           <GameWalls scaleFactor={scaleFactor} />
-
-          {/* Launcher Component */}
-          <Launcher
-            coinPosition={coinPosition}
-            scaleFactor={scaleFactor}
-            isThrowAnimation={isThrowAnimation}
-            canThrow={canThrow}
-            currentBallLevel={currentBall?.level} // Added optional chaining
-          />
 
           {/* Coin */}
           <div className="absolute" style={coinStyle}>

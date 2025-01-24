@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useCallback, useMemo, useState } from "react"
+import React, { useCallback, useMemo, useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useGameState, useGameDispatch } from "../../contexts/GameContext"
 import { useTranslation } from "../../contexts/TranslationContext"
 import { ErrorBoundary } from "../ErrorBoundary"
-import Settings from "../game/Settings"
+import Settings from "../game/settings/Settings" // Updated import path
 import StatusPanel from "./StatusPanel"
 import Image from "next/image"
 import { formatSnotValue, formatTime } from "../../utils/gameUtils"
@@ -23,16 +23,16 @@ interface ResourcesProps {
   onAddClick?: () => void
   showOnlySnotCoin?: boolean
   showOnlySnot?: boolean
-  snotCoins: number
-  snot: number
   energy: number
   maxEnergy: number
   energyRecoveryTime?: number
+  snot: number
+  snotCoins: number
 }
 
 const ResourceItem: React.FC<{
   icon: string
-  value: number | undefined
+  value: number
   maxValue?: number
   label: string
   color: string
@@ -46,7 +46,7 @@ const ResourceItem: React.FC<{
     const formattedValue = useMemo(() => {
       if (value === undefined) return "0"
       if (maxValue !== undefined) return `${Math.floor(value)}/${maxValue}`
-      return formatSnotValue(value, 0)
+      return formatSnotValue(value, 4)
     }, [value, maxValue])
 
     const { t } = useTranslation()
@@ -78,7 +78,7 @@ const ResourceItem: React.FC<{
                     : ""
             }`}
           >
-            {label === "Energy" ? `${Math.floor(value ?? 0)}/${maxValue}` : formatSnotValue(value ?? 0, 0)}
+            {label === "Energy" ? `${value}/${maxValue}` : formatSnotValue(value, 4)}
           </span>
           {label === "Energy" && recoveryTime && (
             <span className="text-xs sm:text-sm text-blue-300 leading-tight font-medium ml-1">({recoveryTime})</span>
@@ -113,15 +113,24 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     onAddClick,
     showOnlySnotCoin = false,
     showOnlySnot = false,
-    snotCoins,
-    snot,
     energy,
     maxEnergy,
     energyRecoveryTime,
+    snot,
+    snotCoins,
   }) => {
     const { t } = useTranslation()
     const gameState = useGameState()
     const dispatch = useGameDispatch()
+
+    useEffect(() => {
+      console.log("Resources: Current game state", {
+        snotCoins: gameState.inventory.snotCoins,
+        snot: gameState.inventory.snot,
+        energy,
+        maxEnergy,
+      })
+    }, [gameState.inventory.snotCoins, gameState.inventory.snot, energy, maxEnergy])
 
     const handleSettingsClick = useCallback(() => {
       setIsSettingsOpen((prev) => !prev)
@@ -135,10 +144,16 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     }, [energy, maxEnergy])
 
     const resourceItems = useMemo(() => {
+      console.log("Resources: Current game state", {
+        snotCoins: gameState.inventory.snotCoins,
+        snot: gameState.inventory.snot,
+        energy,
+        maxEnergy,
+      })
       let items = [
         {
           icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Coin-a2GBTJ75mu1bwG6EaCihxvYEXwcpvy.webp",
-          value: snotCoins || 0,
+          value: gameState.inventory.snotCoins,
           label: "SnotCoins",
           color: "yellow",
           showClaim: true,
@@ -172,7 +187,8 @@ const Resources: React.FC<ResourcesProps> = React.memo(
 
       return items
     }, [
-      snotCoins,
+      gameState.inventory.snotCoins,
+      gameState.inventory.snot,
       energy,
       maxEnergy,
       energyRecoveryTimeFormatted,
@@ -180,7 +196,6 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       showAddButton,
       showOnlySnotCoin,
       showOnlySnot,
-      gameState.inventory.snot,
     ])
 
     if (!isVisible) return null
@@ -251,10 +266,11 @@ const Resources: React.FC<ResourcesProps> = React.memo(
             </div>
             {showStatusPanel && activeTab === "laboratory" && (
               <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
+                className="w-full"
               >
                 <StatusPanel
                   containerCapacity={gameState.inventory.Cap ?? 0}
@@ -262,7 +278,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
                   containerSnot={gameState?.containerSnot ?? 0}
                   containerFillingSpeed={gameState?.fillingSpeed ?? 0}
                   fillingSpeedLevel={gameState?.fillingSpeedLevel ?? 1}
-                  className="w-full"
+                  className="flex flex-wrap justify-between bg-gradient-to-r from-[#3a5c82] via-[#4a7a9e] to-[#5889ae] rounded-full shadow-lg py-0.5 px-1 outline outline-2 outline-[#5889ae]/50"
                 />
               </motion.div>
             )}
@@ -277,4 +293,22 @@ const Resources: React.FC<ResourcesProps> = React.memo(
 Resources.displayName = "Resources"
 
 export default Resources
+
+interface EnergyDisplayProps {
+  energy: number
+  maxEnergy: number
+}
+
+const EnergyDisplay: React.FC<EnergyDisplayProps> = ({ energy, maxEnergy }) => {
+  const percentage = (energy / maxEnergy) * 100
+
+  return (
+    <div className="flex items-center space-x-2">
+      <div className="w-20 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 overflow-hidden">
+        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+      </div>
+      <span className="text-xs font-medium text-white">{`${Math.floor(energy)}/${maxEnergy}`}</span>
+    </div>
+  )
+}
 

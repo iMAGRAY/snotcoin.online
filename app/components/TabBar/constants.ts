@@ -1,30 +1,30 @@
-import type { TabInfo } from "./types"
+import { TabInfo } from './types';
 
 export const tabs: TabInfo[] = [
-  {
-    id: "fusion",
+  { 
+    id: 'fusion',
     icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/MergeMicrobs-GR0sBHgLJziNPoeN99cxLVylxd9qTB.webp",
-    label: "fusionTab",
+    label: 'fusionTab'
   },
-  {
-    id: "laboratory",
+  { 
+    id: 'laboratory',
     icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Laboratory-QLz6DMBJOgQKMAmu5qw5gmlqCUOl1j.webp",
-    label: "laboratoryTab",
+    label: 'laboratoryTab'
   },
-  {
-    id: "storage",
+  { 
+    id: 'storage',
     icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Storage2-JyGrplmohN4NIozd4co8HOR9y3EgYW.webp",
-    label: "storageTab",
+    label: 'storageTab'
   },
-  {
-    id: "games",
+  { 
+    id: 'games',
     icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Games%201-3A8eefFvVUlzA0Qdy7uqKDbTHJ71Al.webp",
-    label: "gamesTab",
+    label: 'gamesTab'
   },
-  {
-    id: "profile",
+  { 
+    id: 'profile',
     icon: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Profile-usMOz4iK8UmmhBOtQJI34mXX8uXQhT.webp",
-    label: "profile",
+    label: 'profile'
   },
-]
+];
 

@@ -1,12 +1,12 @@
-import "./globals.css"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import './globals.css'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "SnotCoin Mining Game",
-  description: "A Telegram-based crypto mining game",
+  title: 'SnotCoin Mining Game',
+  description: 'A Telegram-based crypto mining game',
 }
 
 export default function RootLayout({

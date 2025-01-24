@@ -6,113 +6,88 @@ import LoadingScreen from "./LoadingScreen"
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import dynamic from "next/dynamic"
 import { GameProvider, useGameContext, useGameState } from "../contexts/GameContext"
-import { TranslationProvider } from "../contexts/TranslationContext"
+import { TranslationProvider, useTranslation } from "../contexts/TranslationContext"
 import Resources from "./common/Resources"
-import { validateTelegramUser, getTelegramUser } from "../utils/telegramAuth"
-import { getOrCreateUserGameState, updateGameState, saveOrUpdateUser } from "../utils/db"
-import type { User, GameState } from "../types/gameTypes"
+import AuthenticationWindow from "./auth/AuthenticationWindow"
+import { loadFromLocalStorage, clearUserFromLocalStorage } from "../utils/localStorage"
+import { useAuth } from "../contexts/AuthContext" // Import useAuth
 
-// Import all main components with error handling
-const Laboratory = dynamic(
-  () =>
-    import("./game/laboratory/laboratory").catch((err) => {
-      console.error("Error loading Laboratory:", err)
-      return () => <ErrorDisplay message="Failed to load Laboratory component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const Storage = dynamic(
-  () =>
-    import("./game/Storage").catch((err) => {
-      console.error("Error loading Storage:", err)
-      return () => <ErrorDisplay message="Failed to load Storage component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const Games = dynamic(
-  () =>
-    import("./game/Games").catch((err) => {
-      console.error("Error loading Games:", err)
-      return () => <ErrorDisplay message="Failed to load Games component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const TabBar = dynamic(
-  () =>
-    import("./TabBar/TabBar").catch((err) => {
-      console.error("Error loading TabBar:", err)
-      return () => <ErrorDisplay message="Failed to load TabBar component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const Fusion = dynamic(
-  () =>
-    import("./game/fusion/Fusion").catch((err) => {
-      console.error("Error loading Fusion:", err)
-      return () => <ErrorDisplay message="Failed to load Fusion component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const Settings = dynamic(
-  () =>
-    import("./game/Settings").catch((err) => {
-      console.error("Error loading Settings:", err)
-      return () => <ErrorDisplay message="Failed to load Settings component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
-
-const ProfilePage = dynamic(
-  () =>
-    import("./game/profile/ProfilePage").catch((err) => {
-      console.error("Error loading ProfilePage:", err)
-      return () => <ErrorDisplay message="Failed to load ProfilePage component" />
-    }),
-  {
-    loading: () => <LoadingScreen />,
-    ssr: false,
-  },
-)
+// Import all main components
+const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const Storage = dynamic(() => import("./game/storage/Storage"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const Games = dynamic(() => import("./game/Games"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const TabBar = dynamic(() => import("./TabBar/TabBar"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const Fusion = dynamic(() => import("./game/fusion/Fusion"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const Settings = dynamic(() => import("./game/settings/Settings"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
+const ProfilePage = dynamic(() => import("./game/profile/ProfilePage"), {
+  loading: () => <LoadingScreen />,
+  ssr: false,
+})
 
 const isBrowser = typeof window !== "undefined"
 
-function HomeContentInner() {
+function HomeContent() {
   const { state, dispatch } = useGameContext()
+  const gameState = useGameState()
   const [viewportHeight, setViewportHeight] = useState("100vh")
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isGameLoaded, setIsGameLoaded] = useState(false)
+  const { user, login } = useAuth() // Use useAuth hook
+  const { t } = useTranslation()
   const [error, setError] = useState<string | null>(null)
-  const [initializationAttempts, setInitializationAttempts] = useState(0)
-
-  const closeSettings = useCallback(() => {
-    setIsSettingsOpen(false)
-  }, [])
+  const [isDeveloperMode, setIsDeveloperMode] = useState(false) // Added state variable
 
   useEffect(() => {
-    if (isBrowser) {
+    const checkAuth = () => {
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          const authToken = localStorage.getItem("authToken")
+          if (authToken && !user) {
+            // If there's a token but no user data, load it
+            const userData = JSON.parse(atob(authToken))
+            login(userData)
+            dispatch({ type: "LOAD_USER_DATA", payload: userData })
+          } else if (!authToken && user) {
+            // User is logged out, clear the game state
+            handleLogout()
+          }
+        }
+      } catch (err) {
+        console.error("Error checking authentication:", err)
+        setError("Authentication error. Please try logging in again.")
+        // Clear the invalid auth token
+        if (typeof window !== "undefined" && window.localStorage) {
+          localStorage.removeItem("authToken")
+        }
+        handleLogout()
+      }
+    }
+    checkAuth()
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", checkAuth)
+      return () => window.removeEventListener("storage", checkAuth)
+    }
+  }, [dispatch, user, login]) // Updated dependencies
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
       const setAppHeight = () => {
         const vh = window.innerHeight * 0.01
         document.documentElement.style.setProperty("--vh", `${vh}px`)
@@ -125,88 +100,46 @@ function HomeContentInner() {
     }
   }, [])
 
-  const initializeGame = useCallback(async () => {
-    if (typeof window === "undefined") return
+  useEffect(() => {
+    console.log("Authentication state changed:", user) // Log user from useAuth
+  }, [user])
 
-    try {
-      // Wait for Telegram Web App to be available
-      if (!window.Telegram?.WebApp) {
-        console.log("Waiting for Telegram WebApp to initialize...")
-        if (initializationAttempts < 5) {
-          setTimeout(() => {
-            setInitializationAttempts((prev) => prev + 1)
-          }, 1000)
-          return
-        } else {
-          throw new Error("Telegram WebApp initialization timeout")
+  const closeSettings = useCallback(() => {
+    setIsSettingsOpen(false)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem("authToken")
+    }
+    login(null)
+    dispatch({ type: "RESET_GAME_STATE" })
+    dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+  }, [login, dispatch])
+
+  const handleAuthentication = useCallback(
+    (userData?: any, token?: string, devMode = false) => {
+      // Modified handleAuthentication
+      try {
+        console.log("Handling authentication, userData:", userData)
+        if (token && typeof window !== "undefined" && window.localStorage) {
+          localStorage.setItem("authToken", token)
         }
-      }
-
-      // Ensure we're running in Telegram environment
-      const webApp = window.Telegram.WebApp
-      if (!webApp) {
-        throw new Error("Telegram WebApp is not available")
-      }
-
-      // Expand the Web App to full height
-      webApp.expand()
-
-      // Get the init data and validate the user
-      const initData = webApp.initData
-      const telegramUser = await validateTelegramUser(initData)
-      if (!telegramUser) {
-        throw new Error("Failed to validate user data")
-      }
-
-      // Save or update user in database
-      const savedUser = await saveOrUpdateUser(telegramUser)
-      dispatch({ type: "SET_USER", payload: savedUser })
-
-      // Get or create game state
-      const gameState = await getOrCreateUserGameState(savedUser.telegram_id)
-      dispatch({ type: "LOAD_GAME_STATE", payload: gameState })
-
-      setIsGameLoaded(true)
-      setError(null)
-    } catch (err) {
-      console.error("Error in game initialization:", err)
-      setError(err instanceof Error ? err.message : "An unknown error occurred")
-    }
-  }, [dispatch, initializationAttempts])
-
-  useEffect(() => {
-    initializeGame()
-  }, [initializeGame, initializationAttempts])
-
-  // Add auto-retry logic for initialization errors
-  useEffect(() => {
-    if (error && initializationAttempts < 5) {
-      const timer = setTimeout(() => {
-        console.log(`Retrying initialization (attempt ${initializationAttempts + 1})...`)
-        setInitializationAttempts((prev) => prev + 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [error, initializationAttempts])
-
-  // Save game state when it changes
-  useEffect(() => {
-    if (state.user && isGameLoaded) {
-      const saveGameState = async () => {
-        try {
-          if (state.user) {
-            await updateGameState(state.user.telegram_id, state)
-          }
-        } catch (error) {
-          console.error("Error saving game state:", error)
+        if (userData) {
+          console.log("Logging in user")
+          login(userData)
+          dispatch({ type: "SET_USER", payload: userData })
         }
+        setIsDeveloperMode(devMode) // Added setIsDeveloperMode
+      } catch (err) {
+        console.error("Authentication error:", err)
+        setError("Failed to authenticate. Please try again.")
       }
+    },
+    [dispatch, login],
+  )
 
-      saveGameState()
-    }
-  }, [state, isGameLoaded])
-
-  const renderActivePage = useCallback(() => {
+  const renderActivePage = () => {
     switch (state.activeTab) {
       case "fusion":
         return <Fusion />
@@ -217,121 +150,99 @@ function HomeContentInner() {
       case "games":
         return <Games />
       case "profile":
-        return <ProfilePage />
+        return <ProfilePage onLogout={handleLogout} />
       case "settings":
         return <Settings onClose={closeSettings} />
       default:
         return <Laboratory />
     }
-  }, [state.activeTab, closeSettings])
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-        <h1 className="text-2xl font-bold mb-4">Error</h1>
-        <p className="text-center mb-4">{error}</p>
-        {initializationAttempts >= 5 ? (
-          <>
-            <p className="text-center mb-4">
-              Unable to initialize the game after multiple attempts. Please ensure you're opening this app through
-              Telegram.
-            </p>
-            <button
-              onClick={() => setInitializationAttempts(0)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Try Again
-            </button>
-          </>
-        ) : (
-          <p className="text-center animate-pulse">Attempting to initialize... ({initializationAttempts}/5)</p>
-        )}
-        <div className="mt-4 text-center">
-          <a
-            href="https://core.telegram.org/bots/webapps"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline"
-          >
-            Learn more about Telegram Web Apps
-          </a>
-        </div>
-      </div>
-    )
   }
 
-  const gameState = useGameContext().state
+  if (error) {
+    return <ErrorDisplay message={error} onRetry={() => setError(null)} />
+  }
 
   return (
-    <main
-      className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black"
-      style={{
-        height: viewportHeight,
-        maxHeight: viewportHeight,
-        maxWidth: "100vw",
-        margin: "0 auto",
-        backgroundColor: "var(--tg-theme-bg-color, #1c1c1e)",
-        color: "var(--tg-theme-text-color, #ffffff)",
-      }}
-    >
-      <div className="flex flex-col h-full">
-        {state.activeTab !== "profile" && (
-          <ErrorBoundary
-            fallback={<ErrorDisplay message="An error occurred while loading resources. Please try again." />}
-          >
-            <Suspense fallback={<LoadingScreen />}>
-              <Resources
-                isVisible={true}
-                isSettingsOpen={isSettingsOpen}
-                setIsSettingsOpen={setIsSettingsOpen}
-                closeSettings={closeSettings}
-                showStatusPanel={true}
-                activeTab={state.activeTab}
-                energy={state.energy}
-                maxEnergy={state.maxEnergy}
-                energyRecoveryTime={state.energyRecoveryTime}
-                snotCoins={state.inventory.snotCoins}
-                snot={state.inventory.snot}
-              />
-            </Suspense>
-          </ErrorBoundary>
+    <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
+      <Suspense fallback={<LoadingScreen />}>
+        {gameState.error && (
+          <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-2 text-center z-50">{gameState.error}</div>
         )}
-        <div className="flex-grow relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50 z-10" />
-          <div className="relative z-20 h-full overflow-y-auto">
-            <AnimatePresence mode="wait">
+        {!user && !isDeveloperMode ? ( // Modified condition
+          <AuthenticationWindow
+            onAuthenticate={(userData, token) => handleAuthentication(userData, token as string | undefined, true)}
+          />
+        ) : (
+          <main
+            className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black"
+            style={{
+              height: viewportHeight,
+              maxHeight: viewportHeight,
+              maxWidth: "100vw",
+              margin: "0 auto",
+              backgroundColor: "var(--tg-theme-bg-color, #1c1c1e)",
+              color: "var(--tg-theme-text-color, #ffffff)",
+            }}
+          >
+            <div className="flex flex-col h-full">
+              {state.activeTab !== "profile" && (
+                <ErrorBoundary
+                  fallback={<ErrorDisplay message="An error occurred while loading resources. Please try again." />}
+                >
+                  <Suspense fallback={<LoadingScreen />}>
+                    <Resources
+                      isVisible={true}
+                      isSettingsOpen={isSettingsOpen}
+                      setIsSettingsOpen={setIsSettingsOpen}
+                      closeSettings={closeSettings}
+                      showStatusPanel={true}
+                      activeTab={state.activeTab}
+                      energy={gameState.energy}
+                      maxEnergy={gameState.maxEnergy}
+                      snot={gameState.inventory.snot}
+                      snotCoins={gameState.inventory.snotCoins}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+              <div className="flex-grow relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50 z-10" />
+                <div className="relative z-20 h-full overflow-y-auto">
+                  <AnimatePresence mode="wait">
+                    <ErrorBoundary
+                      fallback={<ErrorDisplay message="An error occurred in the main content. Please try again." />}
+                    >
+                      <Suspense fallback={<LoadingScreen />}>{renderActivePage()}</Suspense>
+                    </ErrorBoundary>
+                  </AnimatePresence>
+                </div>
+              </div>
               <ErrorBoundary
-                key={state.activeTab}
-                fallback={<ErrorDisplay message="An error occurred in the main content. Please try again." />}
+                fallback={<ErrorDisplay message="An error occurred while loading the tab bar. Please try again." />}
               >
-                <Suspense fallback={<LoadingScreen />}>{renderActivePage()}</Suspense>
+                <Suspense fallback={<LoadingScreen />}>
+                  <TabBar setIsSettingsOpen={setIsSettingsOpen} closeSettings={closeSettings} />
+                </Suspense>
               </ErrorBoundary>
-            </AnimatePresence>
-          </div>
-        </div>
-        <ErrorBoundary
-          fallback={<ErrorDisplay message="An error occurred while loading the tab bar. Please try again." />}
-        >
-          <Suspense fallback={<LoadingScreen />}>
-            <TabBar setIsSettingsOpen={setIsSettingsOpen} closeSettings={closeSettings} />
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    </main>
+            </div>
+          </main>
+        )}
+      </Suspense>
+    </ErrorBoundary>
   )
 }
 
-export default function HomeContent() {
+export default function HomeContentWrapper() {
   return (
-    <GameProvider>
-      <TranslationProvider>
-        <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
+    <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
+      <GameProvider>
+        <TranslationProvider>
           <Suspense fallback={<LoadingScreen />}>
-            <HomeContentInner />
+            <HomeContent />
           </Suspense>
-        </ErrorBoundary>
-      </TranslationProvider>
-    </GameProvider>
+        </TranslationProvider>
+      </GameProvider>
+    </ErrorBoundary>
   )
 }
 

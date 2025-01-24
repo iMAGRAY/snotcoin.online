@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react"
 import { AnimatePresence } from "framer-motion"
+import { useGameState, useGameDispatch, useInventory } from "../../../../contexts/GameContext"
 import { useTranslation } from "../../../../contexts/TranslationContext"
 import { useRouter } from "next/navigation"
 import Header from "./Header"
@@ -16,13 +17,13 @@ import { useFusionGame } from "../../../../hooks/useFusionGame"
 import ExplosiveBall from "./power-ups/explosive-ball"
 import Joy from "./power-ups/joy"
 import Bull from "./power-ups/bull"
-import { useGameState, useGameDispatch } from "../../../../contexts/GameContext"
 
 const FusionGame: React.FC = () => {
+  const gameState = useGameState()
   const gameDispatch = useGameDispatch()
+  const { inventory } = useInventory()
   const { t } = useTranslation()
   const router = useRouter()
-  const gameState = useGameState()
 
   const {
     thrownBalls,
@@ -62,12 +63,12 @@ const FusionGame: React.FC = () => {
 
   // Memo hooks
   const currentSnot = useMemo(() => {
-    return gameState.inventory ? gameState.inventory.snot : 0
-  }, [gameState.inventory])
+    return inventory.snot
+  }, [inventory.snot])
 
   const calculateEarnedSnot = useMemo(() => {
-    return gameState.inventory ? gameState.inventory.snot - initialSnot : 0 - initialSnot
-  }, [gameState.inventory, initialSnot])
+    return inventory.snot - initialSnot
+  }, [inventory.snot, initialSnot])
 
   const currentBall = useMemo(() => {
     if (isBullActive) {
@@ -89,14 +90,14 @@ const FusionGame: React.FC = () => {
   const handleHome = useCallback(() => {
     resetGame()
     gameDispatch({ type: "RESET_FUSION_GAME" })
-    gameDispatch({ type: "SET_ACTIVE_TAB", payload: "fusion" })
+    gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
     router.push("/")
   }, [resetGame, gameDispatch, router])
 
   const handleRestart = useCallback(() => {
     if (gameState.fusionAttemptsUsed < 2) {
       resetGame()
-      setInitialSnot(gameState.inventory ? gameState.inventory.snot : 0)
+      setInitialSnot(inventory.snot)
       setIsGameOver(false)
       setFinalScore(0)
       startGameLoop()
@@ -110,15 +111,7 @@ const FusionGame: React.FC = () => {
     } else {
       handleHome()
     }
-  }, [
-    resetGame,
-    gameState.inventory,
-    startGameLoop,
-    gameOverTimer,
-    gameState.fusionAttemptsUsed,
-    gameDispatch,
-    handleHome,
-  ])
+  }, [resetGame, inventory, startGameLoop, gameOverTimer, gameState.fusionAttemptsUsed, gameDispatch, handleHome])
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -277,13 +270,12 @@ const FusionGame: React.FC = () => {
       stopGameLoop()
     }
     try {
-      const initialSnotCount = gameState.inventory ? gameState.inventory.snot : 0
-      setInitialSnot(initialSnotCount)
+      setInitialSnot(inventory.snot)
     } catch (err) {
       console.error("Error initializing game:", err)
       setError("Failed to initialize game. Please try again.")
     }
-  }, [gameState.fusionGameActive, startGameLoop, stopGameLoop, gameState.inventory])
+  }, [gameState.fusionGameActive, inventory, startGameLoop, stopGameLoop])
 
   useEffect(() => {
     if (gameState.fusionAttemptsUsed >= 2 && !isGameStarted) {
@@ -339,7 +331,7 @@ const FusionGame: React.FC = () => {
   useEffect(() => {
     return () => {
       gameDispatch({ type: "RESET_FUSION_GAME" })
-      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "fusion" })
+      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
       gameDispatch({ type: "SET_FUSION_GAME_ACTIVE", payload: false })
     }
   }, [gameDispatch])

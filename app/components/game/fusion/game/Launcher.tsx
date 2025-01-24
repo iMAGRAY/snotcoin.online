@@ -7,12 +7,12 @@ interface LauncherProps {
   scaleFactor: number
   isThrowAnimation: boolean
   canThrow: boolean
-  currentBallLevel?: number
+  currentBallLevel: number
 }
 
 const Launcher: React.FC<LauncherProps> = React.memo(
   ({ coinPosition, scaleFactor, isThrowAnimation, canThrow, currentBallLevel }) => {
-    const currentBall = currentBallLevel ? BALL_LEVELS[currentBallLevel - 1] : BALL_LEVELS[0]
+    const currentBall = BALL_LEVELS[currentBallLevel - 1]
 
     return (
       <>
@@ -41,7 +41,7 @@ const Launcher: React.FC<LauncherProps> = React.memo(
         </div>
 
         {/* Current Ball */}
-        {canThrow && currentBall && (
+        {canThrow && (
           <div
             className="absolute z-30 pointer-events-none"
             style={{
@@ -53,7 +53,7 @@ const Launcher: React.FC<LauncherProps> = React.memo(
             }}
           >
             <Image
-              src={currentBall.image || ""}
+              src={currentBall.image || "/placeholder.svg"}
               alt={`Level ${currentBall.level} Ball`}
               width={currentBall.size * scaleFactor}
               height={currentBall.size * scaleFactor}

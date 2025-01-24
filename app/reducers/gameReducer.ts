@@ -1,200 +1,159 @@
-import type { GameState, Action } from "../types/gameTypes"
+import {
+  type GameState,
+  type Action,
+  MAX_LEVEL,
+  BASE_FILLING_SPEED,
+  CONTAINER_UPGRADES,
+  FILLING_SPEED_UPGRADES,
+} from "../types/gameTypes"
+import { saveToLocalStorage } from "../utils/localStorage"
 
 const calculateFillingSpeed = (level: number): number => {
-  // 1 SNOT per 24 hours at level 1, increasing by 1 SNOT per level
-  return level / (24 * 60 * 60)
+  return BASE_FILLING_SPEED * level
 }
 
 export const initialState: GameState = {
-  telegram_id: 0,
   containerLevel: 1,
-  fillingSpeedLevel: 1,
   containerSnot: 0,
-  fillingSpeed: calculateFillingSpeed(1),
+  fillingSpeedLevel: 1,
+  fillingSpeed: 1 / (24 * 60 * 60),
   activeTab: "laboratory",
   gameStarted: false,
-  energyRecoveryTime: 0,
   fusionGameActive: false,
   fusionGameStarted: false,
   fusionAttemptsUsed: 0,
+  fusionGamesPlayed: 0,
+  fusionGamesAvailable: 2,
+  lastFusionGameTime: 0,
   inventory: {
     snot: 0,
     snotCoins: 0,
-    fillingSpeedLevel: 1,
-    containerCapacityLevel: 1,
-    Cap: 1,
     collectionEfficiency: 1.0,
+    Cap: 1,
+    containerCapacityLevel: 1,
+    fillingSpeedLevel: 1,
   },
   energy: 500,
   maxEnergy: 500,
+  energyRecoveryTime: 0,
+  wallet: null,
+  clickSoundVolume: 0.5,
+  effectsSoundVolume: 0.5,
+  isEffectsMuted: false,
+  highestLevel: 1,
+  snotCollected: 0,
+  backgroundMusicVolume: 0.5,
+  isMuted: false,
+  isBackgroundMusicMuted: false,
   Cap: 1,
   containerCapacity: 1,
-  fusionGamesAvailable: 2,
-  lastFusionGameTime: 0,
-  snotCollected: 0,
-  fusionGamesPlayed: 0,
-  user: null,
-  highestLevel: 1,
-  wallet: null,
-  collectionEfficiency: 1.0,
-  backgroundMusicVolume: 50,
-  isMuted: false,
+  containerCapacityLevel: 1,
   ethBalance: "0",
-  clickSoundVolume: 0.5,
-  isBackgroundMusicMuted: false,
-  isEffectsMuted: false,
-  effectsSoundVolume: 0.5,
-  snotCoins: 0,
-  theme: {
-    // Add default theme properties here
+  user: null,
+  lastValidation: undefined,
+  validationStatus: "pending",
+  achievements: [],
+  fusionHistory: [],
+  chestOpeningStats: {
+    common: 0,
+    rare: 0,
+    legendary: 0,
+    totalRewards: 0,
   },
+  totalPlayTime: 0,
+  lastLoginDate: new Date().toISOString(),
+  settings: {
+    language: "en",
+    soundSettings: {
+      musicVolume: 0.5,
+      effectsVolume: 0.5,
+      isMuted: false,
+    },
+  },
+  miniGamesProgress: {},
+  error: null,
+  lastLoginTime: Date.now(),
 }
 
 export function gameReducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "SET_RESOURCE":
+      if (action.resource === "containerSnot") {
+        return {
+          ...state,
+          containerSnot: Math.min(action.payload, state.inventory.Cap),
+        }
+      }
       return { ...state, [action.resource]: action.payload }
+
+    case "UPDATE_RESOURCES":
+      return {
+        ...state,
+        containerSnot: Math.min(state.containerSnot + state.fillingSpeed, state.inventory.Cap),
+      }
+
     case "UPDATE_ENERGY":
       const energyRecoveryRate = state.maxEnergy / (12 * 60 * 60)
+      const newEnergy = Math.min(state.energy + energyRecoveryRate, state.maxEnergy)
       return {
         ...state,
-        energy: Math.min(state.energy + energyRecoveryRate, state.maxEnergy),
-        energyRecoveryTime: Math.ceil((state.maxEnergy - state.energy) / energyRecoveryRate),
+        energy: newEnergy,
+        energyRecoveryTime: Math.ceil((state.maxEnergy - newEnergy) / energyRecoveryRate),
       }
+
     case "SET_ACTIVE_TAB":
-      return {
-        ...state,
-        activeTab: action.payload,
-        gameStarted: state.gameStarted,
-      }
+      return { ...state, activeTab: action.payload }
+
     case "CONSUME_ENERGY":
       return { ...state, energy: Math.max(0, state.energy - action.payload) }
-    case "CLEAR_GAME_DATA":
-      return {
-        ...initialState,
-        inventory: {
-          ...initialState.inventory,
-          snotCoins: state.inventory.snotCoins || 0,
-        },
-        activeTab: "laboratory",
-        gameStarted: false,
-      }
-    case "SET_GAME_STARTED":
-      return {
-        ...state,
-        gameStarted: action.payload,
-      }
+
     case "ADD_SNOT":
       return {
         ...state,
-        inventory: {
-          ...state.inventory,
-          snot: state.inventory.snot + action.payload,
-        },
+        inventory: { ...state.inventory, snot: state.inventory.snot + action.payload },
+        snotCollected: state.snotCollected + action.payload,
       }
-    case "SYNC_WITH_TELEGRAM":
+
+    case "UPGRADE_FILLING_SPEED":
+      if (state.fillingSpeedLevel < MAX_LEVEL) {
+        const upgrade = FILLING_SPEED_UPGRADES[state.fillingSpeedLevel - 1]
+        if (state.inventory.snotCoins >= upgrade.cost) {
+          return {
+            ...state,
+            fillingSpeedLevel: state.fillingSpeedLevel + 1,
+            fillingSpeed: calculateFillingSpeed(state.fillingSpeedLevel + 1),
+            inventory: {
+              ...state.inventory,
+              snotCoins: state.inventory.snotCoins - upgrade.cost,
+            },
+          }
+        }
+      }
       return state
-    case "LOAD_FROM_TELEGRAM":
+
+    case "UPGRADE_CONTAINER_CAPACITY":
+      if (state.containerLevel < MAX_LEVEL) {
+        const upgrade = CONTAINER_UPGRADES[state.containerLevel]
+        if (state.inventory.snotCoins >= upgrade.cost) {
+          return {
+            ...state,
+            containerLevel: state.containerLevel + 1,
+            inventory: {
+              ...state.inventory,
+              Cap: state.inventory.Cap + upgrade.capacityIncrease,
+              snotCoins: state.inventory.snotCoins - upgrade.cost,
+            },
+          }
+        }
+      }
       return state
+
     case "SET_FUSION_GAME_ACTIVE":
       return { ...state, fusionGameActive: action.payload }
-    case "UPGRADE_FILLING_SPEED":
-      const newSpeedLevel = Math.min(state.fillingSpeedLevel + 1, 100)
-      const speedUpgradeCost = Math.floor(
-        (state.Cap * newSpeedLevel + state.Cap * 0.5 + state.Cap * newSpeedLevel * 2) / 2,
-      )
-      if (state.inventory.snotCoins >= speedUpgradeCost) {
-        const newSpeed = calculateFillingSpeed(newSpeedLevel)
-        return {
-          ...state,
-          fillingSpeedLevel: newSpeedLevel,
-          fillingSpeed: newSpeed,
-          inventory: {
-            ...state.inventory,
-            snotCoins: state.inventory.snotCoins - speedUpgradeCost,
-            fillingSpeedLevel: newSpeedLevel,
-          },
-        }
-      }
-      return state
-    case "SET_BACKGROUND_MUSIC_MUTE":
-      return {
-        ...state,
-        isBackgroundMusicMuted: action.payload,
-      }
-    case "ADD_TO_INVENTORY":
-      return {
-        ...state,
-        inventory: {
-          ...state.inventory,
-          [action.item]: (state.inventory[action.item] || 0) + action.amount,
-        },
-      }
-    case "REMOVE_FROM_INVENTORY":
-      return {
-        ...state,
-        inventory: {
-          ...state.inventory,
-          [action.item]: Math.max(0, (state.inventory[action.item] || 0) - action.amount),
-        },
-      }
-    case "UPDATE_RESOURCES":
-      const newContainerSnot = Math.min(state.containerSnot + state.fillingSpeed, state.Cap)
-      return {
-        ...state,
-        containerSnot: newContainerSnot,
-      }
-    case "SET_EFFECTS_MUTE":
-      return {
-        ...state,
-        isEffectsMuted: action.payload,
-      }
-    case "UPGRADE_CONTAINER_CAPACITY":
-      const newContainerLevel = Math.min(state.containerLevel + 1, 100)
-      const containerUpgradeCost = Math.floor(
-        (state.Cap * newContainerLevel + state.Cap * 0.5 + state.Cap * newContainerLevel * 2) / 2,
-      )
-      if (state.inventory.snotCoins >= containerUpgradeCost) {
-        const newCap = state.Cap + 1
-        return {
-          ...state,
-          containerLevel: newContainerLevel,
-          Cap: newCap,
-          inventory: {
-            ...state.inventory,
-            snotCoins: state.inventory.snotCoins - containerUpgradeCost,
-            containerCapacityLevel: newContainerLevel,
-          },
-        }
-      }
-      return state
-    case "SET_CONTAINER_CAPACITY":
-      return {
-        ...state,
-        containerCapacity: action.payload,
-      }
-    case "UPDATE_FUSION_GAME_AVAILABILITY":
-      const currentTime = Date.now()
-      const timeSinceLastGame = currentTime - state.lastFusionGameTime
-      const recoveryTime = 12 * 60 * 60 * 1000
-      if (timeSinceLastGame >= recoveryTime) {
-        return {
-          ...state,
-          fusionAttemptsUsed: 0,
-          lastFusionGameTime: currentTime,
-          fusionGamesAvailable: 2,
-        }
-      }
-      return state
-    case "USE_FUSION_GAME":
-      return {
-        ...state,
-        fusionGamesAvailable: state.fusionGamesAvailable > 0 ? state.fusionGamesAvailable - 1 : 0,
-        lastFusionGameTime: Date.now(),
-        fusionGameStarted: true,
-      }
+
     case "SET_FUSION_GAME_STARTED":
       return { ...state, fusionGameStarted: action.payload }
+
     case "USE_FUSION_ATTEMPT":
       if (state.fusionAttemptsUsed < 2) {
         return {
@@ -204,61 +163,131 @@ export function gameReducer(state: GameState, action: Action): GameState {
         }
       }
       return state
+
     case "RESET_FUSION_GAME":
       return {
         ...state,
-        fusionGameStarted: false,
         fusionGameActive: false,
+        fusionGameStarted: false,
       }
+
     case "START_FUSION_GAME":
       return {
         ...state,
         fusionGameActive: true,
         fusionGameStarted: true,
       }
+
     case "SET_WALLET":
+      return { ...state, wallet: action.payload }
+
+    case "SET_AUDIO_VOLUME":
       return {
         ...state,
-        wallet: action.payload,
+        [action.audioType === "click" ? "clickSoundVolume" : "effectsSoundVolume"]: action.payload,
       }
-    case "SET_ETH_BALANCE":
+
+    case "SET_EFFECTS_MUTE":
+      return { ...state, isEffectsMuted: action.payload }
+
+    case "INCREMENT_FUSION_GAMES_PLAYED":
+      return { ...state, fusionGamesPlayed: state.fusionGamesPlayed + 1 }
+
+    case "COLLECT_CONTAINER_SNOT":
+      const amount = typeof action.payload === "number" ? action.payload : action.payload.amount
       return {
         ...state,
-        ethBalance: action.payload,
+        containerSnot: 0,
+        inventory: {
+          ...state.inventory,
+          snot: state.inventory.snot + amount,
+        },
+        snotCollected: state.snotCollected + amount,
       }
-    case "MOVE_SC_TO_GAME":
-      const amountToMove = action.payload
-      if (state.wallet) {
-        return {
-          ...state,
-          wallet: {
-            ...state.wallet,
-            snotCoins: (state.wallet.snotCoins || 0) - amountToMove,
-          },
-          inventory: {
-            ...state.inventory,
-            snotCoins: state.inventory.snotCoins + amountToMove,
-          },
+
+    case "OPEN_CHEST":
+      return {
+        ...state,
+        inventory: {
+          ...state.inventory,
+          snot: state.inventory.snot - action.payload.requiredSnot,
+          snotCoins: state.inventory.snotCoins + action.payload.rewardAmount,
+        },
+      }
+
+    case "SET_USER":
+      return {
+        ...state,
+        user: action.payload,
+      }
+
+    case "LOAD_GAME_STATE":
+      const loadedState = localStorage.getItem("gameState")
+      if (loadedState) {
+        try {
+          const parsedState = JSON.parse(loadedState)
+          return { ...state, ...parsedState }
+        } catch (error) {
+          console.error("Error parsing saved game state:", error)
+          return state
         }
       }
       return state
-    case "LOAD_GAME_STATE":
+
+    case "UPDATE_VALIDATION_STATUS":
       return {
         ...state,
-        ...action.payload,
-        user: state.user,
+        validationStatus: action.payload,
+        lastValidation: Date.now(),
       }
-    case "SET_USER":
-      return { ...state, user: action.payload }
-    case "SET_THEME":
-      return { ...state, theme: { ...state.theme, ...action.payload } }
-    case "INCREMENT_FUSION_GAMES_PLAYED":
+
+    case "RESET_GAME_STATE":
+      return { ...initialState }
+
+    case "LOAD_USER_DATA":
+      try {
+        if (typeof action.payload !== "string" && typeof action.payload !== "object") {
+          console.error("LOAD_USER_DATA: Invalid payload type")
+          return state
+        }
+
+        const userData = typeof action.payload === "string" ? JSON.parse(atob(action.payload)) : action.payload
+
+        if (!userData || typeof userData !== "object") {
+          console.error("LOAD_USER_DATA: Invalid user data format")
+          return state
+        }
+
+        console.log("Loaded user data:", userData)
+        return {
+          ...state,
+          user: userData,
+        }
+      } catch (error) {
+        console.error("Error parsing user data:", error)
+        return state
+      }
+
+    case "SET_ENERGY":
+      return { ...state, energy: Math.min(action.payload, state.maxEnergy) }
+
+    case "SET_LAST_LOGIN_TIME":
+      return { ...state, lastLoginTime: Date.parse(action.payload) }
+
+    case "SET_ERROR":
+      console.error(action.payload)
+      return { ...state, error: action.payload }
+
+    case "REPLENISH_ENERGY":
+      return { ...state, energy: Math.min(state.energy + action.payload, state.maxEnergy) }
+
+    case "SAVE_GAME_STATE_ERROR":
+      console.error("Error saving game state:", action.payload)
       return {
         ...state,
-        fusionGamesPlayed: state.fusionGamesPlayed + 1,
+        error: action.payload,
       }
-    case "SET_EFFECTS_SOUND_VOLUME":
-      return { ...state, effectsSoundVolume: action.payload }
+
     default:
       return state
   }

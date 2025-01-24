@@ -1,19 +1,19 @@
-import type React from "react"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import React from 'react';
+import { useTranslation } from '../../../../contexts/TranslationContext';
 
 interface AmountInputProps {
-  amount: string
-  onAmountChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  selectedCurrency: "ETH" | "SnotCoin"
+  amount: string;
+  onAmountChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  selectedCurrency: 'ETH' | 'SnotCoin';
 }
 
-const AmountInput: React.FC<AmountInputProps> = ({ amount, onAmountChange, selectedCurrency }) => {
-  const { t } = useTranslation()
+const AmountInput: React.FC<AmountInputProps> = React.memo(({ amount, onAmountChange, selectedCurrency }) => {
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-2">
       <label htmlFor="amount" className="block text-sm font-medium text-gray-300">
-        {t("amount")}
+        {t('amount')}
       </label>
       <input
         type="number"
@@ -25,10 +25,8 @@ const AmountInput: React.FC<AmountInputProps> = ({ amount, onAmountChange, selec
         required
       />
     </div>
-  )
-}
+  );
+});
 
-AmountInput.displayName = "AmountInput"
-
-export default AmountInput
+export default AmountInput;
 

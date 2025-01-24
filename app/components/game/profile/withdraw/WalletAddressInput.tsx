@@ -1,18 +1,18 @@
-import type React from "react"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import React from 'react';
+import { useTranslation } from '../../../../contexts/TranslationContext';
 
 interface WalletAddressInputProps {
-  walletAddress: string
-  onWalletAddressChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  walletAddress: string;
+  onWalletAddressChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-const WalletAddressInput: React.FC<WalletAddressInputProps> = ({ walletAddress, onWalletAddressChange }) => {
-  const { t } = useTranslation()
+const WalletAddressInput: React.FC<WalletAddressInputProps> = React.memo(({ walletAddress, onWalletAddressChange }) => {
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-2">
       <label htmlFor="walletAddress" className="block text-sm font-medium text-gray-300">
-        {t("walletAddress")}
+        {t('walletAddress')}
       </label>
       <div className="relative">
         <input
@@ -26,10 +26,8 @@ const WalletAddressInput: React.FC<WalletAddressInputProps> = ({ walletAddress, 
         />
       </div>
     </div>
-  )
-}
+  );
+});
 
-WalletAddressInput.displayName = "WalletAddressInput"
-
-export default WalletAddressInput
+export default WalletAddressInput;
 

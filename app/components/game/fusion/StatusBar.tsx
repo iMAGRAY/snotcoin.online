@@ -1,15 +1,15 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { useTranslation } from '../../../contexts/TranslationContext';
-import { formatSnotValue } from '../../../utils/gameUtils';
+import type React from "react"
+import { motion } from "framer-motion"
+import { useTranslation } from "../../../contexts/TranslationContext"
+import { formatSnotValue } from "../../../utils/gameUtils"
 
 interface StatusBarProps {
-  score: number;
-  snot: number;
+  score: number
+  snot: number
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({ score, snot }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   return (
     <motion.div
@@ -20,14 +20,14 @@ const StatusBar: React.FC<StatusBarProps> = ({ score, snot }) => {
     >
       <div /> {/* Empty div for left column */}
       <div className="justify-self-center text-white font-bold text-sm drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]">
-        {t('score')}: {score}
+        {t("score")}: {score}
       </div>
       <div className="justify-self-end text-white font-bold text-sm drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]">
         SNOT: {formatSnotValue(snot)}
       </div>
     </motion.div>
-  );
-};
+  )
+}
 
-export default StatusBar;
+export default StatusBar
 

@@ -1,9 +1,9 @@
-import React from 'react';
-import Image from 'next/image';
-import { motion } from 'framer-motion';
+import type React from "react"
+import Image from "next/image"
+import { motion } from "framer-motion"
 
 interface BullProps {
-  onClick: () => void;
+  onClick: () => void
 }
 
 const Bull: React.FC<BullProps> = ({ onClick }) => {
@@ -16,16 +16,16 @@ const Bull: React.FC<BullProps> = ({ onClick }) => {
       aria-label="Bull Power-up"
     >
       <div className="relative w-full h-full">
-        <Image 
+        <Image
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Bull-o3IGleDJ5srQlgx6uBygThiBrxkBTO.webp"
-          alt="Bull Power-up" 
+          alt="Bull Power-up"
           fill
           className="object-contain"
         />
       </div>
     </motion.button>
-  );
-};
+  )
+}
 
-export default Bull;
+export default Bull
 

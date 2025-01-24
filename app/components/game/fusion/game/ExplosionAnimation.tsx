@@ -9,9 +9,9 @@ interface ExplosionAnimationProps {
 
 const ExplosionAnimation: React.FC<ExplosionAnimationProps> = ({ x, y, size }) => {
   const particleCount = 12
+  const colors = ["#FFA500", "#FF4500", "#FF0000", "#FFD700"]
 
   const particles = useMemo(() => {
-    const colors = ["#FFA500", "#FF4500", "#FF0000", "#FFD700"]
     return Array.from({ length: particleCount }).map((_, index) => {
       const angle = (Math.PI * 2 * index) / particleCount
       const distance = size / 4
@@ -21,7 +21,7 @@ const ExplosionAnimation: React.FC<ExplosionAnimationProps> = ({ x, y, size }) =
 
       return { offsetX, offsetY, color }
     })
-  }, [size, particleCount])
+  }, [size])
 
   return (
     <motion.div

@@ -67,7 +67,7 @@ const Ball: React.FC<BallProps> = React.memo(({ ball, scaleFactor, isJoyActive }
       }
     >
       <Image
-        src={ballImage || ""}
+        src={ballImage || "/placeholder.svg"}
         alt={ball.isBull ? "Bull Ball" : ball.isExplosive ? "Explosive Ball" : `Ball Level ${ball.level}`}
         width={ballSize * scaleFactor}
         height={ballSize * scaleFactor}

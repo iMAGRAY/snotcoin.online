@@ -1,4 +1,5 @@
-import { type GameState, type Action, CONTAINER_UPGRADES, FILLING_SPEED_UPGRADES } from "../types/gameTypes"
+import type { GameState, Action } from "../types/gameTypes"
+import { CONTAINER_UPGRADES, FILLING_SPEED_UPGRADES } from "../types/gameTypes"
 
 export function updateResources(state: GameState): GameState {
   const newContainerSnot = Math.min(state.containerSnot + state.fillingSpeed, state.inventory.Cap)
@@ -73,14 +74,17 @@ export function openChest(state: GameState, requiredSnot: number, rewardAmount: 
 }
 
 export function upgradeCollectionEfficiency(state: GameState, cost: number): GameState {
-  return {
-    ...state,
-    inventory: {
-      ...state.inventory,
-      collectionEfficiency: Math.min(state.inventory.collectionEfficiency + 0.01, 2.0),
-      snotCoins: state.inventory.snotCoins - cost,
-    },
+  if (state.inventory.snotCoins >= cost) {
+    return {
+      ...state,
+      inventory: {
+        ...state.inventory,
+        collectionEfficiency: Math.min(state.inventory.collectionEfficiency + 0.01, 2.0),
+        snotCoins: state.inventory.snotCoins - cost,
+      },
+    }
   }
+  return state
 }
 
 export function consumeEnergy(state: GameState, amount: number): GameState {
@@ -110,7 +114,11 @@ export function gameReducer(state: GameState, action: Action): GameState {
     case "UPGRADE_FILLING_SPEED":
       return upgradeFillingSpeed(state)
     case "COLLECT_CONTAINER_SNOT":
-      return collectContainerSnot(state, action.payload.amount)
+      if (typeof action.payload === "number") {
+        return collectContainerSnot(state, action.payload)
+      } else {
+        return collectContainerSnot(state, action.payload.amount)
+      }
     case "OPEN_CHEST":
       return openChest(state, action.payload.requiredSnot, action.payload.rewardAmount)
     case "SET_ACTIVE_TAB":
@@ -198,6 +206,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
     case "LOAD_GAME_STATE":
       return { ...state, ...action.payload }
     case "SET_USER":
+      return { ...state, user: action.payload }
+    case "SET_TELEGRAM_USER":
       return { ...state, user: action.payload }
     case "INCREMENT_FUSION_GAMES_PLAYED":
       return { ...state, fusionGamesPlayed: state.fusionGamesPlayed + 1 }

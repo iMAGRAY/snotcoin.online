@@ -1,12 +1,12 @@
-// Start of Selection
-import React, { createContext, useContext, useState } from 'react';
+import type React from "react"
+import { createContext, useContext, useState } from "react"
 
-type Language = 'en' | 'es' | 'fr' | 'de' | 'ru';
+type Language = "en" | "es" | "fr" | "de" | "ru"
 
 interface Translations {
   [key: string]: {
-    [key: string]: string;
-  };
+    [key: string]: string
+  }
 }
 
 const translations: Translations = {
@@ -141,7 +141,17 @@ const translations: Translations = {
     mainNavigation: "Main Navigation",
     back: "Back",
     about: "About",
-    aboutDescription: "SnotCoin is an exciting crypto-mining game where you collect, merge, and earn virtual currency."
+    aboutDescription: "SnotCoin is an exciting crypto-mining game where you collect, merge, and earn virtual currency.",
+    authentication: "Authentication",
+    loginWithTelegram: "Login with Telegram",
+    loginAsGuest: "Login as Guest",
+    loginWithWarpCast: "Login with WarpCast",
+    logout: "Log Out",
+    guestLoginWarning: "Guest Login Warning",
+    guestLoginWarningMessage:
+      "Please note that as a guest, your game progress will not be saved. Are you sure you want to continue?",
+    cancel: "Cancel",
+    continue: "Continue",
   },
   es: {
     settings: "Ajustes",
@@ -266,7 +276,18 @@ const translations: Translations = {
     mainNavigation: "Navegación principal",
     back: "Atrás",
     about: "Acerca de",
-    aboutDescription: "SnotCoin es un emocionante juego de criptominería donde recolectas, fusionas y ganas moneda virtual."
+    aboutDescription:
+      "SnotCoin es un emocionante juego de criptominería donde recolectas, fusionas y ganas moneda virtual.",
+    authentication: "Autenticación",
+    loginWithTelegram: "Iniciar sesión con Telegram",
+    loginAsGuest: "Iniciar sesión como invitado",
+    loginWithWarpCast: "Iniciar sesión con WarpCast",
+    logout: "Cerrar Sesión",
+    guestLoginWarning: "Advertencia de inicio de sesión de invitado",
+    guestLoginWarningMessage:
+      "¡Tenga en cuenta que, como invitado, su progreso en el juego no se guardará. ¿Está seguro de que desea continuar?",
+    cancel: "Cancelar",
+    continue: "Continuar",
   },
   fr: {
     settings: "Paramètres",
@@ -297,7 +318,8 @@ const translations: Translations = {
     fullIn: "Plein dans",
     loadingGameAssets: "Chargement des ressources du jeu",
     complete: "Terminé",
-    assetLoadFailed: "Certaines ressources n'ont pas pu être chargées. Le jeu continuera avec des fonctionnalités réduites.",
+    assetLoadFailed:
+      "Certaines ressources n'ont pas pu être chargées. Le jeu continuera avec des fonctionnalités réduites.",
     commonChest: "Coffre Commun",
     commonChestDescription: "Coûte 5 SNOT. Récompense 2-8 SnotCoins",
     rareChest: "Coffre Rare",
@@ -391,7 +413,18 @@ const translations: Translations = {
     mainNavigation: "Navigation principale",
     back: "Retour",
     about: "À propos",
-    aboutDescription: "SnotCoin est un jeu de crypto-minage passionnant où vous collectez, fusionnez et gagnez de la monnaie virtuelle."
+    aboutDescription:
+      "SnotCoin est un jeu de crypto-minage passionnant où vous collectez, fusionnez et gagnez de la monnaie virtuelle.",
+    authentication: "Authentification",
+    loginWithTelegram: "Se connecter avec Telegram",
+    loginAsGuest: "Se connecter en tant qu'invité",
+    loginWithWarpCast: "Se connecter avec WarpCast",
+    logout: "Se Déconnecter",
+    guestLoginWarning: "Avertissement de connexion invité",
+    guestLoginWarningMessage:
+      "Veuillez noter qu'en tant qu'invité, votre progression de jeu ne sera pas enregistrée. Êtes-vous sûr de vouloir continuer ?",
+    cancel: "Annuler",
+    continue: "Continuer",
   },
   de: {
     settings: "Einstellungen",
@@ -422,7 +455,8 @@ const translations: Translations = {
     fullIn: "Voll in",
     loadingGameAssets: "Lade Spielressourcen",
     complete: "Abgeschlossen",
-    assetLoadFailed: "Einige Ressourcen konnten nicht geladen werden. Das Spiel wird mit eingeschränkter Funktionalität fortgesetzt.",
+    assetLoadFailed:
+      "Einige Ressourcen konnten nicht geladen werden. Das Spiel wird mit eingeschränkter Funktionalität fortgesetzt.",
     commonChest: "Gewöhnliche Truhe",
     commonChestDescription: "Kostet 5 SNOT. Belohnung 2-8 SnotCoins",
     rareChest: "Seltene Truhe",
@@ -449,7 +483,8 @@ const translations: Translations = {
     addBall: "Ball Hinzufügen",
     launchBall: "Ball Werfen",
     fusionLab: "Fusionslabor",
-    fusionDescription: "Verschmelze Mikroben, erschaffe mächtige Kombinationen und verdiene SNOT in diesem aufregenden Fusionsspiel!",
+    fusionDescription:
+      "Verschmelze Mikroben, erschaffe mächtige Kombinationen und verdiene SNOT in diesem aufregenden Fusionsspiel!",
     fusionPower: "Fusionskraft",
     lowRiskLowReward: "Niedriges Risiko",
     highRiskHighReward: "Hohes Risiko",
@@ -516,7 +551,18 @@ const translations: Translations = {
     mainNavigation: "Hauptnavigation",
     back: "Zurück",
     about: "Über",
-    aboutDescription: "SnotCoin ist ein spannendes Krypto-Mining-Spiel, bei dem du virtuelle Währung sammelst, zusammenführst und verdienst."
+    aboutDescription:
+      "SnotCoin ist ein spannendes Krypto-Mining-Spiel, bei dem du virtuelle Währung sammelst, zusammenführst und verdienst.",
+    authentication: "Authentifizierung",
+    loginWithTelegram: "Mit Telegram anmelden",
+    loginAsGuest: "Als Gast anmelden",
+    loginWithWarpCast: "Mit WarpCast anmelden",
+    logout: "Abmelden",
+    guestLoginWarning: "Gast-Anmeldewarnung",
+    guestLoginWarningMessage:
+      "Bitte beachten Sie, dass Ihr Spielfortschritt als Gast nicht gespeichert wird. Sind Sie sicher, dass Sie fortfahren möchten?",
+    cancel: "Abbrechen",
+    continue: "Fortfahren",
   },
   ru: {
     settings: "Настройки",
@@ -574,7 +620,8 @@ const translations: Translations = {
     addBall: "Добавить Шар",
     launchBall: "Запустить Шар",
     fusionLab: "Лаборатория слияния",
-    fusionDescription: "Объединяйте микробы, создавайте мощные комбинации и зарабатывайте SNOT в этой захватывающей игре слияния!",
+    fusionDescription:
+      "Объединяйте микробы, создавайте мощные комбинации и зарабатывайте SNOT в этой захватывающей игре слияния!",
     fusionPower: "Мощность слияния",
     lowRiskLowReward: "Низкий риск",
     highRiskHighReward: "Высокий риск",
@@ -641,37 +688,44 @@ const translations: Translations = {
     mainNavigation: "Основная навигация",
     back: "Назад",
     about: "О Нас",
-    aboutDescription: "SnotCoin — это захватывающая игра по добыче криптовалюты, в которой вы собираете, объединяйте и зарабатываете виртуальную валюту."
-  }
-};
-
-interface TranslationContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+    aboutDescription:
+      "SnotCoin — это захватывающая игра по добыче криптовалюты, в которой вы собираете, объединяйте и зарабатываете виртуальную валюту.",
+    authentication: "Аутентификация",
+    loginWithTelegram: "Войти через Telegram",
+    loginAsGuest: "Войти как гость",
+    loginWithWarpCast: "Войти через WarpCast",
+    logout: "Выйти",
+    guestLoginWarning: "Предупреждение о входе гостя",
+    guestLoginWarningMessage:
+      "Обратите внимание, что как гость ваш игровойprogress не будет сохранен. Вы уверены, что хотите продолжить?",
+    cancel: "Отмена",
+    continue: "Продолжить",
+  },
 }
 
-const TranslationContext = createContext<TranslationContextType | undefined>(undefined);
+interface TranslationContextType {
+  language: Language
+  setLanguage: (lang: Language) => void
+  t: (key: string) => string
+}
+
+const TranslationContext = createContext<TranslationContextType | undefined>(undefined)
 
 export const TranslationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>("en")
 
   const t = (key: string): string => {
-    return translations[language][key] || key;
-  };
+    return translations[language][key] || key
+  }
 
-  return (
-    <TranslationContext.Provider value={{ language, setLanguage, t }}>
-      {children}
-    </TranslationContext.Provider>
-  );
-};
+  return <TranslationContext.Provider value={{ language, setLanguage, t }}>{children}</TranslationContext.Provider>
+}
 
 export const useTranslation = () => {
-  const context = useContext(TranslationContext);
+  const context = useContext(TranslationContext)
   if (context === undefined) {
-    throw new Error('useTranslation must be used within a TranslationProvider');
+    throw new Error("useTranslation must be used within a TranslationProvider")
   }
-  return context;
-};
+  return context
+}
 

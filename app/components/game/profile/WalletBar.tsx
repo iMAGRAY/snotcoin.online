@@ -14,7 +14,11 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const ethBalance = 0 // Added to handle the removal of useWallet
+  const mockWallet = {
+    address: "0x1234...5678",
+    balance: "0.5",
+  }
+  const mockEthBalance = "0.5"
 
   return (
     <motion.div
@@ -25,16 +29,6 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
     >
       <div className="absolute inset-0 bg-gradient-to-br from-transparent to-[#1a2b3d]/30 pointer-events-none" />
       <h3 className="text-lg font-bold text-white mb-2 relative z-10 inline-block">Wallet</h3>
-      <motion.button
-        onClick={() => {
-          //getEthBalance is removed because useWallet is removed.  This section needs to be updated based on how you want to handle ETH balance updates without useWallet.
-        }}
-        className="absolute top-3 right-3 bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] text-white p-2 rounded-full transition-colors shadow-md hover:from-[#5889ae] hover:to-[#6899be]"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-      >
-        <RefreshCw size={18} />
-      </motion.button>
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-[#2a3b4d]/70 rounded-lg p-3 flex justify-between items-center shadow-inner">
           <div className="flex items-center">
@@ -45,7 +39,7 @@ const WalletBar: React.FC<WalletBarProps> = ({ setActiveSection }) => {
               height={24}
             />
           </div>
-          <p className="text-[#6899be] text-sm font-bold">{ethBalance} ETH</p>
+          <p className="text-[#6899be] text-sm font-bold">{mockEthBalance} ETH</p>
         </div>
         <div className="bg-[#2a3b4d]/70 rounded-lg p-3 flex justify-between items-center shadow-inner">
           <div className="flex items-center">

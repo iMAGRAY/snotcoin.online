@@ -1,12 +1,11 @@
 import React from "react"
 import { motion } from "framer-motion"
 
-export const ErrorDisplay: React.FC<{
-  message: string
-  error?: Error | null
-  onRetry?: () => void
-  componentStack?: string
-}> = ({ message, error, onRetry, componentStack }) => (
+export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onRetry?: () => void }> = ({
+  message,
+  error,
+  onRetry,
+}) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -19,13 +18,15 @@ export const ErrorDisplay: React.FC<{
         <p className="font-semibold">Error details:</p>
         <p>Name: {error.name || "Unknown"}</p>
         <p>Message: {error.message || "No message available"}</p>
-        {(error.stack || componentStack) && (
+        {error.stack ? (
           <details>
             <summary className="cursor-pointer mt-2 text-blue-400 hover:text-blue-300">Stack trace</summary>
-            <pre className="text-left whitespace-pre-wrap mt-2 bg-gray-800 p-2 rounded overflow-auto max-h-40 text-xs">
-              {error.stack || componentStack}
+            <pre className="text-left whitespace-pre-wrap mt-2 bg-gray-800 p-2 rounded overflow-auto max-h-40">
+              {error.stack}
             </pre>
           </details>
+        ) : (
+          <p>No stack trace available</p>
         )}
       </div>
     )}
@@ -50,33 +51,20 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
-  componentStack: string
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props)
-    this.state = {
-      hasError: false,
-      error: null,
-      componentStack: "",
-    }
+    this.state = { hasError: false, error: null }
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return {
-      hasError: true,
-      error,
-      componentStack: "",
-    }
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Uncaught error:", error)
-    console.error("Error info:", errorInfo)
-    this.setState({
-      componentStack: errorInfo.componentStack || "",
-    })
+    console.error("Uncaught error:", error, errorInfo)
   }
 
   render() {
@@ -86,8 +74,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <ErrorDisplay
             message="An unexpected error occurred"
             error={this.state.error}
-            componentStack={this.state.componentStack}
-            onRetry={() => this.setState({ hasError: false, error: null, componentStack: "" })}
+            onRetry={() => this.setState({ hasError: false, error: null })}
           />
         )
       )

@@ -1,9 +1,9 @@
 "use client"
 
 import React, { useReducer, useCallback, useMemo, useState, useRef, useEffect } from "react"
-import { useGameState, useGameDispatch, useGameContext } from "../../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 import { localReducer, initialLocalState } from "./laboratory-state"
-import BackgroundImage from "./background-image"
+import BackgroundImage from "./BackgroundImage" // Update: Import from "./BackgroundImage"
 import UpgradeButton from "./UpgradeButton"
 import CollectButton from "./CollectButton"
 import { useTranslation } from "../../../contexts/TranslationContext"
@@ -22,8 +22,8 @@ type NotificationType = {
 const Laboratory: React.FC = () => {
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
-  const { t } = useTranslation()
   const [localState, localDispatch] = useReducer(localReducer, initialLocalState)
+  const { t } = useTranslation()
   const [showCollectOptions, setShowCollectOptions] = useState(false)
   const [notification, setNotification] = useState<NotificationType>(null)
   const [isContainerClicked, setIsContainerClicked] = useState(false)
@@ -32,10 +32,7 @@ const Laboratory: React.FC = () => {
   const handleContainerClick = useCallback(() => {
     if (gameState.energy > 0) {
       const increaseAmount = 0.0005
-      const newContainerSnot = Math.min(
-        gameState.containerSnot + increaseAmount,
-        gameState.inventory.Cap || gameState.Cap,
-      )
+      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.Cap)
 
       gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
       gameDispatch({ type: "CONSUME_ENERGY", payload: 1 })
@@ -53,16 +50,7 @@ const Laboratory: React.FC = () => {
         type: "warning",
       })
     }
-  }, [
-    gameState.energy,
-    gameState.containerSnot,
-    gameState.inventory.Cap,
-    gameState.Cap,
-    gameState.inventory.snot,
-    gameDispatch,
-    localDispatch,
-    t,
-  ])
+  }, [gameState.energy, gameState.containerSnot, gameState.inventory.Cap, gameDispatch, localDispatch, t])
 
   useEffect(() => {
     const containerElement = document.getElementById("container-element")
@@ -85,21 +73,34 @@ const Laboratory: React.FC = () => {
     }
   }, [handleContainerClick])
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const increaseAmount = gameState.fillingSpeed
+      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.Cap)
+
+      if (newContainerSnot !== gameState.containerSnot) {
+        gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
+      }
+    }, 1000) // Update every second
+
+    return () => clearInterval(intervalId)
+  }, [gameState.fillingSpeed, gameState.inventory.Cap, gameState.containerSnot, gameDispatch])
+
   const handleCollect = useCallback(
-    async (amount: number, success: boolean) => {
+    (amount: number, success: boolean) => {
       setShowCollectOptions(false)
       setNotification(null)
+      console.log("Laboratory: handleCollect", { amount, success })
       if (success) {
         const newTotalSnot = gameState.inventory.snot + amount
-        gameDispatch({ type: "ADD_TO_INVENTORY", item: "snot", amount })
+        console.log("Collecting SNOT:", { amount, currentSnot: gameState.inventory.snot, newTotalSnot })
+        gameDispatch({ type: "COLLECT_CONTAINER_SNOT", payload: { amount } })
         setNotification({
           message: t("snotCollected"),
           amount: Number.parseFloat(formatSnotValue(amount, 4)),
           totalSnot: Number.parseFloat(formatSnotValue(newTotalSnot, 4)),
           type: "success",
         })
-        const { dispatch } = useGameContext()
-        // Remove the dispatch for CREATE_GAME_TRANSACTION as it's not defined in the Action type
       } else {
         setNotification({
           message: t("collectionFailed"),
@@ -108,10 +109,6 @@ const Laboratory: React.FC = () => {
           type: "failure",
         })
       }
-      gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: 0 })
-      const { dispatch } = useGameContext()
-      // Use an existing action type or add a new one if necessary
-      dispatch({ type: "UPDATE_RESOURCES" })
 
       // Automatically clear the notification after 3 seconds
       setTimeout(() => {
@@ -123,18 +120,18 @@ const Laboratory: React.FC = () => {
 
   const handleCollectClick = useCallback(() => {
     setNotification(null)
-    if (gameState?.containerSnot > 0) {
+    if (gameState.containerSnot > 0) {
       setShowCollectOptions(true)
     } else {
       setNotification({
         message: t("containerEmpty"),
         amount: 0,
-        totalSnot: gameState?.inventory?.snot,
+        totalSnot: gameState.inventory.snot,
         type: "warning",
       })
       setTimeout(() => setNotification(null), 3000)
     }
-  }, [gameState?.containerSnot, gameState?.inventory?.snot, t])
+  }, [gameState.containerSnot, gameState.inventory.snot, t])
 
   const resourcesProps = useMemo(
     () => ({
@@ -152,7 +149,11 @@ const Laboratory: React.FC = () => {
     [gameState.inventory.snotCoins, gameState.inventory.snot, gameState.energy, gameState.maxEnergy],
   )
 
-  const containerSnotValue = useMemo(() => formatSnotValue(gameState?.containerSnot, 4), [gameState?.containerSnot])
+  const containerSnotValue = useMemo(() => formatSnotValue(gameState.containerSnot, 4), [gameState.containerSnot])
+
+  const containerFilling = useMemo(() => {
+    return (gameState.containerSnot / gameState.inventory.Cap) * 100
+  }, [gameState.containerSnot, gameState.inventory.Cap])
 
   return (
     <div
@@ -169,6 +170,7 @@ const Laboratory: React.FC = () => {
         isContainerClicked={isContainerClicked}
         id="container-element"
         containerSnotValue={containerSnotValue}
+        containerFilling={containerFilling}
       />
       <Resources {...resourcesProps} />
       <AnimatePresence mode="wait">
@@ -184,7 +186,7 @@ const Laboratory: React.FC = () => {
               <div className="flex w-full space-x-4 h-14 -mt-10">
                 <CollectButton
                   onCollect={handleCollectClick}
-                  containerSnot={gameState?.containerSnot}
+                  containerSnot={gameState.containerSnot}
                   className="pointer-events-auto flex-grow"
                 />
                 <UpgradeButton className="pointer-events-auto" />
@@ -200,7 +202,7 @@ const Laboratory: React.FC = () => {
             className="absolute bottom-0 left-0 right-0 z-50 px-4 pb-4"
           >
             <CollectOptions
-              containerSnot={gameState?.containerSnot}
+              containerSnot={gameState.containerSnot}
               onCollect={handleCollect}
               onCancel={() => setShowCollectOptions(false)}
             />

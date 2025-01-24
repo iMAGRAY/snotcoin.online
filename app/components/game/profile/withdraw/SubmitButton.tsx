@@ -1,10 +1,10 @@
-import type React from "react"
-import { motion } from "framer-motion"
-import { Wallet } from "lucide-react"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Wallet } from 'lucide-react';
+import { useTranslation } from '../../../../contexts/TranslationContext';
 
-const SubmitButton: React.FC = () => {
-  const { t } = useTranslation()
+const SubmitButton: React.FC = React.memo(() => {
+  const { t } = useTranslation();
 
   return (
     <motion.button
@@ -14,12 +14,10 @@ const SubmitButton: React.FC = () => {
       whileTap={{ scale: 0.98 }}
     >
       <Wallet className="w-5 h-5" />
-      <span>{t("Withdraw")}</span>
+      <span>{t('Withdraw')}</span>
     </motion.button>
-  )
-}
+  );
+});
 
-SubmitButton.displayName = "SubmitButton"
-
-export default SubmitButton
+export default SubmitButton;
 

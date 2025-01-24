@@ -1,42 +1,32 @@
 import { useMemo } from "react"
+import { GameState } from "../types/gameTypes"
 
-export function formatSnotValue(value: number | undefined | null, decimalPlaces = 0): string {
-  if (value === undefined || value === null) {
-    return "0"
-  }
+type FormatFunction = (value: number, decimalPlaces?: number) => string
+
+export const formatSnotValue: FormatFunction = (value, decimalPlaces = 4) => {
+  if (value === undefined || value === null) return "0"
   if (value >= 1e9) return `${(value / 1e9).toFixed(decimalPlaces)}B`
   if (value >= 1e6) return `${(value / 1e6).toFixed(decimalPlaces)}M`
   if (value >= 1e3) return `${(value / 1e3).toFixed(decimalPlaces)}K`
-  if (value < 1) return value.toFixed(5) // Show 5 decimal places for small values
   return value.toFixed(decimalPlaces)
 }
 
 export const useFormattedSnotValue = (value: number) => useMemo(() => formatSnotValue(value), [value])
 
-export function formatTime(seconds: number): string {
+export const formatTime = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`
-  } else {
-    return `${minutes}m`
-  }
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
 
 export const useFormattedTime = (seconds: number) => useMemo(() => formatTime(seconds), [seconds])
 
-export function formatPercentage(value: number): string {
-  return `${(value * 100).toFixed(1)}%`
-}
+export const formatPercentage = (value: number): string => `${(value * 100).toFixed(1)}%`
 
-export function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`
-}
+export const formatCurrency = (value: number): string => `$${value.toFixed(2)}`
 
-export function calculateUpgradeCost(baseCost: number, costMultiplier: number, level: number): number {
-  return Math.floor(baseCost * Math.pow(costMultiplier, level))
-}
+export const calculateUpgradeCost = (baseCost: number, costMultiplier: number, level: number): number =>
+  Math.floor(baseCost * Math.pow(costMultiplier, level - 1))
 
 export const useCalculatedUpgradeCost = (baseCost: number, costMultiplier: number, level: number) =>
   useMemo(() => calculateUpgradeCost(baseCost, costMultiplier, level), [baseCost, costMultiplier, level])
@@ -45,13 +35,11 @@ export function getUpgradeEffect(currentEffect: number, nextEffect: number): str
   return `${currentEffect.toFixed(2)} → ${nextEffect.toFixed(2)}`
 }
 
-export function calculateEnergyRecoveryTime(currentEnergy: number, maxEnergy: number, recoveryRate: number): number {
-  return Math.ceil((maxEnergy - currentEnergy) / recoveryRate)
-}
+export const calculateEnergyRecoveryTime = (currentEnergy: number, maxEnergy: number, recoveryRate: number): number =>
+  Math.ceil((maxEnergy - currentEnergy) / recoveryRate)
 
-export function calculateFillingTime(containerSnot: number, maxContainerSnot: number, fillingSpeed: number): number {
-  return Math.ceil((maxContainerSnot - containerSnot) / fillingSpeed)
-}
+export const calculateFillingTime = (containerSnot: number, maxContainerSnot: number, fillingSpeed: number): number =>
+  Math.ceil((maxContainerSnot - containerSnot) / fillingSpeed)
 
 export const useCalculatedFillingTime = (containerSnot: number, maxContainerSnot: number, fillingSpeed: number) =>
   useMemo(
