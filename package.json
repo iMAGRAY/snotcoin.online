@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:ssl": "sudo node server.js",
+    "start:dev:ssl": "NODE_ENV=development sudo node server.js",
     "lint": "next lint"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
+    "@farcaster/frame-sdk": "^0.0.31",
     "@headlessui/react": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.5.0",

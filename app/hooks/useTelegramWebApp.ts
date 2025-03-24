@@ -1,8 +1,13 @@
+"use client";
+
 /**
  * Хук для работы с Telegram WebApp API
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { TelegramWebAppUser } from '../types/telegramAuth';
+
+// Проверка на браузерное окружение
+const isBrowser = typeof window !== 'undefined';
 
 // Интерфейс результата работы хука
 export interface TelegramWebAppResult {
@@ -20,10 +25,31 @@ export interface TelegramWebAppResult {
   deviceInfo: { platform: string; version: string };
 }
 
+// Дефолтный результат для серверного рендеринга
+const defaultResult: TelegramWebAppResult = {
+  isLoading: true,
+  isAvailable: false,
+  initDataAvailable: false,
+  userData: null,
+  initData: null,
+  authDate: null,
+  hash: null,
+  error: null,
+  loadWebAppScript: async () => false,
+  closeWebApp: () => {},
+  setBackgroundColor: () => {},
+  deviceInfo: { platform: 'unknown', version: 'unknown' }
+};
+
 /**
  * Хук для работы с WebApp API Telegram
  */
 export const useTelegramWebApp = (): TelegramWebAppResult => {
+  // Если код выполняется на сервере, возвращаем дефолтные значения
+  if (!isBrowser) {
+    return defaultResult;
+  }
+  
   // Состояние загрузки
   const [isLoading, setIsLoading] = useState<boolean>(true);
   
@@ -47,13 +73,27 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
   // Ссылка на скрипт для отслеживания его загрузки
   const scriptRef = useRef<HTMLScriptElement | null>(null);
   
+  // Флаг для отслеживания монтирования компонента
+  const isMountedRef = useRef<boolean>(true);
+  
   // Дополнительные данные
   const [deviceInfo, setDeviceInfo] = useState({ platform: 'unknown', version: 'unknown' });
+  
+  /**
+   * Безопасное обновление состояния
+   */
+  const safeSetState = useCallback((setter: Function, value: any) => {
+    if (isMountedRef.current) {
+      setter(value);
+    }
+  }, []);
   
   /**
    * Загрузка скрипта WebApp
    */
   const loadWebAppScript = async (): Promise<boolean> => {
+    if (!isBrowser || !isMountedRef.current) return false;
+    
     // Если скрипт уже есть, не загружаем его повторно
     if (scriptRef.current || document.getElementById('telegram-webapp-script')) {
       return true;
@@ -76,10 +116,14 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
         new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000))
       ]);
       
-      scriptRef.current = script;
+      if (isMountedRef.current) {
+        scriptRef.current = script;
+      }
       return result;
     } catch (e) {
-      setError(`Ошибка загрузки скрипта: ${e instanceof Error ? e.message : String(e)}`);
+      if (isMountedRef.current) {
+        setError(`Ошибка загрузки скрипта: ${e instanceof Error ? e.message : String(e)}`);
+      }
       return false;
     }
   };
@@ -88,6 +132,8 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
    * Закрытие WebApp
    */
   const closeWebApp = useCallback(() => {
+    if (!isBrowser) return;
+    
     // Проверяем наличие метода close
     const webApp = window.Telegram?.WebApp;
     try {
@@ -103,11 +149,17 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
    * Получение данных инициализации при первом рендере
    */
   useEffect(() => {
+    if (!isBrowser) return;
+    
+    isMountedRef.current = true;
+    
     const checkTelegramWebApp = () => {
+      if (!isMountedRef.current) return;
+      
       try {
         // Проверяем наличие Telegram WebApp
         const webAppAvailable = !!window.Telegram && !!window.Telegram.WebApp;
-        setIsAvailable(webAppAvailable);
+        safeSetState(setIsAvailable, webAppAvailable);
         
         if (webAppAvailable) {
           // Используем бесспорное утверждение, так как мы проверили, что оба не null/undefined
@@ -117,30 +169,30 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
           if (webApp) {
             // Получаем данные WebApp
             const initDataStr = webApp.initData;
-            setInitData(initDataStr);
+            safeSetState(setInitData, initDataStr);
             
             // Извлекаем пользователя из данных
             const initDataUnsafe = (webApp as any).initDataUnsafe || {};
             
             if (initDataUnsafe.user) {
-              setUserData(initDataUnsafe.user);
+              safeSetState(setUserData, initDataUnsafe.user);
             }
             
             // Проверка даты авторизации
             if (initDataUnsafe.auth_date) {
-              setAuthDate(initDataUnsafe.auth_date);
+              safeSetState(setAuthDate, initDataUnsafe.auth_date);
             }
             
             // Проверка хеша
             if (initDataUnsafe.hash) {
-              setHash(initDataUnsafe.hash);
+              safeSetState(setHash, initDataUnsafe.hash);
             }
             
             // Отмечаем что WebApp готов
-            setInitDataAvailable(!!initDataStr);
+            safeSetState(setInitDataAvailable, !!initDataStr);
             
             // Подготавливаем данные об устройстве
-            setDeviceInfo({
+            safeSetState(setDeviceInfo, {
               platform: (webApp as any).platform || 'unknown',
               version: (webApp as any).version || 'unknown'
             });
@@ -152,16 +204,18 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
             });
           } else {
             console.warn('[Telegram WebApp] WebApp объект получен, но undefined');
-            setError('WebApp объект получен, но undefined');
+            safeSetState(setError, 'WebApp объект получен, но undefined');
           }
         } else {
           console.warn('[Telegram WebApp] API не найден в window.Telegram.WebApp');
         }
       } catch (error) {
         console.error('[Telegram WebApp] Ошибка при получении данных:', error);
-        setError('Не удалось получить данные WebApp: ' + String(error));
+        safeSetState(setError, 'Не удалось получить данные WebApp: ' + String(error));
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          safeSetState(setIsLoading, false);
+        }
       }
     };
     
@@ -170,16 +224,21 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
     checkTelegramWebApp();
     
     const retryTimeout = setTimeout(() => {
-      if (!isAvailable) {
+      if (isMountedRef.current && !isAvailable) {
         checkTelegramWebApp();
       }
     }, 500);
     
-    return () => clearTimeout(retryTimeout);
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+      clearTimeout(retryTimeout);
+    };
+  }, [safeSetState, isAvailable]);
   
   // Функция для проверки полной загрузки WebApp
   const checkWebAppReady = useCallback(() => {
+    if (!isBrowser) return false;
+    
     const webApp = window.Telegram?.WebApp;
     if (!webApp) {
       console.warn("Telegram WebApp API не найдено");
@@ -187,16 +246,18 @@ export const useTelegramWebApp = (): TelegramWebAppResult => {
     }
     
     // Подготавливаем данные об устройстве
-    setDeviceInfo({
+    safeSetState(setDeviceInfo, {
       platform: (webApp as any).platform || 'unknown',
       version: (webApp as any).version || 'unknown'
     });
     
     return true;
-  }, []);
+  }, [safeSetState]);
   
   // Функция для измения цвета WebApp
   const setBackgroundColor = useCallback((color: string) => {
+    if (!isBrowser) return;
+    
     const webApp = window.Telegram?.WebApp;
     if (webApp) {
       try {

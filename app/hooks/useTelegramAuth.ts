@@ -13,6 +13,9 @@ import { AuthLogType, AuthStep, logAuth, logAuthDebug, logAuthError, logAuthInfo
 import { authStore } from '../components/auth/AuthenticationWindow';
 import { useTelegramWebAppContext } from '../contexts/TelegramWebAppContext';
 
+// Предотвращаем выполнение хука на стороне сервера
+const isBrowser = typeof window !== 'undefined';
+
 /**
  * Результат работы хука аутентификации
  */
@@ -31,12 +34,33 @@ interface TelegramAuthHookResult {
   logout: () => void;
 }
 
+// Дефолтное значение для возврата при SSR
+const defaultAuthResult: TelegramAuthHookResult = {
+  user: null,
+  status: AuthStatus.LOADING,
+  isLoading: true,
+  handleAuth: async () => false,
+  handleRetry: () => {},
+  closeWebApp: () => {},
+  openInTelegram: () => {},
+  isAuthenticated: false,
+  authToken: null,
+  errorMessage: null,
+  login: () => {},
+  logout: () => {},
+};
+
 /**
  * Хук для работы с аутентификацией через Telegram с подробным логированием
  */
 export const useTelegramAuth = (
   onAuthenticate: TelegramAuthProps['onAuthenticate']
 ): TelegramAuthHookResult => {
+  // Если код выполняется на сервере, возвращаем дефолтное значение
+  if (!isBrowser) {
+    return defaultAuthResult;
+  }
+
   const [state, setState] = useState<AuthState>({
     status: AuthStatus.LOADING,
     user: null,
@@ -439,11 +463,102 @@ export const useTelegramAuth = (
     loadUser();
   }, [loadUser]);
   
+  /**
+   * Выполнение автоматической аутентификации при загрузке
+   */
+  useEffect(() => {
+    // Проверка, что код выполняется в браузере
+    if (!isBrowser) return;
+    
+    let isMounted = true;
+    
+    const performAuth = async () => {
+      try {
+        // Если уже аутентифицированы или попытки аутентификации исчерпаны, не продолжаем
+        if (isAuthenticated || authAttempts > 3) return;
+        
+        // Увеличиваем счетчик попыток
+        setAuthAttempts(prev => prev + 1);
+        
+        // Если есть сохраненный токен, пытаемся использовать его
+        const savedToken = localStorage.getItem('auth_token');
+        if (savedToken) {
+          // Проверяем токен
+          try {
+            // Здесь можно добавить код для проверки токена
+          } catch (error) {
+            console.error('Ошибка проверки токена:', error);
+          }
+        }
+        
+        // Выполняем аутентификацию
+        await handleAuth();
+      } catch (error) {
+        console.error('Ошибка при автоматической аутентификации:', error);
+      }
+    };
+    
+    // Запускаем проверку аутентификации, если страница загружена полностью
+    if (document.readyState === 'complete') {
+      performAuth();
+    } else {
+      window.addEventListener('load', performAuth);
+      return () => {
+        window.removeEventListener('load', performAuth);
+      };
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, authAttempts]);
+  
+  /**
+   * Аутентификация
+   */
+  const handleAuth = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!isBrowser) return false;
+      
+      setState(prev => ({ ...prev, status: AuthStatus.LOADING }));
+      
+      // Пробуем через Telegram WebApp
+      if (webAppContext.isReady && webAppContext.initData) {
+        const result = await authenticateWithTelegram(webAppContext.initData);
+        if (result.success && result.user) {
+          if (result.token) {
+            localStorage.setItem('auth_token', result.token);
+            setAuthToken(result.token);
+          }
+          
+          setIsAuthenticated(true);
+          return handleAuthSuccess(result.user);
+        }
+      }
+      
+      // Пробуем через URL-параметры
+      const urlAuthResult = await tryWithUrlData();
+      if (urlAuthResult) {
+        return true;
+      }
+      
+      // В режиме разработки можно использовать тестовую аутентификацию
+      if (process.env.NODE_ENV === 'development') {
+        return await tryForceLogin();
+      }
+      
+      return handleAuthError('Не удалось аутентифицироваться. Убедитесь, что вы открыли ссылку через приложение Telegram.');
+    } catch (error) {
+      return handleAuthError(`Ошибка при аутентификации: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [webAppContext, handleAuthSuccess, handleAuthError]);
+  
+  // Возвращаем результат хука
   return {
     user: state.user,
     status: state.status,
     isLoading: state.status === AuthStatus.LOADING,
-    handleAuth: tryAuthenticate,
+    handleAuth,
     handleRetry,
     closeWebApp,
     openInTelegram,
@@ -455,12 +570,13 @@ export const useTelegramAuth = (
   };
 };
 
-// Используем интерфейс Window из telegram.d.ts
-// Удаляем повторное объявление
-  
-// Эффект для инициализации
-useEffect(() => {
-  // ... существующий код ...
-}, []);
-  
-// ... existing code ... 
+// Вспомогательные функции для чистоты хуков
+const tryWithUrlDataGlobal = async (): Promise<boolean> => {
+  // Реализация для глобального использования
+  return false;
+};
+
+const tryForceLoginGlobal = async (): Promise<boolean> => {
+  // Реализация для глобального использования
+  return false;
+}; 

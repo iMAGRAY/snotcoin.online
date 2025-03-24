@@ -4,6 +4,9 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import type { TelegramWebApp } from '../types/telegram';
 import type { TelegramWebAppUser } from '../types/telegramAuth';
 
+// Проверка на браузерное окружение
+const isBrowser = typeof window !== 'undefined';
+
 interface WebAppContextType {
   isReady: boolean;
   isLoading: boolean;
@@ -27,9 +30,18 @@ const initialState: WebAppContextType = {
 const TelegramWebAppContext = createContext<WebAppContextType>(initialState);
 
 export const TelegramWebAppProvider: React.FC<{children: React.ReactNode}> = ({children}) => {
+  // Проверка на серверную часть
+  if (!isBrowser) {
+    return <>{children}</>;
+  }
+  
   const [state, setState] = useState<WebAppContextType>(initialState);
   // Ref для отслеживания монтирования компонента
   const isMountedRef = useRef(true);
+  // Ref для отслеживания попыток инициализации
+  const initAttemptedRef = useRef(false);
+  // Ref для отслеживания таймера инициализации
+  const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Безопасная функция обновления состояния
   const safeSetState = useCallback((newState: Partial<WebAppContextType>) => {
@@ -40,12 +52,19 @@ export const TelegramWebAppProvider: React.FC<{children: React.ReactNode}> = ({c
   
   // Инициализация Telegram WebApp API
   const initializeTelegramWebApp = useCallback(() => {
+    // Проверяем, что мы в браузере
+    if (!isBrowser) return;
+    
+    // Отмечаем, что попытка инициализации была предпринята
+    initAttemptedRef.current = true;
+    
     try {
       console.log('[TelegramWebAppContext] Инициализация Telegram WebApp API');
       
       if (!isMountedRef.current) return;
       
-      if (window.Telegram?.WebApp) {
+      // Проверяем наличие Telegram API
+      if (typeof window.Telegram !== 'undefined' && window.Telegram?.WebApp) {
         // Приводим к корректному типу
         const webApp = window.Telegram.WebApp as TelegramWebApp;
         
@@ -77,38 +96,13 @@ export const TelegramWebAppProvider: React.FC<{children: React.ReactNode}> = ({c
           error: null
         });
       } else {
-        console.warn('[TelegramWebAppContext] API не найден в window.Telegram.WebApp');
+        console.log('[TelegramWebAppContext] API не найден в window.Telegram.WebApp, возможно не в Telegram');
         
-        if (!isMountedRef.current) return;
-        
-        // Если API не доступен, пробуем загрузить скрипт
-        const script = document.createElement('script');
-        script.id = 'telegram-webapp-script';
-        script.src = 'https://telegram.org/js/telegram-web-app.js';
-        script.async = true;
-        
-        script.onload = () => {
-          console.log('[TelegramWebAppContext] Скрипт WebApp загружен, повторная инициализация');
-          
-          // Даем время на инициализацию
-          if (isMountedRef.current) {
-            setTimeout(() => {
-              if (isMountedRef.current) {
-                initializeTelegramWebApp();
-              }
-            }, 500);
-          }
-        };
-        
-        script.onerror = () => {
-          console.error('[TelegramWebAppContext] Не удалось загрузить скрипт WebApp');
-          safeSetState({
-            isLoading: false,
-            error: 'Не удалось загрузить Telegram WebApp API'
-          });
-        };
-        
-        document.head.appendChild(script);
+        // Если мы не в Telegram, просто отмечаем, что API не доступен
+        safeSetState({
+          isLoading: false,
+          error: 'Telegram WebApp API недоступен (возможно вы не в Telegram)'
+        });
       }
     } catch (error) {
       console.error('[TelegramWebAppContext] Ошибка при инициализации:', error);
@@ -120,23 +114,28 @@ export const TelegramWebAppProvider: React.FC<{children: React.ReactNode}> = ({c
   }, [safeSetState]);
   
   useEffect(() => {
-    // Запускаем инициализацию
-    initializeTelegramWebApp();
+    // Запускаем инициализацию только на клиенте
+    if (!isBrowser) return;
     
-    // Повторяем проверку через 1 секунду если API все еще не доступен
-    const retryTimeout = setTimeout(() => {
-      if (isMountedRef.current && !state.isReady && !state.error) {
-        console.log('[TelegramWebAppContext] Повторная попытка инициализации');
+    // Предотвращаем повторную инициализацию
+    if (initAttemptedRef.current) return;
+    
+    // Отложенная инициализация для стабильности
+    initTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current && !initAttemptedRef.current) {
         initializeTelegramWebApp();
       }
-    }, 1000);
+    }, 100);
     
     // Функция очистки при размонтировании
     return () => {
       isMountedRef.current = false;
-      clearTimeout(retryTimeout);
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
     };
-  }, [state.isReady, state.error, initializeTelegramWebApp]);
+  }, [initializeTelegramWebApp]);
   
   return (
     <TelegramWebAppContext.Provider value={state}>
@@ -145,4 +144,12 @@ export const TelegramWebAppProvider: React.FC<{children: React.ReactNode}> = ({c
   );
 };
 
-export const useTelegramWebAppContext = () => useContext(TelegramWebAppContext); 
+// Версия с проверкой браузерного окружения
+export const useTelegramWebAppContext = () => {
+  // Возвращаем начальное состояние для серверного рендера
+  if (!isBrowser) {
+    return initialState;
+  }
+  
+  return useContext(TelegramWebAppContext);
+}; 

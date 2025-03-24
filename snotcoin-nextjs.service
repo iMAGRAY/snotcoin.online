@@ -1,0 +1,15 @@
+[Unit]
+Description=SnotCoin Next.js Application with HTTPS
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/snotcoin.online/
+ExecStart=/usr/bin/npm run start:ssl
+Restart=on-failure
+Environment=NODE_ENV=production
+Environment=PORT=443
+
+[Install]
+WantedBy=multi-user.target 
