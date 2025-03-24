@@ -1,4 +1,3 @@
-import { supabase } from "../utils/supabase";
 import type { GameState, ExtendedGameState } from "../types/gameTypes";
 import { saveQueue, CompressedGameState, isCompressedGameState } from "../utils/saveQueue";
 
@@ -200,7 +199,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     
     // Добавляем в очередь сохранений
     saveQueue.enqueue(async () => {
-      await saveToSupabase(telegramId, stateToSave);
+      await saveToPostgres(telegramId, stateToSave);
     });
     
   } catch (error) {
@@ -211,9 +210,9 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
 }
 
 /**
- * Сохраняет состояние в Supabase с повторными попытками
+ * Сохраняет состояние в PostgreSQL с повторными попытками
  */
-async function saveToSupabase(telegramId: number, gameState: ExtendedGameState, attempt = 1): Promise<void> {
+async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, attempt = 1): Promise<void> {
   try {
     // Проверка целостности данных перед отправкой
     if (!checkDataIntegrity(gameState)) {
@@ -332,10 +331,12 @@ async function saveToSupabase(telegramId: number, gameState: ExtendedGameState, 
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
     
     try {
+      const token = localStorage.getItem('auth_token');
       const response = await fetch('/api/game/save-progress', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         body: JSON.stringify({ 
           telegramId, 
@@ -376,7 +377,7 @@ async function saveToSupabase(telegramId: number, gameState: ExtendedGameState, 
     if (attempt < MAX_RETRY_ATTEMPTS && (isNetworkError || error instanceof TypeError)) {
       const retryDelay = RETRY_DELAY * Math.pow(2, attempt - 1); // Экспоненциальная задержка
       await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return saveToSupabase(telegramId, gameState, attempt + 1);
+      return saveToPostgres(telegramId, gameState, attempt + 1);
     }
     
     // Создаем резервную копию при окончательной неудаче
@@ -419,7 +420,7 @@ async function processBatchSaves(): Promise<void> {
       // Добавляем операцию в массив промисов с обработкой ошибок
       const savePromise = saveQueue.enqueue(async () => {
         try {
-          await saveToSupabase(telegramId, state);
+          await saveToPostgres(telegramId, state);
         } catch (saveError) {
           console.error(`Ошибка сохранения для пользователя ${telegramId}:`, saveError);
           // Сохраняем информацию о неудачном сохранении
@@ -449,38 +450,32 @@ async function processBatchSaves(): Promise<void> {
         Math.floor(SAVE_DEBOUNCE_TIME / 2)
       );
     }
-  } catch (error) {
-    console.error('Критическая ошибка при пакетном сохранении:', error);
+  } catch (batchError) {
+    console.error('Критическая ошибка при пакетном сохранении:', batchError);
     
-    // В случае полной ошибки обработки всего пакета пытаемся восстановить данные и 
-    // выполнить сохранения поочередно через короткое время
-    setTimeout(() => {
-      try {
-        pendingSaves.forEach((state, telegramId) => {
-          // Гарантированно сохраняем резервную копию
-          saveBackup(telegramId, state);
-          
-          // Добавляем в очередь сохранений с индивидуальной обработкой ошибок
-          saveQueue.enqueue(async () => {
-            try {
-              await saveToSupabase(telegramId, state);
-            } catch (individualError) {
-              console.error(`Индивидуальная ошибка сохранения для пользователя ${telegramId}:`, individualError);
-              // Сохраняем резервную копию и планируем индивидуальную повторную попытку
-              saveBackup(telegramId, state, individualError);
-              setTimeout(() => {
-                pendingSaves.set(telegramId, state);
-                if (!batchSaveTimer) {
-                  batchSaveTimer = setTimeout(() => processBatchSaves(), SAVE_DEBOUNCE_TIME);
-                }
-              }, RETRY_DELAY);
-            }
-          });
+    // В случае критической ошибки, пробуем сохранить каждое состояние индивидуально
+    try {
+      const failedBatchIds = Array.from(pendingSaves.keys());
+      console.warn(`Попытка индивидуального сохранения для ${failedBatchIds.length} пользователей`);
+      
+      // Очищаем текущую очередь
+      pendingSaves.clear();
+      
+      // Запускаем индивидуальное сохранение для каждого пользователя с увеличенным таймаутом
+      for (const [telegramId, state] of Array.from(pendingSaves.entries())) {
+        saveQueue.enqueue(async () => {
+          try {
+            await saveToPostgres(telegramId, state);
+          } catch (individualError) {
+            console.error(`Индивидуальная ошибка сохранения для пользователя ${telegramId}:`, individualError);
+            // Создаем резервную копию при окончательной неудаче
+            saveBackup(telegramId, state, individualError);
+          }
         });
-      } catch (recoveryError) {
-        console.error('Критическая ошибка при попытке восстановления после сбоя:', recoveryError);
       }
-    }, RETRY_DELAY);
+    } catch (finalError) {
+      console.error('Критическая ошибка при индивидуальном сохранении:', finalError);
+    }
   }
 }
 
@@ -516,10 +511,13 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
     
     try {
+      // Получаем токен авторизации
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`/api/game/load-progress?telegramId=${telegramId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
         },
         signal: controller.signal
       });
@@ -657,7 +655,7 @@ export async function forceSaveGameState(telegramId: number, gameState: Extended
     }
     
     // Сохраняем напрямую, без очереди и с таймаутом
-    const savePromise = saveToSupabase(telegramId, stateToSave);
+    const savePromise = saveToPostgres(telegramId, stateToSave);
     
     // Устанавливаем максимальное время ожидания для принудительного сохранения
     const timeoutPromise = new Promise<void>((_, reject) => {
@@ -722,11 +720,18 @@ export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () 
       
       // Используем Beacon API для надежной отправки перед закрытием
       if (navigator.sendBeacon) {
-        const data = JSON.stringify({
+        // Получаем JWT-токен
+        const token = localStorage.getItem('auth_token');
+        
+        // Подготавливаем данные для отправки
+        const payload = {
           telegramId,
           gameState: state,
-          clientTimestamp: new Date().toISOString()
-        });
+          clientTimestamp: new Date().toISOString(),
+          token: token // Добавляем токен напрямую в данные, так как нельзя установить заголовки в sendBeacon
+        };
+        
+        const data = JSON.stringify(payload);
         const blob = new Blob([data], { type: 'application/json' });
         navigator.sendBeacon('/api/game/save-progress', blob);
       }

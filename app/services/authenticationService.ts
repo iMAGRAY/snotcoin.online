@@ -1,8 +1,9 @@
 /**
- * Сервис для работы с аутентификацией через Telegram
+ * Сервис для работы с аутентификацией через Telegram с использованием JWT токенов
  */
 
 import { TelegramWebAppUser, TelegramUser, ForceLoginData } from '../types/telegramAuth';
+import { jwtDecode } from 'jwt-decode';
 
 // Интерфейс результата аутентификации
 interface AuthResult {
@@ -13,12 +14,79 @@ interface AuthResult {
   errorDetails?: string;
 }
 
+// Интерфейс декодированного JWT токена
+interface JWTPayload {
+  sub: string;
+  telegram_id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  iat: number;
+  exp: number;
+}
+
 /**
- * Устанавливает токен Supabase в localStorage
+ * Устанавливает JWT токен в localStorage
  */
-export const setSupabaseToken = async (token: string): Promise<void> => {
-  localStorage.setItem('supabase_token', token);
+export const setAuthToken = async (token: string): Promise<void> => {
+  localStorage.setItem('auth_token', token);
   return Promise.resolve();
+};
+
+/**
+ * Получает JWT токен из localStorage
+ */
+export const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
+/**
+ * Проверяет валидность JWT токена
+ */
+export const isTokenValid = (): boolean => {
+  const token = getAuthToken();
+  if (!token) return false;
+  
+  try {
+    const decoded = jwtDecode<JWTPayload>(token);
+    const currentTime = Date.now() / 1000;
+    
+    // Проверяем, не истек ли срок действия токена
+    return decoded.exp > currentTime;
+  } catch (error) {
+    console.error('Ошибка при валидации токена:', error);
+    return false;
+  }
+};
+
+/**
+ * Удаляет JWT токен из localStorage
+ */
+export const removeAuthToken = (): void => {
+  localStorage.removeItem('auth_token');
+};
+
+/**
+ * Получает информацию о пользователе из JWT токена
+ */
+export const getUserFromToken = (): TelegramUser | null => {
+  const token = getAuthToken();
+  if (!token) return null;
+  
+  try {
+    const decoded = jwtDecode<JWTPayload>(token);
+    
+    return {
+      id: decoded.sub,
+      telegram_id: decoded.telegram_id,
+      username: decoded.username || '',
+      first_name: decoded.first_name || '',
+      last_name: decoded.last_name || ''
+    };
+  } catch (error) {
+    console.error('Ошибка при декодировании токена:', error);
+    return null;
+  }
 };
 
 /**
@@ -64,18 +132,36 @@ export const authenticateWithTelegram = async (
     
     // Если был получен токен - сохраняем его
     if (data.token) {
-      await setSupabaseToken(data.token);
+      await setAuthToken(data.token);
     }
     
-    // Создаем объект пользователя
-    const user: TelegramUser = {
-      id: String(data.user.id),
-      telegram_id: Number(data.user.telegram_id),
-      username: data.user.username,
-      first_name: data.user.first_name,
-      last_name: data.user.last_name,
-      photo_url: data.user.photo_url
-    };
+    // Создаем объект пользователя из декодированного токена или из ответа
+    let user: TelegramUser;
+    
+    if (data.token) {
+      const decodedUser = getUserFromToken();
+      if (decodedUser) {
+        user = decodedUser;
+      } else {
+        user = {
+          id: String(data.user.id),
+          telegram_id: Number(data.user.telegram_id),
+          username: data.user.username,
+          first_name: data.user.first_name,
+          last_name: data.user.last_name,
+          photo_url: data.user.photo_url
+        };
+      }
+    } else {
+      user = {
+        id: String(data.user.id),
+        telegram_id: Number(data.user.telegram_id),
+        username: data.user.username,
+        first_name: data.user.first_name,
+        last_name: data.user.last_name,
+        photo_url: data.user.photo_url
+      };
+    }
     
     return {
       success: true,
@@ -150,7 +236,7 @@ export const authenticateWithForceLogin = async (userData: ForceLoginData): Prom
     
     // Если был получен токен - сохраняем его
     if (data.token) {
-      await setSupabaseToken(data.token);
+      await setAuthToken(data.token);
     }
     
     // Создаем объект пользователя

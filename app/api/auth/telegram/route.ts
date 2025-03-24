@@ -1,20 +1,9 @@
 import { NextResponse } from 'next/server'
 import { validateTelegramAuth } from '../../../utils/validation'
-import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { AuthLogType, AuthStep, logAuth } from '../../../utils/auth-logger'
-
-// Создаем клиент Supabase за пределами обработчика
-let supabaseAdmin: any = null
-try {
-  supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-    process.env.SUPABASE_SERVICE_KEY ?? ''
-  )
-} catch (error) {
-  console.error('[SUPABASE_INIT_ERROR]', error)
-  logAuth(AuthStep.SERVER_ERROR, AuthLogType.ERROR, 'Ошибка инициализации Supabase', null, error)
-}
+import { UserModel } from '../../../utils/postgres'
+import { generateToken } from '../../../utils/jwt'
 
 // Определяем поддерживаемые HTTP методы
 export const dynamic = 'force-dynamic'
@@ -78,16 +67,6 @@ function authLog(logId: string, step: string, message: string, data?: any, error
     'DB_USER_INSERT_ERROR': AuthStep.SERVER_ERROR,
     'USER_CREATED': AuthStep.USER_CREATED,
     'INITIAL_GAME_STATE': AuthStep.USER_CREATED,
-    'AUTH_USER_CHECK': AuthStep.DATABASE_QUERY,
-    'AUTH_USER_CREATION': AuthStep.USER_CREATED,
-    'AUTH_USER_CREATION_ERROR': AuthStep.SERVER_ERROR,
-    'AUTH_USER_CREATED': AuthStep.USER_CREATED,
-    'AUTH_USER_CHECK_ERROR': AuthStep.SERVER_ERROR,
-    'AUTH_USER_EXISTS': AuthStep.USER_UPDATED,
-    'AUTH_USER_UPDATE_ERROR': AuthStep.SERVER_ERROR,
-    'AUTH_USER_UPDATED': AuthStep.USER_UPDATED,
-    'AUTH_USER_CRITICAL_ERROR': AuthStep.SERVER_ERROR,
-    'EXISTING_USER': AuthStep.USER_UPDATED,
     'TOKEN_GENERATION': AuthStep.TOKEN_GENERATED,
     'TOKEN_UPDATE': AuthStep.DATABASE_QUERY,
     'TOKEN_UPDATE_ERROR': AuthStep.SERVER_ERROR,
@@ -279,23 +258,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // Стандартный путь с обращением к базе данных
+    // Поиск пользователя в PostgreSQL
     authLog(logId, 'DB_USER_SEARCH', 'Поиск пользователя в базе данных', { telegramId });
-    const { data: existingUser, error: searchError } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('telegram_id', telegramId)
-      .single()
-
-    if (searchError && searchError.code !== 'PGRST116') {
+    let existingUser;
+    
+    try {
+      existingUser = await UserModel.findByTelegramId(telegramId);
+    } catch (searchError) {
       authLog(logId, 'DB_SEARCH_ERROR', 'Ошибка базы данных при поиске пользователя', null, searchError);
       return NextResponse.json(
-        { error: 'Database error', details: searchError.message },
+        { error: 'Database error', details: (searchError as Error).message },
         { status: 500 }
       )
     }
 
-    let userId = existingUser?.id
+    let userId = existingUser?.id || null;
     authLog(logId, 'USER_SEARCH_RESULT', existingUser ? 'Пользователь найден в базе данных' : 'Пользователь не найден в базе данных', { 
       userId,
       isNewUser: !existingUser 
@@ -304,11 +281,11 @@ export async function POST(request: Request) {
     // Если пользователь не найден, создаем нового
     if (!existingUser) {
       authLog(logId, 'USER_CREATION', 'Создание нового пользователя');
-      const usernameValue = username || `user_${telegramId}`
-      const firstNameValue = firstName || 'New'
-      const lastNameValue = lastName || 'User'
+      const usernameValue = username || `user_${telegramId}`;
+      const firstNameValue = firstName || 'New';
+      const lastNameValue = lastName || 'User';
       
-      // Создаем пользователя в таблице users
+      // Создаем пользователя в базе данных PostgreSQL
       authLog(logId, 'DB_USER_INSERT', 'Добавление нового пользователя в базу данных', { 
         telegramId, 
         username: usernameValue,
@@ -316,148 +293,44 @@ export async function POST(request: Request) {
         lastName: lastNameValue
       });
       
-      const { data: newUser, error: createError } = await supabaseAdmin
-        .from('users')
-        .insert([{
+      try {
+        const newUser = await UserModel.create({
           telegram_id: telegramId,
           username: usernameValue,
           first_name: firstNameValue,
-          last_name: lastNameValue,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single()
-
-      if (createError) {
+          last_name: lastNameValue
+        });
+        
+        userId = newUser.id;
+        authLog(logId, 'USER_CREATED', 'Пользователь успешно создан в базе данных', { userId, telegramId });
+      } catch (createError) {
         authLog(logId, 'DB_USER_INSERT_ERROR', 'Ошибка создания пользователя в базе данных', null, createError);
         console.error('Ошибка создания пользователя:', createError);
-        throw new Error(`Не удалось создать пользователя: ${createError.message}`);
+        throw new Error(`Не удалось создать пользователя: ${(createError as Error).message}`);
       }
-      userId = newUser.id
-      authLog(logId, 'USER_CREATED', 'Пользователь успешно создан в базе данных', { userId, telegramId });
 
       // Создаем начальное состояние игры для нового пользователя
       authLog(logId, 'INITIAL_GAME_STATE', 'Создание начального состояния игры');
-      const initialGameState = {
-        user: {
-          id: userData.id,
-          telegram_id: userData.telegram_id,
-          username: userData.username,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          photo_url: userData.photo_url
-        },
-        inventory: {
-          snot: 0,
-          snotCoins: 0,
-          containerSnot: 0,
-          containerCapacity: 1,
-          Cap: 1,
-          fillingSpeed: 1 / (24 * 60 * 60), // 1 единица в день
-          containerCapacityLevel: 1,
-          fillingSpeedLevel: 1,
-          collectionEfficiency: 1.0
-        },
-        activeTab: 'laboratory',
-        gameStarted: true,
-        highestLevel: 1,
-        consecutiveLoginDays: 1,
-        settings: {
-          language: 'en',
-          theme: 'light',
-          notifications: true,
-          tutorialCompleted: false
-        },
-        soundSettings: {
-          backgroundMusicVolume: 0.3,
-          clickVolume: 0.5,
-          effectsVolume: 0.5,
-          isBackgroundMusicMuted: false,
-          isEffectsMuted: false,
-          isMuted: false
-        },
-        isPlaying: false
-      };
-
-      // Создаем auth пользователя
-      try {
-        authLog(logId, 'AUTH_USER_CHECK', 'Проверка существования учетной записи аутентификации');
-        const { data: authUserData, error: authCheckError } = await supabaseAdmin.auth.admin.getUserByEmail(
-          `${telegramId}@telegram.user`
-        );
-        
-        if (authCheckError) {
-          if (authCheckError.status === 404) {
-            authLog(logId, 'AUTH_USER_CREATION', 'Создание учетной записи аутентификации', { email: `${telegramId}@telegram.user` });
-            const { error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
-              email: `${telegramId}@telegram.user`,
-              password: telegramId.toString(),
-              email_confirm: true
-            });
-            
-            if (createAuthError) {
-              authLog(logId, 'AUTH_USER_CREATION_ERROR', 'Ошибка создания учетной записи аутентификации', null, createAuthError);
-              console.error('Ошибка создания учетной записи авторизации:', createAuthError);
-            } else {
-              authLog(logId, 'AUTH_USER_CREATED', 'Учетная запись аутентификации успешно создана');
-              console.log('Успешно создана учетная запись авторизации для пользователя:', telegramId);
-            }
-          } else {
-            authLog(logId, 'AUTH_USER_CHECK_ERROR', 'Ошибка при проверке существования учетной записи', null, authCheckError);
-            console.error('Ошибка при проверке существования учетной записи:', authCheckError);
-          }
-        } else {
-          authLog(logId, 'AUTH_USER_EXISTS', 'Учетная запись аутентификации уже существует, обновление метаданных', { authUserId: authUserData.user.id });
-          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-            authUserData.user.id,
-            {
-              user_metadata: { 
-                database_user_id: userId,
-                telegram_id: telegramId,
-                last_sync: new Date().toISOString()
-              }
-            }
-          );
-          
-          if (updateError) {
-            authLog(logId, 'AUTH_USER_UPDATE_ERROR', 'Ошибка обновления метаданных пользователя', null, updateError);
-            console.error('Ошибка обновления метаданных пользователя:', updateError);
-          } else {
-            authLog(logId, 'AUTH_USER_UPDATED', 'Метаданные пользователя успешно обновлены');
-            console.log('Успешно обновлены метаданные пользователя:', telegramId);
-          }
-        }
-      } catch (authErr) {
-        authLog(logId, 'AUTH_USER_CRITICAL_ERROR', 'Критическая ошибка при работе с аутентификацией', null, authErr);
-        console.error('Критическая ошибка при работе с аутентификацией:', authErr);
-        // Продолжаем выполнение, так как эта ошибка не должна блокировать основной процесс
-      }
-
+      // Здесь будет дополнительная логика инициализации пользователя, если необходимо
     } else {
       authLog(logId, 'EXISTING_USER', 'Использование существующего пользователя', { userId, telegramId });
     }
 
     // Создаем JWT токен для пользователя
     authLog(logId, 'TOKEN_GENERATION', 'Генерация JWT токена');
-    const token = crypto.randomBytes(32).toString('hex')
+    const token = generateToken({
+      id: userId,
+      telegram_id: telegramId,
+      username: username || `user_${telegramId}`,
+      first_name: firstName || 'User',
+      last_name: lastName || ''
+    });
 
-    // Обновляем запись пользователя с новым токеном
+    // Обновляем запись пользователя с новым токеном в PostgreSQL
     try {
       authLog(logId, 'TOKEN_UPDATE', 'Обновление токена пользователя в базе данных');
-      const { error: updateError } = await supabaseAdmin
-        .from('users')
-        .update({
-          updated_at: new Date().toISOString(),
-          jwt_token: token
-        })
-        .eq('id', userId)
-
-      if (updateError) {
-        authLog(logId, 'TOKEN_UPDATE_ERROR', 'Ошибка обновления токена пользователя', { userId }, updateError);
-      } else {
-        authLog(logId, 'TOKEN_UPDATED', 'Токен пользователя успешно обновлен');
-      }
+      await UserModel.updateToken(userId, token);
+      authLog(logId, 'TOKEN_UPDATED', 'Токен пользователя успешно обновлен');
     } catch (tokenError) {
       authLog(logId, 'TOKEN_UPDATE_EXCEPTION', 'Исключение при обновлении токена', null, tokenError);
     }
