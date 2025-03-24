@@ -1,49 +1,48 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import { useTranslation } from '../../../contexts/TranslationContext';
-import { useRouter } from 'next/navigation';
+"use client"
 
-interface UpgradeButtonProps {
-  className?: string;
-}
+import React, { useCallback } from "react"
+import { motion } from "framer-motion"
+import Image from "next/image"
+import type { UpgradeButtonProps } from "../../../types/laboratory-types"
+import { useTranslation } from "../../../contexts/TranslationContext"
+import { ICONS } from "../../../constants/uiConstants"
 
-const UpgradeButton: React.FC<UpgradeButtonProps> = ({ className }) => {
-  const { t } = useTranslation();
-  const router = useRouter();
-
-  const handleUpgradeClick = () => {
-    router.push('/upgrade');
-  };
+/**
+ * Компонент кнопки перехода к улучшениям
+ */
+const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => {
+  const { t } = useTranslation()
+  
+  const handleClick = useCallback(() => {
+    if (onClick) {
+      onClick();
+    }
+  }, [onClick]);
 
   return (
-    <motion.button 
-      onClick={handleUpgradeClick}
-      className={`
-        relative bg-gradient-to-r from-green-400 to-green-600 text-white font-bold p-2 rounded-xl 
-        shadow-lg overflow-hidden border-2 border-green-300 hover:from-green-500 hover:to-green-700 
-        transition-all duration-300 flex items-center justify-center
-        w-14 h-full 
-        ${className}
-      `}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 300, damping: 15 }}
+    <motion.button
+      onClick={handleClick}
+      className="relative px-6 py-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-full font-bold 
+        text-white shadow-lg shadow-[#4a7a9e]/20 focus:outline-none focus:ring-2 
+        focus:ring-[#4a7a9e] transition-all duration-200 hover:shadow-xl hover:from-[#5189b0] hover:to-[#455a72]"
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
     >
-      <span className="relative z-10 flex items-center justify-center">
+      <div className="flex items-center justify-center space-x-2">
         <Image 
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Upgrades-tJUxwEwDZDwL1g970CNm6sZmUwYMui.webp"
-          alt={t('upgrade')}
-          width={40}
-          height={40}
-          className="w-4/5 h-4/5 object-contain" 
+          src={ICONS.LABORATORY.BUTTONS.UPGRADE} 
+          width={24} 
+          height={24} 
+          alt={t("upgradeResources")} 
+          className="inline-block" 
         />
-      </span>
-      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
-      <div className="absolute inset-0 rounded-xl" style={{ boxShadow: '0 0 15px 5px rgba(34,197,94,0.5)' }} />
+        <span>{t("upgradeResources")}</span>
+      </div>
     </motion.button>
-  );
-};
+  )
+})
 
-export default React.memo(UpgradeButton);
+UpgradeButton.displayName = "UpgradeButton"
+
+export default UpgradeButton
 

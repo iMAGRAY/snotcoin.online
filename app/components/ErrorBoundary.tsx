@@ -1,8 +1,14 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+"use client"
 
-export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onRetry?: () => void }> = ({ message, error, onRetry }) => (
-  <motion.div 
+import React from "react"
+import { motion } from "framer-motion"
+
+export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onRetry?: () => void }> = ({
+  message,
+  error,
+  onRetry,
+}) => (
+  <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
@@ -12,8 +18,8 @@ export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onR
     {error && (
       <div className="mt-4 text-sm text-gray-400 max-w-md">
         <p className="font-semibold">Error details:</p>
-        <p>Name: {error.name || 'Unknown'}</p>
-        <p>Message: {error.message || 'No message available'}</p>
+        <p>Name: {error.name || "Unknown"}</p>
+        <p>Message: {error.message || "No message available"}</p>
         {error.stack ? (
           <details>
             <summary className="cursor-pointer mt-2 text-blue-400 hover:text-blue-300">Stack trace</summary>
@@ -27,7 +33,7 @@ export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onR
       </div>
     )}
     {onRetry && (
-      <motion.button 
+      <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -37,45 +43,46 @@ export const ErrorDisplay: React.FC<{ message: string; error?: Error | null; onR
       </motion.button>
     )}
   </motion.div>
-);
+)
 
 interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
+  children: React.ReactNode
+  fallback?: React.ReactNode
 }
 
 interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
+  hasError: boolean
+  error: Error | null
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
+    super(props)
+    this.state = { hasError: false, error: null }
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Uncaught error:", error);
-    console.error("Error info:", errorInfo);
+    // Ошибка поймана и обрабатывается отображением fallback
   }
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <ErrorDisplay 
-          message="An unexpected error occurred" 
-          error={this.state.error}
-          onRetry={() => this.setState({ hasError: false, error: null })}
-        />
-      );
+      return (
+        this.props.fallback || (
+          <ErrorDisplay
+            message="An unexpected error occurred"
+            error={this.state.error}
+            onRetry={() => this.setState({ hasError: false, error: null })}
+          />
+        )
+      )
     }
 
-    return this.props.children;
+    return this.props.children
   }
 }
 

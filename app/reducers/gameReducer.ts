@@ -1,277 +1,374 @@
-import {
-  type GameState,
-  type Action,
-  MAX_LEVEL,
-  BASE_FILLING_SPEED,
-  CONTAINER_UPGRADES,
-  FILLING_SPEED_UPGRADES,
-} from "../types/gameTypes"
-import { saveToLocalStorage, saveUserToLocalStorage } from "../utils/localStorage"
+import { Action, GameState, ExtendedGameState } from "../types/gameTypes"
+import { initialState } from "../constants/gameConstants"
 
-const calculateFillingSpeed = (level: number): number => {
-  return BASE_FILLING_SPEED * level
-}
+// Единое хранилище для данных в памяти
+const inMemoryStore: Record<string, any> = {};
 
-export const initialState: GameState = {
-  containerLevel: 1,
-  containerSnot: 0,
-  fillingSpeedLevel: 1,
-  fillingSpeed: 1 / (24 * 60 * 60),
-  activeTab: "laboratory",
-  gameStarted: false,
-  fusionGameActive: false,
-  fusionGameStarted: false,
-  fusionAttemptsUsed: 0,
-  fusionGamesPlayed: 0,
-  fusionGamesAvailable: 2,
-  lastFusionGameTime: 0,
-  inventory: {
-    snot: 0,
-    snotCoins: 0,
-    collectionEfficiency: 1.0,
-    containerCapacity: 1,
-    containerCapacityLevel: 1,
-    fillingSpeedLevel: 1,
-  },
-  energy: 500,
-  maxEnergy: 500,
-  energyRecoveryTime: 0,
-  wallet: null,
-  clickSoundVolume: 0.5,
-  effectsSoundVolume: 0.5,
-  isEffectsMuted: false,
-  highestLevel: 1,
-  snotCollected: 0,
-  backgroundMusicVolume: 0.5,
-  isMuted: false,
-  isBackgroundMusicMuted: false,
-  containerCapacity: 1,
-  containerCapacityLevel: 1,
-  ethBalance: "0",
-  user: null,
-  lastValidation: undefined,
-  validationStatus: "pending",
-  achievements: [],
-  fusionHistory: [],
-  chestOpeningStats: {
-    common: 0,
-    rare: 0,
-    legendary: 0,
-    totalRewards: 0,
-  },
-  totalPlayTime: 0,
-  lastLoginDate: new Date().toISOString(),
-  settings: {
-    language: "en",
-    soundSettings: {
-      musicVolume: 0.5,
-      effectsVolume: 0.5,
-      isMuted: false,
-    },
-  },
-  miniGamesProgress: {},
-}
+export function gameReducer(state: ExtendedGameState = initialState as ExtendedGameState, action: Action): ExtendedGameState {
+  // Вспомогательная функция для обновления метаданных
+  const withMetadata = (newState: Partial<ExtendedGameState>): ExtendedGameState => {
+    return {
+      ...state,
+      ...newState,
+      _lastActionTime: new Date().toISOString(),
+      _lastAction: action.type
+    };
+  };
 
-export function gameReducer(state: GameState, action: Action): GameState {
   switch (action.type) {
-    case "SET_RESOURCE":
-      if (action.resource === "containerSnot") {
-        return {
-          ...state,
-          containerSnot: Math.min(action.payload, state.inventory.containerCapacity),
-        }
-      }
-      return { ...state, [action.resource]: action.payload }
-
-    case "UPDATE_RESOURCES":
-      return {
-        ...state,
-        containerSnot: Math.min(state.containerSnot + state.fillingSpeed, state.inventory.containerCapacity),
-      }
-
-    case "UPDATE_ENERGY":
-      const energyRecoveryRate = state.maxEnergy / (12 * 60 * 60)
-      const newEnergy = Math.min(state.energy + energyRecoveryRate, state.maxEnergy)
-      return {
-        ...state,
-        energy: newEnergy,
-        energyRecoveryTime: Math.ceil((state.maxEnergy - newEnergy) / energyRecoveryRate),
-      }
+    case "LOGIN":
+      return withMetadata({
+        activeTab: "laboratory",
+        isLoading: true,
+        // Принудительно сбрасываем эти значения для безопасности
+        hideInterface: false
+      });
 
     case "SET_ACTIVE_TAB":
-      return { ...state, activeTab: action.payload }
-
-    case "CONSUME_ENERGY":
-      return { ...state, energy: Math.max(0, state.energy - action.payload) }
-
-    case "ADD_SNOT":
-      return {
-        ...state,
-        inventory: { ...state.inventory, snot: state.inventory.snot + action.payload },
-        snotCollected: state.snotCollected + action.payload,
-      }
-
-    case "UPGRADE_FILLING_SPEED":
-      if (state.fillingSpeedLevel < MAX_LEVEL) {
-        const upgrade = FILLING_SPEED_UPGRADES[state.fillingSpeedLevel - 1]
-        if (state.inventory.snotCoins >= upgrade.cost) {
-          return {
-            ...state,
-            fillingSpeedLevel: state.fillingSpeedLevel + 1,
-            fillingSpeed: calculateFillingSpeed(state.fillingSpeedLevel + 1),
-            inventory: {
-              ...state.inventory,
-              snotCoins: state.inventory.snotCoins - upgrade.cost,
-            },
-          }
-        }
-      }
-      return state
-
-    case "UPGRADE_CONTAINER_CAPACITY":
-      if (state.containerLevel < MAX_LEVEL) {
-        const upgrade = CONTAINER_UPGRADES[state.containerLevel]
-        if (state.inventory.snotCoins >= upgrade.cost) {
-          return {
-            ...state,
-            containerLevel: state.containerLevel + 1,
-            inventory: {
-              ...state.inventory,
-              containerCapacity: state.inventory.containerCapacity + upgrade.capacityIncrease,
-              snotCoins: state.inventory.snotCoins - upgrade.cost,
-            },
-          }
-        }
-      }
-      return state
-
-    case "SET_FUSION_GAME_ACTIVE":
-      return { ...state, fusionGameActive: action.payload }
-
-    case "SET_FUSION_GAME_STARTED":
-      return { ...state, fusionGameStarted: action.payload }
-
-    case "USE_FUSION_ATTEMPT":
-      if (state.fusionAttemptsUsed < 2) {
-        return {
-          ...state,
-          fusionAttemptsUsed: state.fusionAttemptsUsed + 1,
-          lastFusionGameTime: state.fusionAttemptsUsed === 0 ? Date.now() : state.lastFusionGameTime,
-        }
-      }
-      return state
-
-    case "RESET_FUSION_GAME":
-      return {
-        ...state,
-        fusionGameActive: false,
-        fusionGameStarted: false,
-      }
-
-    case "START_FUSION_GAME":
-      return {
-        ...state,
-        fusionGameActive: true,
-        fusionGameStarted: true,
-      }
-
-    case "SET_WALLET":
-      return { ...state, wallet: action.payload }
-
-    case "SET_AUDIO_VOLUME":
-      return {
-        ...state,
-        [action.audioType === "click" ? "clickSoundVolume" : "effectsSoundVolume"]: action.payload,
-      }
-
-    case "SET_EFFECTS_MUTE":
-      return { ...state, isEffectsMuted: action.payload }
-
-    case "INCREMENT_FUSION_GAMES_PLAYED":
-      return { ...state, fusionGamesPlayed: state.fusionGamesPlayed + 1 }
-
-    case "COLLECT_CONTAINER_SNOT":
-      const amount = typeof action.payload === "number" ? action.payload : action.payload.amount
-      return {
-        ...state,
-        containerSnot: 0,
-        inventory: {
-          ...state.inventory,
-          snot: state.inventory.snot + amount,
-        },
-        snotCollected: state.snotCollected + amount,
-      }
-
-    case "OPEN_CHEST":
-      return {
-        ...state,
-        inventory: {
-          ...state.inventory,
-          snot: state.inventory.snot - action.payload.requiredSnot,
-          snotCoins: state.inventory.snotCoins + action.payload.rewardAmount,
-        },
-      }
+      return withMetadata({
+        activeTab: action.payload
+      });
 
     case "SET_USER":
-      return { ...state, user: action.payload }
+      return withMetadata({ user: action.payload });
 
-    case "UPDATE_VALIDATION_STATUS":
-      return {
-        ...state,
-        validationStatus: action.payload,
-        lastValidation: Date.now(),
+    case "SET_TELEGRAM_USER":
+      return withMetadata({ 
+        user: { 
+          id: action.payload.id.toString(),
+          telegram_id: action.payload.telegram_id,
+          first_name: action.payload.first_name,
+          last_name: action.payload.last_name,
+          username: action.payload.username,
+          photo_url: action.payload.photo_url,
+        } 
+      });
+
+    case "UPDATE_CONTAINER_LEVEL":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          containerCapacity: action.payload,
+        },
+      });
+
+    case "UPDATE_CONTAINER_SNOT":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          containerSnot: action.payload,
+        },
+      });
+
+    case "UPDATE_FILLING_SPEED":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          fillingSpeed: action.payload,
+        },
+      });
+
+    case "UPDATE_RESOURCES":
+      // Обновление ресурсов с автоматическим заполнением контейнера
+      const currentTime = Date.now();
+      const lastUpdateTime = state.inventory.lastUpdateTimestamp || currentTime;
+      
+      // Проверяем корректность времени обновления
+      if (lastUpdateTime > currentTime) {
+        // Защита от некорректной даты - используем текущее время
+        return withMetadata({
+          inventory: {
+            ...state.inventory,
+            lastUpdateTimestamp: currentTime
+          }
+        });
       }
+      
+      const elapsedTime = currentTime - lastUpdateTime;
+      
+      // Предотвращаем аномально большие интервалы времени (более 1 часа)
+      const maxElapsedTime = 60 * 60 * 1000; // 1 час в миллисекундах
+      const safeElapsedTime = Math.min(elapsedTime, maxElapsedTime);
+      
+      // Получаем скорость заполнения и вместимость с проверками
+      const fillingSpeed = Math.max(0.01, state.inventory.fillingSpeed || 0.01);
+      const containerCapacity = Math.max(1, state.inventory.Cap || 100);
+      const currentContainerSnot = Math.max(0, state.inventory.containerSnot || 0);
+      
+      // Рассчитываем прирост в зависимости от скорости наполнения и времени
+      const containerIncrement = (safeElapsedTime / 1000) * fillingSpeed;
+      
+      // Новое количество в контейнере не может превышать вместимость
+      const newContainerSnot = Math.min(
+        currentContainerSnot + containerIncrement,
+        containerCapacity
+      );
+      
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          containerSnot: newContainerSnot,
+          lastUpdateTimestamp: currentTime
+        }
+      });
+
+    case "SET_RESOURCE": {
+      const { resource, value } = action.payload;
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          [resource]: value
+        }
+      });
+    }
+
+    case "ADD_SNOT":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          snot: state.inventory.snot + action.payload,
+        },
+      });
+
+    case "COLLECT_CONTAINER_SNOT": {
+      // Получаем количество для сбора
+      const { amount } = action.payload;
+      
+      // Проверяем валидность данных
+      if (amount <= 0 || isNaN(amount)) {
+        return state; // Возвращаем состояние без изменений при некорректных данных
+      }
+      
+      // Вычисляем новое значение snot с защитой от переполнения
+      const currentSnot = state.inventory.snot || 0;
+      const newSnot = Math.max(0, currentSnot + amount);
+      
+      // Добавляем к общему количеству SNOT и обнуляем контейнер
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          snot: newSnot,
+          containerSnot: 0 // Обнуляем контейнер после сбора
+        }
+      });
+    }
+
+    case "UPGRADE_FILLING_SPEED":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          fillingSpeed: state.inventory.fillingSpeed * 1.1, // Увеличиваем на 10%
+        },
+      });
+
+    case "UPGRADE_CONTAINER_CAPACITY":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
+        },
+      });
+
+    case "INCREMENT_CONTAINER_CAPACITY":
+      return withMetadata({
+        inventory: {
+          ...state.inventory,
+          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
+        },
+      });
+
+    case "INITIALIZE_NEW_USER": {
+      // Если передан payload, используем его
+      if (action.payload) {
+        // Проверяем необходимые поля и устанавливаем значения по умолчанию если они отсутствуют
+        const customState = { ...action.payload };
+        
+        return {
+          ...customState,
+          _lastActionTime: new Date().toISOString(),
+          _lastAction: action.type
+        };
+      }
+      
+      // Стандартная инициализация для нового пользователя
+      const currentUser = state.user;
+      
+      const defaultState = {
+        ...state,
+        inventory: {
+          ...state.inventory,
+          snot: 0,
+          snotCoins: 0,
+          containerSnot: 0,
+          containerCapacity: 1,
+          fillingSpeed: 1 / (24 * 60 * 60), // 1 SNOT per day
+        },
+        _saveVersion: 1,
+        _lastSaved: new Date().toISOString(),
+        _isInitialState: true,
+        _lastActionTime: new Date().toISOString(),
+        _lastAction: action.type,
+        user: currentUser
+      };
+      
+      return defaultState;
+    }
 
     case "RESET_GAME_STATE":
-      return { ...initialState }
+      return {
+        ...initialState as ExtendedGameState,
+        activeTab: "laboratory",
+        user: null,
+        validationStatus: "pending",
+        lastValidation: undefined,
+        _saveVersion: (state._saveVersion || 0) + 1,
+        _lastSaved: new Date().toISOString(),
+        _lastActionTime: new Date().toISOString(),
+        _lastAction: action.type
+      };
 
     case "LOAD_USER_DATA":
-      try {
-        if (!action.payload) {
-          console.error("LOAD_USER_DATA: Payload is empty")
-          return state
-        }
+      return withMetadata({
+        ...state,
+        ...action.payload,
+      });
 
-        let userData
-        if (typeof action.payload === "string") {
-          // If payload is a string (likely a token), try to decode it
-          const decodedData = atob(action.payload)
-          if (!decodedData) {
-            console.error("LOAD_USER_DATA: Decoded data is empty")
-            return state
-          }
-          userData = JSON.parse(decodedData)
-        } else if (typeof action.payload === "object") {
-          // If payload is already an object, use it directly
-          userData = action.payload
-        } else {
-          console.error("LOAD_USER_DATA: Invalid payload type")
-          return state
-        }
-
-        if (!userData || typeof userData !== "object") {
-          console.error("LOAD_USER_DATA: Invalid user data format")
-          return state
-        }
-
-        console.log("Loaded user data:", userData)
-        return {
-          ...state,
-          user: userData,
-        }
-      } catch (error) {
-        console.error("Error parsing user data:", error)
-        return state
+    case "SET_IS_PLAYING":
+      return withMetadata({
+        isPlaying: action.payload,
+      });
+      
+    case "LOAD_GAME_STATE": {
+      // Проверяем, что загружаемое состояние имеет необходимые поля
+      const loadedState = action.payload as ExtendedGameState;
+      
+      if (!loadedState) {
+        return state;
       }
+      
+      // Проверяем наличие инвентаря
+      if (!loadedState.inventory) {
+        loadedState.inventory = initialState.inventory;
+      }
+      
+      // Проверяем основные свойства инвентаря и устанавливаем значения по умолчанию при необходимости
+      if (typeof loadedState.inventory.snot !== 'number' || isNaN(loadedState.inventory.snot)) {
+        loadedState.inventory.snot = initialState.inventory.snot;
+      }
+      
+      if (typeof loadedState.inventory.snotCoins !== 'number' || isNaN(loadedState.inventory.snotCoins)) {
+        loadedState.inventory.snotCoins = initialState.inventory.snotCoins;
+      }
+      
+      if (typeof loadedState.inventory.containerCapacity !== 'number' || 
+          isNaN(loadedState.inventory.containerCapacity) || 
+          loadedState.inventory.containerCapacity <= 0) {
+        loadedState.inventory.containerCapacity = initialState.inventory.containerCapacity;
+      }
+      
+      if (typeof loadedState.inventory.Cap !== 'number' || 
+          isNaN(loadedState.inventory.Cap) || 
+          loadedState.inventory.Cap <= 0) {
+        loadedState.inventory.Cap = initialState.inventory.Cap;
+      }
+      
+      // Синхронизируем Cap и containerCapacity
+      if (loadedState.inventory.Cap !== loadedState.inventory.containerCapacity) {
+        loadedState.inventory.Cap = loadedState.inventory.containerCapacity;
+      }
+      
+      if (typeof loadedState.inventory.containerSnot !== 'number' || 
+          isNaN(loadedState.inventory.containerSnot) || 
+          loadedState.inventory.containerSnot < 0) {
+        loadedState.inventory.containerSnot = initialState.inventory.containerSnot;
+      }
+      
+      // Проверяем, что количество снота в контейнере не превышает емкость
+      if (loadedState.inventory.containerSnot > loadedState.inventory.containerCapacity) {
+        loadedState.inventory.containerSnot = loadedState.inventory.containerCapacity;
+      }
+      
+      if (typeof loadedState.inventory.fillingSpeed !== 'number' || 
+          isNaN(loadedState.inventory.fillingSpeed) || 
+          loadedState.inventory.fillingSpeed <= 0) {
+        loadedState.inventory.fillingSpeed = initialState.inventory.fillingSpeed;
+      }
+      
+      if (typeof loadedState.inventory.fillingSpeedLevel !== 'number' || 
+          isNaN(loadedState.inventory.fillingSpeedLevel) || 
+          loadedState.inventory.fillingSpeedLevel <= 0) {
+        loadedState.inventory.fillingSpeedLevel = initialState.inventory.fillingSpeedLevel;
+      }
+      
+      if (typeof loadedState.inventory.containerCapacityLevel !== 'number' || 
+          isNaN(loadedState.inventory.containerCapacityLevel) || 
+          loadedState.inventory.containerCapacityLevel <= 0) {
+        loadedState.inventory.containerCapacityLevel = initialState.inventory.containerCapacityLevel;
+      }
+      
+      return loadedState;
+    }
 
-    case "SET_ENERGY":
-      return { ...state, energy: Math.min(action.payload, state.maxEnergy) }
+    case "SET_GAME_STARTED":
+      return withMetadata({
+        gameStarted: action.payload,
+      });
 
-    case "REPLENISH_ENERGY":
-      return { ...state, energy: Math.min(state.energy + action.payload, state.maxEnergy) }
+    case "SET_CLICK_SOUND_VOLUME":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          clickVolume: action.payload,
+        },
+      });
+
+    case "SET_BACKGROUND_MUSIC_VOLUME":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          backgroundMusicVolume: action.payload,
+        },
+      });
+
+    case "SET_EFFECTS_SOUND_VOLUME":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          effectsVolume: action.payload,
+        },
+      });
+
+    case "SET_MUTE":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          isMuted: action.payload,
+        },
+      });
+
+    case "SET_EFFECTS_MUTE":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          isEffectsMuted: action.payload,
+        },
+      });
+
+    case "SET_BACKGROUND_MUSIC_MUTE":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          isBackgroundMusicMuted: action.payload,
+        },
+      });
+
+    case "SET_HIDE_INTERFACE":
+      return withMetadata({
+        hideInterface: action.payload,
+      });
 
     default:
-      return state
+      return state;
   }
 }
 

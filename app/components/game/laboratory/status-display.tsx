@@ -1,55 +1,135 @@
-import React from 'react'
-import { useTranslation } from '../../../contexts/TranslationContext'
-import { formatTime, calculateFillingTime, formatSnotValue } from '../../../utils/gameUtils'
+"use client"
 
-interface StatusDisplayProps {
-  containerCapacity: number
-  containerLevel: number
-  containerSnot: number
-  containerFillingSpeed: number
-  fillingSpeedLevel: number
-}
+import React, { useMemo } from "react"
+import { motion } from "framer-motion"
+import { useTranslation } from "../../../contexts/TranslationContext"
+import { formatTime, formatSnotValue } from "../../../utils/formatters"
+import { calculateFillingTime } from "../../../utils/gameUtils"
+import { validateContainerParams } from "../../../utils/resourceUtils"
+import { Database, Zap, Clock, ArrowUp } from "lucide-react"
+import type { StatusDisplayProps } from "../../../types/laboratory-types"
+import { UI_CLASSES, ANIMATIONS } from "../../../constants/uiConstants"
 
-const StatusDisplay: React.FC<StatusDisplayProps> = ({
-  containerCapacity,
-  containerLevel,
-  containerSnot,
-  containerFillingSpeed,
-  fillingSpeedLevel,
+/**
+ * Компонент отображения отдельного статусного элемента
+ */
+const StatusItem: React.FC<{ 
+  icon: React.ElementType; 
+  label: string; 
+  value: string; 
+  tooltip: string 
+}> = React.memo(({ icon: Icon, label, value, tooltip }) => (
+  <motion.div
+    className="flex-1 flex items-center justify-center px-0.5 rounded-full space-x-1 hover:bg-white/20 transition-all duration-300"
+    {...ANIMATIONS.STATUS_ITEM}
+    whileHover={{ scale: 1.05 }}
+    title={tooltip}
+  >
+    <Icon className={UI_CLASSES.STATUS.ICON} />
+    <span className={UI_CLASSES.STATUS.TEXT}>{label}</span>
+    <span className={UI_CLASSES.STATUS.BOLD_TEXT}>{value}</span>
+  </motion.div>
+))
+
+StatusItem.displayName = "StatusItem"
+
+/**
+ * Компонент отображения статусной панели контейнера
+ */
+const StatusDisplay: React.FC<StatusDisplayProps> = React.memo(({ 
+  containerCapacity, 
+  containerLevel, 
+  containerSnot, 
+  containerFillingSpeed, 
+  fillingSpeedLevel 
 }) => {
   const { t } = useTranslation()
+  
+  // Валидируем входные данные для безопасного отображения
+  const validatedParams = useMemo(() => validateContainerParams({
+    containerCapacity,
+    containerLevel,
+    containerSnot,
+    containerFillingSpeed,
+    fillingSpeedLevel
+  }), [
+    containerCapacity,
+    containerLevel,
+    containerSnot,
+    containerFillingSpeed,
+    fillingSpeedLevel
+  ]);
+  
+  // Создаем массив элементов статуса
+  const statusItems = useMemo(() => [
+    {
+      icon: Database,
+      label: "Cap",
+      value: formatSnotValue(validatedParams.containerCapacity, 2),
+      tooltip: t("capacityTooltip"),
+    },
+    {
+      icon: ArrowUp,
+      label: "Lvl",
+      value: validatedParams.containerLevel.toString(),
+      tooltip: t("capacityLevelTooltip"),
+    },
+    {
+      icon: Zap,
+      label: "Spd",
+      value: validatedParams.fillingSpeedLevel.toString(),
+      tooltip: t("fillingLevelTooltip"),
+    },
+    {
+      icon: Clock,
+      label: "Fill",
+      value: formatTime(calculateFillingTime(
+        validatedParams.containerSnot, 
+        validatedParams.containerCapacity, 
+        validatedParams.containerFillingSpeed
+      )),
+      tooltip: t("fillTimeTooltip"),
+    },
+  ], [
+    validatedParams.containerCapacity, 
+    validatedParams.containerLevel, 
+    validatedParams.containerSnot, 
+    validatedParams.containerFillingSpeed, 
+    validatedParams.fillingSpeedLevel, 
+    t
+  ]);
 
-  return (
-    <div 
-      className="absolute left-4 right-4 z-50 bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl p-1.5 pointer-events-none shadow-lg border border-gray-700"
-      style={{ 
-        boxShadow: '0 0 10px rgba(59, 130, 246, 0.2)',
-        top: 'calc(3.5rem + 4px)' // Position it below the Resources bar with a small gap
-      }}
-    >
-      <div className="grid grid-cols-4 gap-x-4 text-xs">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-300">{t('capacity')}:</span>
-          <span className="text-blue-400 font-medium ml-1">{formatSnotValue(containerCapacity, 2)}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-300">{t('capacityLevel')}:</span>
-          <span className="text-blue-400 font-medium ml-1">{containerLevel}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-300">{t('fillingLevel')}:</span>
-          <span className="text-blue-400 font-medium ml-1">{fillingSpeedLevel}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-300">{t('fillTime')}:</span>
-          <span className="text-blue-400 font-medium ml-1">
-            {formatTime(calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed))}
+  // Обработка случая когда контейнер недоступен
+  if (!validatedParams) {
+    return (
+      <motion.div
+        className={UI_CLASSES.STATUS.CONTAINER}
+        {...ANIMATIONS.STATUS_ITEM}
+      >
+        <div className="text-center py-1 px-2">
+          <span className={UI_CLASSES.STATUS.BOLD_TEXT}>
+            {t("containerUnavailable")}
           </span>
         </div>
-      </div>
-    </div>
-  )
-}
+      </motion.div>
+    );
+  }
 
-export default React.memo(StatusDisplay)
+  return (
+    <motion.div
+      className={UI_CLASSES.STATUS.CONTAINER}
+      {...ANIMATIONS.STATUS_ITEM}
+    >
+      <div className="flex flex-wrap justify-between">
+        {statusItems.map((item) => (
+          <StatusItem key={item.label} {...item} />
+        ))}
+      </div>
+    </motion.div>
+  )
+})
+
+StatusDisplay.displayName = "StatusDisplay"
+
+export default StatusDisplay
 

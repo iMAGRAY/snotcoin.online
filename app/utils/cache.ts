@@ -1,25 +1,28 @@
-import { useState, useEffect } from 'react';
+"use client"
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
+import { useState, useEffect } from "react"
+
+// Глобальное хранилище для данных в рамках сессии
+const sessionStateStore: Record<string, any> = {};
+
+export function useSessionState<T>(key: string, initialValue: T): [T, (value: T) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     if (typeof window === "undefined") {
-      return initialValue;
+      return initialValue
     }
     try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      return sessionStateStore[key] ?? initialValue;
     } catch (error) {
-      console.log(error);
-      return initialValue;
+      return initialValue
     }
-  });
+  })
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(key, JSON.stringify(storedValue));
+      sessionStateStore[key] = storedValue;
     }
-  }, [key, storedValue]);
+  }, [key, storedValue])
 
-  return [storedValue, setStoredValue];
+  return [storedValue, setStoredValue]
 }
 

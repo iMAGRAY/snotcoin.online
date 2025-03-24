@@ -1,6 +1,7 @@
-import React, { useCallback } from "react"
+"use client"
+
+import React from "react"
 import { motion } from "framer-motion"
-import { Sparkles } from "lucide-react"
 import type { Chest } from "../../../types/storage"
 import { useTranslation } from "../../../contexts/TranslationContext"
 

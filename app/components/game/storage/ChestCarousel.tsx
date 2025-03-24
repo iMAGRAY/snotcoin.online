@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useRef, useCallback, useMemo } from "react"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import { ChestImage } from "./ChestImage"

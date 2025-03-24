@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useTranslation } from '../../../../contexts/TranslationContext';
+"use client"
+
+import type React from "react"
+import { useState } from "react"
+import { motion } from "framer-motion"
+import { useTranslation } from "../../../../contexts/TranslationContext"
 
 const InventorySection: React.FC = () => {
-  const { t } = useTranslation();
-  const inventorySize = 20;
-  const [inventory] = useState<(string | null)[]>(Array(inventorySize).fill(null));
+  const { t } = useTranslation()
+  const inventorySize = 20
+  const [inventory] = useState<(string | null)[]>(Array(inventorySize).fill(null))
 
   return (
-    <motion.div 
+    <motion.div
       className="text-white space-y-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -17,7 +20,7 @@ const InventorySection: React.FC = () => {
       <h4 className="font-bold text-xl mb-3 text-[#6899be]">Inventory</h4>
       <div className="grid grid-cols-4 gap-2">
         {inventory.map((item, index) => (
-          <motion.div 
+          <motion.div
             key={index}
             className="bg-gray-700/50 rounded-lg p-2 aspect-square flex items-center justify-center"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -33,8 +36,8 @@ const InventorySection: React.FC = () => {
         ))}
       </div>
     </motion.div>
-  );
-};
+  )
+}
 
-export default InventorySection;
+export default InventorySection
 

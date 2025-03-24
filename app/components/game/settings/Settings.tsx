@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Volume2, ChevronDown, X, GamepadIcon, MapIcon, CoinsIcon, InfoIcon } from "lucide-react"
+import { ChevronDown, X, GamepadIcon, MapIcon, CoinsIcon, InfoIcon, LogOut } from "lucide-react"
 import { XIcon, TelegramIcon } from "../../../components/icons/SocialIcons"
 import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 import { useTranslation } from "../../../contexts/TranslationContext"
@@ -10,6 +10,9 @@ import GamesPage from "./GamesPage"
 import RoadmapPage from "./RoadmapPage"
 import TokenomicPage from "./TokenomicPage"
 import AboutPage from "./AboutPage"
+import { useRouter } from "next/navigation"
+import MenuItem from "../../../components/ui/menu-item"
+import { authStore } from '../../auth/AuthenticationWindow';
 
 interface SettingsProps {
   isOpen?: boolean
@@ -40,36 +43,38 @@ const SettingsToggle: React.FC<{ icon: React.ReactNode; text: string; isOn: bool
   </div>
 )
 
-const MenuItem: React.FC<{ icon: React.ReactNode; text: string; onClick: () => void }> = ({ icon, text, onClick }) => (
-  <motion.button
-    className="flex items-center space-x-2 text-white py-3 px-3 rounded-lg hover:bg-[#4a7a9e]/50 transition-colors w-full text-left"
-    whileHover={{ scale: 1.02 }}
-    whileTap={{ scale: 0.98 }}
-    onClick={onClick}
-  >
-    {React.cloneElement(icon as React.ReactElement, { size: 18 })}
-    <span className="text-sm">{text}</span>
-  </motion.button>
-)
-
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const gameState = useGameState()
-  const dispatch = useGameDispatch()
-  const { language, setLanguage, t } = useTranslation()
-  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false)
+  const { language, t } = useTranslation()
   const [currentPage, setCurrentPage] = useState<"main" | "games" | "roadmap" | "tokenomic" | "about">("main")
-  // const router = useRouter()
-
-  const handleLanguageChange = (lang: "en" | "es" | "fr" | "de" | "ru") => {
-    setLanguage(lang)
-    setShowLanguageDropdown(false)
-  }
+  const router = useRouter()
+  const dispatch = useGameDispatch()
 
   const handleOutsideClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose()
     }
   }
+
+  const handleLogout = useCallback(() => {
+    // Clear auth data from memory store instead of localStorage
+    authStore.clearAuthData();
+
+    // Dispatch a custom event to notify other components
+    window.dispatchEvent(new Event("logout"))
+
+    // Reset game state
+    dispatch({ type: "RESET_GAME_STATE" })
+
+    // Clear user data
+    dispatch({ type: "SET_USER", payload: null })
+
+    // Close settings
+    onClose()
+
+    // Redirect to the home page, which will show the authentication screen
+    router.push("/")
+  }, [dispatch, router, onClose])
 
   return (
     <motion.div
@@ -122,38 +127,11 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
                     <div className="space-y-6">
                       <div className="relative">
-                        <button
-                          onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                          className="w-full bg-[#4a7a9e] text-white text-sm rounded-lg px-3 py-2 flex justify-between items-center"
-                        >
+                        <div className="w-full bg-[#4a7a9e] text-white text-sm rounded-lg px-3 py-2 flex justify-between items-center">
                           <span>
                             {t("language")}: {language.toUpperCase()}
                           </span>
-                          <ChevronDown
-                            size={16}
-                            className={`transition-transform ${showLanguageDropdown ? "rotate-180" : ""}`}
-                          />
-                        </button>
-                        <AnimatePresence>
-                          {showLanguageDropdown && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              className="absolute top-full left-0 right-0 mt-1 bg-[#3a4c62] rounded-lg overflow-hidden shadow-lg z-10"
-                            >
-                              {["en", "es", "fr", "de", "ru"].map((lang) => (
-                                <button
-                                  key={lang}
-                                  onClick={() => handleLanguageChange(lang as "en" | "es" | "fr" | "de" | "ru")}
-                                  className="w-full text-left px-3 py-2 text-sm text-white hover:bg-[#4a7a9e] transition-colors"
-                                >
-                                  {lang.toUpperCase()}
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -161,21 +139,36 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                           icon={<GamepadIcon size={20} />}
                           text={t("game")}
                           onClick={() => setCurrentPage("games")}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
                         />
                         <MenuItem
                           icon={<MapIcon size={20} />}
                           text={t("roadmap")}
                           onClick={() => setCurrentPage("roadmap")}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
                         />
                         <MenuItem
                           icon={<CoinsIcon size={20} />}
                           text={t("tokenomic")}
                           onClick={() => setCurrentPage("tokenomic")}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
                         />
                         <MenuItem
                           icon={<InfoIcon size={20} />}
                           text={t("about")}
                           onClick={() => setCurrentPage("about")}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
+                        />
+                        <MenuItem 
+                          icon={<LogOut size={20} />} 
+                          text={t("logout")} 
+                          onClick={handleLogout}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
                         />
                       </div>
 

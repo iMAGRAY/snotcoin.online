@@ -1,51 +1,62 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import { useTranslation } from '../../../contexts/TranslationContext';
+"use client"
 
-interface CollectButtonProps {
-  onCollect: () => void;
-  containerSnot: number;
-  className?: string;
-}
+import React, { useMemo, useCallback } from "react"
+import { motion } from "framer-motion"
+import Image from "next/image"
+import { useTranslation } from "../../../contexts/TranslationContext"
+import type { CollectButtonProps } from "../../../types/laboratory-types"
+import { formatSnotValue } from "../../../utils/formatters"
+import { ICONS } from "../../../constants/uiConstants"
 
-const CollectButton: React.FC<CollectButtonProps> = ({ onCollect, containerSnot, className }) => {
-  const { t } = useTranslation();
-  const canCollect = containerSnot > 0;
+/**
+ * Компонент кнопки сбора ресурсов
+ */
+const CollectButton: React.FC<CollectButtonProps> = React.memo(({ 
+  onCollect, 
+  containerSnot, 
+  isCollecting 
+}) => {
+  const { t } = useTranslation()
+  const isDisabled = typeof containerSnot !== 'number' || isNaN(containerSnot) || containerSnot <= 0 || isCollecting
+
+  const containerSnotValue = useMemo(() => {
+    if (typeof containerSnot !== 'number' || isNaN(containerSnot)) {
+      return '0';
+    }
+    return formatSnotValue(Math.max(0, containerSnot));
+  }, [containerSnot]);
+
+  const handleClick = useCallback(() => {
+    if (!isDisabled && onCollect) {
+      onCollect();
+    }
+  }, [isDisabled, onCollect]);
 
   return (
-    <motion.button 
-      onClick={onCollect}
-      disabled={!canCollect}
-      className={`
-        relative bg-gradient-to-r text-white font-bold py-4 rounded-xl shadow-lg overflow-hidden border-2 
-        transition-all duration-300 w-full flex items-center justify-center
-        ${canCollect 
-          ? 'from-yellow-400 to-yellow-600 border-yellow-300 hover:from-yellow-500 hover:to-yellow-700' 
-          : 'from-gray-400 to-gray-500 border-gray-400 opacity-50 cursor-not-allowed'}
-        ${className}
-      `}
-      whileHover={canCollect ? { scale: 1.02 } : {}}
-      whileTap={canCollect ? { scale: 0.98 } : {}}
-      transition={{ type: "spring", stiffness: 300, damping: 15 }}
+    <motion.button
+      onClick={handleClick}
+      className={`relative px-6 py-3 bg-gradient-to-r from-[#bbeb25] to-[#a3d119] rounded-full font-bold 
+        text-slate-800 shadow-lg shadow-[#bbeb25]/20 focus:outline-none focus:ring-2 
+        focus:ring-[#bbeb25] transition-all duration-200 ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl hover:from-[#c8f832] hover:to-[#b1df21]'}`}
+      whileHover={!isDisabled ? { scale: 1.05 } : {}}
+      whileTap={!isDisabled ? { scale: 0.95 } : {}}
+      disabled={isDisabled}
     >
-      <span className="relative z-10 flex items-center justify-center tracking-wide text-lg" style={{ textShadow: '1px 1px 0 rgba(0,0,0,0.3)' }}>
+      <div className="flex items-center justify-center space-x-2">
         <Image 
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Claim-3Ctw9xE3JgbtUqIalf2y5jArm28PFi.webp"
-          alt="Claim"
-          width={32}
-          height={32}
-          className="w-8 h-8 mr-2"
+          src={ICONS.LABORATORY.BUTTONS.CLAIM} 
+          width={24} 
+          height={24} 
+          alt={t("collectResources")} 
+          className="inline-block" 
         />
-        {t('collect')}
-      </span>
-      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
-      {canCollect && (
-        <div className="absolute inset-0 rounded-xl" style={{ boxShadow: '0 0 15px 5px rgba(255,215,0,0.5)' }} />
-      )}
+        <span>{`${t("collectResources")} (${containerSnotValue})`}</span>
+      </div>
     </motion.button>
-  );
-};
+  )
+})
 
-export default React.memo(CollectButton);
+CollectButton.displayName = "CollectButton"
+
+export default CollectButton
 

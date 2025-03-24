@@ -1,30 +1,42 @@
-declare module "@twa-dev/sdk" {
-  interface WebApp {
-    isInitialized: boolean
-    initData: string
-    initDataUnsafe: any
-    ready: () => void
-    expand: () => void
-    close: () => void
-    MainButton: {
-      text: string
-      color: string
-      textColor: string
-      isVisible: boolean
-      isActive: boolean
-      isProgressVisible: boolean
-      show: () => void
-      hide: () => void
-      enable: () => void
-      disable: () => void
-      showProgress: (leaveActive: boolean) => void
-      hideProgress: () => void
-      onClick: (callback: () => void) => void
-      offClick: (callback: () => void) => void
-    }
-  }
+import { TelegramWebAppUser } from './telegramAuth';
 
-  const WebApp: WebApp
-  export default WebApp
+/**
+ * Декларация типов для Telegram WebApp API
+ */
+
+// Типы для WebApp
+export interface TelegramWebApp {
+  initData: string;
+  initDataUnsafe: {
+    user?: TelegramWebAppUser;
+    auth_date?: number;
+    hash?: string;
+  };
+  ready(): void;
+  close(): void;
+  expand(): void;
+  isExpanded?: boolean;
+  backgroundColor?: string;
+  MainButton?: {
+    text: string;
+    onClick(callback: Function): void;
+    show(): void;
+    hide(): void;
+  };
+  version?: string;
+  platform?: string;
 }
 
+// Типы для Telegram
+export interface Telegram {
+  WebApp?: TelegramWebApp;
+}
+
+// Расширяем глобальное объявление Window
+declare global {
+  interface Window {
+    Telegram?: Telegram;
+  }
+}
+
+export {}; 

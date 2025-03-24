@@ -1,166 +1,165 @@
-import { useState, useEffect, useCallback, useRef } from "react"
-import { motion } from "framer-motion"
-import WebApp from "@twa-dev/sdk"
-import { useGameDispatch } from "../../../contexts/GameContext"
-import { validateTelegramAuth } from "../../../utils/validation"
-import Image from "next/image"
+"use client"
 
-interface UserData {
-  id: number
-  first_name: string
-  last_name?: string
-  username?: string
-}
+import React, { useEffect, useState } from 'react';
+import { TelegramAuthProps, AuthStatus } from '../../../types/telegramAuth';
+import { useTelegramAuth } from '../../../hooks/useTelegramAuth';
+import TelegramAuthLoader from './TelegramAuthLoader';
+import TelegramAuthError from './TelegramAuthError';
+import { AuthLogType, AuthStep, logAuth, logAuthError, logAuthInfo } from '../../../utils/auth-logger';
 
-interface TelegramAuthProps {
-  onAuthenticate: (userData: UserData) => void
-}
-
-const VALIDATION_INTERVAL = 5 * 60 * 1000 // 5 minutes
-const MAX_RETRIES = 3
-const RETRY_DELAY = 5000 // 5 seconds
-
+/**
+ * Компонент для аутентификации через Telegram
+ */
 const TelegramAuth: React.FC<TelegramAuthProps> = ({ onAuthenticate }) => {
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isWebAppReady, setIsWebAppReady] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  const validationIntervalRef = useRef<NodeJS.Timeout>()
-  const dispatch = useGameDispatch()
-
-  const handleValidationError = useCallback(
-    (error: string) => {
-      console.error("Validation error:", error)
-      setError(error)
-
-      if (retryCount < MAX_RETRIES) {
-        setTimeout(() => {
-          setRetryCount((prev) => prev + 1)
-          validateAuth()
-        }, RETRY_DELAY)
-      } else {
-        // Reset authentication state
-        localStorage.removeItem("isAuthenticated")
-        dispatch({ type: "SET_USER", payload: null })
-        window.location.reload() // Force re-authentication
-      }
-    },
-    [retryCount, dispatch],
-  )
-
-  const validateAuth = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-
-    const result = await validateTelegramAuth()
-
-    console.log("Validation result:", result)
-
-    if (result.success && result.data?.user) {
-      dispatch({ type: "SET_USER", payload: result.data.user })
-      localStorage.setItem("isAuthenticated", "true")
-      localStorage.setItem("lastValidation", Date.now().toString())
-      setRetryCount(0) // Reset retry count on successful validation
-    } else {
-      handleValidationError(result.error || "Validation failed")
-    }
-
-    setIsLoading(false)
-  }, [dispatch, handleValidationError])
-
-  // Initial WebApp ready check
+  // Используем хук для логики аутентификации
+  const {
+    user,
+    status,
+    isLoading,
+    handleAuth,
+    handleRetry,
+    closeWebApp,
+    openInTelegram,
+    errorMessage
+  } = useTelegramAuth(onAuthenticate);
+  
+  // Состояние для отслеживания попыток аутентификации
+  const [authAttempts, setAuthAttempts] = useState<number>(0);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
+  
+  // Выполняем аутентификацию при монтировании компонента
   useEffect(() => {
-    const checkWebAppReady = () => {
-      if (WebApp.initData) {
-        setIsWebAppReady(true)
-      } else {
-        setTimeout(checkWebAppReady, 100)
-      }
-    }
-    checkWebAppReady()
-  }, [])
-
-  // Setup periodic validation
-  useEffect(() => {
-    if (isWebAppReady) {
-      // Validate on mount
-      validateAuth()
-
-      // Setup interval for periodic validation
-      validationIntervalRef.current = setInterval(validateAuth, VALIDATION_INTERVAL)
-
-      return () => {
-        if (validationIntervalRef.current) {
-          clearInterval(validationIntervalRef.current)
+    logAuthInfo(AuthStep.INIT, 'Инициализация компонента TelegramAuth');
+    
+    const authenticate = async () => {
+      logAuthInfo(AuthStep.TELEGRAM_INIT, 'Запуск процесса Telegram авторизации');
+      
+      try {
+        setIsRetrying(true);
+        
+        // Пытаемся авторизовать пользователя через Telegram
+        const result = await handleAuth();
+        
+        if (result) {
+          logAuthInfo(AuthStep.AUTH_COMPLETE, 'Процесс авторизации завершен успешно');
+        } else {
+          logAuthError(
+            AuthStep.AUTH_ERROR, 
+            'Процесс авторизации завершен с ошибкой', 
+            new Error(errorMessage || 'Неизвестная ошибка'),
+            { status }
+          );
+          
+          // Если авторизация не удалась, увеличиваем счетчик попыток
+          setAuthAttempts(prev => prev + 1);
         }
+      } catch (error) {
+        logAuthError(
+          AuthStep.AUTH_ERROR, 
+          'Ошибка при авторизации через Telegram', 
+          error,
+          { status }
+        );
+        setAuthAttempts(prev => prev + 1);
+      } finally {
+        setIsRetrying(false);
       }
-    }
-  }, [isWebAppReady, validateAuth])
-
-  // Check last validation time on focus
-  useEffect(() => {
-    const handleFocus = () => {
-      const lastValidation = localStorage.getItem("lastValidation")
-      if (lastValidation) {
-        const timeSinceLastValidation = Date.now() - Number.parseInt(lastValidation)
-        if (timeSinceLastValidation > VALIDATION_INTERVAL) {
-          validateAuth()
-        }
+    };
+    
+    // Запускаем процесс авторизации
+    authenticate();
+    
+    // Отписываемся при размонтировании
+    return () => {
+      logAuthInfo(AuthStep.USER_INTERACTION, 'Компонент TelegramAuth размонтирован');
+    };
+  }, [handleAuth, status, errorMessage]);
+  
+  // Обработчик повторной попытки авторизации
+  const handleAuthRetry = async () => {
+    logAuth(
+      AuthStep.AUTH_RETRY, 
+      AuthLogType.INFO, 
+      'Попытка повторной авторизации', 
+      { previousError: errorMessage, attempt: authAttempts + 1 }
+    );
+    
+    setIsRetrying(true);
+    setAuthAttempts(prev => prev + 1);
+    
+    try {
+      const result = await handleAuth();
+      if (result) {
+        logAuthInfo(AuthStep.AUTH_COMPLETE, 'Повторная авторизация успешна');
+      } else {
+        logAuthError(
+          AuthStep.AUTH_RETRY, 
+          'Повторная авторизация завершилась с ошибкой', 
+          new Error(errorMessage || 'Неизвестная ошибка')
+        );
       }
+    } catch (error) {
+      logAuthError(
+        AuthStep.AUTH_RETRY, 
+        'Ошибка при повторной авторизации', 
+        error
+      );
+    } finally {
+      setIsRetrying(false);
     }
-
-    window.addEventListener("focus", handleFocus)
-    return () => window.removeEventListener("focus", handleFocus)
-  }, [validateAuth])
-
-  const handleTelegramAuth = async () => {
-    setIsLoading(true)
-    setError(null)
-
-    const result = await validateTelegramAuth()
-
-    console.log("Telegram auth result:", result)
-
-    if (result.success && result.data?.user) {
-      onAuthenticate(result.data.user)
-    } else {
-      setError(result.error || "Authentication failed")
-    }
-
-    setIsLoading(false)
+  };
+  
+  // Обработчик закрытия Telegram WebApp
+  const handleCloseWebApp = () => {
+    logAuth(
+      AuthStep.USER_INTERACTION, 
+      AuthLogType.INFO, 
+      'Пользователь закрыл WebApp', 
+      { status }
+    );
+    closeWebApp();
+  };
+  
+  // Обработчик открытия в Telegram
+  const handleOpenInTelegram = () => {
+    logAuth(
+      AuthStep.USER_INTERACTION, 
+      AuthLogType.INFO, 
+      'Пользователь выбрал открытие в Telegram', 
+      { status }
+    );
+    openInTelegram();
+  };
+  
+  // Отображаем загрузчик при загрузке
+  if (isLoading || status === AuthStatus.LOADING || isRetrying) {
+    logAuthInfo(AuthStep.USER_INTERACTION, 'Отображение загрузчика авторизации', { isRetrying, authAttempts });
+    return <TelegramAuthLoader />;
   }
+  
+  // Отображаем компонент ошибки при ошибке
+  if (status === AuthStatus.ERROR) {
+    logAuthError(
+      AuthStep.USER_INTERACTION, 
+      'Отображение компонента ошибки авторизации', 
+      errorMessage ? new Error(errorMessage) : undefined,
+      { authAttempts }
+    );
+    
+    return (
+      <TelegramAuthError 
+        errorMessage={errorMessage || undefined}
+        onRetry={handleAuthRetry}
+        onClose={handleCloseWebApp}
+        onOpenInTelegram={handleOpenInTelegram}
+        attemptCount={authAttempts}
+      />
+    );
+  }
+  
+  // В случае успешной авторизации, возвращаем null (дочерние компоненты будут отрисованы родителем)
+  logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация успешна, возвращаем null для продолжения');
+  return null;
+};
 
-  return (
-    <div>
-      <motion.button
-        onClick={handleTelegramAuth}
-        disabled={!isWebAppReady || isLoading}
-        className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white py-3 px-4 rounded-xl hover:from-blue-600 hover:to-blue-800 transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <Image
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Telegram-pdBpQiBQsYiOchnK3AhwVMiKqqtdyk.webp"
-          alt="Telegram"
-          width={24}
-          height={24}
-          className="rounded"
-        />
-        <span className="font-semibold">{isLoading ? "Loading..." : "Login with Telegram"}</span>
-      </motion.button>
-      {error && (
-        <motion.p
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-red-500 mt-2 text-sm bg-red-500/10 p-2 rounded-lg border border-red-500/20"
-        >
-          {error}
-        </motion.p>
-      )}
-    </div>
-  )
-}
-
-export default TelegramAuth
-
+export default TelegramAuth;

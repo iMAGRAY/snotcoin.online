@@ -1,8 +1,9 @@
-'use client'
+"use client"
 
-import React from 'react';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
+import type React from "react"
+import { motion } from "framer-motion"
+import Image from "next/image"
+import { ICONS } from "../constants/uiConstants"
 
 const SplashScreen: React.FC = () => {
   return (
@@ -15,7 +16,7 @@ const SplashScreen: React.FC = () => {
     >
       <div className="relative w-full h-full">
         <Image
-          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/2-jdGFRrTDdfXFFiLdjaKZ0cFQUD3FqL.webp"
+          src={ICONS.COMMON.LOADING}
           alt="SnotCoin Splash Screen"
           layout="fill"
           objectFit="contain"
@@ -23,13 +24,13 @@ const SplashScreen: React.FC = () => {
           loading="eager"
           className="transition-opacity duration-300"
           onLoadingComplete={(image) => {
-            image.classList.remove('opacity-0');
+            image.classList.remove("opacity-0")
           }}
         />
       </div>
     </motion.div>
-  );
-};
+  )
+}
 
-export default SplashScreen;
+export default SplashScreen
 

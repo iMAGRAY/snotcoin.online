@@ -1,28 +1,45 @@
-import React from 'react'
-import { motion } from 'framer-motion'
-import { formatSnotValue } from '../../../utils/gameUtils'
+"use client"
 
-const FlyingNumber: React.FC<{ value: number }> = React.memo(({ value }) => (
-  <motion.div
-    initial={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-    animate={{ opacity: 0, y: -70, scale: 1.2, filter: 'blur(2px)' }}
-    exit={{ opacity: 0 }}
-    transition={{ duration: 1.2, ease: "easeOut" }}
-    className="absolute top-[45%] left-[45%] transform -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none select-none"
-  >
-    <span 
-      className="text-green-400 font-bold text-4xl drop-shadow-lg"
-      style={{
-        textShadow: '0 0 15px rgba(34, 197, 94, 0.7), 0 0 30px rgba(34, 197, 94, 0.5)',
-        WebkitTextStroke: '2px black'
+import React, { useMemo } from "react"
+import { motion } from "framer-motion"
+import { formatSnotValue } from "../../../utils/formatters"
+import type { FlyingNumberProps } from "../../../types/laboratory-types"
+
+const FlyingNumber: React.FC<FlyingNumberProps> = React.memo(({ value }) => {
+  const formattedValue = useMemo(() => formatSnotValue(value, 4), [value])
+
+  return (
+    <motion.div
+      initial={{ opacity: 1, y: 0, scale: 1 }}
+      animate={{
+        opacity: [1, 1, 0],
+        y: [0, "-10vh"],
+        x: ["-50%", "-50%"],
+        scale: [1, 1.2, 1],
       }}
+      transition={{
+        duration: 1.5,
+        ease: "easeOut",
+        times: [0, 0.7, 1],
+      }}
+      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none select-none"
     >
-      +{formatSnotValue(value)}
-    </span>
-  </motion.div>
-))
+      <motion.span
+        className="text-[#bbeb25] font-bold text-2xl"
+        style={{
+          textShadow: `
+            0 2px 4px rgba(0, 0, 0, 0.5),
+            0 0 10px rgba(16, 185, 129, 0.5)
+          `,
+        }}
+      >
+        +{formattedValue}
+      </motion.span>
+    </motion.div>
+  )
+})
 
-FlyingNumber.displayName = 'FlyingNumber'
+FlyingNumber.displayName = "FlyingNumber"
 
 export default FlyingNumber
 

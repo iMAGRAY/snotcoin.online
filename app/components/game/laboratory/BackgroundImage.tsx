@@ -1,96 +1,52 @@
-import React, { useMemo, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+"use client"
+
+import React, { useMemo } from "react"
+import { motion } from "framer-motion"
 import Image from "next/image"
-import { formatSnotValue } from "../../../utils/gameUtils"
-import type { GameState } from "../../../types/gameTypes"
-import type { LocalState, LocalAction } from "../../../types/laboratory-types"
-import { Database } from "lucide-react"
-
-const FlyingNumber: React.FC<{ id: number; value: number }> = React.memo(({ id, value }) => {
-  const formattedValue = useMemo(() => formatSnotValue(value, 4), [value])
-
-  return (
-    <motion.div
-      key={id}
-      initial={{ opacity: 1, y: 0, scale: 1 }}
-      animate={{
-        opacity: [1, 1, 0],
-        y: [0, "-10vh"],
-        x: ["-50%", "-50%"],
-        scale: [1, 1.2, 1],
-      }}
-      transition={{
-        duration: 1.5,
-        ease: "easeOut",
-        times: [0, 0.7, 1],
-      }}
-      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[70] pointer-events-none select-none"
-    >
-      <motion.span
-        className="text-[#bbeb25] font-bold text-2xl"
-        style={{
-          textShadow: "0 0 5px rgba(16, 185, 129, 0.5), 0 0 10px rgba(16, 185, 129, 0.3), 0 2px 3px rgba(0, 0, 0, 0.8)",
-        }}
-      >
-        +{formattedValue}
-      </motion.span>
-    </motion.div>
-  )
-})
-
-FlyingNumber.displayName = "FlyingNumber"
-
-interface BackgroundImageProps {
-  store: GameState
-  dispatch: React.Dispatch<any>
-  localState: LocalState
-  localDispatch: React.Dispatch<LocalAction>
-  onContainerClick: () => void
-  allowContainerClick: boolean
-  isContainerClicked: boolean
-  id: string
-  containerSnotValue: string
-  containerFilling: number
-}
+import { formatSnotValue } from "../../../utils/formatters"
+import { calculateFillingPercentage } from "../../../utils/resourceUtils"
+import type { BackgroundImageProps } from "../../../types/laboratory-types"
+import { ICONS } from "../../../constants/uiConstants"
 
 const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
-  ({
-    store,
-    localState,
-    onContainerClick,
-    allowContainerClick,
-    isContainerClicked,
-    id,
-    containerSnotValue,
-    containerFilling,
-  }) => {
+  ({ store, onContainerClick, allowContainerClick, isContainerClicked, id, containerSnotValue, containerFilling }) => {
     const containerFillingMemo = useMemo(() => {
-      return (store.containerSnot / store.containerCapacity) * 100
-    }, [store.containerSnot, store.containerCapacity])
+      if (!store?.inventory) return 0;
+      
+      return calculateFillingPercentage(store.inventory);
+    }, [store?.inventory])
 
-    const containerSnotValueMemo = useMemo(() => formatSnotValue(store.containerSnot, 4), [store.containerSnot])
-
-    const handleClick = useCallback(() => {
-      if (allowContainerClick) {
-        onContainerClick()
+    const containerSnotValueMemo = useMemo(() => {
+      const containerSnot = Math.max(0, store?.inventory?.containerSnot ?? 0);
+      
+      if (isNaN(containerSnot)) {
+        return "0";
       }
-    }, [allowContainerClick, onContainerClick])
+      
+      return formatSnotValue(containerSnot, 4);
+    }, [store?.inventory?.containerSnot])
+
+    const handleContainerClick = (e: React.MouseEvent) => {
+      if (onContainerClick && allowContainerClick) {
+        onContainerClick();
+      }
+    };
 
     return (
       <div className="fixed inset-0 w-full h-full overflow-hidden">
         <style jsx>{`
-      :root {
-        --container-fill: ${containerFilling}%;
-      }
-      .drop-shadow-glow-green {
-        filter: drop-shadow(0 0 5px rgba(187, 235, 37, 0.7));
-      }
-    `}</style>
+        :root {
+          --container-fill: ${containerFilling}%;
+        }
+        .drop-shadow-glow-green {
+          filter: drop-shadow(0 0 5px rgba(187, 235, 37, 0.7));
+        }
+      `}</style>
         <div
           className="absolute inset-0 z-0"
           style={{
             backgroundImage:
-              "url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/BackGroundLab2-L6J62hXIqasQsQ4GImBeX6Trmpiwuq.webp')",
+              `url('${ICONS.LABORATORY.BACKGROUND}')`,
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
             backgroundSize: "cover",
@@ -110,13 +66,13 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
             >
               <div
                 className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#bbeb25] to-[#a3d119] transition-all duration-300 ease-in-out"
-                style={{ height: `var(--container-fill)` }}
+                style={{ height: `${containerFillingMemo}%` }}
               />
             </motion.div>
             <motion.div
               id={id}
               className={`absolute inset-0 z-30 ${allowContainerClick ? "cursor-pointer" : ""}`}
-              onClick={handleClick}
+              onClick={handleContainerClick}
               style={{
                 pointerEvents: allowContainerClick ? "auto" : "none",
                 touchAction: "manipulation",
@@ -130,7 +86,7 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
               }}
             >
               <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/5-fAIoNsO4S0dYFjXAHFexJ09zRNNm3l.webp"
+                src={ICONS.LABORATORY.MACHINE}
                 layout="fill"
                 objectFit="contain"
                 alt="Storage Machine"
@@ -152,22 +108,15 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
                   className="text-[#bbeb25] font-bold text-2xl tracking-wider"
                   style={{
                     textShadow: `
-                  0 2px 4px rgba(0, 0, 0, 0.5),
-                  0 0 10px rgba(16, 185, 129, 0.5)
-                `,
+                    0 2px 4px rgba(0, 0, 0, 0.5),
+                    0 0 10px rgba(16, 185, 129, 0.5)
+                  `,
                   }}
                 >
-                  {containerSnotValue}
+                  {containerSnotValueMemo}
                 </motion.span>
               </motion.div>
             </motion.div>
-            <div className="absolute inset-0 z-[60] pointer-events-none">
-              <AnimatePresence>
-                {localState.flyingNumbers.map(({ id, value }) => (
-                  <FlyingNumber key={id} id={id} value={value} />
-                ))}
-              </AnimatePresence>
-            </div>
           </div>
         </div>
       </div>
@@ -177,5 +126,5 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
 
 BackgroundImage.displayName = "BackgroundImage"
 
-export default React.memo(BackgroundImage)
+export default BackgroundImage
 

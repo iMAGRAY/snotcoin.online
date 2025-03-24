@@ -1,188 +1,175 @@
-// Game constants
-export const MAX_LEVEL = 100
-export const BASE_FILLING_SPEED = 1 / (24 * 60 * 60) // 1 SNOT per 24 hours
-export const MAX_FILLING_SPEED = 1000 / (24 * 60 * 60) // 1000 SNOT per 24 hours
-
-export const CONTAINER_UPGRADES = [
-  { level: 1, cost: 0, capacityIncrease: 1 },
-  { level: 2, cost: 10, capacityIncrease: 1 },
-  ...Array.from({ length: MAX_LEVEL - 2 }, (_, index) => {
-    const level = index + 3
-    return {
-      level,
-      cost: Math.floor(10 * Math.pow(1.1, level - 1)),
-      capacityIncrease: 1,
-    }
-  }),
-]
-
-export const FILLING_SPEED_UPGRADES = Array.from({ length: MAX_LEVEL }, (_, index) => {
-  const level = index + 1
-  return {
-    level,
-    cost: Math.floor(50 * Math.pow(1.1, level - 1)),
-    speedIncrease: BASE_FILLING_SPEED * index,
-  }
-})
-
-// GameState interface
-export interface GameState {
-  // Container properties
-  containerLevel: number
-  containerSnot: number
+/**
+ * Типы данных для игры
+ */
+// Типы для игровой механики
+export interface Inventory {
+  snot: number
+  snotCoins: number
+  collectionEfficiency: number
+  containerCapacityLevel: number
   fillingSpeedLevel: number
   fillingSpeed: number
-  containerCapacityLevel: number
   containerCapacity: number
-
-  // Game state
-  activeTab: "fusion" | "laboratory" | "storage" | "games" | "profile" | "settings"
-  gameStarted: boolean
-  fusionGameActive: boolean
-  fusionGameStarted: boolean
-  fusionAttemptsUsed: number
-  fusionGamesPlayed: number
-  fusionGamesAvailable: number
-  lastFusionGameTime: number
-
-  // Player resources
-  inventory: {
-    snot: number
-    snotCoins: number
-    collectionEfficiency: number
-    containerCapacity: number
-    containerCapacityLevel: number
-    fillingSpeedLevel: number
-  }
-
-  // Energy system
-  energy: number
-  maxEnergy: number
-  energyRecoveryTime: number
-
-  // Wallet
-  wallet: {
-    address?: string
-    balance?: string
-    snotCoins?: number
-    seedPhrase?: string
-  } | null
-
-  // Audio settings
-  clickSoundVolume: number
-  effectsSoundVolume: number
-  isEffectsMuted: boolean
-  backgroundMusicVolume: number
-  isMuted: boolean
-  isBackgroundMusicMuted: boolean
-
-  // Game progress
-  highestLevel: number
-  snotCollected: number
-
-  // User data
-  user: TelegramUser | null
-  lastValidation?: number
-  validationStatus: "valid" | "invalid" | "pending"
-  lastLoginTime: number
-
-  // Additional data
-  achievements: Achievement[]
-  fusionHistory: FusionEvent[]
-  chestOpeningStats: ChestOpeningStats
-  totalPlayTime: number
-  lastLoginDate: string
-  settings: {
-    language: string
-    soundSettings: {
-      musicVolume: number
-      effectsVolume: number
-      isMuted: boolean
-    }
-  }
-  miniGamesProgress: {
-    [key: string]: any
-  }
-
-  // Security
-  signature?: string
+  containerSnot: number
+  Cap: number
+  lastUpdateTimestamp?: number // Временная метка последнего обновления ресурсов
 }
 
-// Action types
-export type Action =
-  | { type: "SET_RESOURCE"; resource: keyof GameState; payload: any }
-  | { type: "UPDATE_RESOURCES" }
-  | { type: "UPDATE_ENERGY" }
-  | { type: "SET_ACTIVE_TAB"; payload: Exclude<GameState["activeTab"], "settings"> }
-  | { type: "CONSUME_ENERGY"; payload: number }
-  | { type: "CLEAR_GAME_DATA" }
-  | { type: "SET_GAME_STARTED"; payload: boolean }
-  | { type: "ADD_SNOT"; payload: number }
-  | { type: "SYNC_WITH_TELEGRAM" }
-  | { type: "LOAD_FROM_TELEGRAM" }
-  | { type: "SET_FUSION_GAME_ACTIVE"; payload: boolean }
-  | { type: "UPGRADE_FILLING_SPEED" }
-  | { type: "ADD_TO_INVENTORY"; item: keyof GameState["inventory"]; amount: number }
-  | { type: "REMOVE_FROM_INVENTORY"; item: keyof GameState["inventory"]; amount: number }
-  | { type: "SET_NON_BACKGROUND_AUDIO_MUTE"; payload: boolean }
-  | { type: "SET_EFFECTS_MUTE"; payload: boolean }
-  | { type: "UPGRADE_CONTAINER_CAPACITY" }
-  | { type: "UPDATE_FUSION_GAME_AVAILABILITY" }
-  | { type: "USE_FUSION_GAME" }
-  | { type: "SET_FUSION_GAME_STARTED"; payload: boolean }
-  | { type: "USE_FUSION_ATTEMPT" }
-  | { type: "RESET_FUSION_GAME" }
-  | { type: "START_FUSION_GAME" }
-  | { type: "SET_WALLET"; payload: GameState["wallet"] }
-  | { type: "SET_ETH_BALANCE"; payload: string }
-  | { type: "MOVE_SC_TO_GAME"; payload: number }
-  | { type: "LOAD_GAME_STATE"; payload: Partial<GameState> }
-  | { type: "INCREMENT_FUSION_GAMES_PLAYED" }
-  | { type: "COLLECT_CONTAINER_SNOT"; payload: number | { amount: number } }
-  | { type: "OPEN_CHEST"; payload: { requiredSnot: number; rewardAmount: number } }
-  | { type: "SET_CLICK_SOUND_VOLUME"; payload: number }
-  | { type: "SET_EFFECTS_SOUND_VOLUME"; payload: number }
-  | { type: "SET_AUDIO_VOLUME"; audioType: "click" | "effects"; payload: number }
-  | { type: "SET_BACKGROUND_MUSIC_VOLUME"; payload: number }
-  | { type: "SET_MUTE"; payload: boolean }
-  | { type: "UPGRADE_COLLECTION_EFFICIENCY"; payload: number }
-  | { type: "SET_BACKGROUND_MUSIC_MUTE"; payload: boolean }
-  | { type: "SET_USER"; payload: TelegramUser | null }
-  | { type: "UPDATE_VALIDATION_STATUS"; payload: "valid" | "invalid" | "pending" }
-  | { type: "SET_TELEGRAM_USER"; payload: any }
-  | { type: "RESET_GAME_STATE" }
-  | { type: "LOAD_USER_DATA"; payload: any }
-  | { type: "SET_ENERGY"; payload: number }
-  | { type: "SET_LAST_LOGIN_TIME"; payload: number }
-  | { type: "REPLENISH_ENERGY"; payload: number }
+export interface Upgrades {
+  containerLevel: number
+  fillingSpeedLevel: number
+  collectionEfficiencyLevel: number
+}
 
-export interface TelegramUser {
-  id: number
+export interface Container {
+  level: number
+  capacity: number
+  currentAmount: number
+  fillRate: number
+}
+
+export interface Settings {
+  language: string
+  theme: string
+  notifications: boolean
+  tutorialCompleted: boolean
+}
+
+export interface SoundSettings {
+  clickVolume: number
+  effectsVolume: number
+  backgroundMusicVolume: number
+  isMuted: boolean
+  isEffectsMuted: boolean
+  isBackgroundMusicMuted: boolean
+}
+
+export interface User {
+  id: string
+  telegram_id?: number
   first_name: string
   last_name?: string
   username?: string
   photo_url?: string
 }
 
-export interface Achievement {
+export interface GameState {
+  activeTab: string
+  user: User | null
+  validationStatus: "pending" | "valid" | "invalid"
+  lastValidation?: number
+  inventory: Inventory
+  container: Container
+  upgrades: Upgrades
+  settings: Settings
+  soundSettings: SoundSettings
+  hideInterface: boolean
+  isPlaying: boolean
+  isLoading: boolean
+  containerLevel: number
+  fillingSpeed: number
+  containerSnot: number
+  gameStarted: boolean
+  highestLevel: number
+  consecutiveLoginDays: number
+  wallet?: {
+    snotCoins: number
+  }
+}
+
+export interface ExtendedGameState extends GameState {
+  // Дополнительные поля для расширенного состояния игры
+  _saveVersion?: number
+  _lastSaved?: string
+  _isRetry?: boolean
+  _isInitialState?: boolean
+  _isError?: boolean
+  _lastActionTime?: string
+  _lastAction?: string
+  _skippedLoad?: boolean  // Флаг, указывающий, что загрузка была пропущена из-за более новой локальной версии
+  _isForceSave?: boolean  // Флаг, указывающий на принудительное сохранение
+  _isBeforeUnloadSave?: boolean // Флаг для сохранения перед закрытием страницы
+  _isMerged?: boolean // Флаг, указывающий что состояние было получено путем слияния
+  _clientSentAt?: string // Метка времени отправки с клиента 
+  _tempData?: any // Временные данные, которые не должны сохраняться
+}
+
+export type ActionType =
+  | 'SET_USER'
+  | 'SET_TELEGRAM_USER'
+  | 'SET_ACTIVE_TAB'
+  | 'SET_CONTAINER_LEVEL'
+  | 'SET_FILLING_SPEED_LEVEL'
+  | 'SET_COLLECTION_EFFICIENCY_LEVEL'
+  | 'UPDATE_CONTAINER'
+  | 'UPDATE_CONTAINER_LEVEL'
+  | 'UPDATE_CONTAINER_SNOT'
+  | 'UPDATE_FILLING_SPEED'
+  | 'UPDATE_RESOURCES'
+  | 'INITIALIZE_NEW_USER'
+  | 'RESET_GAME_STATE'
+  | 'LOAD_USER_DATA'
+  | 'SET_IS_PLAYING'
+  | 'LOGIN'
+  | 'LOAD_GAME_STATE'
+  | 'SET_GAME_STARTED'
+  | 'ADD_TO_INVENTORY'
+  | 'REMOVE_FROM_INVENTORY'
+  | 'FORCE_SAVE_GAME_STATE'
+  | 'SET_RESOURCE'
+  | 'UPGRADE_CONTAINER_CAPACITY'
+  | 'UPGRADE_FILLING_SPEED'
+  | 'ADD_SNOT'
+  | 'COLLECT_CONTAINER_SNOT'
+  | 'INCREMENT_CONTAINER_CAPACITY'
+  | 'SET_CLICK_SOUND_VOLUME'
+  | 'SET_BACKGROUND_MUSIC_VOLUME'
+  | 'SET_EFFECTS_SOUND_VOLUME'
+  | 'SET_MUTE'
+  | 'SET_EFFECTS_MUTE'
+  | 'SET_BACKGROUND_MUSIC_MUTE'
+  | 'CLEAR_GAME_DATA'
+  | 'MOVE_SC_TO_GAME'
+  | 'SET_HIDE_INTERFACE';
+
+export interface Action {
+  type: ActionType
+  payload?: any
+}
+
+// Константы для улучшений
+export const CONTAINER_UPGRADES = [
+  { level: 1, capacity: 100, cost: 0, capacityIncrease: 100 },
+  { level: 2, capacity: 200, cost: 100, capacityIncrease: 100 },
+  { level: 3, capacity: 400, cost: 300, capacityIncrease: 200 },
+  { level: 4, capacity: 800, cost: 700, capacityIncrease: 400 },
+  { level: 5, capacity: 1600, cost: 1500, capacityIncrease: 800 },
+  { level: 6, capacity: 3200, cost: 3000, capacityIncrease: 1600 },
+  { level: 7, capacity: 6400, cost: 6000, capacityIncrease: 3200 },
+  { level: 8, capacity: 12800, cost: 12000, capacityIncrease: 6400 },
+  { level: 9, capacity: 25600, cost: 24000, capacityIncrease: 12800 },
+  { level: 10, capacity: 51200, cost: 48000, capacityIncrease: 25600 }
+];
+
+export const FILLING_SPEED_UPGRADES = [
+  { level: 1, speed: 1, cost: 0, speedIncrease: 0 },
+  { level: 2, speed: 2, cost: 150, speedIncrease: 1 },
+  { level: 3, speed: 4, cost: 450, speedIncrease: 2 },
+  { level: 4, speed: 8, cost: 1050, speedIncrease: 4 },
+  { level: 5, speed: 16, cost: 2250, speedIncrease: 8 },
+  { level: 6, speed: 32, cost: 4500, speedIncrease: 16 },
+  { level: 7, speed: 64, cost: 9000, speedIncrease: 32 },
+  { level: 8, speed: 128, cost: 18000, speedIncrease: 64 },
+  { level: 9, speed: 256, cost: 36000, speedIncrease: 128 },
+  { level: 10, speed: 512, cost: 72000, speedIncrease: 256 }
+];
+
+// Типы для Telegram
+export interface TelegramUser {
   id: string
-  name: string
-  description: string
-  completed: boolean
-  completedDate?: string
-}
-
-export interface FusionEvent {
-  date: string
-  level: number
-  result: "success" | "failure"
-  reward?: number
-}
-
-export interface ChestOpeningStats {
-  common: number
-  rare: number
-  legendary: number
-  totalRewards: number
-}
-
+  first_name: string
+  last_name?: string
+  username?: string
+  telegram_id?: number
+  photo_url?: string
+} 

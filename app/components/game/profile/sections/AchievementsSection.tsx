@@ -1,35 +1,40 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Trophy } from 'lucide-react';
-import { useTranslation } from '../../../../contexts/TranslationContext';
-import { AchievementCategory } from '../../../../types/profile-types';
+"use client"
+
+import type React from "react"
+import { motion } from "framer-motion"
+import { Trophy } from "lucide-react"
+import { useTranslation } from "../../../../contexts/TranslationContext"
+import type { AchievementCategory } from "../../../../types/profile-types"
 
 const achievements: AchievementCategory[] = [
-  { 
-    category: 'Collection',
+  {
+    category: "Collection",
     items: [
-      { name: 'Snot Novice', description: 'Collect your first SNOT', points: 5, completed: true },
-      { name: 'Snot Enthusiast', description: 'Collect 1,000 SNOT', points: 10, completed: true },
-      { name: 'Snot Master', description: 'Collect 1,000,000 SNOT', points: 50, completed: false },
-      { name: 'Snot Billionaire', description: 'Collect 1,000,000,000 SNOT', points: 100, completed: false },
-    ]
+      { name: "Snot Novice", description: "Collect your first SNOT", points: 5, completed: true },
+      { name: "Snot Enthusiast", description: "Collect 1,000 SNOT", points: 10, completed: true },
+      { name: "Snot Master", description: "Collect 1,000,000 SNOT", points: 50, completed: false },
+      { name: "Snot Billionaire", description: "Collect 1,000,000,000 SNOT", points: 100, completed: false },
+    ],
   },
   {
-    category: 'Fusion',
+    category: "Upgrades",
     items: [
-      { name: 'Fusion Beginner', description: 'Perform your first fusion', points: 5, completed: true },
-      { name: 'Fusion Expert', description: 'Perform 100 successful fusions', points: 25, completed: true },
-      { name: 'Fusion Master', description: 'Reach fusion level 20', points: 50, completed: false },
-    ]
+      { name: "Container Upgrade", description: "Upgrade your container for the first time", points: 5, completed: true },
+      { name: "Storage Expert", description: "Reach container level 10", points: 25, completed: false },
+      { name: "Storage Master", description: "Max out your container capacity", points: 50, completed: false },
+    ],
   },
   // ... other categories
-];
+]
 
 const AchievementsSection: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
-  const totalPoints = achievements.reduce((total, category) => 
-    total + category.items.reduce((catTotal, item) => catTotal + (item.completed ? item.points : 0), 0), 0);
+  const totalPoints = achievements.reduce(
+    (total, category) =>
+      total + category.items.reduce((catTotal, item) => catTotal + (item.completed ? item.points : 0), 0),
+    0,
+  )
 
   return (
     <motion.div className="text-white space-y-6">
@@ -53,9 +58,9 @@ const AchievementsSection: React.FC = () => {
           <h4 className="font-bold text-xl mb-3 text-[#6899be]">{category.category} Achievements</h4>
           <ul className="space-y-3">
             {category.items.map((item, itemIndex) => (
-              <motion.li 
+              <motion.li
                 key={item.name}
-                className={`bg-gradient-to-br from-[#3a5c82] to-[#4a7a9e] rounded-xl p-4 shadow-md ${item.completed ? 'opacity-100' : 'opacity-70'}`}
+                className={`bg-gradient-to-br from-[#3a5c82] to-[#4a7a9e] rounded-xl p-4 shadow-md ${item.completed ? "opacity-100" : "opacity-70"}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 * categoryIndex + 0.05 * itemIndex }}
@@ -81,11 +86,11 @@ const AchievementsSection: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-2 w-full bg-[#2a3b4d] rounded-full h-2">
-                  <motion.div 
-                    className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full" 
-                    style={{ width: item.completed ? '100%' : '0%' }}
+                  <motion.div
+                    className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full"
+                    style={{ width: item.completed ? "100%" : "0%" }}
                     initial={{ width: 0 }}
-                    animate={{ width: item.completed ? '100%' : '0%' }}
+                    animate={{ width: item.completed ? "100%" : "0%" }}
                     transition={{ duration: 1, delay: 0.5 + 0.1 * categoryIndex + 0.05 * itemIndex }}
                   />
                 </div>
@@ -95,8 +100,8 @@ const AchievementsSection: React.FC = () => {
         </motion.div>
       ))}
     </motion.div>
-  );
-};
+  )
+}
 
-export default AchievementsSection;
+export default AchievementsSection
 

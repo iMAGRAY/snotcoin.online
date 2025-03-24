@@ -5,12 +5,14 @@ import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Image from "next/image"
 import { useTranslation } from "../../../contexts/TranslationContext"
 import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
-import { X, Star, BarChart2, Package, Award, LogOut } from "lucide-react"
+import { X, Star, BarChart2, Package, Award, Cog, Calendar } from "lucide-react"
 import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
 import Resources from "../../common/Resources"
-import WalletBar from "./WalletBar"
 import { useRouter } from "next/navigation"
+import Settings from "../settings/Settings"
+import { authStore } from '../../auth/AuthenticationWindow'
+import { ICONS } from "../../../constants/uiConstants"
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -18,8 +20,6 @@ import InventorySection from "./sections/InventorySection"
 import AchievementsSection from "./sections/AchievementsSection"
 
 // Import modals
-import DepositModal from "./modals/DepositModal"
-import WithdrawModal from "./withdraw/WithdrawModal"
 import SettingsModal from "./modals/SettingsModal"
 
 type ProfilePageProps = {}
@@ -30,12 +30,8 @@ const ProfilePage: React.FC = () => {
   const gameDispatch = useGameDispatch()
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const router = useRouter()
-
-  console.log("ProfilePage rendered, gameState:", gameState)
-
-  useEffect(() => {
-    console.log("ProfilePage useEffect, user:", gameState.user)
-  }, [gameState.user])
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const state = { activeTab: "profile" } // Added state for activeTab
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
@@ -61,10 +57,20 @@ const ProfilePage: React.FC = () => {
   }
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("authToken")
+    authStore.clearAuthData()
+    
+    gameDispatch({ type: "SET_USER", payload: null })
     gameDispatch({ type: "RESET_GAME_STATE" })
+    
+    const logoutEvent = new Event('logout')
+    window.dispatchEvent(logoutEvent)
+    
     router.push("/")
   }, [gameDispatch, router])
+
+  const handleSettingsClick = () => {
+    setIsSettingsOpen(true)
+  }
 
   const profileSectionsData: ProfileSection[] = [
     { label: "stats", icon: BarChart2, color: "from-indigo-500 to-indigo-700", content: <StatsSection /> },
@@ -79,7 +85,7 @@ const ProfilePage: React.FC = () => {
         className="absolute inset-0 bg-cover bg-center z-0"
         style={{
           backgroundImage:
-            "url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/profile-background-Rl9Hy7Uy5Ib5Ue5Ue5Ue5Ue5Ue5Ue.jpg')",
+            `url('${ICONS.PROFILE.BACKGROUND}')`,
           filter: "blur(5px)",
         }}
       />
@@ -112,13 +118,7 @@ const ProfilePage: React.FC = () => {
                 <Image
                   src={
                     gameState.user?.photo_url ||
-                    "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ZeroAvatar-9ZXTxf5fMhIXgOiSYaLod3n9bNIiGv.webp" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg"
+                    ICONS.PROFILE.AVATAR.DEFAULT
                   }
                   alt="Profile"
                   width={80}
@@ -141,66 +141,44 @@ const ProfilePage: React.FC = () => {
                     </motion.p>
                   </div>
                 </motion.div>
+                <motion.div className="flex items-center mt-2" layout>
+                  <Calendar className="w-5 h-5 text-emerald-400 mr-2" />
+                  <motion.p className="text-[#6899be] text-lg font-semibold" layout>
+                    {t("consecutiveLoginDays")}: {gameState.consecutiveLoginDays}
+                  </motion.p>
+                </motion.div>
               </motion.div>
             </motion.div>
 
-            {/* Balance Bars */}
+            {/* Balance Bar */}
             <div className="mt-4">
-              {/* SnotCoin Bar */}
               <motion.div className="h-12 bg-gradient-to-r from-[#3a5c82] to-[#4a7a9e] rounded-xl border border-[#5889ae]/30 shadow-md flex items-center justify-between px-2">
                 <div className="flex-1">
                   <Resources
-                    showStatusPanel={false}
-                    activeTab="profile"
-                    hideEnergy={true}
-                    hideSettings={true}
-                    showOnlySnotCoin={true}
-                    isSettingsOpen={false}
-                    setIsSettingsOpen={() => {}}
-                    closeSettings={() => {}}
-                    snotCoins={gameState.inventory.snotCoins}
-                    snot={gameState.inventory.snot}
-                    energy={gameState.energy}
-                    maxEnergy={gameState.maxEnergy}
                     isVisible={true}
+                    activeTab={gameState.activeTab}
+                    showOnlySnotCoin={true}
+                    snot={gameState.inventory.snot}
+                    snotCoins={gameState.inventory.snotCoins}
                   />
-                </div>
-                <div className="flex space-x-2 ml-2">
-                  <motion.button
-                    onClick={() => setActiveSection("deposit")}
-                    className="bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-bold py-2 px-3 rounded-md shadow-md hover:from-green-600 hover:to-green-700 transition-all duration-300"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {t("Deposit")}
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setActiveSection("withdraw")}
-                    className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-sm font-bold py-2 px-3 rounded-md shadow-md hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {t("Claim")}
-                  </motion.button>
                 </div>
               </motion.div>
             </div>
           </motion.div>
 
-          {/* WalletBar */}
-          <WalletBar setActiveSection={setActiveSection} />
-
-          {/* Logout Button */}
-          <motion.button
-            onClick={handleLogout}
-            className="w-full bg-gradient-to-r from-red-500 to-red-700 text-white py-3 px-4 rounded-xl hover:from-red-600 hover:to-red-800 transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-red-500/20 mt-4"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-red-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <LogOut className="w-5 h-5 mr-2" />
-            <span className="font-semibold">{t("logout")}</span>
-          </motion.button>
+          {/* Buttons */}
+          <div className="mt-4">
+            <motion.button
+              onClick={handleSettingsClick}
+              className="w-full bg-gradient-to-r from-[#3a5c82] to-[#4a7a9e] text-white py-3 px-4 rounded-xl hover:from-[#4a7a9e] hover:to-[#5889ae] transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-[#5889ae]/20"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-[#5889ae]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <Cog className="w-5 h-5 mr-2" />
+              <span className="font-semibold">{t("settings")}</span>
+            </motion.button>
+          </div>
 
           {/* Tabs */}
           <Tab.Group as={React.Fragment} key="profile-tabs">
@@ -273,17 +251,22 @@ const ProfilePage: React.FC = () => {
               <h2 className="text-2xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-6">
                 {t(activeSection)}
               </h2>
-              {activeSection === "deposit" ? (
-                <DepositModal userEthAddress={gameState.wallet?.address || undefined} />
-              ) : activeSection === "withdraw" ? (
-                <WithdrawModal />
-              ) : activeSection === "settings" ? (
-                <SettingsModal />
-              ) : null}
+              {activeSection === "settings" ? <SettingsModal /> : null}
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+      {isSettingsOpen && <Settings onClose={() => setIsSettingsOpen(false)} />}
+
+      {/* Add Logout button */}
+      <motion.button
+        onClick={handleLogout}
+        className="absolute bottom-4 right-4 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        {t("logout")}
+      </motion.button>
     </div>
   )
 }

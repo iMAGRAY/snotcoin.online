@@ -1,9 +1,9 @@
-import React from 'react';
+import type React from "react"
 import { Button } from "../ui/button"
-import { Pause } from 'lucide-react';
+import { Pause } from "lucide-react"
 
 interface BackButtonProps {
-  onClick: () => void;
+  onClick: () => void
 }
 
 const BackButton: React.FC<BackButtonProps> = ({ onClick }) => {
@@ -17,8 +17,8 @@ const BackButton: React.FC<BackButtonProps> = ({ onClick }) => {
       <Pause className="h-4 w-4" />
       <span className="sr-only">Pause</span>
     </Button>
-  );
-};
+  )
+}
 
-export default BackButton;
+export default BackButton
 

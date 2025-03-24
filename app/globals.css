@@ -137,7 +137,7 @@ body {
   .h-screen {
     height: -webkit-fill-available;
   }
-  
+
   .min-h-screen {
     min-height: -webkit-fill-available;
   }
@@ -164,7 +164,7 @@ body {
 
 /* Vertical height-based responsive adjustments */
 
-@media (max-aspect-ratio: 1/1) {
+@media (max-aspect-ratio: 1 / 1) {
   .w-[80vmin] {
     width: 80vw;
   }
@@ -173,12 +173,11 @@ body {
   }
 }
 
-@media (min-aspect-ratio: 1/1) {
+@media (min-aspect-ratio: 1 / 1) {
   .w-[80vmin] {
     width: 80vh;
   }
   .h-[80vmin] {
     height: 80vh;
   }
-}
-
+} 

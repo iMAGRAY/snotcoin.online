@@ -1,267 +1,156 @@
 "use client"
 
-import React, { useReducer, useCallback, useMemo, useState, useRef, useEffect } from "react"
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import { motion } from "framer-motion"
+import { useRouter } from "next/navigation"
 import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
-import { localReducer, initialLocalState } from "./laboratory-state"
-import BackgroundImage from "./BackgroundImage" // Update: Import from "./BackgroundImage"
-import UpgradeButton from "./UpgradeButton"
 import CollectButton from "./CollectButton"
-import { useTranslation } from "../../../contexts/TranslationContext"
-import CollectOptions from "./CollectOptions"
-import { motion, AnimatePresence } from "framer-motion"
-import { formatSnotValue } from "../../../utils/gameUtils"
 import Resources from "../../common/Resources"
+import BackgroundImage from "./BackgroundImage"
+import FlyingNumber from "./flying-number"
+import UpgradeButton from "./UpgradeButton"
+import { formatSnotValue } from "../../../utils/formatters"
+import { ANIMATION_DURATIONS, LAYOUT } from "../../../constants/uiConstants"
+import { getSafeInventory, calculateFillingPercentage } from "../../../utils/resourceUtils"
 
-type NotificationType = {
-  message: string
-  amount: number
-  totalSnot: number
-  type: "success" | "failure" | "warning"
-} | null
-
+/**
+ * Компонент лаборатории - основная игровая страница
+ */
 const Laboratory: React.FC = () => {
   const gameState = useGameState()
-  const gameDispatch = useGameDispatch()
-  const [localState, localDispatch] = useReducer(localReducer, initialLocalState)
-  const { t } = useTranslation()
-  const [showCollectOptions, setShowCollectOptions] = useState(false)
-  const [notification, setNotification] = useState<NotificationType>(null)
-  const [isContainerClicked, setIsContainerClicked] = useState(false)
-  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const dispatch = useGameDispatch()
+  const router = useRouter()
+  const [isCollecting, setIsCollecting] = useState(false)
+  const [flyingNumberValue, setFlyingNumberValue] = useState<number | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleContainerClick = useCallback(() => {
-    if (gameState.energy > 0) {
-      const increaseAmount = 0.0005
-      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.containerCapacity)
-
-      gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
-      gameDispatch({ type: "CONSUME_ENERGY", payload: 1 })
-
-      localDispatch({ type: "ADD_FLYING_NUMBER", payload: { id: Date.now(), value: increaseAmount } })
-
-      requestAnimationFrame(() => {
-        setIsContainerClicked((prev) => !prev)
-      })
-    } else {
-      setNotification({
-        message: t("notEnoughEnergy"),
-        amount: 0,
-        totalSnot: gameState.inventory.snot,
-        type: "warning",
-      })
-    }
-  }, [gameState.energy, gameState.containerSnot, gameState.inventory.containerCapacity, gameDispatch, localDispatch, t])
-
+  // Безопасно получаем данные инвентаря
+  const inventory = useMemo(() => 
+    getSafeInventory(gameState), 
+    [gameState]
+  )
+  
+  // Вычисляем процент заполнения контейнера
+  const containerFilling = useMemo(() => 
+    calculateFillingPercentage(inventory), 
+    [inventory]
+  )
+  
+  // Очищаем таймер при размонтировании компонента
   useEffect(() => {
-    const containerElement = document.getElementById("container-element")
-    if (!containerElement) return
-
-    let lastTapTime = 0
-    const handleTouchStart = (e: TouchEvent) => {
-      e.preventDefault()
-      const currentTime = Date.now()
-      if (currentTime - lastTapTime < 300) {
-        handleContainerClick()
-      }
-      lastTapTime = currentTime
-    }
-
-    containerElement.addEventListener("touchstart", handleTouchStart, { passive: false })
-
     return () => {
-      containerElement.removeEventListener("touchstart", handleTouchStart)
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
     }
-  }, [handleContainerClick])
-
+  }, [])
+  
+  // Обновление ресурсов по таймеру
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      const increaseAmount = gameState.fillingSpeed
-      const newContainerSnot = Math.min(gameState.containerSnot + increaseAmount, gameState.inventory.containerCapacity)
+    // Сохраняем ссылку на интервал в переменной
+    const resourceUpdateInterval = setInterval(() => {
+      // Обновление состояния контейнера и ресурсов
+      dispatch({ type: 'UPDATE_RESOURCES' });
+    }, ANIMATION_DURATIONS.RESOURCE_UPDATE_INTERVAL);
 
-      if (newContainerSnot !== gameState.containerSnot) {
-        gameDispatch({ type: "SET_RESOURCE", resource: "containerSnot", payload: newContainerSnot })
-      }
-    }, 1000) // Update every second
+    // Очищаем интервал при размонтировании компонента или изменении интервала
+    return () => {
+      clearInterval(resourceUpdateInterval);
+    };
+  }, [dispatch, ANIMATION_DURATIONS.RESOURCE_UPDATE_INTERVAL]); // Добавляем зависимость от интервала обновления
 
-    return () => clearInterval(intervalId)
-  }, [gameState.fillingSpeed, gameState.inventory.containerCapacity, gameState.containerSnot, gameDispatch])
-
-  const handleCollect = useCallback(
-    (amount: number, success: boolean) => {
-      setShowCollectOptions(false)
-      setNotification(null)
-      console.log("Laboratory: handleCollect", { amount, success })
-      if (success) {
-        const newTotalSnot = gameState.inventory.snot + amount
-        console.log("Collecting SNOT:", { amount, currentSnot: gameState.inventory.snot, newTotalSnot })
-        gameDispatch({ type: "COLLECT_CONTAINER_SNOT", payload: { amount } })
-        setNotification({
-          message: t("snotCollected"),
-          amount: Number.parseFloat(formatSnotValue(amount, 4)),
-          totalSnot: Number.parseFloat(formatSnotValue(newTotalSnot, 4)),
-          type: "success",
-        })
-      } else {
-        setNotification({
-          message: t("collectionFailed"),
-          amount: 0,
-          totalSnot: gameState.inventory.snot,
-          type: "failure",
-        })
-      }
-
-      // Automatically clear the notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null)
-      }, 3000)
-    },
-    [gameDispatch, gameState.inventory.snot, t],
-  )
-
-  const handleCollectClick = useCallback(() => {
-    setNotification(null)
-    if (gameState.containerSnot > 0) {
-      setShowCollectOptions(true)
-    } else {
-      setNotification({
-        message: t("containerEmpty"),
-        amount: 0,
-        totalSnot: gameState.inventory.snot,
-        type: "warning",
-      })
-      setTimeout(() => setNotification(null), 3000)
+  /**
+   * Обработчик сбора ресурсов
+   */
+  const handleCollect = useCallback(() => {
+    // Проверяем возможность сбора
+    if (inventory.containerSnot <= 0 || isCollecting || isNaN(inventory.containerSnot)) return
+    
+    // Устанавливаем состояние сбора
+    setIsCollecting(true)
+    
+    // Получаем проверенное значение для сбора
+    const amountToCollect = Math.max(0, inventory.containerSnot)
+    
+    // Диспатчим действие сбора
+    dispatch({ 
+      type: "COLLECT_CONTAINER_SNOT", 
+      payload: { amount: amountToCollect } 
+    })
+    
+    // Показываем анимацию с текущим значением
+    setFlyingNumberValue(amountToCollect)
+    
+    // Очищаем предыдущий таймер если он есть
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
     }
-  }, [gameState.containerSnot, gameState.inventory.snot, t])
+    
+    // Устанавливаем таймер для скрытия анимации
+    timerRef.current = setTimeout(() => {
+      setFlyingNumberValue(null)
+      setIsCollecting(false)
+      timerRef.current = null
+    }, ANIMATION_DURATIONS.FLYING_NUMBER)
+    
+  }, [dispatch, inventory.containerSnot, isCollecting])
 
-  const resourcesProps = useMemo(
-    () => ({
-      isVisible: true,
-      isSettingsOpen: false,
-      setIsSettingsOpen: () => {},
-      closeSettings: () => {},
-      showStatusPanel: true,
-      activeTab: "laboratory",
-      snotCoins: gameState.inventory.snotCoins,
-      snot: gameState.inventory.snot,
-      energy: gameState.energy,
-      maxEnergy: gameState.maxEnergy,
-    }),
-    [gameState.inventory.snotCoins, gameState.inventory.snot, gameState.energy, gameState.maxEnergy],
-  )
-
-  const containerSnotValue = useMemo(() => formatSnotValue(gameState.containerSnot, 4), [gameState.containerSnot])
-
-  const containerFilling = useMemo(() => {
-    return (gameState.containerSnot / gameState.inventory.containerCapacity) * 100
-  }, [gameState.containerSnot, gameState.inventory.containerCapacity])
+  /**
+   * Переход на страницу улучшений
+   */
+  const handleUpgradeClick = useCallback(() => {
+    router.push("/upgrade")
+  }, [router])
 
   return (
-    <div
-      className="h-full w-full relative overflow-hidden select-none"
-      style={{ WebkitUserDrag: "none" } as React.CSSProperties}
+    <motion.div
+      className="relative w-full h-full flex flex-col items-center justify-between"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
     >
-      <BackgroundImage
-        store={gameState}
-        dispatch={gameDispatch}
-        localState={localState}
-        localDispatch={localDispatch}
-        onContainerClick={handleContainerClick}
-        allowContainerClick={true}
-        isContainerClicked={isContainerClicked}
-        id="container-element"
-        containerSnotValue={containerSnotValue}
-        containerFilling={containerFilling}
-      />
-      <Resources {...resourcesProps} />
-      <AnimatePresence mode="wait">
-        {!showCollectOptions ? (
-          <motion.div
-            key="mainButtons"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-0 left-0 right-0 z-50 px-4 pb-4"
-          >
-            <div className="flex flex-col items-center relative">
-              <div className="flex w-full space-x-4 h-14 -mt-10">
-                <CollectButton
-                  onCollect={handleCollectClick}
-                  containerSnot={gameState.containerSnot}
-                  className="pointer-events-auto flex-grow"
-                />
-                <UpgradeButton className="pointer-events-auto" />
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="collectOptions"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-0 left-0 right-0 z-50 px-4 pb-4"
-          >
-            <CollectOptions
-              containerSnot={gameState.containerSnot}
-              onCollect={handleCollect}
-              onCancel={() => setShowCollectOptions(false)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {notification && (
-          <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -50, scale: 0.8 }}
-            transition={{ type: "spring", stiffness: 500, damping: 25 }}
-            className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 px-4 py-2 rounded-full 
-              ${
-                notification.type === "success"
-                  ? "bg-gradient-to-r from-emerald-400 to-green-500"
-                  : notification.type === "failure"
-                    ? "bg-gradient-to-r from-red-400 to-rose-500"
-                    : "bg-gradient-to-r from-amber-400 to-yellow-500"
-              } 
-              text-white font-bold z-[9999] shadow-lg flex items-center space-x-2 whitespace-nowrap text-sm pointer-events-none`}
-            style={{
-              boxShadow:
-                notification.type === "success"
-                  ? "0 0 15px rgba(16, 185, 129, 0.6), 0 0 30px rgba(16, 185, 129, 0.3)"
-                  : notification.type === "failure"
-                    ? "0 0 15px rgba(239, 68, 68, 0.6), 0 0 30px rgba(239, 68, 68, 0.3)"
-                    : "0 0 15px rgba(234, 179, 8, 0.6), 0 0 30px rgba(234, 179, 8, 0.3)",
-              maxWidth: "90%",
-            }}
-          >
-            <motion.span
-              className="text-sm font-semibold"
-              initial={{ y: -5 }}
-              animate={{ y: 0 }}
-              transition={{ type: "spring", stiffness: 500, delay: 0.1 }}
-            >
-              {notification.message}
-            </motion.span>
-            {notification.type === "success" && (
-              <motion.div
-                className="text-xs font-extrabold flex items-center bg-white/20 px-2 py-1 rounded-full"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 500, delay: 0.2 }}
-              >
-                <span className="text-yellow-300 mr-1">+</span>
-                <span className="text-white">{formatSnotValue(notification.amount, 4)}</span>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      {/* Верхняя панель с ресурсами и статусом */}
+      <div className="absolute top-0 left-0 right-0 z-30">
+        <Resources
+          isVisible={true}
+          activeTab="laboratory"
+          snot={inventory.snot}
+          snotCoins={inventory.snotCoins}
+          containerCapacity={inventory.containerCapacity}
+          containerLevel={inventory.containerCapacityLevel}
+          containerSnot={inventory.containerSnot}
+          containerFillingSpeed={inventory.fillingSpeed}
+          fillingSpeedLevel={inventory.fillingSpeedLevel}
+        />
+      </div>
+      
+      <div className={`w-full flex-grow relative ${LAYOUT.TOP_PADDING}`}>
+        <BackgroundImage
+          store={gameState}
+          onContainerClick={null}
+          allowContainerClick={false}
+          isContainerClicked={isCollecting}
+          id="container-element"
+          containerSnotValue={formatSnotValue(inventory.containerSnot)}
+          containerFilling={containerFilling}
+        />
+      </div>
+      
+      <div className="w-full px-4 py-4 flex items-center justify-center space-x-4">
+        <CollectButton 
+          onCollect={handleCollect} 
+          containerSnot={inventory.containerSnot} 
+          isCollecting={isCollecting} 
+        />
+        <UpgradeButton onClick={handleUpgradeClick} />
+      </div>
+      
+      {flyingNumberValue !== null && (
+        <FlyingNumber value={flyingNumberValue} />
+      )}
+    </motion.div>
   )
 }
-
-Laboratory.displayName = "Laboratory"
 
 export default React.memo(Laboratory)
 

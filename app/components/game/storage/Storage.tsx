@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback, useMemo } from "react"
+import React, { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
@@ -9,12 +9,13 @@ import ChestCarousel from "./ChestCarousel"
 import { useTranslation } from "../../../contexts/TranslationContext"
 import FallingRewards from "../../effects/FallingRewards"
 import ExplosionEffect from "../../effects/ExplosionEffect"
+import { ICONS } from "../../../constants/uiConstants"
 
 const chests: Chest[] = [
   {
     id: 1,
     name: "commonChest",
-    image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1lvl-cvYuhHED4uWojlevj9dTxMziuWY2gM.webp",
+    image: ICONS.STORAGE.LEVELS.LEVEL1,
     requiredSnot: 5,
     reward: () => Math.floor(Math.random() * 7) + 2, // 2-8
     description: "commonChestDescription",
@@ -22,7 +23,7 @@ const chests: Chest[] = [
   {
     id: 2,
     name: "rareChest",
-    image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/2-xpF7jwDXMHaGmV8PdX44oRqiw7mRN9.webp",
+    image: ICONS.STORAGE.LEVELS.LEVEL2,
     requiredSnot: 50,
     reward: () => Math.floor(Math.random() * 46) + 25, // 25-70
     description: "rareChestDescription",
@@ -30,7 +31,7 @@ const chests: Chest[] = [
   {
     id: 3,
     name: "legendaryChest",
-    image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/3-rLCmoIqYJBHOmCG26EKa1q6JGn99TM.webp",
+    image: ICONS.STORAGE.LEVELS.LEVEL3,
     requiredSnot: 400,
     reward: () => Math.floor(Math.random() * 301) + 200, // 200-500
     description: "legendaryChestDescription",
@@ -154,11 +155,23 @@ const Storage: React.FC = () => {
         const reward = currentChest.reward()
         setRewardAmount(reward)
         setIsChestOpening(false)
-        gameDispatch({ type: "REMOVE_FROM_INVENTORY", item: "snot", amount: currentChest.requiredSnot })
-        gameDispatch({ type: "ADD_TO_INVENTORY", item: "snotCoins", amount: reward })
+        gameDispatch({ 
+          type: "REMOVE_FROM_INVENTORY", 
+          payload: { 
+            item: "snot", 
+            amount: currentChest.requiredSnot 
+          } 
+        })
+        gameDispatch({ 
+          type: "ADD_TO_INVENTORY", 
+          payload: { 
+            item: "snotCoins", 
+            amount: reward 
+          } 
+        })
       }, 1000)
     } else {
-      console.log("Not enough SNOT to open this chest")
+      // Недостаточно SNOT для открытия сундука
     }
   }, [currentIndex, gameState.inventory.snot, gameDispatch])
 
@@ -168,7 +181,7 @@ const Storage: React.FC = () => {
         className="absolute inset-0 z-0"
         style={{
           backgroundImage:
-            "url('https://hebbkx1anhila5yf.public.blob.vercel-storage.com/BackGroundStorage-D4ROHHue4K4RiEgXWuyNdtA0DW2bye.webp')",
+            `url('${ICONS.STORAGE.BACKGROUND}')`,
           backgroundPosition: "center",
           backgroundSize: "cover",
         }}

@@ -1,7 +1,11 @@
-"use client"
-
 import dynamic from "next/dynamic"
-const HomeContent = dynamic(() => import("./components/HomeContent"), { ssr: false })
+import LoadingScreen from "./components/LoadingScreen"
+
+// Динамический импорт HomeContent без SSR
+const HomeContent = dynamic(() => import("./components/HomeContent"), {
+  ssr: false,
+  loading: () => <LoadingScreen progress={0} statusMessage="Loading game..." />,
+})
 
 export default function Home() {
   return <HomeContent />

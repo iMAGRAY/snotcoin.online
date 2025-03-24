@@ -1,29 +1,31 @@
-'use client'
+"use client"
 
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
+import type React from "react"
+import { useEffect, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import Image from "next/image"
+import { ICONS } from "../constants/uiConstants"
 
 interface FirstVisitScreenProps {
-  onComplete: () => void;
+  onComplete: () => void
 }
 
 const FirstVisitScreen: React.FC<FirstVisitScreenProps> = ({ onComplete }) => {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(true)
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setIsVisible(false);
-    }, 2000);
+      setIsVisible(false)
+    }, 2000)
 
-    return () => clearTimeout(timer);
-  }, []);
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     if (!isVisible) {
-      onComplete();
+      onComplete()
     }
-  }, [isVisible, onComplete]);
+  }, [isVisible, onComplete])
 
   return (
     <AnimatePresence>
@@ -37,27 +39,27 @@ const FirstVisitScreen: React.FC<FirstVisitScreenProps> = ({ onComplete }) => {
         >
           <div className="relative w-full h-full">
             <Image
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/2-AcG5rGY5Pum3qkP9U5IaGJQQQEmsry.webp"
+              src={ICONS.COMMON.FIRST_VISIT}
               alt="SnotCoin Welcome Screen"
               layout="fill"
               objectFit="cover"
               priority
               className="transition-opacity duration-300"
               style={{
-                objectPosition: 'center',
-                width: '100vw',
-                height: '100vh',
+                objectPosition: "center",
+                width: "100vw",
+                height: "100vh",
               }}
               onLoadingComplete={(image) => {
-                image.classList.remove('opacity-0');
+                image.classList.remove("opacity-0")
               }}
             />
           </div>
         </motion.div>
       )}
     </AnimatePresence>
-  );
-};
+  )
+}
 
-export default FirstVisitScreen;
+export default FirstVisitScreen
 
