@@ -1,165 +1,64 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
-import { TelegramAuthProps, AuthStatus } from '../../../types/telegramAuth';
+import React, { useState, useCallback, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import Image from 'next/image';
+import { TelegramAuthProps } from '../../../types/telegramAuth';
 import { useTelegramAuth } from '../../../hooks/useTelegramAuth';
-import TelegramAuthLoader from './TelegramAuthLoader';
-import TelegramAuthError from './TelegramAuthError';
-import { AuthLogType, AuthStep, logAuth, logAuthError, logAuthInfo } from '../../../utils/auth-logger';
 
 /**
- * Компонент для аутентификации через Telegram
+ * Упрощенный компонент для аутентификации через Telegram
  */
 const TelegramAuth: React.FC<TelegramAuthProps> = ({ onAuthenticate }) => {
-  // Используем хук для логики аутентификации
-  const {
-    user,
-    status,
-    isLoading,
-    handleAuth,
-    handleRetry,
-    closeWebApp,
-    openInTelegram,
-    errorMessage
-  } = useTelegramAuth(onAuthenticate);
+  const [loading, setLoading] = useState(false);
   
-  // Состояние для отслеживания попыток аутентификации
-  const [authAttempts, setAuthAttempts] = useState<number>(0);
-  const [isRetrying, setIsRetrying] = useState<boolean>(false);
+  // Используем хук аутентификации
+  const { handleAuth } = useTelegramAuth(onAuthenticate);
   
-  // Выполняем аутентификацию при монтировании компонента
+  // Автоматически аутентифицируем пользователя при монтировании
   useEffect(() => {
-    logAuthInfo(AuthStep.INIT, 'Инициализация компонента TelegramAuth');
-    
     const authenticate = async () => {
-      logAuthInfo(AuthStep.TELEGRAM_INIT, 'Запуск процесса Telegram авторизации');
-      
+      setLoading(true);
       try {
-        setIsRetrying(true);
-        
-        // Пытаемся авторизовать пользователя через Telegram
-        const result = await handleAuth();
-        
-        if (result) {
-          logAuthInfo(AuthStep.AUTH_COMPLETE, 'Процесс авторизации завершен успешно');
-        } else {
-          logAuthError(
-            AuthStep.AUTH_ERROR, 
-            'Процесс авторизации завершен с ошибкой', 
-            new Error(errorMessage || 'Неизвестная ошибка'),
-            { status }
-          );
-          
-          // Если авторизация не удалась, увеличиваем счетчик попыток
-          setAuthAttempts(prev => prev + 1);
-        }
-      } catch (error) {
-        logAuthError(
-          AuthStep.AUTH_ERROR, 
-          'Ошибка при авторизации через Telegram', 
-          error,
-          { status }
-        );
-        setAuthAttempts(prev => prev + 1);
+        await handleAuth();
       } finally {
-        setIsRetrying(false);
+        setLoading(false);
       }
     };
     
-    // Запускаем процесс авторизации
     authenticate();
-    
-    // Отписываемся при размонтировании
-    return () => {
-      logAuthInfo(AuthStep.USER_INTERACTION, 'Компонент TelegramAuth размонтирован');
-    };
-  }, [handleAuth, status, errorMessage]);
+  }, [handleAuth]);
   
-  // Обработчик повторной попытки авторизации
-  const handleAuthRetry = async () => {
-    logAuth(
-      AuthStep.AUTH_RETRY, 
-      AuthLogType.INFO, 
-      'Попытка повторной авторизации', 
-      { previousError: errorMessage, attempt: authAttempts + 1 }
-    );
-    
-    setIsRetrying(true);
-    setAuthAttempts(prev => prev + 1);
-    
+  const handleClick = useCallback(async () => {
+    setLoading(true);
     try {
-      const result = await handleAuth();
-      if (result) {
-        logAuthInfo(AuthStep.AUTH_COMPLETE, 'Повторная авторизация успешна');
-      } else {
-        logAuthError(
-          AuthStep.AUTH_RETRY, 
-          'Повторная авторизация завершилась с ошибкой', 
-          new Error(errorMessage || 'Неизвестная ошибка')
-        );
-      }
-    } catch (error) {
-      logAuthError(
-        AuthStep.AUTH_RETRY, 
-        'Ошибка при повторной авторизации', 
-        error
-      );
+      await handleAuth();
     } finally {
-      setIsRetrying(false);
+      setLoading(false);
     }
-  };
+  }, [handleAuth]);
   
-  // Обработчик закрытия Telegram WebApp
-  const handleCloseWebApp = () => {
-    logAuth(
-      AuthStep.USER_INTERACTION, 
-      AuthLogType.INFO, 
-      'Пользователь закрыл WebApp', 
-      { status }
-    );
-    closeWebApp();
-  };
-  
-  // Обработчик открытия в Telegram
-  const handleOpenInTelegram = () => {
-    logAuth(
-      AuthStep.USER_INTERACTION, 
-      AuthLogType.INFO, 
-      'Пользователь выбрал открытие в Telegram', 
-      { status }
-    );
-    openInTelegram();
-  };
-  
-  // Отображаем загрузчик при загрузке
-  if (isLoading || status === AuthStatus.LOADING || isRetrying) {
-    logAuthInfo(AuthStep.USER_INTERACTION, 'Отображение загрузчика авторизации', { isRetrying, authAttempts });
-    return <TelegramAuthLoader />;
-  }
-  
-  // Отображаем компонент ошибки при ошибке
-  if (status === AuthStatus.ERROR) {
-    logAuthError(
-      AuthStep.USER_INTERACTION, 
-      'Отображение компонента ошибки авторизации', 
-      errorMessage ? new Error(errorMessage) : undefined,
-      { authAttempts }
-    );
-    
-    return (
-      <TelegramAuthError 
-        errorMessage={errorMessage || undefined}
-        onRetry={handleAuthRetry}
-        onClose={handleCloseWebApp}
-        onOpenInTelegram={handleOpenInTelegram}
-        attemptCount={authAttempts}
+  return (
+    <motion.button
+      onClick={handleClick}
+      disabled={loading}
+      className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white py-3 px-4 rounded-xl hover:from-blue-600 hover:to-blue-800 transition-all duration-300 flex items-center justify-center space-x-3 group relative overflow-hidden shadow-lg border border-blue-500/20"
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <Image
+        src="https://telegram.org/img/t_logo.png"
+        alt="Telegram"
+        width={24}
+        height={24}
+        className="rounded"
       />
-    );
-  }
-  
-  // В случае успешной авторизации, возвращаем null (дочерние компоненты будут отрисованы родителем)
-  logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация успешна, возвращаем null для продолжения');
-  return null;
+      <span className="font-semibold">
+        {loading ? "Авторизация..." : "Войти через Telegram"}
+      </span>
+    </motion.button>
+  );
 };
 
 export default TelegramAuth;

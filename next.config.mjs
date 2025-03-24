@@ -36,12 +36,12 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
+            value: "frame-ancestors * 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me https://t.me https://*.t.me https://web.telegram.org https://*.web.telegram.org"
           },
           {
-            // Remove X-Frame-Options header
+            // Modern browsers use CSP instead of X-Frame-Options
             key: 'X-Frame-Options',
-            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
+            value: 'SAMEORIGIN'
           }
         ]
       }
