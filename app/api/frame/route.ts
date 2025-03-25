@@ -21,11 +21,14 @@ export async function POST(req: NextRequest) {
     // Проверяем, был ли нажата кнопка
     if (body?.untrustedData?.buttonIndex === 1) {
       // Если кнопка была нажата, редиректим пользователя на игровую страницу
-      // с параметрами для идентификации пользователя
-      return NextResponse.redirect(
-        `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`, 
-        { status: 302 }
-      );
+      const redirectUrl = `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`;
+      
+      return new NextResponse(null, {
+        status: 302,
+        headers: {
+          'Location': redirectUrl
+        },
+      });
     }
     
     // Возвращаем HTML с начальным экраном
@@ -36,9 +39,10 @@ export async function POST(req: NextRequest) {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta property="fc:frame" content="vNext" />
+          <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
           <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
           <meta property="fc:frame:button:1" content="Play Game" />
-          <meta property="fc:frame:button:1:action" content="post_redirect" />
+          <meta property="fc:frame:button:1:action" content="link" />
           <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
           <title>Snotcoin Game</title>
         </head>
@@ -68,10 +72,11 @@ export async function POST(req: NextRequest) {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta property="fc:frame" content="vNext" />
+          <meta property="og:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:button:1" content="Try Again" />
-          <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame" />
+          <meta property="fc:frame:button:1:action" content="link" />
+          <meta property="fc:frame:button:1:target" content="${BASE_URL}/frame.html" />
           <title>Error</title>
         </head>
         <body>
@@ -99,9 +104,10 @@ export async function GET() {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta property="fc:frame" content="vNext" />
+        <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
         <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
         <meta property="fc:frame:button:1" content="Play Game" />
-        <meta property="fc:frame:button:1:action" content="post_redirect" />
+        <meta property="fc:frame:button:1:action" content="link" />
         <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
         <title>Snotcoin Game</title>
       </head>

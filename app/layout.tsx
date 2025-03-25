@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     siteName: 'Snotcoin',
     images: [
       {
-        url: '/og-image.png',
+        url: '/game/cast.webp',
         width: 1200,
         height: 630,
         alt: 'Snotcoin Game',
@@ -36,14 +36,15 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Snotcoin - Play to Earn Game',
     description: 'Play to earn game on Farcaster',
-    images: ['/og-image.png'],
+    images: ['/game/cast.webp'],
   },
   // Farcaster Frame метаданные
   other: {
     'fc:frame': 'vNext',
     'fc:frame:image': 'https://snotcoin.online/game/cast.webp',
+    'og:image': 'https://snotcoin.online/game/cast.webp',
     'fc:frame:button:1': 'Play Game',
-    'fc:frame:button:1:action': 'post_redirect',
+    'fc:frame:button:1:action': 'link',
     'fc:frame:button:1:target': 'https://snotcoin.online/?embed=true',
   },
 }
