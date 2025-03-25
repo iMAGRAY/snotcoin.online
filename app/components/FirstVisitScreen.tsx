@@ -41,11 +41,11 @@ const FirstVisitScreen: React.FC<FirstVisitScreenProps> = ({ onComplete }) => {
             <Image
               src={ICONS.COMMON.FIRST_VISIT}
               alt="SnotCoin Welcome Screen"
-              layout="fill"
-              objectFit="cover"
+              fill
               priority
               className="transition-opacity duration-300"
               style={{
+                objectFit: "cover",
                 objectPosition: "center",
                 width: "100vw",
                 height: "100vh",

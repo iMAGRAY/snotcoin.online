@@ -27,8 +27,8 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress = 0, error = nul
         <Image
           src={ICONS.COMMON.LOADING}
           alt="Snot Coin Loading Screen"
-          layout="fill"
-          objectFit="cover"
+          fill
+          style={{ objectFit: "cover" }}
           priority
         />
       </div>

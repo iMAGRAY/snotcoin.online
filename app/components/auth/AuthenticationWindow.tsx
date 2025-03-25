@@ -125,8 +125,8 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
       <Image
         src={ICONS.AUTH.BACKGROUND}
         alt="Authentication Background"
-        layout="fill"
-        objectFit="cover"
+        fill
+        style={{ objectFit: "cover" }}
         quality={100}
         priority
         className="opacity-75"

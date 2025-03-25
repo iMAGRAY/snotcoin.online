@@ -62,7 +62,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta httpEquiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com" />
+        {/* CSP frame-ancestors директива перенесена в HTTP заголовки */}
       </head>
       <body className={inter.className}>
         <FarcasterProvider>
