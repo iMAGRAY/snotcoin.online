@@ -39,16 +39,10 @@ export async function POST(req: NextRequest) {
       <html>
         <head>
           <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${IMAGE_URL}" />
           <meta property="og:image" content="${IMAGE_URL}" />
-          <meta property="og:title" content="Snotcoin - Play to Earn Game" />
-          <meta property="og:description" content="Play to earn game on Farcaster" />
-          <meta property="og:url" content="${BASE_URL}/frame.html" />
-          <meta property="og:type" content="website" />
-          <meta property="fc:frame:button:1" content="Play Now" />
+          <meta property="fc:frame:button:1" content="Play now" />
           <meta property="fc:frame:button:1:action" content="link" />
           <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
-          <meta property="fc:frame:aspect_ratio" content="1.91:1" />
         </head>
         <body>
           <h1>Welcome to Snotcoin Game!</h1>
@@ -71,15 +65,9 @@ export async function POST(req: NextRequest) {
       <html>
         <head>
           <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
           <meta property="og:image" content="${BASE_URL}/error.png" />
-          <meta property="og:title" content="Error - Snotcoin Game" />
-          <meta property="og:description" content="Something went wrong. Please try again." />
-          <meta property="og:url" content="${BASE_URL}/frame.html" />
-          <meta property="og:type" content="website" />
           <meta property="fc:frame:button:1" content="Try Again" />
           <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:aspect_ratio" content="1.91:1" />
         </head>
         <body>
           <h1>Error</h1>
@@ -104,16 +92,10 @@ export async function GET(req: NextRequest) {
     <html>
       <head>
         <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="${IMAGE_URL}" />
         <meta property="og:image" content="${IMAGE_URL}" />
-        <meta property="og:title" content="Snotcoin - Play to Earn Game" />
-        <meta property="og:description" content="Play to earn game on Farcaster" />
-        <meta property="og:url" content="${BASE_URL}/frame.html" />
-        <meta property="og:type" content="website" />
-        <meta property="fc:frame:button:1" content="Play Now" />
+        <meta property="fc:frame:button:1" content="Play now" />
         <meta property="fc:frame:button:1:action" content="link" />
         <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
-        <meta property="fc:frame:aspect_ratio" content="1.91:1" />
       </head>
       <body>
         <h1>Snotcoin Game Preview</h1>
