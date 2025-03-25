@@ -5,8 +5,10 @@ import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
 import { TelegramWebAppProvider } from "./contexts/TelegramWebAppContext"
+import { FarcasterProvider } from "./contexts/FarcasterContext"
+import Header from './components/Header'
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin", "cyrillic"] })
 
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
@@ -57,14 +59,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com" />
+      </head>
       <body className={inter.className}>
-        <GameProvider>
-          <TranslationProvider>
-            <TelegramWebAppProvider>
-              {children}
-            </TelegramWebAppProvider>
-          </TranslationProvider>
-        </GameProvider>
+        <FarcasterProvider>
+          <Header />
+          <GameProvider>
+            <TranslationProvider>
+              <TelegramWebAppProvider>
+                <div className="pt-16">
+                  {children}
+                </div>
+              </TelegramWebAppProvider>
+            </TranslationProvider>
+          </GameProvider>
+        </FarcasterProvider>
       </body>
     </html>
   )
