@@ -3,10 +3,13 @@ import { createToken, verifyToken } from '../../utils/jwt'
 import { UserModel } from '../../utils/models'
 import { logAuthInfo, AuthStep } from '../../utils/auth-logger'
 import { WarpcastUser } from '../../types/warpcastAuth'
+import { cookies } from 'next/headers'
 
 // Принудительная динамичность маршрута
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const BASE_URL = process.env.NEXT_PUBLIC_DOMAIN || 'https://snotcoin.online'
 
 /**
  * Обработчик POST запроса для авторизации/регистрации пользователя
@@ -109,54 +112,46 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   try {
-    // Получаем токен из заголовка
-    let token: string | null = null;
-    const authHeader = request.headers.get('Authorization');
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
+    const { searchParams } = new URL(request.url)
+    const fid = searchParams.get('fid')
+    const username = searchParams.get('username')
+    const redirect = searchParams.get('redirect') || '/home'
+    const embed = searchParams.get('embed') === 'true'
+
+    if (!fid) {
+      throw new Error('FID is required')
     }
-    
-    // Валидация токена
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - no token' },
-        { status: 401 }
-      )
+
+    // Создаем сессию пользователя
+    const session = {
+      fid,
+      username,
+      isAuthenticated: true,
+      timestamp: Date.now(),
     }
-    
-    // Проверяем валидность токена
-    const { valid, user, expired } = verifyToken(token);
-    
-    if (!valid || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: expired ? 'Token expired' : 'Invalid token' },
-        { status: 401 }
-      )
+
+    // Сохраняем сессию в куки
+    cookies().set('session', JSON.stringify(session), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60, // 7 дней
+    })
+
+    // Формируем URL для редиректа
+    const redirectUrl = new URL(redirect, BASE_URL)
+    if (embed) {
+      redirectUrl.searchParams.set('embed', 'true')
     }
-    
-    // Проверяем, существует ли токен в базе данных
-    const isValidToken = await UserModel.validateToken(user.id, token);
-    
-    if (!isValidToken) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - token revoked' },
-        { status: 401 }
-      )
-    }
-    
-    // Логируем успешную проверку токена
-    logAuthInfo(AuthStep.TOKEN_RECEIVED, `Token validated for user ID: ${user.id}`);
-    
-    // Возвращаем данные пользователя
-    return NextResponse.json({ user })
-    
+
+    // Редирект на указанную страницу
+    return NextResponse.redirect(redirectUrl)
   } catch (error) {
-    console.error('Token validation error:', error)
+    console.error('Auth error:', error)
     
-    return NextResponse.json(
-      { error: 'Token validation failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    // В случае ошибки редиректим на страницу ошибки
+    const errorUrl = new URL('/error', BASE_URL)
+    errorUrl.searchParams.set('message', 'Authentication failed')
+    return NextResponse.redirect(errorUrl)
   }
 } 

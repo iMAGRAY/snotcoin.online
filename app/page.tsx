@@ -1,42 +1,28 @@
-import dynamic from "next/dynamic"
-import LoadingScreen from "./components/LoadingScreen"
-
-// Динамический импорт HomeContent без SSR
-const HomeContent = dynamic(() => import("./components/HomeContent"), {
-  ssr: false,
-  loading: () => <LoadingScreen progress={0} statusMessage="Loading game..." />,
-})
-
-// Динамический импорт FarcasterFrameHandler с дополнительными проверками
-const FarcasterFrameHandler = dynamic(
-  () => import('./components/FarcasterFrameHandler'),
-  { 
-    ssr: false,
-    loading: () => null 
-  }
-);
-
-// Компонент-обертка для безопасного рендеринга клиентских компонентов
-function ClientOnly({ children }: { children: React.ReactNode }) {
-  return (
-    <>{children}</>
-  );
-}
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import HomeContent from './components/HomeContent';
 
 export default function Home() {
-  return (
-    <main>
-      {/* 
-        Безопасный рендеринг FarcasterFrameHandler только на клиенте
-        Используем ClientOnly для дополнительной защиты от проблем с SSR
-      */}
-      <ClientOnly>
-        <FarcasterFrameHandler />
-      </ClientOnly>
-      
-      {/* Остальной контент страницы */}
-      <HomeContent />
-    </main>
-  )
+  const cookieStore = cookies();
+  const session = cookieStore.get('session');
+
+  // Если есть сессия и пользователь авторизован, показываем HomeContent
+  if (session) {
+    try {
+      const sessionData = JSON.parse(session.value);
+      if (sessionData.isAuthenticated && sessionData.fid) {
+        return <HomeContent />;
+      }
+    } catch (error) {
+      console.error('Session parsing error:', error);
+    }
+  }
+
+  // Если нет сессии или она невалидна, редиректим на страницу авторизации
+  const authUrl = new URL('/api/auth', process.env.NEXT_PUBLIC_DOMAIN || 'https://snotcoin.online');
+  authUrl.searchParams.set('redirect', '/');
+  authUrl.searchParams.set('embed', 'true');
+  
+  redirect(authUrl.toString());
 }
 
