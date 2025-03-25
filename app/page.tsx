@@ -10,6 +10,7 @@ const HomeContent = dynamic(() => import('./components/HomeContent'), {
 });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 interface SessionData {
   isAuthenticated: boolean;
   fid: string;
@@ -39,6 +40,10 @@ export default function Home() {
   authUrl.searchParams.set('embed', 'true');
   
   redirect(authUrl.toString());
+=======
+export default function Home() {
+  return <HomeContent />
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
 =======
 export default function Home() {
   return <HomeContent />
