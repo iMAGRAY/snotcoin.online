@@ -5,7 +5,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 
 /**
  * Обработчик POST запросов для Farcaster Frames
- * Возвращает HTML с начальным экраном для Farcaster Frame
+ * Возвращает HTML или перенаправляет пользователя на игру
  */
 export async function POST(req: NextRequest) {
   try {
@@ -18,18 +18,32 @@ export async function POST(req: NextRequest) {
     const fid = body?.untrustedData?.fid;
     const username = body?.untrustedData?.username || 'Player';
     
-    // Проверяем, был ли нажата кнопка
+    // Проверяем, был ли нажата кнопка Play Game
     if (body?.untrustedData?.buttonIndex === 1) {
-      // Если кнопка была нажата, редиректим пользователя на игровую страницу
-      const redirectUrl = `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`;
-      
-      // Для post_redirect необходимо использовать стандартный HTTP редирект
-      return new NextResponse(null, {
-        status: 302, // HTTP статус для редиректа
-        headers: {
-          'Location': redirectUrl
-        },
-      });
+      // Для Farcaster Frames v2 не используем прямой редирект через статус код,
+      // а возвращаем HTML со специальным тегом для редиректа
+      return new NextResponse(
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta property="fc:frame" content="vNext" />
+            <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
+            <meta property="fc:frame:redirect" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true" />
+            <title>Redirecting to Snotcoin Game...</title>
+          </head>
+          <body>
+            <p>Redirecting to Snotcoin Game...</p>
+          </body>
+        </html>`,
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html',
+          },
+        }
+      );
     }
     
     // Возвращаем HTML с начальным экраном, если кнопка не была нажата
@@ -43,7 +57,7 @@ export async function POST(req: NextRequest) {
           <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
           <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
           <meta property="fc:frame:button:1" content="Play Game" />
-          <meta property="fc:frame:button:1:action" content="post_redirect" />
+          <meta property="fc:frame:button:1:action" content="post" />
           <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame" />
           <title>Snotcoin Game</title>
         </head>
@@ -76,7 +90,7 @@ export async function POST(req: NextRequest) {
           <meta property="og:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:button:1" content="Try Again" />
-          <meta property="fc:frame:button:1:action" content="post_redirect" />
+          <meta property="fc:frame:button:1:action" content="post" />
           <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame" />
           <title>Error</title>
         </head>
@@ -108,7 +122,7 @@ export async function GET() {
         <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
         <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
         <meta property="fc:frame:button:1" content="Play Game" />
-        <meta property="fc:frame:button:1:action" content="post_redirect" />
+        <meta property="fc:frame:button:1:action" content="post" />
         <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame" />
         <title>Snotcoin Game</title>
       </head>
