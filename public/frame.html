@@ -7,8 +7,11 @@
   
   <!-- Обязательные метатеги для Farcaster Frames v2 -->
   <meta property="fc:frame" content="vNext" />
-  <meta property="og:image" content="https://snotcoin.online/game/cast.webp" />
   <meta property="fc:frame:image" content="https://snotcoin.online/game/cast.webp" />
+  <meta property="og:image" content="https://snotcoin.online/game/cast.webp" />
+  <!-- Соотношение сторон изображения для лучшего отображения -->
+  <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+  <!-- Конфигурация кнопки игры -->
   <meta property="fc:frame:button:1" content="Play Game" />
   <meta property="fc:frame:button:1:action" content="link" />
   <meta property="fc:frame:button:1:target" content="https://snotcoin.online/?embed=true" />
@@ -55,11 +58,18 @@
     .button:hover {
       background-color: #45a049;
     }
+    img {
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 20px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Snotcoin - Play to Earn Game</h1>
+    <img src="https://snotcoin.online/game/cast.webp" alt="Snotcoin Game" />
     <p>Click the button below to start playing the game directly in Warpcast!</p>
     <a href="https://snotcoin.online/?embed=true" class="button">Play Game</a>
   </div>

@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
-const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
+const imageUrl = `${siteUrl}/game/cast.webp`;
 
 export const metadata: Metadata = {
   title: "Snotcoin - Play to Earn Game",
@@ -38,11 +38,17 @@ export const metadata: Metadata = {
     description: 'Play to earn game on Farcaster',
     images: ['/game/cast.webp'],
   },
-  // Farcaster Frame метаданные
+  // Farcaster Frame метаданные по спецификации v2
   other: {
+    // Обязательное поле, указывающее что это Farcaster Frame
     'fc:frame': 'vNext',
-    'fc:frame:image': 'https://snotcoin.online/game/cast.webp',
-    'og:image': 'https://snotcoin.online/game/cast.webp',
+    // Изображение для отображения во фрейме (обязательное)
+    'fc:frame:image': imageUrl,
+    // Дублирование для OpenGraph совместимости
+    'og:image': imageUrl,
+    // Соотношение сторон изображения (опционально)
+    'fc:frame:image:aspect_ratio': '1.91:1',
+    // Кнопка 1
     'fc:frame:button:1': 'Play Game',
     'fc:frame:button:1:action': 'link',
     'fc:frame:button:1:target': 'https://snotcoin.online/?embed=true',

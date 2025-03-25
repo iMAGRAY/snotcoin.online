@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Константа для определения хоста
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
+const IMAGE_URL = `${BASE_URL}/game/cast.webp`;
 
 /**
  * Обработчик POST запросов для Farcaster Frames
- * Возвращает HTML с начальным экраном для Farcaster Frame
+ * Возвращает HTML с экраном для запуска игры
  */
 export async function POST(req: NextRequest) {
   try {
@@ -18,21 +19,6 @@ export async function POST(req: NextRequest) {
     const fid = body?.untrustedData?.fid;
     const username = body?.untrustedData?.username || 'Player';
     
-    // Проверяем, был ли нажата кнопка Play Game
-    if (body?.untrustedData?.buttonIndex === 1) {
-      // При использовании action: link эта ветка кода не будет выполняться,
-      // т.к. клики на кнопки с link action не отправляются на сервер
-      // но оставляем для обратной совместимости
-      const redirectUrl = `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`;
-      
-      return new NextResponse('', {
-        status: 302,
-        headers: {
-          'Location': redirectUrl
-        },
-      });
-    }
-    
     // Возвращаем HTML с экраном, направляющим прямо на игру
     return new NextResponse(
       `<!DOCTYPE html>
@@ -40,12 +26,20 @@ export async function POST(req: NextRequest) {
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <!-- Основные метатеги Farcaster Frame -->
           <meta property="fc:frame" content="vNext" />
-          <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
-          <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
+          <meta property="fc:frame:image" content="${IMAGE_URL}" />
+          <meta property="og:image" content="${IMAGE_URL}" />
+          <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+          
+          <!-- Кнопка для запуска игры -->
           <meta property="fc:frame:button:1" content="Play Game" />
           <meta property="fc:frame:button:1:action" content="link" />
-          <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
+          <meta property="fc:frame:button:1:target" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true" />
+          
+          <!-- Open Graph метатеги -->
+          <meta property="og:title" content="Snotcoin Game" />
+          <meta property="og:description" content="Play to earn game on Farcaster" />
           <title>Snotcoin Game</title>
         </head>
         <body>
@@ -73,9 +67,12 @@ export async function POST(req: NextRequest) {
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <!-- Основные метатеги Farcaster Frame -->
           <meta property="fc:frame" content="vNext" />
-          <meta property="og:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
+          <meta property="og:image" content="${BASE_URL}/error.png" />
+          
+          <!-- Кнопка для повторной попытки -->
           <meta property="fc:frame:button:1" content="Try Again" />
           <meta property="fc:frame:button:1:action" content="link" />
           <meta property="fc:frame:button:1:target" content="${BASE_URL}/frame.html" />
@@ -105,9 +102,13 @@ export async function GET() {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!-- Основные метатеги Farcaster Frame -->
         <meta property="fc:frame" content="vNext" />
-        <meta property="og:image" content="${BASE_URL}/game/cast.webp" />
-        <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
+        <meta property="fc:frame:image" content="${IMAGE_URL}" />
+        <meta property="og:image" content="${IMAGE_URL}" />
+        <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+        
+        <!-- Кнопка для запуска игры -->
         <meta property="fc:frame:button:1" content="Play Game" />
         <meta property="fc:frame:button:1:action" content="link" />
         <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
