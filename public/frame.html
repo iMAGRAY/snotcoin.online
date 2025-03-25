@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Snotcoin - Play to Earn Game</title>
   
+  <!-- Farcaster SDK -->
+  <script src="https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js"></script>
+  
   <!-- Обязательные метатеги для Farcaster Frames v2 -->
   <meta name="fc:frame" content="{&quot;version&quot;:&quot;next&quot;,&quot;imageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;button&quot;:{&quot;title&quot;:&quot;Play Snotcoin 🎮&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;launch_frame&quot;,&quot;name&quot;:&quot;Snotcoin&quot;,&quot;url&quot;:&quot;https://snotcoin.online&quot;,&quot;splashImageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;splashBackgroundColor&quot;:&quot;#0F172A&quot;}}}" />
   <meta property="og:title" content="Snotcoin - Play to Earn Game" />
@@ -12,6 +15,15 @@
   <meta property="og:image" content="https://snotcoin.online/game/cast.webp" />
   <meta property="og:url" content="https://snotcoin.online/frame.html" />
   <meta property="og:type" content="website" />
+
+  <script>
+    // Инициализация Farcaster SDK
+    window.addEventListener('load', function() {
+      if (window.farcaster) {
+        window.farcaster.ready();
+      }
+    });
+  </script>
 </head>
 <body>
 </body>
