@@ -4,15 +4,9 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Базовый домен приложения
-const isProd = process.env.NODE_ENV === 'production';
-const DOMAIN = isProd ? 'https://snotcoin.online' : 'http://localhost:3000';
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Добавляем настройки для домена
-  assetPrefix: isProd ? 'https://snotcoin.online' : undefined,
   images: {
     remotePatterns: [
       {
@@ -42,11 +36,12 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+            value: "frame-ancestors * 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me https://t.me https://*.t.me https://web.telegram.org https://*.web.telegram.org"
           },
           {
+            // Modern browsers use CSP instead of X-Frame-Options
             key: 'X-Frame-Options',
-            value: 'ALLOWALL'
+            value: 'SAMEORIGIN'
           }
         ]
       }
@@ -54,10 +49,6 @@ const nextConfig = {
   },
   compiler: {
     removeConsole: false,
-  },
-  // Добавляем настройки публичных переменных среды
-  env: {
-    NEXT_PUBLIC_DOMAIN: DOMAIN,
   },
   webpack: (config) => {
     config.resolve.alias = {
