@@ -91,12 +91,13 @@ const Achievements: React.FC = () => {
                 achievement.condition(gameState) ? "border-2 border-emerald-500" : "border-2 border-gray-700 opacity-50"
               }`}
             >
-              <div className="relative w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0">
+              <div className="relative h-28 w-28 mb-3">
                 <Image
                   src={achievement.icon || "/placeholder.svg"}
                   alt={achievement.name}
-                  layout="fill"
-                  objectFit="contain"
+                  fill
+                  style={{ objectFit: "contain" }}
+                  quality={100}
                   className={achievement.condition(gameState) ? "" : "grayscale"}
                 />
               </div>

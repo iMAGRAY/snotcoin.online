@@ -18,8 +18,8 @@ const SplashScreen: React.FC = () => {
         <Image
           src={ICONS.COMMON.LOADING}
           alt="SnotCoin Splash Screen"
-          layout="fill"
-          objectFit="contain"
+          fill
+          style={{ objectFit: "contain" }}
           priority
           loading="eager"
           className="transition-opacity duration-300"

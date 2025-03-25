@@ -85,6 +85,9 @@ interface FarcasterSDK {
   /** Получение контекста текущего пользователя */
   getContext: () => Promise<FarcasterContext>;
   
+  /** Получение контекста из Neynar (альтернативный метод) */
+  getNeynarContext?: () => Promise<FarcasterContext>;
+  
   /** Получение пользователя по FID */
   fetchUserByFid?: (fid: number) => Promise<any>;
   
@@ -99,6 +102,12 @@ interface FarcasterSDK {
   
   /** Проверка подписки на пользователя */
   checkFollowing?: (targetFid: number) => Promise<boolean>;
+  
+  /** Объект для работы с Frames (в Frames SDK) */
+  frame?: any;
+  
+  /** Другие свойства, которые могут быть в SDK */
+  [key: string]: any;
 }
 
 /**

@@ -37,22 +37,13 @@ const FirstVisitScreen: React.FC<FirstVisitScreenProps> = ({ onComplete }) => {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="relative w-full h-full">
+          <div className="relative w-64 h-64 mb-4 mx-auto">
             <Image
               src={ICONS.COMMON.FIRST_VISIT}
-              alt="SnotCoin Welcome Screen"
+              alt="Welcome"
               fill
+              style={{ objectFit: "contain" }}
               priority
-              className="transition-opacity duration-300"
-              style={{
-                objectFit: "cover",
-                objectPosition: "center",
-                width: "100vw",
-                height: "100vh",
-              }}
-              onLoadingComplete={(image) => {
-                image.classList.remove("opacity-0")
-              }}
             />
           </div>
         </motion.div>

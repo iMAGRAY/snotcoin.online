@@ -42,18 +42,15 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
           filter: drop-shadow(0 0 5px rgba(187, 235, 37, 0.7));
         }
       `}</style>
-        <div
-          className="absolute inset-0 z-0"
-          style={{
-            backgroundImage:
-              `url('${ICONS.LABORATORY.BACKGROUND}')`,
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            backgroundSize: "cover",
-            width: "100%",
-            height: "100%",
-          }}
-        />
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <Image
+            src={ICONS.LABORATORY.BACKGROUND}
+            alt="Background"
+            fill
+            style={{ objectFit: "cover" }}
+            priority
+          />
+        </div>
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="relative w-full h-full max-w-[80vmin] max-h-[80vmin]">
             <motion.div
@@ -87,11 +84,10 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
             >
               <Image
                 src={ICONS.LABORATORY.MACHINE}
-                layout="fill"
-                objectFit="contain"
                 alt="Storage Machine"
+                fill
+                style={{ objectFit: "contain" }}
                 priority
-                draggable="false"
               />
               <motion.div
                 className="absolute bottom-[10%] left-1/2 transform -translate-x-1/2 z-50 px-4 py-2"

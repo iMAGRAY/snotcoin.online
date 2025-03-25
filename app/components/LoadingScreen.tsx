@@ -22,17 +22,18 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress = 0, error = nul
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-end z-[9999] overflow-hidden">
-      <div className="absolute inset-0">
-        <Image
-          src={ICONS.COMMON.LOADING}
-          alt="Snot Coin Loading Screen"
+    <div className="fixed inset-0 flex flex-col items-center justify-center z-[9999] overflow-hidden">
+      <div className="relative w-48 h-48 mb-8">
+        <Image 
+          src={ICONS.COMMON.LOADING} 
+          alt="Loading" 
           fill
-          style={{ objectFit: "cover" }}
+          style={{ objectFit: "contain" }}
+          className="animate-pulse"
           priority
         />
       </div>
-      <div className="relative w-full max-w-md mx-auto mb-8 px-4 z-10">
+      <div className="relative w-full max-w-md mx-auto px-4 z-10">
         <div className="h-4 bg-black/20 rounded-full overflow-hidden backdrop-blur-sm border border-white/10">
           <MotionDiv
             initial={{ width: 0 }}

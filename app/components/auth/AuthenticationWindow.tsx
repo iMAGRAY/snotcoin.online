@@ -129,17 +129,24 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
     );
   }
 
+  // Предотвращаем монтирование компонента авторизации, если пользователь уже аутентифицирован
+  if (authStore.getIsAuthenticated()) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <Image
-        src={ICONS.AUTH.BACKGROUND}
-        alt="Authentication Background"
-        fill
-        style={{ objectFit: "cover" }}
-        quality={100}
-        priority
-        className="opacity-75"
-      />
+      <div className="absolute inset-0">
+        <Image
+          src={ICONS.AUTH.BACKGROUND}
+          alt="Authentication Background"
+          fill
+          style={{ objectFit: "cover" }}
+          quality={100}
+          priority
+          className="opacity-75"
+        />
+      </div>
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/50 backdrop-blur-sm" />
 
       <MotionDiv

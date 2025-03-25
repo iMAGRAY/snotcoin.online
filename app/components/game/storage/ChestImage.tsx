@@ -17,16 +17,18 @@ export const ChestImage: React.FC<ChestImageProps> = React.memo(({ src, alt, isO
 
   return (
     <animated.div className="relative w-64 h-64 mb-8" style={props}>
-      <Image
-        src={src || "/placeholder.svg"}
-        alt={alt}
-        layout="fill"
-        objectFit="contain"
-        className="drop-shadow-2xl"
-        draggable={false}
-        loading="eager"
-        priority
-      />
+      <div className="relative w-full h-full rounded-xl overflow-hidden transition-transform">
+        <Image
+          src={src || "/placeholder.svg"}
+          alt={alt}
+          fill
+          style={{ objectFit: "contain" }}
+          className="drop-shadow-2xl"
+          draggable={false}
+          loading="eager"
+          priority
+        />
+      </div>
     </animated.div>
   )
 })

@@ -7,6 +7,7 @@ import { GameProvider, useGameState, useGameDispatch } from "../contexts/GameCon
 import { TranslationProvider } from "../contexts/TranslationContext"
 import type { Action } from "../types/gameTypes"
 import { useFarcaster } from "../contexts/FarcasterContext"
+import { MotionDiv } from "./motion/MotionWrapper"
 const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
   ssr: false,
 })
@@ -138,49 +139,69 @@ const HomeContent: React.FC = () => {
 
   // Обновляем авторизацию с Farcaster, когда пользователь меняется
   useEffect(() => {
-    if (farcasterUser && isFarcasterAuth) {
-      dispatch({ type: "SET_USER", payload: {
-        id: farcasterUser.id,
-        farcaster_fid: farcasterUser.fid,
-        username: farcasterUser.username,
-        displayName: farcasterUser.displayName
-      }});
-      setIsAuthenticated(true);
-      
-      if (!hasDispatchedLoginRef.current) {
-        dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-        dispatch({ type: "LOGIN" });
-        
-        if (gameState.activeTab !== "laboratory") {
-          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-        }
-        
-        // Устанавливаем состояние загрузки данных
-        setIsUserDataLoading(true);
-        
-        hasDispatchedLoginRef.current = true;
-        
-        const timer = setTimeout(() => {
-          // Снимаем состояние загрузки данных
-          setIsUserDataLoading(false);
+    // Предотвращаем повторные обновления, если они не нужны
+    if (isCheckingSessionRef.current) return;
+    
+    // Маркируем, что мы выполняем проверку сессии
+    isCheckingSessionRef.current = true;
+    
+    try {
+      if (farcasterUser && isFarcasterAuth) {
+        // Проверяем, не выполнили ли мы уже логин
+        if (!hasDispatchedLoginRef.current) {
+          // Устанавливаем данные пользователя
+          dispatch({ type: "SET_USER", payload: {
+            id: farcasterUser.id,
+            farcaster_fid: farcasterUser.fid,
+            username: farcasterUser.username,
+            displayName: farcasterUser.displayName
+          }});
           
-          if (gameState.activeTab !== "laboratory" || gameState.hideInterface) {
-            dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+          // Обновляем состояние аутентификации перед любыми другими обновлениями UI
+          if (!isAuthenticated) {
+            setIsAuthenticated(true);
+          }
+          
+          // Устанавливаем флаг загрузки данных ПЕРЕД обновлением интерфейса
+          // чтобы избежать мерцания
+          setIsUserDataLoading(true);
+          
+          // Показываем интерфейс и обновляем состояние игры
+          dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+          dispatch({ type: "LOGIN" });
+          
+          // Устанавливаем laboratory как активную вкладку, если она не активна
+          if (gameState.activeTab !== "laboratory") {
             dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
           }
-        }, 3000);
-        
-        return () => clearTimeout(timer);
-      }
-    } else {
-      if (isAuthenticated) {
+          
+          // Отмечаем, что уже выполнили логин
+          hasDispatchedLoginRef.current = true;
+          
+          // Устанавливаем таймер для завершения загрузки данных
+          const timer = setTimeout(() => {
+            // Снимаем состояние загрузки данных
+            setIsUserDataLoading(false);
+          }, 1000); // Сокращаем время для лучшего пользовательского опыта
+          
+          return () => clearTimeout(timer);
+        }
+      } else if (isAuthenticated && !isFarcasterAuth) {
+        // Если пользователь был аутентифицирован, но потерял авторизацию Farcaster
         setIsAuthenticated(false);
         dispatch({ type: "SET_USER", payload: null });
+        hasDispatchedLoginRef.current = false;
       }
+    } finally {
+      // Сбрасываем флаг проверки сессии
+      isCheckingSessionRef.current = false;
     }
-    
-    // Проверяем, нужно ли сбросить состояние
-    if (gameState.hideInterface) {
+  }, [isFarcasterAuth, farcasterUser, dispatch]);
+
+  // Отдельный эффект для обработки изменения состояния интерфейса
+  useEffect(() => {
+    // Если интерфейс скрыт, показываем его
+    if (gameState.hideInterface && isAuthenticated) {
       dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
       
       // Если вкладка не laboratory, устанавливаем ее
@@ -188,7 +209,7 @@ const HomeContent: React.FC = () => {
         dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
       }
     }
-  }, [isFarcasterAuth, farcasterUser, dispatch, gameState.hideInterface, gameState.activeTab, isAuthenticated]);
+  }, [gameState.hideInterface, gameState.activeTab, isAuthenticated, dispatch]);
 
   // Фиксим мобильный viewport
   useEffect(() => {
@@ -233,37 +254,53 @@ const HomeContent: React.FC = () => {
     console.log('Authenticated:', userData);
   };
 
+  // Функция рендеринга содержимого при аутентификации
+  const renderAuthenticatedContent = () => {
+    return (
+      <>
+        {!gameState.hideInterface && (
+          <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md">
+            <Resources 
+              isVisible={true} 
+              activeTab={gameState.activeTab} 
+              snot={0} 
+              snotCoins={0} 
+            />
+          </header>
+        )}
+
+        <main className="flex-grow overflow-hidden relative">
+          <ErrorBoundary fallback={<ErrorDisplay message="Произошла непредвиденная ошибка в игре. Попробуйте перезагрузить страницу." />}>
+            {renderActiveTab()}
+          </ErrorBoundary>
+        </main>
+
+        {!gameState.hideInterface && <TabBar />}
+      </>
+    );
+  }
+
   return (
     <div
       className="game-container flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800"
       style={{ height: viewportHeight }}
     >
-      {!isAuthenticated ? (
-        <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait">
+        {!isAuthenticated ? (
           <AuthenticationWindow key="auth" onAuthenticate={handleAuthentication} />
-        </AnimatePresence>
-      ) : (
-        <>
-          {!gameState.hideInterface && (
-            <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md">
-              <Resources 
-                isVisible={true} 
-                activeTab={gameState.activeTab} 
-                snot={0} 
-                snotCoins={0} 
-              />
-            </header>
-          )}
-
-          <main className="flex-grow overflow-hidden relative">
-            <ErrorBoundary fallback={<ErrorDisplay message="Произошла непредвиденная ошибка в игре. Попробуйте перезагрузить страницу." />}>
-              {renderActiveTab()}
-            </ErrorBoundary>
-          </main>
-
-          {!gameState.hideInterface && <TabBar />}
-        </>
-      )}
+        ) : (
+          <MotionDiv
+            key="content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-col h-full w-full"
+          >
+            {renderAuthenticatedContent()}
+          </MotionDiv>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
