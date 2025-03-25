@@ -1,0 +1,35 @@
+# Зависимости
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Next.js
+.next
+out
+
+# Файлы среды разработки
+.git
+.github
+.vscode
+.idea
+
+# Тестовые файлы
+__tests__
+coverage
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Другие файлы
+README.md
+*.md
+.eslintrc.json
+.prettierrc
+.env.example
+
+# Кэш
+.npm
+.env.local 

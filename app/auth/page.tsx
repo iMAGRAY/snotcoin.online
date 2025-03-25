@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NeynarAuth from '../components/auth/NeynarAuth';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
 
-export default function AuthPage() {
+// Компонент с логикой аутентификации и редиректа
+function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useFarcaster();
@@ -36,7 +37,7 @@ export default function AuthPage() {
   };
   
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+    <div className="w-full">
       <div className="w-full max-w-md mb-8">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">
           Авторизация
@@ -51,6 +52,30 @@ export default function AuthPage() {
         onSuccess={handleAuthSuccess}
         onError={handleAuthError}
       />
+    </div>
+  );
+}
+
+// Заглушка для Suspense
+function AuthFallback() {
+  return (
+    <div className="w-full max-w-md mb-8">
+      <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">
+        Загрузка...
+      </h1>
+      <p className="text-gray-600 text-center">
+        Пожалуйста, подождите
+      </p>
+    </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <Suspense fallback={<AuthFallback />}>
+        <AuthContent />
+      </Suspense>
       
       <div className="mt-8 text-sm text-gray-500 max-w-md text-center">
         <p>
