@@ -27,15 +27,15 @@ export async function POST(req: NextRequest) {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <!-- Основные метатеги Farcaster Frame -->
-          <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${IMAGE_URL}" />
+          <meta name="fc:frame" content="vNext" />
+          <meta name="fc:frame:image" content="${IMAGE_URL}" />
           <meta property="og:image" content="${IMAGE_URL}" />
-          <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+          <meta name="fc:frame:image:aspect_ratio" content="1.91:1" />
           
           <!-- Кнопка для запуска игры -->
-          <meta property="fc:frame:button:1" content="Play Game" />
-          <meta property="fc:frame:button:1:action" content="link" />
-          <meta property="fc:frame:button:1:target" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true" />
+          <meta name="fc:frame:button:1" content="Play Game" />
+          <meta name="fc:frame:button:1:action" content="link" />
+          <meta name="fc:frame:button:1:target" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true" />
           
           <!-- Open Graph метатеги -->
           <meta property="og:title" content="Snotcoin Game" />
@@ -68,14 +68,14 @@ export async function POST(req: NextRequest) {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <!-- Основные метатеги Farcaster Frame -->
-          <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
+          <meta name="fc:frame" content="vNext" />
+          <meta name="fc:frame:image" content="${BASE_URL}/error.png" />
           <meta property="og:image" content="${BASE_URL}/error.png" />
           
           <!-- Кнопка для повторной попытки -->
-          <meta property="fc:frame:button:1" content="Try Again" />
-          <meta property="fc:frame:button:1:action" content="link" />
-          <meta property="fc:frame:button:1:target" content="${BASE_URL}/frame.html" />
+          <meta name="fc:frame:button:1" content="Try Again" />
+          <meta name="fc:frame:button:1:action" content="link" />
+          <meta name="fc:frame:button:1:target" content="${BASE_URL}/frame.html" />
           <title>Error</title>
         </head>
         <body>
@@ -103,15 +103,15 @@ export async function GET() {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <!-- Основные метатеги Farcaster Frame -->
-        <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="${IMAGE_URL}" />
+        <meta name="fc:frame" content="vNext" />
+        <meta name="fc:frame:image" content="${IMAGE_URL}" />
         <meta property="og:image" content="${IMAGE_URL}" />
-        <meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
+        <meta name="fc:frame:image:aspect_ratio" content="1.91:1" />
         
         <!-- Кнопка для запуска игры -->
-        <meta property="fc:frame:button:1" content="Play Game" />
-        <meta property="fc:frame:button:1:action" content="link" />
-        <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
+        <meta name="fc:frame:button:1" content="Play Game" />
+        <meta name="fc:frame:button:1:action" content="link" />
+        <meta name="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
         <title>Snotcoin Game</title>
       </head>
       <body>

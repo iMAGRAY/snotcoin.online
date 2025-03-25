@@ -69,6 +69,13 @@ export default function RootLayout({
           async 
           defer
         />
+        {/* Farcaster Frame метатеги с использованием name вместо property */}
+        <meta name="fc:frame" content="vNext" />
+        <meta name="fc:frame:image" content={imageUrl} />
+        <meta name="fc:frame:image:aspect_ratio" content="1.91:1" />
+        <meta name="fc:frame:button:1" content="Play Game" />
+        <meta name="fc:frame:button:1:action" content="link" />
+        <meta name="fc:frame:button:1:target" content="https://snotcoin.online/?embed=true" />
       </head>
       <body className={inter.className}>
         <GameProvider>
