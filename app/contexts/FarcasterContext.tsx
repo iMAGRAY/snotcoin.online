@@ -4,7 +4,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter } from 'next/navigation';
 
 interface FarcasterUser {
-  fid: string;
+  id: string;
+  fid: number;
   username: string;
   displayName?: string;
   pfp?: string;
@@ -45,13 +46,13 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       const response = await fetch('/api/farcaster/auth');
       const data = await response.json();
       
-      if (data.authenticated) {
+      if (data.authenticated && data.user) {
         setUser(data.user);
+        return true;
       } else {
         setUser(null);
+        return false;
       }
-      
-      return data.authenticated;
     } catch (error) {
       console.error('Error fetching user data:', error);
       setUser(null);
@@ -103,6 +104,10 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       
       if (response.ok) {
         setUser(null);
+        // Обновляем страницу или делаем что-то еще после выхода
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
       }
     } catch (error) {
       console.error('Logout error:', error);

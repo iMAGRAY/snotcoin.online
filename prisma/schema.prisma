@@ -11,20 +11,24 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 // Модель пользователя
 model User {
-  id          String      @id @default(uuid())
-  telegram_id Int         @unique
-  username    String?
-  first_name  String?
-  last_name   String?
-  jwt_token   String?     // JWT токен для аутентификации
-  created_at  DateTime    @default(now())
-  updated_at  DateTime    @updatedAt
-  progress    Progress?   // Связь с прогрессом пользователя
+  id            String      @id @default(uuid())
+  telegram_id   Int?        @unique // Опциональный, для обратной совместимости
+  farcaster_fid Int?        @unique // Farcaster ID пользователя
+  farcaster_username String? // Имя пользователя в Farcaster
+  farcaster_displayname String? // Отображаемое имя в Farcaster
+  farcaster_pfp String?     // URL аватара в Farcaster
+  username      String?     // Общее имя пользователя
+  first_name    String?     // Общее имя
+  last_name     String?     // Общая фамилия
+  auth_type     String      @default("telegram") // Тип аутентификации: "telegram" или "farcaster"
+  jwt_token     String?     // JWT токен для аутентификации
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+  progress      Progress?   // Связь с прогрессом пользователя
 
   @@map("users")
 }

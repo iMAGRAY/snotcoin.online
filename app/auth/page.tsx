@@ -7,62 +7,85 @@ import FarcasterUserInfo from '@/app/components/auth/FarcasterUserInfo';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
 
 export default function AuthPage() {
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || '/home';
-  const { user, isLoading, isAuthenticated, refreshUserData } = useFarcaster();
+  const redirectPath = searchParams.get('redirect') || '/game';
+  const { isAuthenticated, isLoading, refreshUserData } = useFarcaster();
 
-  // После успешной авторизации переходим на redirectUrl
+  useEffect(() => {
+    // Проверяем статус аутентификации при загрузке страницы
+    setIsPageLoading(true);
+    const checkAuth = async () => {
+      await refreshUserData();
+      setIsPageLoading(false);
+    };
+    
+    checkAuth();
+  }, [refreshUserData]);
+
+  // После успешной авторизации переходим на redirectPath
   const handleLoginSuccess = async () => {
     // Обновляем данные в контексте
     await refreshUserData();
     
     // Проверяем статус аутентификации после обновления данных
     if (isAuthenticated) {
-      router.push(redirectUrl);
+      router.push(redirectPath);
     }
   };
 
-  // Если пользователь уже авторизован, перенаправляем его
-  useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      router.push(redirectUrl);
-    }
-  }, [isAuthenticated, isLoading, redirectUrl, router]);
+  if (isPageLoading || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Авторизация через Farcaster</h1>
-        
-        {isLoading ? (
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
-          </div>
-        ) : isAuthenticated ? (
-          <div className="flex flex-col items-center">
-            <FarcasterUserInfo />
-            <p className="mt-4 text-gray-600">
-              Вы уже авторизованы. Перенаправление...
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <p className="mb-6 text-gray-600 text-center">
-              Для использования приложения необходимо авторизоваться через Farcaster. 
-              Это позволит связать ваш аккаунт с игровой статистикой.
-            </p>
-            
-            <FarcasterLogin 
-              onSuccess={handleLoginSuccess}
-              buttonSize="large"
-            />
-            
-            <p className="mt-6 text-sm text-gray-500 text-center">
-              Для использования Farcaster вам необходимо установить приложение <a href="https://warpcast.com/download" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Warpcast</a> или использовать веб-версию <a href="https://warpcast.com/" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Warpcast Web</a>.
-            </p>
-          </div>
-        )}
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-center mb-6">Авторизация через Farcaster</h2>
+          
+          {isAuthenticated ? (
+            <div className="space-y-6">
+              <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-700 text-center">
+                Вы уже авторизованы!
+              </div>
+              
+              <FarcasterUserInfo />
+              
+              <div className="flex justify-center">
+                <button 
+                  onClick={() => router.push(redirectPath)} 
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition"
+                >
+                  Продолжить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <p className="text-gray-600 text-center mb-6">
+                Для игры в Snotcoin вам необходимо авторизоваться через Farcaster.
+              </p>
+              
+              <div className="flex justify-center">
+                <FarcasterLogin 
+                  onSuccess={handleLoginSuccess}
+                  buttonText="Войти через Farcaster"
+                  buttonClass="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-md font-medium text-lg"
+                />
+              </div>
+              
+              <p className="text-sm text-gray-500 text-center mt-4">
+                Впервые используете Farcaster? <a href="https://warpcast.com/download" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Скачайте Warpcast</a> для входа.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
