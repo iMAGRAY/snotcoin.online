@@ -14,15 +14,15 @@ interface AuthenticationWindowProps {
   onAuthenticate: (userData: any) => void
 }
 
-// Хранилище для хранения данных аутентификации через localStorage
+// Хранилище для хранения данных аутентификации в памяти
 export const authStore = {
+  authToken: null as any,
+  isAuthenticated: false,
+  
   // Методы для работы с данными аутентификации
   setAuthData(token: any, isAuth: boolean) {
-    if (typeof window === 'undefined') return;
-    
-    // Сохраняем в localStorage
-    localStorage.setItem('authToken', typeof token === 'string' ? token : JSON.stringify(token));
-    localStorage.setItem('isAuthenticated', isAuth ? 'true' : 'false');
+    this.authToken = token;
+    this.isAuthenticated = isAuth;
     
     // Логирование сохранения токена
     logAuth(
@@ -39,34 +39,17 @@ export const authStore = {
   },
   
   clearAuthData() {
-    if (typeof window === 'undefined') return;
-    
     logAuthInfo(AuthStep.USER_INTERACTION, 'Очистка данных авторизации в хранилище');
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('isAuthenticated');
+    this.authToken = null;
+    this.isAuthenticated = false;
   },
   
   getAuthToken() {
-    if (typeof window === 'undefined') return null;
-    
-    const token = localStorage.getItem('authToken');
-    if (!token) return null;
-    
-    try {
-      // Пытаемся распарсить JSON, если это возможно
-      if (token.startsWith('{') || token.startsWith('[')) {
-        return JSON.parse(token);
-      }
-      return token;
-    } catch (e) {
-      console.error('Ошибка при парсинге токена:', e);
-      return token;
-    }
+    return this.authToken;
   },
   
   getIsAuthenticated() {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('isAuthenticated') === 'true';
+    return this.isAuthenticated;
   }
 };
 
@@ -85,36 +68,57 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
 
   const handleAuthentication = useCallback(
     (userData: any) => {
-      if (!userData) {
+      if (userData) {
+        logAuth(
+          AuthStep.AUTH_COMPLETE, 
+          AuthLogType.INFO, 
+          'Авторизация успешна, обновление состояния игры', 
+          { userId: userData?.user?.id, telegramId: userData?.user?.telegram_id }
+        );
+        
+        // Проверяем, не был ли пользователь уже аутентифицирован
+        if (authStore.getIsAuthenticated()) {
+          logAuth(
+            AuthStep.AUTH_COMPLETE, 
+            AuthLogType.WARNING, 
+            'Повторная попытка аутентификации игнорирована, пользователь уже аутентифицирован'
+          );
+          return;
+        }
+        
+        // Save user data
+        authStore.setAuthData(userData, true)
+
+        // Update game state
+        gameDispatch({ type: "SET_USER", payload: userData })
+        
+        // Явно устанавливаем laboratory как активную вкладку перед вызовом onAuthenticate
+        // для гарантии правильного начального состояния
+        gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+
+        // Логируем обновление игрового состояния
+        logAuth(
+          AuthStep.AUTH_COMPLETE, 
+          AuthLogType.INFO, 
+          'Игровое состояние обновлено, вызов колбэка завершения авторизации'
+        );
+        
+        // Call the onAuthenticate callback после короткой задержки, чтобы убедиться,
+        // что gameState успел обновиться
+        setTimeout(() => {
+          onAuthenticate(userData);
+          logAuth(AuthStep.AUTH_COMPLETE, AuthLogType.INFO, 'Колбэк авторизации успешно выполнен');
+        }, 10);
+      } else {
         logAuth(
           AuthStep.AUTH_ERROR, 
           AuthLogType.ERROR, 
           'Попытка авторизации с пустыми данными пользователя'
         );
-        return;
       }
-      
-      logAuth(
-        AuthStep.AUTH_COMPLETE, 
-        AuthLogType.INFO, 
-        'Авторизация успешна, обновление состояния игры', 
-        { userId: userData?.user?.id, telegramId: userData?.user?.telegram_id }
-      );
-      
-      // Save user data to localStorage
-      authStore.setAuthData(userData, true);
-
-      // Update game state
-      gameDispatch({ type: "SET_USER", payload: userData });
-      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-
-      // Notify parent component
-      onAuthenticate(userData);
-      
-      logAuth(AuthStep.AUTH_COMPLETE, AuthLogType.INFO, 'Авторизация завершена успешно');
     },
     [gameDispatch, onAuthenticate],
-  );
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

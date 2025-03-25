@@ -12,24 +12,7 @@ const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
 })
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import AuthenticationWindow from "./auth/AuthenticationWindow"
-
-// Создаем простое хранилище аутентификации, чтобы не импортировать напрямую из компонента
-const authStoreSimple = {
-  getIsAuthenticated: () => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem("isAuthenticated") === "true";
-  },
-  getAuthToken: () => {
-    if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem("authToken");
-    return token ? token : null;
-  },
-  clearAuthData: () => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem("isAuthenticated");
-    localStorage.removeItem("authToken");
-  }
-};
+import { authStore } from './auth/AuthenticationWindow'
 
 // Dynamically import components that use browser APIs
 const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
@@ -62,10 +45,9 @@ const Quests = dynamic(() => import("./game/quests/Quests"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Quests..." />,
 })
 
-// Выносим функцию проверки аутентификации из компонента
 const checkAuth = (dispatch: React.Dispatch<Action>) => {
-  const isAuth = authStoreSimple.getIsAuthenticated()
-  const authToken = authStoreSimple.getAuthToken()
+  const isAuth = authStore.getIsAuthenticated()
+  const authToken = authStore.getAuthToken()
 
   if (!isAuth || !authToken) {
     dispatch({ type: "SET_USER", payload: null })
@@ -91,7 +73,7 @@ const checkAuth = (dispatch: React.Dispatch<Action>) => {
     }
   } catch (error) {
     // Ошибка парсинга токена
-    authStoreSimple.clearAuthData();
+    authStore.clearAuthData();
     dispatch({ type: "SET_USER", payload: null });
     return false;
   }
@@ -103,15 +85,17 @@ const HomeContent: React.FC = () => {
   const [viewportHeight, setViewportHeight] = React.useState("100vh")
   const [isAuthenticated, setIsAuthenticated] = React.useState(false)
   
-  // Refs для отслеживания состояний
+  // Создаем ref на уровне компонента, а не внутри эффекта
   const hasDispatchedLoginRef = useRef(false);
+  // Переносим sessionCheckErrorCountRef на уровень компонента
   const sessionCheckErrorCountRef = useRef(0);
+  // Добавляем ref для отслеживания состояния проверки сессии
   const isCheckingSessionRef = useRef(false);
   
   // Инициализируем Telegram WebApp API при монтировании компонента
   useEffect(() => {
     // Сигнализируем Telegram о готовности WebApp и расширяем его
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+    if (window.Telegram?.WebApp) {
       console.log('[Telegram WebApp] Вызов метода ready() для инициализации WebApp');
       
       // Приводим к правильному типу
@@ -134,71 +118,181 @@ const HomeContent: React.FC = () => {
     }
   }, []);
 
-  // Упрощаем memoizedCheckAuth, убирая зависимость от isAuthenticated
   const memoizedCheckAuth = useCallback(() => {
-    const authResult = checkAuth(dispatch);
-    setIsAuthenticated(authResult);
-    return authResult;
-  }, [dispatch]);
+    const prevAuthState = isAuthenticated;
+    const authResult = checkAuth(dispatch)
+    
+    // Обновляем состояние, только если оно изменилось
+    if (prevAuthState !== authResult) {
+      setIsAuthenticated(authResult)
+    }
+  }, [dispatch, isAuthenticated])
 
   // Проверка auth состояния при монтировании и изменениях localStorage
   useEffect(() => {
-    // Проверяем и устанавливаем флаг, чтобы избежать дополнительных ререндеров
-    if (!isCheckingSessionRef.current) {
-      isCheckingSessionRef.current = true;
-      
-      // Выполняем начальную проверку авторизации
-      const isAuth = memoizedCheckAuth();
-      
-      // Если пользователь авторизован, устанавливаем соответствующий флаг
-      if (isAuth && !hasDispatchedLoginRef.current) {
-        hasDispatchedLoginRef.current = true;
-        dispatch({ type: "LOGIN" });
-      }
-      
-      isCheckingSessionRef.current = false;
+    // Флаг для отслеживания первого вызова
+    let isFirstRun = true;
+    
+    // Выполняем начальную проверку авторизации
+    if (isFirstRun) {
+      memoizedCheckAuth();
+      isFirstRun = false;
     }
 
-    // Добавляем слушатель для событий localStorage
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "isAuthenticated" || e.key === "authToken") {
-        memoizedCheckAuth();
+        memoizedCheckAuth()
       }
-    };
+    }
 
-    // Подписываемся на изменения localStorage
-    window.addEventListener("storage", handleStorageChange);
+    const handleLogout = () => {
+      memoizedCheckAuth()
+    }
 
-    // Отписываемся при размонтировании
+    window.addEventListener("storage", handleStorageChange)
+    window.addEventListener("logout", handleLogout)
+
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, [dispatch, memoizedCheckAuth]); // Явно указываем зависимости
+      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("logout", handleLogout)
+    }
+  }, [memoizedCheckAuth])
 
-  // Проверяем авторизацию каждые 5 минут
+  // Используем один эффект для обработки аутентификации и всех связанных действий
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (!isCheckingSessionRef.current) {
-        isCheckingSessionRef.current = true;
-        
-        try {
-          memoizedCheckAuth();
-        } catch (error) {
-          console.error("Ошибка при проверке сессии:", error);
-          sessionCheckErrorCountRef.current++;
-          
-          // Если произошло слишком много ошибок, останавливаем проверки
-          if (sessionCheckErrorCountRef.current > 3) {
-            clearInterval(intervalId);
-          }
-        } finally {
-          isCheckingSessionRef.current = false;
-        }
-      }
-    }, 5 * 60 * 1000); // 5 минут
+    // Предотвращаем выполнение, если проверка аутентификации не завершена
+    if (!isAuthenticated || !gameState.user?.telegram_id) {
+      return;
+    }
     
-    return () => clearInterval(intervalId);
-  }, [memoizedCheckAuth]);
+    // Если пользователь аутентифицирован впервые
+    if (!hasDispatchedLoginRef.current) {
+      // Сбрасываем связанные флаги
+      dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+      
+      dispatch({ type: "LOGIN" });
+      
+      // Устанавливаем laboratory как активную вкладку (если не установлено)
+      if (gameState.activeTab !== "laboratory") {
+        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+      }
+      
+      // Инициируем загрузку данных пользователя
+      dispatch({ type: "LOAD_USER_DATA", payload: { isLoading: true } });
+      
+      hasDispatchedLoginRef.current = true;
+      
+      // Завершаем загрузку через 3 секунды
+      const timer = setTimeout(() => {
+        dispatch({ type: "LOAD_USER_DATA", payload: { isLoading: false } });
+        
+        // Дополнительная защита для гарантии правильного состояния
+        if (gameState.activeTab !== "laboratory" || gameState.hideInterface) {
+          dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+        }
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+    
+    // Проверяем, нужно ли сбросить состояние
+    if (gameState.hideInterface) {
+      dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+      
+      // Если вкладка не laboratory, устанавливаем ее
+      if (gameState.activeTab !== "laboratory") {
+        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+      }
+    }
+  }, [isAuthenticated, gameState.user?.telegram_id, dispatch, gameState.hideInterface, gameState.activeTab]);
+
+  // Подписываемся на событие истечения сессии и проверяем актуальность авторизации
+  useEffect(() => {
+    if (!isAuthenticated || !gameState.user?.telegram_id) {
+      return; // Не проверяем сессию, если пользователь не аутентифицирован
+    }
+    
+    // Обработчик истечения сессии
+    const handleSessionExpired = () => {
+      // Предотвращаем ререндер, если уже выполняется выход
+      if (!isAuthenticated) return;
+      
+      authStore.clearAuthData();
+      setIsAuthenticated(false);
+      dispatch({ type: "SET_USER", payload: null });
+    };
+    
+    // Проверка статуса сессии
+    const checkSession = async () => {
+      // Предотвращаем одновременные проверки
+      if (isCheckingSessionRef.current || !isAuthenticated || !gameState.user?.telegram_id) {
+        return;
+      }
+      
+      isCheckingSessionRef.current = true;
+      
+      try {
+        // Получаем токен авторизации
+        const authToken = authStore.getAuthToken();
+        if (!authToken) {
+          handleSessionExpired();
+          isCheckingSessionRef.current = false;
+          return;
+        }
+        
+        // Подготавливаем токен для заголовка
+        const token = typeof authToken === 'string' ? authToken : JSON.stringify(authToken);
+        
+        // Проверяем статус авторизации через API
+        const response = await fetch('/api/auth/check-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            telegram_id: gameState.user.telegram_id
+          })
+        });
+        
+        if (!response.ok) {
+          handleSessionExpired();
+          sessionCheckErrorCountRef.current = 0; // Сбрасываем счетчик ошибок
+        } else {
+          // Сбрасываем счетчик ошибок при успешном запросе
+          sessionCheckErrorCountRef.current = 0;
+        }
+      } catch (error) {
+        // Учитываем количество неудачных попыток подключения
+        sessionCheckErrorCountRef.current += 1;
+        
+        // Если ошибки сети продолжаются слишком долго, выполняем logout
+        if (sessionCheckErrorCountRef.current > 3) {
+          handleSessionExpired();
+          sessionCheckErrorCountRef.current = 0;
+        }
+      } finally {
+        isCheckingSessionRef.current = false;
+      }
+    };
+    
+    window.addEventListener('session_expired', handleSessionExpired);
+    
+    // Выполняем первую проверку с задержкой
+    const initialCheckTimeout = setTimeout(() => {
+      checkSession();
+    }, 10000); // Задержка в 10 секунд перед первой проверкой
+    
+    // Настраиваем периодическую проверку сессии
+    const sessionCheckInterval = setInterval(checkSession, 5 * 60 * 1000);
+    
+    return () => {
+      window.removeEventListener('session_expired', handleSessionExpired);
+      clearTimeout(initialCheckTimeout);
+      clearInterval(sessionCheckInterval);
+    };
+  }, [isAuthenticated, gameState.user, dispatch]);
 
   const handleAuthentication = useCallback(
     (userData: any) => {
@@ -246,7 +340,7 @@ const HomeContent: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     // Очищаем данные авторизации в нашем хранилище
-    authStoreSimple.clearAuthData();
+    authStore.clearAuthData();
     
     // Обновляем состояние аутентификации
     setIsAuthenticated(false);
