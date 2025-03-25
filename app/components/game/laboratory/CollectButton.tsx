@@ -35,7 +35,7 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
   return (
     <motion.button
       onClick={handleClick}
-      className={`relative px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-lg font-bold 
+      className={`relative px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
         text-white shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
         focus:ring-yellow-300 focus:ring-opacity-50 h-16 flex-grow ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       whileHover={!isDisabled ? { 

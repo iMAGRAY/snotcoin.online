@@ -42,7 +42,7 @@ const ArrowButton: React.FC<{ direction: "left" | "right"; onClick: () => void }
   ({ direction, onClick }) => (
     <motion.button
       onClick={onClick}
-      className={`absolute top-3/4 -translate-y-1/2 z-10 ${direction === "left" ? "left-2" : "right-2"} w-12 h-16 flex items-center justify-center bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full shadow-lg overflow-hidden border-2 border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50`}
+      className={`absolute top-2/3 -translate-y-1/2 z-10 ${direction === "left" ? "left-2" : "right-2"} w-12 h-16 flex items-center justify-center bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full shadow-lg overflow-hidden border-2 border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50`}
       whileHover={{
         boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
       }}
@@ -120,6 +120,23 @@ const RewardDisplay: React.FC<{
 
 RewardDisplay.displayName = "RewardDisplay"
 
+// Open Chest Button - отдельный компонент, не вложенный в другие div
+const OpenChestButton: React.FC<{onClick: () => void, text: string}> = ({onClick, text}) => {
+  return (
+    <motion.button
+      onClick={onClick}
+      className="fixed left-0 right-0 mx-auto bottom-20 w-3/5 max-w-sm z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold px-6 rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-2 border-yellow-300 h-16"
+      whileHover={{ 
+        scale: 1.05,
+        boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)"
+      }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <span>{text}</span>
+    </motion.button>
+  );
+}
+
 const Storage: React.FC = () => {
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
@@ -176,53 +193,49 @@ const Storage: React.FC = () => {
   }, [currentIndex, gameState.inventory.snot, gameDispatch])
 
   return (
-    <motion.div 
-      className="w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-gray-900 to-gray-800"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage:
-            `url('${ICONS.STORAGE.BACKGROUND}')`,
-          backgroundPosition: "center",
-          backgroundSize: "cover",
-        }}
-      />
-      <div className="absolute inset-0 flex flex-col z-20">
-        <div className="flex-grow flex flex-col">
-          <div className="relative w-full max-w-md mx-auto h-full px-8">
-            <ArrowButton direction="left" onClick={handlePrev} />
-            <ArrowButton direction="right" onClick={handleNext} />
-            <ChestCarousel
-              currentIndex={currentIndex}
-              direction={direction}
-              chests={chests}
-              onSwipe={handleSwipe}
-              isChestOpening={isChestOpening}
-              setCurrentIndex={setCurrentIndex}
-            />
+    <>
+      <motion.div 
+        className="w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-gray-900 to-gray-800"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage:
+              `url('${ICONS.STORAGE.BACKGROUND}')`,
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+          }}
+        />
+        <div className="absolute inset-0 flex flex-col z-20">
+          <div className="flex-grow flex flex-col">
+            <div className="relative w-full max-w-md mx-auto h-full px-8">
+              <ArrowButton direction="left" onClick={handlePrev} />
+              <ArrowButton direction="right" onClick={handleNext} />
+              <ChestCarousel
+                currentIndex={currentIndex}
+                direction={direction}
+                chests={chests}
+                onSwipe={handleSwipe}
+                isChestOpening={isChestOpening}
+                setCurrentIndex={setCurrentIndex}
+              />
+            </div>
           </div>
         </div>
-        <div className="p-4 mb-16">
-          <motion.button
-            onClick={handleOpenChest}
-            className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center justify-center space-x-2"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span>{t("openChest")}</span>
-          </motion.button>
-        </div>
-      </div>
-      <RewardDisplay
-        amount={rewardAmount}
-        maxAmount={500} // Assuming 500 is the max reward
-        setRewardAmount={setRewardAmount}
-      />
-    </motion.div>
+        
+        <RewardDisplay
+          amount={rewardAmount}
+          maxAmount={500} // Assuming 500 is the max reward
+          setRewardAmount={setRewardAmount}
+        />
+      </motion.div>
+      
+      {/* Кнопка Open Chest - вне всех контейнеров */}
+      <OpenChestButton onClick={handleOpenChest} text={t("openChest")} />
+    </>
   )
 }
 

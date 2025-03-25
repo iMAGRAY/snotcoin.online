@@ -99,8 +99,16 @@ const Laboratory: React.FC = () => {
    * Переход на страницу улучшений
    */
   const handleUpgradeClick = useCallback(() => {
-    router.push("/upgrade")
-  }, [router])
+    // Добавляем минимальную задержку для обновления состояния, но не ждем его завершения
+    dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+    // Сразу переходим на страницу улучшений
+    router.push("/upgrade", { scroll: false });
+  }, [router, dispatch]);
+
+  // Предварительно загружаем страницу улучшений при монтировании компонента
+  useEffect(() => {
+    router.prefetch('/upgrade');
+  }, [router]);
 
   return (
     <motion.div

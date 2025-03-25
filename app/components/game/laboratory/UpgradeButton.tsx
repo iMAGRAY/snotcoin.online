@@ -6,12 +6,24 @@ import Image from "next/image"
 import type { UpgradeButtonProps } from "../../../types/laboratory-types"
 import { useTranslation } from "../../../contexts/TranslationContext"
 import { ICONS } from "../../../constants/uiConstants"
+import { useRouter, usePathname } from "next/navigation"
+import { useEffect } from "react"
 
 /**
  * Компонент кнопки перехода к улучшениям
  */
 const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => {
   const { t } = useTranslation()
+  const router = useRouter()
+  const pathname = usePathname()
+  
+  // Предзагружаем страницу улучшений
+  useEffect(() => {
+    if (pathname === '/') {
+      // Используем prefetch для предварительной загрузки страницы
+      void router.prefetch('/upgrade')
+    }
+  }, [router, pathname])
   
   const handleClick = useCallback(() => {
     if (onClick) {
@@ -22,7 +34,7 @@ const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => 
   return (
     <motion.button
       onClick={handleClick}
-      className="relative p-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-lg font-bold 
+      className="relative p-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-2xl font-bold 
         text-white shadow-lg border-2 border-[#5889ae] focus:outline-none focus:ring-2 
         focus:ring-[#4a7a9e] transition-all duration-200 h-16 w-16 flex items-center justify-center"
       whileHover={{ 

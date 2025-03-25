@@ -141,21 +141,23 @@ const UpgradePageContent: React.FC = React.memo(() => {
 
   const handleCapacityUpgrade = useCallback(() => {
     if (gameState.inventory?.snotCoins !== undefined && gameState.inventory.snotCoins >= capacityCost) {
-      const newCapacityLevel = Math.min((gameState.containerLevel || 1) + 1, 100)
       gameDispatch({ type: "UPGRADE_CONTAINER_CAPACITY" })
       setShowUpgradeEffect(true)
       setTimeout(() => setShowUpgradeEffect(false), 1000)
     }
-  }, [gameState, gameDispatch, capacityCost])
+  }, [gameState.inventory?.snotCoins, gameDispatch, capacityCost])
 
   const handleSpeedUpgrade = useCallback(() => {
     if (gameState.inventory?.snotCoins !== undefined && gameState.inventory.snotCoins >= speedCost) {
-      const newSpeedLevel = Math.min((gameState.inventory.fillingSpeedLevel || 1) + 1, 100)
       gameDispatch({ type: "UPGRADE_FILLING_SPEED" })
       setShowUpgradeEffect(true)
       setTimeout(() => setShowUpgradeEffect(false), 1000)
     }
-  }, [gameState, gameDispatch, speedCost])
+  }, [gameState.inventory?.snotCoins, gameDispatch, speedCost])
+
+  useEffect(() => {
+    router.prefetch('/')
+  }, [router])
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-[#1a2b3d] to-[#2a3b4d] text-white">
@@ -242,6 +244,12 @@ const UpgradePageContent: React.FC = React.memo(() => {
 UpgradePageContent.displayName = "UpgradePageContent"
 
 const UpgradePage: React.FC = () => {
+  const router = useRouter()
+  
+  useEffect(() => {
+    router.prefetch('/')
+  }, [router])
+  
   return <UpgradePageContent />
 }
 

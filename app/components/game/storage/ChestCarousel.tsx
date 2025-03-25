@@ -74,12 +74,12 @@ const ChestCarousel: React.FC<ChestCarouselProps> = React.memo(
             dragElastic={1}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto px-4 mb-20 mt-[365px]">
+            <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto px-4 mb-20 mt-[350px]">
               <ChestImage src={currentChest.image} alt={currentChest.name} isOpening={isChestOpening} />
             </div>
           </motion.div>
         </AnimatePresence>
-        <div className="absolute bottom-4 left-0 right-0 z-50">
+        <div className="absolute bottom-12 left-0 right-0 z-50">
           <div className="flex justify-center gap-6">
             {chests.map((_, index) => (
               <motion.button

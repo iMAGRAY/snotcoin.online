@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useMemo, useCallback } from "react"
+import React, { useMemo, useCallback, useEffect } from "react"
 import { useGameState, useGameDispatch } from "../../contexts/GameContext"
 import type { TabId } from "./types"
 import { tabs } from "./constants"
 import TabButton from "./TabButton"
 import { useTranslation } from "../../contexts/TranslationContext"
+import { useRouter } from "next/navigation"
 
 type TabBarProps = {}
 
@@ -13,6 +14,12 @@ const TabBar: React.FC<TabBarProps> = () => {
   const { activeTab } = useGameState()
   const dispatch = useGameDispatch()
   const { t } = useTranslation()
+  const router = useRouter()
+
+  // Предварительно загружаем страницу улучшений для быстрого перехода
+  useEffect(() => {
+    router.prefetch('/upgrade')
+  }, [router])
 
   const handleTabClick = useCallback(
     (id: TabId) => {
