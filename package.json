@@ -6,15 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+<<<<<<< HEAD
     "start:ssl": "sudo node server.js",
     "start:dev:ssl": "NODE_ENV=development sudo node server.js",
     "lint": "next lint",
     "download-sdk": "node scripts/download-sdk.js",
     "postinstall": "npm run download-sdk"
+=======
+    "lint": "next lint"
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
-    "@farcaster/frame-sdk": "^0.0.31",
     "@headlessui/react": "latest",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.5.0",

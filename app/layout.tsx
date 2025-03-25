@@ -8,6 +8,7 @@ import "./styles/auth.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
+<<<<<<< HEAD
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 
@@ -37,6 +38,12 @@ export const metadata: Metadata = {
     description: 'Play to earn game on Farcaster',
     images: ['/game/cast.webp'],
   },
+=======
+export const metadata: Metadata = {
+  title: "SnotCoin Mining Game",
+  description: "A Telegram-based crypto mining game",
+    generator: 'v0.dev'
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
 }
 
 export default function RootLayout({

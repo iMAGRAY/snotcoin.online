@@ -4,15 +4,9 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Базовый домен приложения
-const isProd = process.env.NODE_ENV === 'production';
-const DOMAIN = isProd ? 'https://snotcoin.online' : 'http://localhost:3000';
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Добавляем настройки для домена
-  assetPrefix: isProd ? 'https://snotcoin.online' : undefined,
   images: {
     remotePatterns: [
       {
@@ -43,6 +37,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
+<<<<<<< HEAD
             value: `
               default-src 'self';
               script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
@@ -52,10 +47,18 @@ const nextConfig = {
               frame-src 'self' https://warpcast.com https://*.warpcast.com;
               frame-ancestors 'self' https://warpcast.com https://*.warpcast.com;
             `.replace(/\s+/g, ' ').trim()
+=======
+            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
           },
           {
+            // Remove X-Frame-Options header
             key: 'X-Frame-Options',
+<<<<<<< HEAD
             value: 'ALLOW-FROM https://warpcast.com'
+=======
+            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
           }
         ],
       },
@@ -63,10 +66,6 @@ const nextConfig = {
   },
   compiler: {
     removeConsole: false,
-  },
-  // Добавляем настройки публичных переменных среды
-  env: {
-    NEXT_PUBLIC_DOMAIN: DOMAIN,
   },
   webpack: (config) => {
     config.resolve.alias = {
