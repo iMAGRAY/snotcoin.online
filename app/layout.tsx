@@ -10,7 +10,6 @@ const inter = Inter({ subsets: ["latin"] })
 
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
-const imageUrl = `${siteUrl}/game/cast.webp`;
 
 export const metadata: Metadata = {
   title: "Snotcoin - Play to Earn Game",
@@ -54,12 +53,6 @@ export default function RootLayout({
           async 
           defer
         />
-        {/* Farcaster Frame метатеги */}
-        <meta property="fc:frame" content="vNext" />
-        <meta property="og:image" content={imageUrl} />
-        <meta property="fc:frame:button:1" content="Play now" />
-        <meta property="fc:frame:button:1:action" content="link" />
-        <meta property="fc:frame:button:1:target" content="https://snotcoin.online/?embed=true" />
       </head>
       <body className={inter.className}>
         <GameProvider>

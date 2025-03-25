@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
     
     // Если кнопка не была нажата или это другая кнопка, 
-    // возвращаем HTML с приветствием и кнопкой
+    // возвращаем HTML с метатегами фрейма
     return new NextResponse(`
       <!DOCTYPE html>
       <html>
@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
           <meta property="fc:frame:button:1:action" content="link" />
           <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
         </head>
-        <body>
-          <h1>Welcome to Snotcoin Game!</h1>
-          <p>Click the button to start playing.</p>
-        </body>
+        <body></body>
       </html>
     `, {
       status: 200,
@@ -69,13 +66,10 @@ export async function POST(req: NextRequest) {
           <meta property="fc:frame:button:1" content="Try Again" />
           <meta property="fc:frame:button:1:action" content="post" />
         </head>
-        <body>
-          <h1>Error</h1>
-          <p>Something went wrong. Please try again.</p>
-        </body>
+        <body></body>
       </html>
     `, {
-      status: 200, // Важно! Даже для ошибок возвращаем 200, чтобы фрейм обработался
+      status: 200,
       headers: {
         'Content-Type': 'text/html'
       }
@@ -97,10 +91,7 @@ export async function GET(req: NextRequest) {
         <meta property="fc:frame:button:1:action" content="link" />
         <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
       </head>
-      <body>
-        <h1>Snotcoin Game Preview</h1>
-        <p>This is a preview of the Snotcoin Game frame.</p>
-      </body>
+      <body></body>
     </html>
   `, {
     status: 200,
