@@ -58,10 +58,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* Preload Farcaster SDK */}
+        <script 
+          src="https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js" 
+          async 
+          defer
+        />
+      </head>
       <body className={inter.className}>
         <GameProvider>
           <TranslationProvider>
-            {children}
+            <main className="min-h-screen flex flex-col">
+              {children}
+            </main>
           </TranslationProvider>
         </GameProvider>
       </body>

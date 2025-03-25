@@ -6,7 +6,6 @@ import dynamic from "next/dynamic"
 import { GameProvider, useGameState, useGameDispatch } from "../contexts/GameContext"
 import { TranslationProvider } from "../contexts/TranslationContext"
 import type { Action } from "../types/gameTypes"
-import type { TelegramWebApp } from "../types/telegram"
 const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
   ssr: false,
 })
@@ -92,30 +91,20 @@ const HomeContent: React.FC = () => {
   // Добавляем ref для отслеживания состояния проверки сессии
   const isCheckingSessionRef = useRef(false);
   
-  // Инициализируем Telegram WebApp API при монтировании компонента
+  // Обработка высоты viewport при монтировании
   useEffect(() => {
-    // Сигнализируем Telegram о готовности WebApp и расширяем его
-    if (window.Telegram?.WebApp) {
-      console.log('[Telegram WebApp] Вызов метода ready() для инициализации WebApp');
-      
-      // Приводим к правильному типу
-      const webApp = window.Telegram.WebApp as TelegramWebApp;
-      
-      // Сообщаем Telegram, что приложение загружено и готово к работе
-      webApp.ready();
-      
-      // Расширяем приложение на весь экран
-      webApp.expand();
-      
-      // Устанавливаем обработчик для сообщений от MainButton
-      if (webApp.MainButton) {
-        webApp.MainButton.onClick(() => {
-          console.log('[Telegram WebApp] MainButton нажата');
-        });
-      }
-    } else {
-      console.warn('[Telegram WebApp] API не найден при инициализации. WebApp может работать некорректно.');
-    }
+    const updateViewportHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      setViewportHeight(`${window.innerHeight}px`);
+    };
+    
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+    };
   }, []);
 
   const memoizedCheckAuth = useCallback(() => {

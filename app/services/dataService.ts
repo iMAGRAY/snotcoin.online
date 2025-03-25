@@ -287,21 +287,21 @@ async function processBatchSaves(): Promise<void> {
     // Обрабатываем каждое сохранение
     const savePromises: Promise<void>[] = [];
     
-    savesToProcess.forEach((state, telegramId) => {
+    savesToProcess.forEach((state, fid) => {
       // Создаем резервную копию перед сохранением
-      saveBackup(telegramId, state);
+      saveBackup(fid, state);
       
       // Обновляем временную метку последнего сохранения
-      lastSaveTimestamps.set(telegramId, Date.now());
+      lastSaveTimestamps.set(fid, Date.now());
       
       // Добавляем операцию в массив промисов с обработкой ошибок
       const savePromise = saveQueue.enqueue(async () => {
         try {
-          await saveToPostgres(telegramId, state);
+          await saveToPostgres(fid, state);
         } catch (saveError) {
-          console.error(`Ошибка сохранения для пользователя ${telegramId}:`, saveError);
+          console.error(`Ошибка сохранения для пользователя ${fid}:`, saveError);
           // Сохраняем информацию о неудачном сохранении
-          failedSaves.push([telegramId, state]);
+          failedSaves.push([fid, state]);
         }
       }) as Promise<void>;
       
@@ -317,8 +317,8 @@ async function processBatchSaves(): Promise<void> {
       console.warn(`${failedSaves.length} сохранений не удалось выполнить, планируем повторную попытку`);
       
       // Добавляем неудачные сохранения обратно в очередь
-      for (const [telegramId, state] of failedSaves) {
-        pendingSaves.set(telegramId, state);
+      for (const [fid, state] of failedSaves) {
+        pendingSaves.set(fid, state);
       }
       
       // Запускаем таймер для повторной попытки с меньшим интервалом
@@ -339,14 +339,14 @@ async function processBatchSaves(): Promise<void> {
       pendingSaves.clear();
       
       // Запускаем индивидуальное сохранение для каждого пользователя с увеличенным таймаутом
-      for (const [telegramId, state] of Array.from(pendingSaves.entries())) {
+      for (const [fid, state] of Array.from(pendingSaves.entries())) {
         saveQueue.enqueue(async () => {
           try {
-            await saveToPostgres(telegramId, state);
+            await saveToPostgres(fid, state);
           } catch (individualError) {
-            console.error(`Индивидуальная ошибка сохранения для пользователя ${telegramId}:`, individualError);
+            console.error(`Индивидуальная ошибка сохранения для пользователя ${fid}:`, individualError);
             // Создаем резервную копию при окончательной неудаче
-            saveBackup(telegramId, state, individualError);
+            saveBackup(fid, state, individualError);
           }
         });
       }

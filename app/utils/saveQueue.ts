@@ -165,7 +165,7 @@ export interface CompressedGameState {
   _compression: string;
   _compressedAt: string;
   _integrity: {
-    telegramId: number;
+    fid: number;
     saveVersion?: number;
     snot?: number;
     snotCoins?: number;

@@ -28,11 +28,11 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.farcaster.xyz; connect-src 'self' https://api.farcaster.xyz https://hub.farcaster.xyz; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';",
+              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.farcaster.xyz; connect-src 'self' https://api.farcaster.xyz https://hub.farcaster.xyz wss://hub.farcaster.xyz; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-src 'self' https://warpcast.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://warpcast.com;",
           },
           {
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: 'ALLOW-FROM https://warpcast.com',
           },
           {
             key: 'X-Content-Type-Options',

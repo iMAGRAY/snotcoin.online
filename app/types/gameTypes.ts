@@ -96,7 +96,6 @@ export interface ExtendedGameState extends GameState {
 
 export type ActionType =
   | 'SET_USER'
-  | 'SET_TELEGRAM_USER'
   | 'SET_ACTIVE_TAB'
   | 'SET_CONTAINER_LEVEL'
   | 'SET_FILLING_SPEED_LEVEL'

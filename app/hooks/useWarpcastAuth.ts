@@ -100,54 +100,85 @@ export const useWarpcastAuth = (): WarpcastAuthHookResult => {
     try {
       logAuthInfo(AuthStep.WARPCAST_INIT as AuthStep, 'Начало процесса аутентификации через Warpcast');
       
-      // Проверяем наличие Farcaster Frame SDK
-      if (typeof window === 'undefined' || !window.farcaster) {
-        logAuthError(
-          AuthStep.WARPCAST_INIT as AuthStep,
-          'Farcaster Frame SDK не найден',
-          new Error('Farcaster Frame SDK not found')
-        );
-        return handleAuthError('Farcaster Frame SDK не найден');
+      // Ждем пока SDK загрузится
+      if (typeof window !== 'undefined') {
+        // Если SDK еще не доступен, ждем несколько секунд
+        if (!window.farcaster) {
+          logAuthInfo(AuthStep.WARPCAST_INIT as AuthStep, 'Waiting for Farcaster SDK to initialize...');
+          // Попытка загрузить SDK вручную
+          try {
+            // Добавляем скрипт Farcaster SDK
+            const script = document.createElement('script');
+            script.src = 'https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js';
+            script.async = true;
+            document.head.appendChild(script);
+            
+            // Ждем несколько секунд для загрузки SDK
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (sdkError) {
+            console.error('Failed to load Farcaster SDK manually:', sdkError);
+          }
+        }
+        
+        // Повторная проверка SDK после ожидания
+        if (!window.farcaster) {
+          logAuthError(
+            AuthStep.WARPCAST_INIT as AuthStep,
+            'Farcaster Frame SDK не найден после попытки загрузки',
+            new Error('Farcaster Frame SDK not found after wait')
+          );
+          return handleAuthError('Farcaster Frame SDK не найден. Убедитесь, что вы открыли приложение через Warpcast.');
+        }
+      } else {
+        return handleAuthError('Браузерное окружение недоступно');
       }
       
       // Получаем контекст пользователя
-      const contextData = await window.farcaster.getContext();
-      
-      if (!contextData || !contextData.fid) {
-        logAuthError(
-          AuthStep.WARPCAST_VERIFY as AuthStep,
-          'Не удалось получить FID пользователя',
-          new Error('Failed to get user FID')
+      try {
+        const contextData = await window.farcaster.getContext();
+        
+        if (!contextData || !contextData.fid) {
+          logAuthError(
+            AuthStep.WARPCAST_VERIFY as AuthStep,
+            'Не удалось получить FID пользователя',
+            new Error('Failed to get user FID')
+          );
+          return handleAuthError('Не удалось получить данные пользователя. Пожалуйста, убедитесь, что вы авторизованы в Warpcast.');
+        }
+        
+        // Формируем данные пользователя
+        const userData: WarpcastUser = {
+          fid: contextData.fid,
+          username: contextData.username || `user_${contextData.fid}`,
+          displayName: contextData.displayName || null,
+          pfp: contextData.pfp?.url || null,
+          address: contextData.custody?.address || null
+        };
+        
+        // Генерируем токен
+        const token = `warpcast_${userData.fid}_${Date.now()}`;
+        
+        // Сохраняем токен
+        localStorage.setItem('warpcast_token', token);
+        setAuthToken(token);
+        
+        // Сохраняем данные пользователя
+        localStorage.setItem('warpcast_user', JSON.stringify(userData));
+        
+        logAuthInfo(
+          AuthStep.WARPCAST_SUCCESS as AuthStep,
+          'Аутентификация через Warpcast успешна',
+          userData
         );
-        return handleAuthError('Не удалось получить данные пользователя');
+        return handleAuthSuccess(userData);
+      } catch (contextError) {
+        logAuthError(
+          AuthStep.WARPCAST_ERROR as AuthStep,
+          'Ошибка при получении контекста Warpcast',
+          contextError as Error
+        );
+        return handleAuthError(`Ошибка при получении данных пользователя: ${contextError instanceof Error ? contextError.message : String(contextError)}`);
       }
-      
-      // Формируем данные пользователя
-      const userData: WarpcastUser = {
-        fid: contextData.fid,
-        username: contextData.username || `user_${contextData.fid}`,
-        displayName: contextData.displayName || null,
-        pfp: contextData.pfp?.url || null,
-        address: contextData.custody?.address || null
-      };
-      
-      // Генерируем токен
-      const token = `warpcast_${userData.fid}_${Date.now()}`;
-      
-      // Сохраняем токен
-      localStorage.setItem('warpcast_token', token);
-      setAuthToken(token);
-      
-      // Сохраняем данные пользователя
-      localStorage.setItem('warpcast_user', JSON.stringify(userData));
-      
-      logAuthInfo(
-        AuthStep.WARPCAST_SUCCESS as AuthStep,
-        'Аутентификация через Warpcast успешна',
-        userData
-      );
-      return handleAuthSuccess(userData);
-      
     } catch (error) {
       logAuthError(
         AuthStep.WARPCAST_ERROR as AuthStep,

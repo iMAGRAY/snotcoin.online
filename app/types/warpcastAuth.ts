@@ -48,7 +48,7 @@ export { AuthStep };
 // Определение типов для Farcaster SDK
 declare global {
   interface Window {
-    farcaster: {
+    farcaster?: {
       getContext: () => Promise<{
         fid: number;
         url: string;
@@ -65,6 +65,8 @@ declare global {
           verified: boolean;
         };
       }>;
+      fetchUserByFid?: (fid: number) => Promise<any>;
+      publishCast?: (text: string) => Promise<any>;
     };
   }
 } 

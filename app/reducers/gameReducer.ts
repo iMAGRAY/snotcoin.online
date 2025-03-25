@@ -43,21 +43,6 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         lastValidation: action.payload ? Date.now() : undefined
       });
 
-    case "SET_TELEGRAM_USER":
-      // Устаревший тип действия, преобразуем в формат Warpcast
-      return withMetadata({ 
-        user: action.payload ? { 
-          id: action.payload.id.toString(),
-          fid: parseInt(action.payload.id.toString()),
-          username: action.payload.username || "",
-          displayName: action.payload.first_name || "",
-          pfp: action.payload.photo_url || null,
-          address: undefined
-        } : null,
-        validationStatus: action.payload ? "valid" : "invalid",
-        lastValidation: action.payload ? Date.now() : undefined
-      });
-
     case "UPDATE_CONTAINER_LEVEL":
       return withMetadata({
         inventory: {

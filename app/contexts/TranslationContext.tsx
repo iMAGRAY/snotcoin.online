@@ -154,6 +154,8 @@ const translations: Translations = {
     logout: "Logout",
     questsTab: "Quests",
     consecutiveLoginDays: "Consecutive Login Days",
+    login: "Login",
+    loginWithWarpcast: "Login with Warpcast",
   },
 }
 
