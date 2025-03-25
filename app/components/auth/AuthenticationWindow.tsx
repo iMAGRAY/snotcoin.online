@@ -17,6 +17,10 @@ export const authStore = {
     authStore.isAuthenticated = !!user;
     authStore.user = user;
   },
+  setAuthToken: (token: string) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('authToken', token);
+  },
   getIsAuthenticated: () => authStore.isAuthenticated,
   getAuthToken: () => {
     if (typeof window === 'undefined') return null;

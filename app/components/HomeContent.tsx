@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useEffect, useCallback, useMemo, Suspense } from "react"
+import React, { useRef, useEffect, useCallback, useMemo, Suspense, useState } from "react"
 import { AnimatePresence } from "framer-motion"
 import dynamic from "next/dynamic"
 import { GameProvider, useGameState, useGameDispatch } from "../contexts/GameContext"
@@ -44,7 +44,42 @@ const Quests = dynamic(() => import("./game/quests/Quests"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Quests..." />,
 })
 
-const checkAuth = (dispatch: React.Dispatch<Action>) => {
+// Проверка авторизации пользователя
+const checkAuth = (dispatch: React.Dispatch<Action>, urlParams?: URLSearchParams) => {
+  // Проверяем параметры URL для Farcaster Frames (fid и username)
+  if (urlParams && urlParams.has('fid') && urlParams.get('fid')) {
+    const fid = parseInt(urlParams.get('fid') || '0', 10);
+    const username = urlParams.get('username') || `user_${fid}`;
+    const embed = urlParams.has('embed');
+    
+    if (fid > 0) {
+      // Создаем пользователя на основе параметров URL (для фреймов)
+      const frameUser = {
+        id: `farcaster_${fid}`,
+        fid: fid,
+        username: username,
+        displayName: username,
+        pfp: null,
+        address: null
+      };
+      
+      // Сохраняем данные авторизации в хранилище
+      authStore.setAuth(frameUser);
+      authStore.setAuthToken(JSON.stringify(frameUser));
+      
+      // Устанавливаем пользователя в состояние
+      dispatch({ type: "SET_USER", payload: frameUser });
+      
+      // Если передан параметр embed, скрываем интерфейс авторизации
+      if (embed) {
+        dispatch({ type: "SET_GAME_STARTED", payload: true });
+      }
+      
+      return true;
+    }
+  }
+  
+  // Стандартная проверка авторизации через хранилище
   const isAuth = authStore.getIsAuthenticated()
   const authToken = authStore.getAuthToken()
 
@@ -81,8 +116,9 @@ const checkAuth = (dispatch: React.Dispatch<Action>) => {
 const HomeContent: React.FC = () => {
   const dispatch = useGameDispatch()
   const gameState = useGameState()
-  const [viewportHeight, setViewportHeight] = React.useState("100vh")
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const [viewportHeight, setViewportHeight] = useState("100vh")
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isFrameEmbed, setIsFrameEmbed] = useState(false)
   
   // Создаем ref на уровне компонента, а не внутри эффекта
   const hasDispatchedLoginRef = useRef(false);
@@ -90,6 +126,22 @@ const HomeContent: React.FC = () => {
   const sessionCheckErrorCountRef = useRef(0);
   // Добавляем ref для отслеживания состояния проверки сессии
   const isCheckingSessionRef = useRef(false);
+  
+  // Проверяем параметры URL для интеграции с фреймами Farcaster
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+      
+      // Проверяем параметр embed - если true, то мы внутри фрейма
+      const embed = params.has('embed') && params.get('embed') === 'true';
+      setIsFrameEmbed(embed);
+      
+      // Выполняем проверку авторизации с учетом параметров URL
+      const authResult = checkAuth(dispatch, params);
+      setIsAuthenticated(authResult);
+    }
+  }, [dispatch]);
   
   // Обработка высоты viewport при монтировании
   useEffect(() => {
