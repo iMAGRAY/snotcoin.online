@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     'fc:frame:image': 'https://snotcoin.online/game/cast.webp',
     'og:image': 'https://snotcoin.online/game/cast.webp',
     'fc:frame:button:1': 'Play Game',
-    'fc:frame:button:1:action': 'post',
+    'fc:frame:button:1:action': 'post_redirect',
     'fc:frame:post_url': 'https://snotcoin.online/api/frame',
   },
 }

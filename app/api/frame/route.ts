@@ -20,30 +20,17 @@ export async function POST(req: NextRequest) {
     
     // Проверяем, был ли нажата кнопка Play Game
     if (body?.untrustedData?.buttonIndex === 1) {
-      // Для Farcaster Frames v2 не используем прямой редирект через статус код,
-      // а возвращаем HTML со специальным тегом для редиректа
-      return new NextResponse(
-        `<!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta property="fc:frame" content="vNext" />
-            <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
-            <meta property="fc:frame:redirect" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true" />
-            <title>Redirecting to Snotcoin Game...</title>
-          </head>
-          <body>
-            <p>Redirecting to Snotcoin Game...</p>
-          </body>
-        </html>`,
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/html',
-          },
-        }
-      );
+      // Для Farcaster Frames v2 с "post" action при нажатии кнопки
+      // необходимо вернуть 302 редирект с Location заголовком
+      const redirectUrl = `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`;
+      
+      // Возвращаем 302 редирект согласно спецификации Farcaster Frames v2
+      return new NextResponse('', {
+        status: 302,
+        headers: {
+          'Location': redirectUrl
+        },
+      });
     }
     
     // Возвращаем HTML с начальным экраном, если кнопка не была нажата
