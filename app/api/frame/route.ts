@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
+          <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
           <meta property="fc:frame:button:1" content="Play Game" />
           <meta property="fc:frame:button:1:action" content="post_redirect" />
           <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
@@ -99,7 +99,7 @@ export async function GET() {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
+        <meta property="fc:frame:image" content="${BASE_URL}/game/cast.webp" />
         <meta property="fc:frame:button:1" content="Play Game" />
         <meta property="fc:frame:button:1:action" content="post_redirect" />
         <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />

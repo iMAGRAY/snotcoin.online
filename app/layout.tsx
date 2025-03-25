@@ -41,10 +41,10 @@ export const metadata: Metadata = {
   // Farcaster Frame метаданные
   other: {
     'fc:frame': 'vNext',
-    'fc:frame:image': 'https://snotcoin.online/og-image.png',
+    'fc:frame:image': 'https://snotcoin.online/game/cast.webp',
     'fc:frame:button:1': 'Play Game',
     'fc:frame:button:1:action': 'post_redirect',
-    'fc:frame:button:1:target': 'https://snotcoin.online',
+    'fc:frame:button:1:target': 'https://snotcoin.online/?embed=true',
   },
 }
 
