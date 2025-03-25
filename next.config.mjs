@@ -4,9 +4,15 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Базовый домен приложения
+const isProd = process.env.NODE_ENV === 'production';
+const DOMAIN = isProd ? 'https://snotcoin.online' : 'http://localhost:3000';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Добавляем настройки для домена
+  assetPrefix: isProd ? 'https://snotcoin.online' : undefined,
   images: {
     remotePatterns: [
       {
@@ -27,7 +33,6 @@ const nextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     unoptimized: true,
-    domains: ['snotcoin.online', 'warpcast.com'],
   },
   // Update security headers configuration
   async headers() {
@@ -37,51 +42,22 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-            value: `
-              default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
-              style-src 'self' 'unsafe-inline';
-              img-src 'self' data: https: blob:;
-              connect-src 'self' https://hub.farcaster.xyz wss://hub.farcaster.xyz;
-              frame-src 'self' https://warpcast.com https://*.warpcast.com;
-              frame-ancestors 'self' https://warpcast.com https://*.warpcast.com;
-            `.replace(/\s+/g, ' ').trim()
-=======
-            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
-            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
-            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
+            value: "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
           },
           {
-            // Remove X-Frame-Options header
             key: 'X-Frame-Options',
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-            value: 'ALLOW-FROM https://warpcast.com'
-=======
-            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
-            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
-            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
+            value: 'ALLOWALL'
           }
-        ],
-      },
+        ]
+      }
     ]
   },
   compiler: {
     removeConsole: false,
+  },
+  // Добавляем настройки публичных переменных среды
+  env: {
+    NEXT_PUBLIC_DOMAIN: DOMAIN,
   },
   webpack: (config) => {
     config.resolve.alias = {

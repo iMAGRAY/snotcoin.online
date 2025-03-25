@@ -4,58 +4,50 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
-import "./styles/auth.css"
+import { TelegramWebAppProvider } from "./contexts/TelegramWebAppContext"
 
 const inter = Inter({ subsets: ["latin"] })
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
+const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
-=======
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-export const metadata: Metadata = {
-  title: "Snotcoin - Play to Earn Game",
-  description: "Play to earn game on Farcaster",
-  metadataBase: new URL('https://snotcoin.online'),
-  openGraph: {
-    title: 'Snotcoin - Play to Earn Game',
-    description: 'Play to earn game on Farcaster',
-    url: 'https://snotcoin.online',
-    siteName: 'Snotcoin',
-    images: [
-      {
-        url: '/game/cast.webp',
-        width: 1200,
-        height: 630,
-        alt: 'Snotcoin Game',
-      },
-    ],
-    locale: 'en_US',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Snotcoin - Play to Earn Game',
-    description: 'Play to earn game on Farcaster',
-    images: ['/game/cast.webp'],
-  },
-=======
-=======
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
 export const metadata: Metadata = {
   title: "SnotCoin Mining Game",
   description: "A Telegram-based crypto mining game",
-    generator: 'v0.dev'
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
-=======
->>>>>>> parent of cdf6f88 (Farcaster здравствуй)
+  generator: 'v0.dev',
+  metadataBase: new URL(siteUrl),
+  openGraph: {
+    title: 'SnotCoin Mining Game',
+    description: 'A Telegram-based crypto mining game',
+    images: [
+      {
+        url: imageUrl,
+        width: 1200,
+        height: 628,
+      }
+    ],
+  },
+  // Farcaster Frames metadata
+  other: {
+    // Основные метатеги для Frames v2
+    'fc:frame': 'vNext',
+    'fc:frame:image': imageUrl,
+    'fc:frame:image:aspect_ratio': '1.91:1',
+    'fc:frame:post_url': siteUrl,
+    
+    // Кнопки действий
+    'fc:frame:button:1': 'Play SnotCoin Game',
+    'fc:frame:button:1:target': siteUrl,
+    'fc:frame:button:2': 'Learn More',
+    'fc:frame:button:2:target': `${siteUrl}/about`,
+    
+    // Дополнительные метатеги
+    'fc:frame:state': '',
+    'fc:frame:support:content': 'rich',
+    'fc:frame:support:refresh': 'auto',
+    'fc:frame:support:resend': 'conditional'
+  }
 }
 
 export default function RootLayout({
@@ -65,20 +57,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        {/* Preload Farcaster SDK */}
-        <script 
-          src="https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js" 
-          async 
-          defer
-        />
-      </head>
       <body className={inter.className}>
         <GameProvider>
           <TranslationProvider>
-            <main className="min-h-screen flex flex-col">
+            <TelegramWebAppProvider>
               {children}
-            </main>
+            </TelegramWebAppProvider>
           </TranslationProvider>
         </GameProvider>
       </body>

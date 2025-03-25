@@ -38,10 +38,10 @@ export function middleware(request: NextRequest) {
   // Remove X-Frame-Options header as we'll use CSP instead
   response.headers.delete("X-Frame-Options")
 
-  // Set Content-Security-Policy to allow framing only from Telegram domains
+  // Set Content-Security-Policy to allow framing from any domain
   response.headers.set(
     "Content-Security-Policy",
-    "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me",
+    "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
   )
 
   return response
