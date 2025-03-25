@@ -1,5 +1,6 @@
 import type { GameState, ExtendedGameState } from "../types/gameTypes";
 import { saveQueue, CompressedGameState, isCompressedGameState } from "../utils/saveQueue";
+import { getToken } from "../services/authenticationService";
 
 // Типы для кэша
 interface CacheEntry<T> {
@@ -11,7 +12,7 @@ interface CacheEntry<T> {
 
 // Константы для кэширования
 const CACHE_TTL = 5 * 60 * 1000; // 5 минут
-const SAVE_DEBOUNCE_TIME = 10 * 1000; // 10 секунд
+const SAVE_DEBOUNCE_TIME = 15 * 1000; // 15 секунд (увеличено с 10 секунд)
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000; // 1 секунда
 const MAX_CACHE_SIZE = 50; // Увеличено с 10 до 50
@@ -20,6 +21,10 @@ const INTEGRITY_CHECK_FIELDS = ['inventory'] as const;
 
 // Кэш для данных игры
 const gameStateCache = new Map<string, CacheEntry<ExtendedGameState>>();
+
+// Отслеживание последних загрузок для предотвращения частых запросов
+const lastLoadTimestamps = new Map<string, number>();
+const LOAD_DEBOUNCE_TIME = 2000; // 2 секунды между загрузками
 
 // Отслеживание последних сохранений для предотвращения частых запросов
 const lastSaveTimestamps = new Map<string, number>();
@@ -141,12 +146,16 @@ function restoreFromCache(userId: string, gameState: ExtendedGameState): Extende
 export async function saveGameState(userId: string, gameState: ExtendedGameState): Promise<void> {
   try {
     if (!userId || !gameState) {
+      console.error('[DataService] Неверные аргументы для saveGameState:', { userId: Boolean(userId), gameState: Boolean(gameState) });
       throw new Error('Invalid arguments for saveGameState');
     }
+    
+    console.log(`[DataService] Сохранение состояния для пользователя ${userId}`);
     
     // Проверяем целостность данных перед сохранением
     const isDataValid = checkDataIntegrity(gameState);
     if (!isDataValid) {
+      console.warn(`[DataService] Целостность данных нарушена для пользователя ${userId}, пытаемся восстановить из кэша`);
       // Пытаемся восстановить данные из кэша
       gameState = restoreFromCache(userId, gameState);
     }
@@ -180,6 +189,7 @@ export async function saveGameState(userId: string, gameState: ExtendedGameState
     
     // Если прошло меньше времени, чем SAVE_DEBOUNCE_TIME, добавляем в очередь
     if (now - lastSave < SAVE_DEBOUNCE_TIME) {
+      console.log(`[DataService] Добавление в очередь сохранения для пользователя ${userId}, времени прошло: ${now - lastSave}мс`);
       // Если очередь слишком большая, удаляем старые записи
       if (pendingSaves.size >= MAX_PENDING_SAVES) {
         await processBatchSaves();
@@ -198,12 +208,14 @@ export async function saveGameState(userId: string, gameState: ExtendedGameState
     lastSaveTimestamps.set(userId, now);
     
     // Добавляем в очередь сохранений
+    console.log(`[DataService] Добавляем задачу сохранения в очередь для пользователя ${userId}`);
     saveQueue.enqueue(async () => {
       await saveToPostgres(userId, stateToSave);
     });
     
   } catch (error) {
     // Ошибка сохранения состояния
+    console.error(`[DataService] Ошибка сохранения состояния игры для пользователя ${userId}:`, error);
     saveBackup(userId, gameState, error);
     throw error;
   }
@@ -214,17 +226,37 @@ export async function saveGameState(userId: string, gameState: ExtendedGameState
  */
 async function saveToPostgres(userId: string, gameState: ExtendedGameState, attempt = 1): Promise<void> {
   try {
+    // Проверяем минимальный интервал между API-запросами для одного и того же пользователя
+    const now = Date.now();
+    const lastApiCallTime = lastSaveTimestamps.get(userId) || 0;
+    const MIN_API_CALL_INTERVAL = 5000; // 5 секунд между API-запросами
+    
+    if (now - lastApiCallTime < MIN_API_CALL_INTERVAL) {
+      const waitTime = MIN_API_CALL_INTERVAL - (now - lastApiCallTime);
+      console.log(`[DataService] Слишком частые сохранения для пользователя ${userId}, ожидаем ${waitTime}мс`);
+      
+      // Ожидаем определенное время перед следующим API-запросом
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    console.log(`[DataService] Сохраняем в PostgreSQL для пользователя ${userId}, попытка ${attempt}`);
+    
     // Проверка целостности данных перед отправкой
     if (!checkDataIntegrity(gameState)) {
+      console.warn(`[DataService] Целостность данных нарушена перед отправкой в PostgreSQL для пользователя ${userId}, пытаемся восстановить`);
       // Пытаемся восстановить данные из кэша перед отправкой
       gameState = restoreFromCache(userId, gameState);
       
       // Если после восстановления данные все еще некорректны, создаем резервную копию и выходим
       if (!checkDataIntegrity(gameState)) {
+        console.error(`[DataService] Не удалось восстановить целостность данных для пользователя ${userId}`);
         saveBackup(userId, gameState, new Error('Data integrity check failed'));
         throw new Error('Data integrity check failed, unable to save to server');
       }
     }
+    
+    // Обновляем время последнего API-запроса
+    lastSaveTimestamps.set(userId, Date.now());
     
     // Удаляем ненужные данные перед отправкой
     const cleanedState = { ...gameState };
@@ -253,134 +285,113 @@ async function saveToPostgres(userId: string, gameState: ExtendedGameState, atte
       }
     });
     
-    // Проверяем размер данных перед отправкой
-    const serializedState = JSON.stringify(cleanedState);
-    const dataSize = serializedState.length;
-    
-    let stateToSend: ExtendedGameState | CompressedGameState = cleanedState;
-    let isCompressed = false;
-    
-    // Если данные слишком большие, сжимаем их
-    if (dataSize > 1000000) { // ~1MB
-      console.warn(`Данные слишком большие (${dataSize} байт), выполняем сжатие`);
-      
-      // Удаляем неважные данные
-      const nonCriticalFields = [
-        'settings.debug', 
-        'soundSettings.audioBuffers', 
-        'history', 
-        'logs', 
-        'analytics'
-      ];
-      
-      for (const field of nonCriticalFields) {
-        const parts = field.split('.');
-        let current: any = stateToSend;
-        
-        for (let i = 0; i < parts.length - 1; i++) {
-          if (!current || typeof current !== 'object') break;
-          current = current[parts[i]];
-        }
-        
-        if (current && typeof current === 'object') {
-          const lastPart = parts[parts.length - 1];
-          if (current[lastPart] !== undefined) {
-            delete current[lastPart];
-          }
-        }
-      }
-      
-      // Если после очистки данные все еще большие, применяем сжатие
-      const cleanedJson = JSON.stringify(stateToSend);
-      if (cleanedJson.length > 800000) { // Все еще больше 800KB
-        try {
-          const LZString = await import('lz-string');
-          const compressed = LZString.compressToUTF16(cleanedJson);
-          
-          stateToSend = {
-            _isCompressed: true,
-            _compressedData: compressed,
-            _originalSize: cleanedJson.length,
-            _compressedSize: compressed.length,
-            _compression: 'lz-string-utf16',
-            _compressedAt: new Date().toISOString(),
-            _integrity: {
-              userId,
-              saveVersion: gameState._saveVersion,
-              snot: gameState.inventory?.snot,
-              snotCoins: gameState.inventory?.snotCoins
-            }
-          };
-          
-          isCompressed = true;
-          console.log(`Данные сжаты: ${cleanedJson.length} -> ${compressed.length} байт`);
-        } catch (compressionError) {
-          console.error('Ошибка при сжатии данных:', compressionError);
-          // Продолжаем с несжатыми данными, но предупреждаем об этом
-        }
-      }
-    }
-    
-    // Добавляем метку времени отправки
-    if (!isCompressed) {
-      (stateToSend as ExtendedGameState)._clientSentAt = new Date().toISOString();
-    }
-    
-    // Отправляем данные на сервер с таймаутом
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
-    
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/game/save-progress', {
+      console.log(`[DataService] Получаем JWT-токен для пользователя ${userId}`);
+      // Получаем JWT-токен
+      const token = getToken();
+      
+      // Проверяем наличие токена
+      if (!token) {
+        console.error(`[DataService] JWT-токен отсутствует для пользователя ${userId}. Убедитесь, что пользователь авторизован.`);
+        
+        // Сохраняем резервную копию
+        saveBackup(userId, gameState, new Error('JWT token missing'));
+        
+        // В режиме строгой аутентификации выбрасываем ошибку
+        throw new Error('Отсутствует JWT токен для аутентификации. Необходима авторизация через Farcaster.');
+      }
+      
+      console.log(`[DataService] Отправляем запрос на сохранение для пользователя ${userId}`);
+      // Отправляем запрос на API
+      // Определяем базовый URL в зависимости от среды
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const apiUrl = `${baseUrl}/api/game/save-progress`;
+      
+      // Подготавливаем данные запроса
+      const requestData = {
+        userId: userId,
+        gameState: cleanedState,
+        version: cleanedState._saveVersion || 1,
+        isCompressed: false
+      };
+      
+      // Преобразуем в JSON с проверкой
+      const jsonData = JSON.stringify(requestData);
+      if (!jsonData) {
+        throw new Error('JSON.stringify вернул пустое значение');
+      }
+      
+      console.log(`[DataService] Размер данных для отправки: ${jsonData.length} байт`);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : ''
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          userId, 
-          gameState: stateToSend,
-          clientTimestamp: new Date().toISOString(),
-          isCompressed
-        }),
-        signal: controller.signal
+        body: jsonData
       });
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save game progress');
+        console.error(`[DataService] Ошибка от сервера при сохранении для пользователя ${userId}:`, 
+          {status: response.status, error: errorData});
+        
+        // Если ошибка связана с отсутствием пользователя или его аутентификацией
+        if (response.status === 401) {
+          console.error(`[DataService] Ошибка аутентификации или пользователь не найден для ${userId}.`);
+          
+          // Проверяем, есть ли специфичный код ошибки
+          if (errorData.code === 'USER_NOT_FOUND') {
+            console.log('[DataService] Пользователь не найден на сервере, перенаправляем на авторизацию');
+            
+            // Перенаправляем на страницу авторизации, если это возможно
+            if (typeof window !== 'undefined') {
+              // Сохраняем текущее состояние игры в localStorage перед перенаправлением
+              try {
+                const backupState = JSON.stringify(cleanedState);
+                localStorage.setItem('backup_game_state', backupState);
+                localStorage.setItem('backup_timestamp', Date.now().toString());
+                
+                console.log('[DataService] Создана резервная копия состояния игры перед перенаправлением');
+                
+                // Перенаправляем на страницу авторизации
+                window.location.href = '/auth';
+                return; // Прерываем выполнение функции
+              } catch (backupError) {
+                console.error('[DataService] Ошибка при создании резервной копии перед перенаправлением:', backupError);
+              }
+            }
+          }
+          
+          throw new Error(`Ошибка аутентификации: ${errorData.error || response.statusText}. Требуется авторизация через Farcaster.`);
+        }
+        
+        throw new Error(`Failed to save game state: ${errorData.error || response.statusText}`);
       }
       
-      const result = await response.json();
+      const responseData = await response.json();
+      console.log(`[DataService] Успешное сохранение для пользователя ${userId}:`, responseData);
+    } catch (error) {
+      console.error(`[DataService] Ошибка сохранения данных в PostgreSQL для пользователя ${userId}:`, error);
       
-      // Обновляем версию на основе ответа сервера
-      if (result.version) {
-        stateVersions.set(userId, result.version);
+      // Если не последняя попытка, пробуем еще раз
+      if (attempt < MAX_RETRY_ATTEMPTS) {
+        // Экспоненциальная задержка между попытками
+        const delay = RETRY_DELAY * Math.pow(2, attempt - 1);
+        console.log(`[DataService] Повторная попытка через ${delay}мс для пользователя ${userId}, попытка ${attempt + 1}`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return saveToPostgres(userId, gameState, attempt + 1);
       }
       
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      throw fetchError;
+      // Если все попытки исчерпаны, сохраняем резервную копию
+      saveBackup(userId, gameState, error);
+      throw error;
     }
-    
   } catch (error) {
-    // Проверяем на ошибки сети
-    const isNetworkError = error instanceof Error && 
-      (error.message.includes('network') || 
-       error.message.includes('abort') || 
-       error.message.includes('timeout'));
-    
-    // Повторяем попытку, если не превышено максимальное количество
-    if (attempt < MAX_RETRY_ATTEMPTS && (isNetworkError || error instanceof TypeError)) {
-      const retryDelay = RETRY_DELAY * Math.pow(2, attempt - 1); // Экспоненциальная задержка
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return saveToPostgres(userId, gameState, attempt + 1);
-    }
-    
-    // Создаем резервную копию при окончательной неудаче
+    console.error(`[DataService] Критическая ошибка сохранения в PostgreSQL для пользователя ${userId}:`, error);
+    // Сохраняем резервную копию и пробрасываем ошибку
     saveBackup(userId, gameState, error);
     throw error;
   }
@@ -478,6 +489,30 @@ export async function loadGameState(userId: string): Promise<ExtendedGameState |
       throw new Error('Invalid userId for loadGameState');
     }
     
+    // Проверяем, не слишком ли часто загружаем данные
+    const now = Date.now();
+    const lastLoad = lastLoadTimestamps.get(userId) || 0;
+    
+    if (now - lastLoad < LOAD_DEBOUNCE_TIME) {
+      console.log(`[DataService] Слишком частые загрузки для пользователя ${userId}, ожидаем ${LOAD_DEBOUNCE_TIME}мс`);
+      // Возвращаем данные из кэша, если они есть
+      const cachedEntry = gameStateCache.get(userId);
+      if (cachedEntry && cachedEntry.integrity) {
+        return cachedEntry.data;
+      }
+      
+      // Возвращаем резервную копию, если нет кэша
+      const backupData = getBackup(userId);
+      if (backupData) {
+        return backupData;
+      }
+      
+      // Позволяем загрузку только если нет ни кэша, ни резервной копии
+    }
+    
+    // Обновляем время последней загрузки
+    lastLoadTimestamps.set(userId, now);
+    
     // Проверяем кэш сначала
     const cachedEntry = gameStateCache.get(userId);
     if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_TTL) && cachedEntry.integrity) {
@@ -490,113 +525,265 @@ export async function loadGameState(userId: string): Promise<ExtendedGameState |
     // Проверяем, есть ли резервная копия
     backupData = getBackup(userId);
     
-    // Настраиваем таймаут для запроса
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-секундный таймаут
+    // Настраиваем таймаут для запроса - увеличиваем до 15 секунд для предотвращения AbortError
+    let controller: AbortController | null = new AbortController();
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    // Переменная для отслеживания, отменен ли запрос вручную
+    let isManuallyAborted = false;
     
     try {
-      // Получаем токен авторизации, если он есть
-      const token = localStorage.getItem('auth_token');
+      // Устанавливаем таймаут с сохранением ссылки для очистки
+      timeoutId = setTimeout(() => {
+        if (controller) {
+          console.log(`[DataService] Таймаут запроса истек для пользователя ${userId}`);
+          isManuallyAborted = true;
+          controller.abort();
+        }
+      }, 15000); // Увеличиваем до 15 секунд
       
-      // Делаем запрос к API
-      const response = await fetch(`/api/game/load-progress?userId=${userId}`, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
-        },
-        signal: controller.signal
-      });
+      console.log(`[DataService] Получаем JWT-токен для пользователя ${userId} (загрузка)`);
+      // Получаем токен авторизации через единый метод
+      const token = getToken();
       
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        // Если ответ не 200 OK, используем резервную копию
+      if (!token) {
+        console.error(`[DataService] JWT-токен отсутствует для пользователя ${userId} при загрузке`);
+        
+        // Если есть резервная копия в памяти, возвращаем её
         if (backupData) {
+          console.log(`[DataService] Возвращаем резервную копию из-за отсутствия токена для ${userId}`);
           return backupData;
         }
         
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load game progress');
+        throw new Error('Отсутствует JWT токен для аутентификации при загрузке');
       }
       
-      // Получаем данные из ответа
-      const data = await response.json();
+      // Определяем базовый URL в зависимости от среды
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const apiUrl = `${baseUrl}/api/game/load-progress`;
       
-      if (!data.progress) {
-        // Если данных нет, используем резервную копию
-        if (backupData) {
-          return backupData;
+      console.log(`[DataService] Отправляем запрос на загрузку для пользователя ${userId}`);
+      
+      // Делаем запрос к API с повторными попытками
+      let retryCount = 0;
+      const MAX_RETRIES = 2;
+      let lastError: Error | null = null;
+      
+      while (retryCount <= MAX_RETRIES) {
+        if (isManuallyAborted) {
+          break;
         }
         
-        return null;
-      }
-      
-      // Создаем правильно типизированную переменную
-      let typedData: ExtendedGameState;
-      
-      // Проверяем, сжаты ли данные
-      if (isCompressedGameState(data)) {
-        // Распаковываем сжатые данные
         try {
-          const LZString = await import('lz-string');
-          const decompressed = LZString.decompressFromUTF16(data._compressedData);
-          
-          if (!decompressed) {
-            throw new Error('Decompression failed, got empty result');
+          if (retryCount > 0) {
+            console.log(`[DataService] Повторная попытка ${retryCount} для пользователя ${userId}`);
+            
+            // Создаем новый контроллер для каждой повторной попытки
+            if (controller) {
+              controller = new AbortController();
+            }
           }
           
-          typedData = JSON.parse(decompressed) as ExtendedGameState;
-        } catch (decompressError) {
-          console.error('Ошибка при распаковке сжатых данных:', decompressError);
-          // В случае ошибки распаковки, возвращаем резервную копию
-          if (backupData) {
-            return backupData;
+          // Делаем запрос с текущим контроллером
+          const response = await fetch(`${apiUrl}?userId=${userId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            signal: controller ? controller.signal : undefined
+          });
+          
+          // Если запрос успешен, прерываем цикл повторных попыток
+          if (response.ok) {
+            // Получаем данные из ответа
+            const data = await response.json();
+            
+            // Очищаем таймаут
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            
+            if (!data.data || !data.data.gameState) {
+              console.error(`[DataService] Ответ не содержит данных gameState для пользователя ${userId}`);
+              // Если данных нет, используем резервную копию
+              if (backupData) {
+                return backupData;
+              }
+              
+              return null;
+            }
+            
+            // Создаем правильно типизированную переменную
+            let typedData: ExtendedGameState;
+            
+            // Проверяем, сжаты ли данные
+            if (data.data.isCompressed) {
+              // Распаковываем сжатые данные
+              try {
+                const LZString = await import('lz-string');
+                const decompressed = LZString.decompressFromUTF16(data.data.gameState._compressedData);
+                
+                if (!decompressed) {
+                  throw new Error('Decompression failed, got empty result');
+                }
+                
+                typedData = JSON.parse(decompressed) as ExtendedGameState;
+              } catch (decompressError) {
+                console.error('[DataService] Ошибка при распаковке сжатых данных:', decompressError);
+                // В случае ошибки распаковки, возвращаем резервную копию
+                if (backupData) {
+                  return backupData;
+                }
+                throw new Error('Failed to decompress game data');
+              }
+            } else {
+              // Проверяем формат gameState - поддержка как структурированного, так и обычного формата
+              const gameState = data.data.gameState;
+              
+              // Для структурированного формата (с critical/regular/extended)
+              if (gameState.critical && gameState.critical.inventory) {
+                // Преобразуем из структурированного формата в ExtendedGameState
+                typedData = {
+                  inventory: gameState.critical.inventory,
+                  container: gameState.critical.container,
+                  upgrades: gameState.critical.upgrades,
+                  achievements: gameState.regular?.achievements || { unlockedAchievements: [] },
+                  stats: gameState.regular?.stats || {},
+                  items: gameState.regular?.items || [],
+                  settings: gameState.extended?.settings || {
+                    language: 'ru',
+                    theme: 'light',
+                    notifications: true,
+                    tutorialCompleted: false
+                  },
+                  soundSettings: gameState.extended?.soundSettings || {
+                    clickVolume: 0.5,
+                    effectsVolume: 0.5,
+                    backgroundMusicVolume: 0.3,
+                    isMuted: false,
+                    isEffectsMuted: false,
+                    isBackgroundMusicMuted: false
+                  },
+                  activeTab: "laboratory",
+                  hideInterface: false,
+                  isPlaying: false,
+                  isLoading: false,
+                  containerLevel: gameState.critical.container.level || 1,
+                  fillingSpeed: gameState.critical.container.fillRate || 1,
+                  containerSnot: gameState.critical.container.currentAmount || 0,
+                  gameStarted: true,
+                  highestLevel: gameState.critical.container.level || 1,
+                  consecutiveLoginDays: 0,
+                  user: gameState.critical.metadata?.user || null,
+                  validationStatus: "valid",
+                  _saveVersion: gameState.critical.metadata?.version || 1,
+                  _lastModified: Date.now(),
+                  _lastSaved: new Date().toISOString(),
+                } as ExtendedGameState;
+              } else {
+                // Это обычный формат GameState
+                typedData = gameState as unknown as ExtendedGameState;
+              }
+            }
+            
+            // Проверяем целостность загруженных данных
+            const isDataValid = checkDataIntegrity(typedData);
+            
+            if (!isDataValid && backupData) {
+              // Если данные с сервера некорректны, но есть резервная копия - используем ее
+              console.warn(`[DataService] Данные с сервера не прошли проверку целостности для ${userId}, используем резервную копию`);
+              return backupData;
+            }
+            
+            // Обновляем кэш
+            gameStateCache.set(userId, {
+              data: typedData,
+              timestamp: Date.now(),
+              version: typedData._saveVersion || 0,
+              integrity: isDataValid
+            });
+            
+            // Ограничиваем размер кэша
+            limitCacheSize();
+            
+            // Обновляем версию
+            stateVersions.set(userId, typedData._saveVersion || 0);
+            
+            // Обновляем время последней загрузки с фактическим временем завершения запроса
+            lastLoadTimestamps.set(userId, Date.now());
+            
+            console.log(`[DataService] Успешно загружены данные для пользователя ${userId}`);
+            return typedData;
+          } else {
+            // Если ответ не OK, получаем текст ошибки
+            let errorText = `Статус ответа: ${response.status}`;
+            try {
+              const errorData = await response.json();
+              errorText = errorData.error || errorText;
+            } catch (parseError) {
+              // Игнорируем ошибки парсинга JSON ответа
+            }
+            
+            throw new Error(`Ошибка загрузки: ${errorText}`);
           }
-          throw decompressError;
+        } catch (error) {
+          console.error(`[DataService] Ошибка при загрузке данных для пользователя ${userId} (попытка ${retryCount}):`, error);
+          lastError = error instanceof Error ? error : new Error('Unknown error');
+          retryCount++;
+          
+          // Если это не последняя попытка, делаем паузу перед следующей
+          if (retryCount <= MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
         }
-      } else {
-        typedData = data as ExtendedGameState;
       }
       
-      // Проверяем целостность загруженных данных
-      const isDataValid = checkDataIntegrity(typedData);
-      
-      if (!isDataValid && backupData) {
-        // Если данные с сервера некорректны, но есть резервная копия - используем ее
-        return backupData;
+      // Если все попытки исчерпаны, очищаем таймаут и возвращаем резервную копию
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
       
-      // Обновляем кэш
-      gameStateCache.set(userId, {
-        data: typedData,
-        timestamp: Date.now(),
-        version: typedData._saveVersion || 0,
-        integrity: isDataValid
-      });
-      
-      // Ограничиваем размер кэша
-      limitCacheSize();
-      
-      // Обновляем версию
-      stateVersions.set(userId, typedData._saveVersion || 0);
-      
-      return typedData;
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      // Ошибка получения данных с сервера
-      
-      // В случае ошибки, возвращаем резервную копию, если она есть
+      // Если все попытки исчерпаны, возвращаем резервную копию
       if (backupData) {
+        console.log(`[DataService] Все попытки загрузки завершились с ошибкой, возвращаем резервную копию для ${userId}`);
         return backupData;
       }
       
-      throw fetchError;
+      // Если нет резервной копии, возвращаем кэшированные данные или null
+      const cachedEntry = gameStateCache.get(userId);
+      if (cachedEntry) {
+        console.log(`[DataService] Возвращаем просроченные данные из кэша после неудачных попыток для ${userId}`);
+        return cachedEntry.data;
+      }
+      
+      console.error(`[DataService] Не удалось загрузить данные для ${userId} и нет резервных копий`);
+      return null;
+    } catch (error) {
+      // Очищаем таймаут в случае критической ошибки
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      console.error(`[DataService] Критическая ошибка загрузки для пользователя ${userId}:`, error);
+      
+      // В случае критической ошибки, пробуем вернуть данные из кэша, даже если они просрочены
+      const cachedEntry = gameStateCache.get(userId);
+      if (cachedEntry) {
+        console.log(`[DataService] Возвращаем просроченные данные из кэша для ${userId}`);
+        return cachedEntry.data;
+      }
+      
+      return null;
     }
   } catch (error) {
-    // Ошибка загрузки состояния игры
+    console.error(`[DataService] Критическая ошибка загрузки для пользователя ${userId}:`, error);
     
     // В случае критической ошибки, пробуем вернуть данные из кэша, даже если они просрочены
     const cachedEntry = gameStateCache.get(userId);
     if (cachedEntry) {
+      console.log(`[DataService] Возвращаем просроченные данные из кэша для ${userId}`);
       return cachedEntry.data;
     }
     
@@ -718,20 +905,29 @@ export function setupBeforeUnloadHandler(userId: string, getLatestState: () => E
       
       // Используем Beacon API для надежной отправки перед закрытием
       if (navigator.sendBeacon) {
-        // Получаем JWT-токен
-        const token = localStorage.getItem('auth_token');
+        // Получаем JWT-токен через единый метод
+        const token = getToken();
+        
+        // Если токена нет, не отправляем запрос
+        if (!token) {
+          console.warn('[DataService] JWT-токен отсутствует при сохранении перед закрытием страницы');
+          return;
+        }
         
         // Подготавливаем данные для отправки
         const payload = {
           userId,
           gameState: state,
           clientTimestamp: new Date().toISOString(),
-          token: token // Добавляем токен напрямую в данные, так как нельзя установить заголовки в sendBeacon
+          version: state._saveVersion || 1,
+          isCompressed: false
         };
         
+        // Создаем заголовки для Beacon API (хотя они не могут быть напрямую использованы)
+        // Добавляем токен в URL в качестве обходного решения
         const data = JSON.stringify(payload);
         const blob = new Blob([data], { type: 'application/json' });
-        navigator.sendBeacon('/api/game/save-progress', blob);
+        navigator.sendBeacon(`/api/game/save-progress?token=${encodeURIComponent(token)}`, blob);
       }
       
       // Отменяем стандартное сообщение подтверждения выхода
@@ -739,7 +935,7 @@ export function setupBeforeUnloadHandler(userId: string, getLatestState: () => E
       // Chrome требует возврата значения
       event.returnValue = '';
     } catch (error) {
-      // Ошибка в обработчике beforeUnload
+      console.error('[DataService] Ошибка в обработчике beforeUnload:', error);
     }
   };
   

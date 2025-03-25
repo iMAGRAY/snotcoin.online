@@ -10,10 +10,10 @@ export class UserModel {
   /**
    * Поиск пользователя по farcaster_fid
    */
-  static async findByFarcasterId(fid: number) {
+  static async findByFarcasterId(fid: number | string) {
     try {
       return await prisma.user.findUnique({
-        where: { farcaster_fid: fid }
+        where: { farcaster_fid: String(fid) }
       });
     } catch (error) {
       console.error('Ошибка при поиске пользователя по farcaster_fid:', error);
@@ -25,7 +25,7 @@ export class UserModel {
    * Создание нового пользователя
    */
   static async create(userData: {
-    farcaster_fid: number;
+    farcaster_fid: number | string;
     username?: string;
     first_name?: string;
     last_name?: string;
@@ -35,7 +35,7 @@ export class UserModel {
       // Используем напрямую поля farcaster_*
       return await prisma.user.create({
         data: {
-          farcaster_fid: userData.farcaster_fid,
+          farcaster_fid: String(userData.farcaster_fid),
           farcaster_username: userData.username || '',
           farcaster_displayname: userData.first_name || '',
           farcaster_pfp: userData.photo_url || '',

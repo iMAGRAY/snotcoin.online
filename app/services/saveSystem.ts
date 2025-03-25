@@ -1,976 +1,932 @@
-import { GameState } from "@/app/types/gameTypes";
-import { initialState } from "@/app/constants/gameConstants";
-import * as uuid from "uuid";
-import * as LZString from "lz-string";
-
-// Константы для системы сохранения
-const SAVE_VERSION = 1;
-const LOCAL_SAVE_INTERVAL = 30 * 1000; // 30 секунд
-const SERVER_SAVE_INTERVAL = 2 * 60 * 1000; // 2 минуты
-const CONFLICT_THRESHOLD = 5 * 60 * 1000; // 5 минут
-
-// Расширяем тип игрового состояния для нужд системы сохранений
-interface ExtendedGameState extends GameState {
-  _saveVersion?: number;
-  _lastSavedAt?: string;
-  _serverSavedAt?: string;
-  _isDelta?: boolean;
-  _baseVersion?: number;
-  _saveId?: string;
-  _mergedAt?: string; // Метка времени последнего слияния состояний
-}
-
-// Интерфейс для дельта-изменений состояния
-interface DeltaChanges {
-  _isDelta: true;
-  _baseVersion: number;
-  changes: Record<string, any>;
-}
-
-// Опции для сохранения
-interface SaveOptions {
-  forceFull?: boolean; // Принудительно полное сохранение, а не дельта
-  skipServer?: boolean; // Пропустить сохранение на сервер
-  skipLocal?: boolean; // Пропустить локальное сохранение
-}
-
-// Абстрактный интерфейс для адаптеров хранилища
-interface StorageAdapter {
-  save(key: string, data: any): Promise<boolean>;
-  load(key: string): Promise<any>;
-  delete(key: string): Promise<boolean>;
-}
-
 /**
- * Адаптер для работы с localStorage
+ * Система сохранения прогресса пользователя
+ * Оптимизирована для работы с миллионом пользователей
  */
-class LocalStorageAdapter implements StorageAdapter {
-  /**
-   * Сохраняет данные в localStorage с компрессией
-   */
-  async save(key: string, data: any): Promise<boolean> {
-    try {
-      const serialized = JSON.stringify(data);
-      const compressed = LZString.compressToUTF16(serialized);
-      
-      localStorage.setItem(key, compressed);
-      return true;
-    } catch (error) {
-      console.error('Ошибка при сохранении в localStorage:', error);
-      return false;
-    }
-  }
 
-  /**
-   * Загружает данные из localStorage с декомпрессией
-   */
-  async load(key: string): Promise<any> {
-    try {
-      const compressed = localStorage.getItem(key);
-      
-      if (!compressed) {
-        return null;
-      }
-      
-      const serialized = LZString.decompressFromUTF16(compressed);
-      
-      if (!serialized) {
-        return null;
-      }
-      
-      return JSON.parse(serialized);
-    } catch (error) {
-      console.error('Ошибка при загрузке из localStorage:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Удаляет данные из localStorage
-   */
-  async delete(key: string): Promise<boolean> {
-    try {
-      localStorage.removeItem(key);
-      return true;
-    } catch (error) {
-      console.error('Ошибка при удалении из localStorage:', error);
-      return false;
-    }
-  }
-}
+import { AsyncStorage, StorageKeys } from "../utils/asyncStorage";
+import { SyncManager } from "../utils/syncManager";
+import { validateAndRepairGameState } from "../utils/dataIntegrity";
+import { 
+  compressGameState, 
+  decompressGameState, 
+  estimateCompression,
+  CompressionAlgorithm
+} from "../utils/dataCompression";
+import { createDelta, applyDelta } from "../utils/deltaCompression";
+import { ExtendedGameState } from "../types/gameTypes";
+import { StructuredGameSave, DeltaGameState, SyncInfo } from "../types/saveTypes";
 
 /**
- * Адаптер для работы с API сервера через fetch
+ * Настройки системы сохранения
  */
-class ServerApiAdapter implements StorageAdapter {
-  private userId: string;
-  private authToken: string;
-  private baseUrl: string;
-
-  constructor(userId: string, authToken: string, baseUrl: string = '') {
-    this.userId = userId;
-    this.authToken = authToken;
-    this.baseUrl = baseUrl;
-  }
-
-  /**
-   * Сохраняет данные через API
-   */
-  async save(key: string, data: any): Promise<boolean> {
-    try {
-      // Проверяем авторизацию
-      if (!this.userId || !this.authToken) {
-        console.error('Отсутствуют данные для авторизации');
-        return false;
-      }
-
-      const response = await fetch(`${this.baseUrl}/api/game/savestate/${this.userId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.authToken}`
-        },
-        body: JSON.stringify(data)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Ошибка сохранения (${response.status}): ${errorText}`);
-      }
-
-      const result = await response.json();
-      
-      // Сохраняем локальную версию для оптимизации будущих запросов
-      if (result.version) {
-        this.saveLocalVersion(result.version);
-      }
-      
-      return result.success === true;
-    } catch (error) {
-      console.error('Ошибка при сохранении на сервер:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Загружает данные через API
-   */
-  async load(key: string): Promise<any> {
-    try {
-      // Проверяем авторизацию
-      if (!this.userId || !this.authToken) {
-        console.error('Отсутствуют данные для авторизации');
-        return null;
-      }
-
-      // Получаем последнюю версию локально (для оптимизации загрузки)
-      const lastVersion = await this.getLocalVersion();
-      
-      const response = await fetch(
-        `${this.baseUrl}/api/game/savestate/${this.userId}?lastKnownVersion=${lastVersion}`, 
-        {
-          headers: {
-            'Authorization': `Bearer ${this.authToken}`
-          }
-        }
-      );
-
-      // Если версия локально последняя, сервер вернет 304
-      if (response.status === 304) {
-        console.log('Локальная версия актуальна, загрузка с сервера не требуется');
-        return null;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Ошибка загрузки (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      // Сохраняем версию, если она пришла от сервера
-      if (data && data._saveVersion) {
-        this.saveLocalVersion(data._saveVersion);
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Ошибка при загрузке с сервера:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Удаляет данные через API
-   */
-  async delete(key: string): Promise<boolean> {
-    // Удаление через API не поддерживается для защиты данных
-    console.warn('Прямое удаление данных с сервера не реализовано');
-    return false;
-  }
+export interface SaveSystemOptions {
+  // Автоматическое сохранение
+  autoSave: boolean;
   
-  /**
-   * Получает локальную версию сохранения для оптимизации запросов
-   */
-  private async getLocalVersion(): Promise<number> {
-    try {
-      const localKey = `${this.userId}_version`;
-      const version = localStorage.getItem(localKey);
-      return version ? parseInt(version, 10) : 0;
-    } catch (error) {
-      return 0;
-    }
-  }
+  // Интервал автосохранения (в миллисекундах)
+  autoSaveInterval: number;
   
-  /**
-   * Сохраняет локальную версию
-   */
-  saveLocalVersion(version: number): void {
-    try {
-      const localKey = `${this.userId}_version`;
-      localStorage.setItem(localKey, version.toString());
-    } catch (error) {
-      console.error('Ошибка при сохранении версии:', error);
-    }
-  }
+  // Сжимать данные перед сохранением
+  compressData: boolean;
+  
+  // Синхронизировать с сервером
+  syncWithServer: boolean;
+  
+  // Стратегия разрешения конфликтов
+  conflictResolution: 'client-wins' | 'server-wins' | 'merge' | 'manual';
+  
+  // Режим отладки
+  debugMode: boolean;
+  
+  // Тип хранилища
+  storageType: "localStorage" | "sessionStorage" | "indexedDB" | "memory";
+  
+  // Максимальное количество локальных резервных копий
+  maxLocalBackups: number;
+  
+  // Сохранять автоматически при закрытии страницы
+  saveOnPageClose: boolean;
+  
+  // Оптимизировать сохранения (использовать дельта-сохранения)
+  optimizeSaves: boolean;
+  
+  // Проверять целостность данных при загрузке
+  validateOnLoad: boolean;
 }
 
 /**
- * Основной класс системы сохранения
+ * Результат операции сохранения/загрузки
+ */
+export interface SaveResult {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: string;
+  timestamp: number;
+  metrics?: {
+    duration: number;
+    dataSize?: number;
+    compressedSize?: number;
+    compressionRatio?: number;
+  };
+}
+
+/**
+ * Информация о сохранении
+ */
+export interface SaveInfo {
+  lastSaved: Date;
+  version: number;
+  saveCount: number;
+  hasLocalBackup: boolean;
+  hasSyncedBackup: boolean;
+  lastSync?: Date;
+  compressionStats?: {
+    originalSize: number;
+    compressedSize: number;
+    ratio: number;
+  };
+}
+
+/**
+ * Система сохранения с поддержкой оптимизаций для миллиона пользователей
  */
 export class SaveSystem {
-  private userId: string | null = null;
-  private authToken: string | null = null;
-  private localAdapter: LocalStorageAdapter;
-  private serverAdapter: ServerApiAdapter | null = null;
-
-  private lastLocalSave: number = 0;
-  private lastServerSave: number = 0;
-  private lastLoadedState: ExtendedGameState | null = null;
-  private autoSaveTimeout: NodeJS.Timeout | null = null;
-  private saveInProgress: boolean = false;
-
-  private saveKey: string = 'snotcoin_save';
+  private options: SaveSystemOptions;
+  private storage: AsyncStorage;
+  private syncManager: SyncManager | null = null;
+  private currentState: ExtendedGameState | null = null;
+  private previousState: ExtendedGameState | null = null;
+  private autoSaveTimer: NodeJS.Timeout | null = null;
+  private saveCounter: number = 0;
+  private lastSaveTime: number = 0;
+  private isInitialized: boolean = false;
+  private userId: string;
+  private saveQueue: Array<() => Promise<void>> = [];
+  private isSaving: boolean = false;
   
-  constructor() {
-    this.localAdapter = new LocalStorageAdapter();
-  }
-
   /**
-   * Устанавливает данные пользователя для сохранений
+   * Создает экземпляр системы сохранения
+   * @param userId ID пользователя
+   * @param options Настройки системы сохранения
    */
-  setUserData(userId: string, authToken: string): void {
+  constructor(userId: string, options?: Partial<SaveSystemOptions>) {
     this.userId = userId;
-    this.authToken = authToken;
-    this.serverAdapter = new ServerApiAdapter(userId, authToken);
-    this.saveKey = `snotcoin_save_${userId}`;
-  }
-
-  /**
-   * Получает ID пользователя
-   */
-  getUserId(): string | null {
-    return this.userId;
-  }
-
-  /**
-   * Проверяет, инициализирована ли система сохранений с данными пользователя
-   */
-  isInitialized(): boolean {
-    return !!this.userId && !!this.authToken && !!this.serverAdapter;
-  }
-
-  /**
-   * Запускает автосохранение
-   */
-  startAutoSave(): void {
-    if (this.autoSaveTimeout) {
-      clearTimeout(this.autoSaveTimeout);
-    }
-
-    this.autoSaveTimeout = setTimeout(() => {
-      this.autoSave();
-    }, LOCAL_SAVE_INTERVAL);
-  }
-
-  /**
-   * Останавливает автосохранение
-   */
-  stopAutoSave(): void {
-    if (this.autoSaveTimeout) {
-      clearTimeout(this.autoSaveTimeout);
-      this.autoSaveTimeout = null;
-    }
-  }
-
-  /**
-   * Логика автосохранения
-   */
-  private async autoSave(): Promise<void> {
-    if (this.saveInProgress) {
-      // Если сохранение уже идет, откладываем следующее
-      this.startAutoSave();
-      return;
-    }
-
-    // Проверяем, есть ли загруженное состояние
-    if (!this.lastLoadedState) {
-      console.warn('Автосохранение пропущено: нет загруженного состояния');
-      this.startAutoSave();
-      return;
-    }
-
-    const now = Date.now();
-    const options: SaveOptions = {};
-
-    // Определяем нужно ли сохранять на сервер
-    if (now - this.lastServerSave >= SERVER_SAVE_INTERVAL) {
-      // Пришло время сохранять на сервер
-      options.skipLocal = false;
-      options.skipServer = false;
-    } else {
-      // Сохраняем только локально
-      options.skipServer = true;
-    }
-
-    try {
-      // Запускаем сохранение
-      const saveResult = await this.save(this.lastLoadedState, options);
-      
-      if (!saveResult) {
-        console.warn('Автосохранение не удалось, попробуем снова через сокращенный интервал');
-        // При неудаче пробуем сохранить чаще, но только локально
-        setTimeout(() => {
-          this.autoSave();
-        }, Math.floor(LOCAL_SAVE_INTERVAL / 2));
-        return;
-      }
-    } catch (error) {
-      console.error('Ошибка при автосохранении:', error);
-      // При ошибке также пробуем сохранить чаще, но только локально
-      setTimeout(() => {
-        this.autoSave();
-      }, Math.floor(LOCAL_SAVE_INTERVAL / 2));
-      return;
-    }
-
-    // Планируем следующее автосохранение
-    this.startAutoSave();
-  }
-
-  /**
-   * Сохраняет игровое состояние
-   * @param state Текущее игровое состояние
-   * @param options Опции сохранения
-   */
-  async save(state: ExtendedGameState, options: SaveOptions = {}): Promise<boolean> {
-    if (!state) {
-      console.error('Попытка сохранить пустое состояние');
-      return false;
-    }
-
-    this.saveInProgress = true;
-    let success = true;
     
-    try {
-      // Создаем копию состояния для сохранения
-      const stateToSave: ExtendedGameState = this.deepClone(state);
-      
-      // Добавляем метаданные сохранения
-      stateToSave._saveVersion = stateToSave._saveVersion || 0;
-      stateToSave._lastSavedAt = new Date().toISOString();
-      
-      // Генерируем уникальный ID сохранения, если его нет
-      if (!stateToSave._saveId) {
-        stateToSave._saveId = uuid.v4();
-      }
-      
-      // Локальное сохранение
-      if (!options.skipLocal) {
-        const localSuccess = await this.localAdapter.save(this.saveKey, stateToSave);
-        if (localSuccess) {
-          this.lastLocalSave = Date.now();
-        } else {
-          success = false;
-        }
-      }
-      
-      // Сохранение на сервер
-      if (!options.skipServer && this.serverAdapter && this.isInitialized()) {
-        // Проверяем, есть ли существенные изменения, требующие сохранения на сервер
-        if (options.forceFull || this.hasSignificantChanges(this.lastLoadedState, stateToSave)) {
-          // Создаем дельту для оптимизации передачи данных
-          let dataToSave: ExtendedGameState | DeltaChanges = stateToSave;
-          
-          if (!options.forceFull && this.lastLoadedState && this.lastLoadedState._saveVersion) {
-            const delta = this.createStateDelta(this.lastLoadedState, stateToSave);
-            if (delta) {
-              dataToSave = delta;
-            }
-          }
-          
-          const serverSuccess = await this.serverAdapter.save(this.saveKey, dataToSave);
-          if (serverSuccess) {
-            this.lastServerSave = Date.now();
-            stateToSave._serverSavedAt = new Date().toISOString();
-            
-            // Обновляем локальную копию с отметкой о серверном сохранении
-            if (!options.skipLocal) {
-              await this.localAdapter.save(this.saveKey, stateToSave);
-            }
-          } else {
-            // При ошибке сохранения, только отметим что было неудачно
-            success = false;
-          }
-        } else {
-          console.log('Пропуск сохранения на сервер: нет существенных изменений');
-        }
-      }
-      
-      // Сохраняем последнее состояние для дальнейшего определения изменений
-      this.lastLoadedState = this.deepClone(stateToSave);
-      
-      return success;
-    } catch (error) {
-      console.error('Ошибка при сохранении:', error);
-      return false;
-    } finally {
-      this.saveInProgress = false;
-    }
-  }
-
-  /**
-   * Проверяет, есть ли в состоянии существенные изменения, требующие сохранения
-   */
-  private hasSignificantChanges(oldState: ExtendedGameState | null, newState: ExtendedGameState): boolean {
-    if (!oldState) return true;
-    
-    try {
-      // Проверяем изменения в ключевых параметрах игры
-      // (можно настроить для конкретной игры, какие изменения считать существенными)
-      
-      // Проверяем изменение основных показателей
-      if (oldState.inventory?.snot !== newState.inventory?.snot ||
-          oldState.inventory?.snotCoins !== newState.inventory?.snotCoins ||
-          oldState.container?.level !== newState.container?.level) {
-        return true;
-      }
-      
-      // Проверяем изменения в апгрейдах
-      if (JSON.stringify(oldState.upgrades) !== JSON.stringify(newState.upgrades)) {
-        return true;
-      }
-      
-      // Проверяем время - если прошло более 5 минут, сохраняем в любом случае
-      const oldTime = oldState._lastSavedAt ? new Date(oldState._lastSavedAt).getTime() : 0;
-      const currentTime = Date.now();
-      if (currentTime - oldTime > 5 * 60 * 1000) {
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Ошибка при проверке изменений:', error);
-      return true; // В случае ошибки лучше сохранить
-    }
-  }
-
-  /**
-   * Загружает игровое состояние
-   * @param forceServer Принудительно загрузить с сервера
-   * @returns Загруженное состояние или null
-   */
-  async load(forceServer: boolean = false): Promise<ExtendedGameState | null> {
-    try {
-      let serverState: ExtendedGameState | null = null;
-      let localState: ExtendedGameState | null = null;
-      
-      // Загружаем локальные данные
-      if (!forceServer) {
-        localState = await this.localAdapter.load(this.saveKey) as ExtendedGameState | null;
-      }
-      
-      // Загружаем серверные данные, если доступны и пользователь аутентифицирован
-      if (this.serverAdapter && this.isInitialized()) {
-        serverState = await this.serverAdapter.load(this.saveKey) as ExtendedGameState | null;
-      }
-      
-      // Если есть и локальные, и серверные данные - разрешаем конфликты
-      if (localState && serverState) {
-        const resolvedState = this.resolveStateConflict(localState, serverState);
-        this.lastLoadedState = resolvedState;
-        return resolvedState;
-      }
-      
-      // Если есть только один источник данных
-      const state = serverState || localState;
-      
-      if (!state) {
-        // Если нет данных, возвращаем начальное состояние
-        const initialGameState: ExtendedGameState = {
-          ...initialState,
-          _saveVersion: SAVE_VERSION,
-          _lastSavedAt: new Date().toISOString(),
-          _saveId: uuid.v4()
-        };
-        
-        this.lastLoadedState = initialGameState;
-        return initialGameState;
-      }
-      
-      // Проверяем, является ли состояние дельта-состоянием
-      if (this.isDeltaState(state)) {
-        console.error('Получено дельта-состояние, но нет базового состояния для применения');
-        return null;
-      }
-      
-      this.lastLoadedState = state;
-      return state;
-    } catch (error) {
-      console.error('Ошибка при загрузке игрового состояния:', error);
-      
-      // В случае ошибки при загрузке с сервера, пытаемся вернуть локальное сохранение
-      if (!forceServer) {
-        try {
-          const fallbackState = await this.localAdapter.load(this.saveKey) as ExtendedGameState | null;
-          if (fallbackState) {
-            console.warn('Используем локальное сохранение после ошибки сервера');
-            this.lastLoadedState = fallbackState;
-            return fallbackState;
-          }
-        } catch (localError) {
-          console.error('Ошибка при резервной загрузке из локального хранилища:', localError);
-        }
-      }
-      
-      return null;
-    }
-  }
-
-  /**
-   * Разрешает конфликт между локальным и серверным состоянием
-   * @param localState Локальное состояние
-   * @param serverState Серверное состояние
-   * @returns Разрешенное состояние
-   */
-  private resolveStateConflict(
-    localState: ExtendedGameState, 
-    serverState: ExtendedGameState
-  ): ExtendedGameState {
-    // Проверяем, является ли серверное состояние дельтой
-    if (this.isDeltaState(serverState)) {
-      // Если это дельта, применяем ее к локальному состоянию
-      return this.applyDelta(localState, serverState as any);
-    }
-    
-    try {
-      // Получаем временные метки
-      const localTimestamp = localState._lastSavedAt 
-        ? new Date(localState._lastSavedAt).getTime() 
-        : 0;
-        
-      const serverTimestamp = serverState._serverSavedAt 
-        ? new Date(serverState._serverSavedAt).getTime() 
-        : 0;
-        
-      // Проверяем на различия в версиях
-      const localVersion = localState._saveVersion || 0;
-      const serverVersion = serverState._saveVersion || 0;
-      
-      // Если разница во времени между сохранениями меньше порогового значения,
-      // выполняем умное слияние данных
-      const timeDiff = Math.abs(localTimestamp - serverTimestamp);
-      
-      if (timeDiff < CONFLICT_THRESHOLD) {
-        console.log('Обнаружен незначительный конфликт данных, выполняем умное слияние');
-        return this.mergeStates(localState, serverState);
-      }
-      
-      // Если версии совпадают, выбираем более новое состояние
-      if (localVersion === serverVersion) {
-        return localTimestamp > serverTimestamp ? localState : serverState;
-      }
-      
-      // Если версии разные, но близкие, пытаемся объединить данные
-      if (Math.abs(localVersion - serverVersion) <= 3) {
-        return this.mergeStates(localState, serverState, true);
-      }
-      
-      // Если версии сильно различаются, предпочитаем более новую версию
-      return serverVersion > localVersion ? serverState : localState;
-    } catch (error) {
-      console.error('Ошибка при разрешении конфликта состояний:', error);
-      
-      // В случае ошибки возвращаем самое новое состояние по временной метке
-      const localTimestamp = localState._lastSavedAt 
-        ? new Date(localState._lastSavedAt).getTime() 
-        : 0;
-        
-      const serverTimestamp = serverState._serverSavedAt 
-        ? new Date(serverState._serverSavedAt).getTime() 
-        : 0;
-        
-      return localTimestamp > serverTimestamp ? localState : serverState;
-    }
-  }
-  
-  /**
-   * Выполняет умное слияние двух состояний
-   * @param localState Локальное состояние
-   * @param serverState Серверное состояние
-   * @param preferNewer Предпочитать более новые данные при конфликтах
-   * @returns Объединенное состояние
-   */
-  private mergeStates(
-    localState: ExtendedGameState,
-    serverState: ExtendedGameState,
-    preferNewer: boolean = false
-  ): ExtendedGameState {
-    // Создаем базовое состояние из более нового
-    const localTime = localState._lastSavedAt 
-      ? new Date(localState._lastSavedAt).getTime() 
-      : 0;
-      
-    const serverTime = serverState._serverSavedAt 
-      ? new Date(serverState._serverSavedAt).getTime() 
-      : 0;
-      
-    // Определяем, какое состояние более новое
-    const isLocalNewer = localTime > serverTime;
-    
-    // Выбираем базовое состояние
-    const baseState = isLocalNewer ? this.deepClone(localState) : this.deepClone(serverState);
-    const otherState = isLocalNewer ? serverState : localState;
-    
-    // Критические данные, которые нельзя потерять
-    const criticalPaths = [
-      'inventory.snotCoins',
-      'inventory.snot',
-      'container.level',
-      'upgrades'
-    ];
-    
-    try {
-      // Обходим критические пути и проверяем на потерю данных
-      for (const path of criticalPaths) {
-        const parts = path.split('.');
-        let baseValue: any = baseState;
-        let otherValue: any = otherState;
-        
-        for (const part of parts) {
-          if (baseValue === undefined || baseValue === null) break;
-          if (otherValue === undefined || otherValue === null) break;
-          
-          baseValue = baseValue[part];
-          otherValue = otherValue[part];
-        }
-        
-        // Если значение существует в другом состоянии, но отсутствует в базовом,
-        // либо значение в другом состоянии больше (для числовых значений),
-        // копируем его из другого состояния
-        if (baseValue === undefined && otherValue !== undefined) {
-          this.setValueByPath(baseState, path, otherValue);
-        } else if (
-          typeof baseValue === 'number' &&
-          typeof otherValue === 'number' &&
-          otherValue > baseValue
-        ) {
-          if (preferNewer || path.includes('inventory') || path.includes('container')) {
-            this.setValueByPath(baseState, path, otherValue);
-          }
-        }
-      }
-      
-      // Проверяем на новые элементы, которых может не быть в базовом состоянии
-      this.mergeArrays(baseState, otherState, 'upgrades');
-      this.mergeArrays(baseState, otherState, 'inventory.items');
-      this.mergeArrays(baseState, otherState, 'achievements');
-      
-      // Обновляем метаданные слияния
-      baseState._mergedAt = new Date().toISOString();
-      baseState._saveVersion = Math.max(
-        baseState._saveVersion || 0,
-        otherState._saveVersion || 0
-      ) + 1;
-      
-      return baseState;
-    } catch (error) {
-      console.error('Ошибка при слиянии состояний:', error);
-      // В случае ошибки возвращаем состояние, выбранное в начале
-      return baseState;
-    }
-  }
-  
-  /**
-   * Устанавливает значение в объекте по указанному пути
-   * @param obj Объект для изменения
-   * @param path Путь в формате 'a.b.c'
-   * @param value Значение для установки
-   */
-  private setValueByPath(obj: any, path: string, value: any): void {
-    const parts = path.split('.');
-    let current = obj;
-    
-    for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
-      if (current[part] === undefined) {
-        current[part] = {};
-      }
-      current = current[part];
-    }
-    
-    current[parts[parts.length - 1]] = value;
-  }
-  
-  /**
-   * Объединяет массивы из двух состояний
-   * @param baseState Базовое состояние
-   * @param otherState Другое состояние
-   * @param path Путь к массиву
-   */
-  private mergeArrays(baseState: any, otherState: any, path: string): void {
-    try {
-      const parts = path.split('.');
-      let baseArray: any[] | undefined;
-      let otherArray: any[] | undefined;
-      
-      // Получаем ссылки на массивы
-      let baseCurrent = baseState;
-      let otherCurrent = otherState;
-      
-      for (const part of parts) {
-        if (!baseCurrent || !otherCurrent) return;
-        
-        baseCurrent = baseCurrent[part];
-        otherCurrent = otherCurrent[part];
-      }
-      
-      baseArray = baseCurrent;
-      otherArray = otherCurrent;
-      
-      // Если обе ссылки - массивы, объединяем их
-      if (Array.isArray(baseArray) && Array.isArray(otherArray)) {
-        // Предполагаем, что массивы содержат объекты с id
-        const baseIds = new Set(baseArray.map(item => item.id || JSON.stringify(item)));
-        
-        // Добавляем элементы, которых нет в базовом массиве
-        for (const item of otherArray) {
-          const itemId = item.id || JSON.stringify(item);
-          if (!baseIds.has(itemId)) {
-            baseArray.push(item);
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`Ошибка при объединении массивов по пути ${path}:`, error);
-    }
-  }
-
-  /**
-   * Создает дельту изменений между двумя состояниями
-   */
-  private createStateDelta(
-    baseState: ExtendedGameState, 
-    newState: ExtendedGameState
-  ): DeltaChanges | null {
-    try {
-      // Проверяем, что у нас есть базовая версия
-      if (!baseState._saveVersion) {
-        return null;
-      }
-
-      const changes: Record<string, any> = {};
-      let hasChanges = false;
-
-      // Рекурсивная функция для сравнения объектов и нахождения различий
-      const findChanges = (
-        base: Record<string, any>, 
-        current: Record<string, any>, 
-        path: string = ''
-      ): void => {
-        // Получаем все ключи из обоих объектов
-        const allKeys = new Set([
-          ...Object.keys(base), 
-          ...Object.keys(current)
-        ]);
-
-        // Используем Array.from для итерации по Set
-        Array.from(allKeys).forEach(key => {
-          // Пропускаем служебные поля
-          if (key.startsWith('_')) return;
-
-          const currentPath = path ? `${path}.${key}` : key;
-          const baseValue = base[key];
-          const currentValue = current[key];
-
-          // Если значение отсутствует в одном из объектов
-          if (baseValue === undefined || currentValue === undefined) {
-            if (baseValue !== currentValue) {
-              hasChanges = true;
-              changes[currentPath] = currentValue;
-            }
-            return;
-          }
-
-          // Если типы различаются
-          if (typeof baseValue !== typeof currentValue) {
-            hasChanges = true;
-            changes[currentPath] = currentValue;
-            return;
-          }
-
-          // Если это примитивы и они различаются
-          if (
-            typeof currentValue !== 'object' || 
-            currentValue === null
-          ) {
-            if (baseValue !== currentValue) {
-              hasChanges = true;
-              changes[currentPath] = currentValue;
-            }
-            return;
-          }
-
-          // Если это массив
-          if (Array.isArray(currentValue)) {
-            if (
-              JSON.stringify(baseValue) !== JSON.stringify(currentValue)
-            ) {
-              hasChanges = true;
-              changes[currentPath] = currentValue;
-            }
-            return;
-          }
-
-          // Если это объект, рекурсивно ищем изменения
-          findChanges(baseValue, currentValue, currentPath);
-        });
-      };
-
-      // Начинаем поиск изменений
-      findChanges(baseState, newState);
-
-      if (!hasChanges) {
-        return null;
-      }
-
-      // Создаем объект дельты
-      return {
-        _isDelta: true,
-        _baseVersion: baseState._saveVersion,
-        changes
-      };
-    } catch (error) {
-      console.error('Ошибка при создании дельты состояния:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Создает глубокую копию объекта состояния
-   * @param state Объект состояния для клонирования
-   * @returns Глубокая копия объекта
-   */
-  private deepClone<T>(state: T): T {
-    try {
-      return JSON.parse(JSON.stringify(state));
-    } catch (error) {
-      console.error('Ошибка при создании глубокой копии объекта:', error);
-      // В случае ошибки возвращаем оригинал
-      return state;
-    }
-  }
-
-  /**
-   * Применяет дельту изменений к базовому состоянию
-   */
-  private applyDelta(
-    baseState: ExtendedGameState, 
-    deltaChanges: DeltaChanges
-  ): ExtendedGameState {
-    // Проверяем, что это действительно дельта
-    if (!deltaChanges._isDelta || !deltaChanges.changes) {
-      console.warn('Попытка применить не-дельту как дельту');
-      return baseState;
-    }
-
-    try {
-      // Создаем копию базового состояния
-      const newState = this.deepClone(baseState);
-      
-      // Применяем изменения
-      Object.keys(deltaChanges.changes).forEach(path => {
-        const value = deltaChanges.changes[path];
-        const parts = path.split('.');
-        
-        // Находим нужный объект для изменения
-        let current: any = newState;
-        for (let i = 0; i < parts.length - 1; i++) {
-          const part = parts[i];
-          if (current[part] === undefined) {
-            current[part] = {};
-          }
-          current = current[part];
-        }
-        
-        // Устанавливаем новое значение
-        const lastPart = parts[parts.length - 1];
-        current[lastPart] = value;
-      });
-      
-      // Обновляем версию
-      newState._saveVersion = Math.max(
-        baseState._saveVersion || 0,
-        deltaChanges._baseVersion + 1
-      );
-      
-      return newState;
-    } catch (error) {
-      console.error('Ошибка при применении дельты:', error);
-      return baseState;
-    }
-  }
-
-  /**
-   * Проверяет, является ли состояние дельта-состоянием
-   */
-  private isDeltaState(state: any): boolean {
-    return !!state && state._isDelta === true && typeof state.changes === 'object';
-  }
-
-  /**
-   * Восстанавливает начальное состояние игры
-   */
-  async resetToInitial(): Promise<ExtendedGameState> {
-    const initialGameState: ExtendedGameState = {
-      ...initialState,
-      _saveVersion: SAVE_VERSION,
-      _lastSavedAt: new Date().toISOString(),
-      _saveId: uuid.v4()
+    // Устанавливаем опции по умолчанию
+    this.options = {
+      autoSave: true,
+      autoSaveInterval: 5 * 60 * 1000, // 5 минут
+      compressData: true,
+      syncWithServer: true,
+      conflictResolution: 'merge',
+      debugMode: false,
+      storageType: "localStorage",
+      maxLocalBackups: 3,
+      saveOnPageClose: true,
+      optimizeSaves: true,
+      validateOnLoad: true,
+      ...options
     };
     
-    // Сохраняем начальное состояние
-    await this.save(initialGameState, { forceFull: true });
-    this.lastLoadedState = initialGameState;
+    // Создаем хранилище
+    this.storage = new AsyncStorage(userId, {
+      storageType: this.options.storageType,
+      autoCompress: this.options.compressData,
+      validateBeforeSave: true,
+      enableLogging: this.options.debugMode,
+      maxBackups: this.options.maxLocalBackups
+    });
     
-    return initialGameState;
+    // Создаем менеджер синхронизации, если включена синхронизация
+    if (this.options.syncWithServer) {
+      this.syncManager = new SyncManager(userId, {
+        conflictResolution: this.options.conflictResolution,
+        compressData: this.options.compressData,
+        enableLogging: this.options.debugMode,
+        autoSyncInterval: this.options.autoSaveInterval * 2
+      });
+    }
+    
+    // Устанавливаем обработчик закрытия страницы
+    if (this.options.saveOnPageClose && typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.handlePageClose);
+    }
+    
+    // Логируем создание системы сохранения
+    if (this.options.debugMode) {
+      console.log(`[SaveSystem] Создана система сохранения для пользователя ${userId}`, this.options);
+    }
   }
 
   /**
-   * Удаляет все локальные сохранения
+   * Инициализирует систему сохранения
+   * @returns Результат инициализации
    */
-  async clearLocalSaves(): Promise<boolean> {
+  public async initialize(): Promise<SaveResult> {
+    const startTime = Date.now();
+    
     try {
-      await this.localAdapter.delete(this.saveKey);
-      return true;
+      // Загружаем данные
+      const loadResult = await this.load();
+      
+      // Если загрузка не удалась, создаем новое состояние
+      if (!loadResult.success || !this.currentState) {
+        this.currentState = this.createDefaultState();
+      }
+      
+      // Запускаем автосохранение, если включено
+      if (this.options.autoSave) {
+        this.startAutoSave();
+      }
+      
+      // Устанавливаем состояние в менеджер синхронизации
+      if (this.syncManager && this.currentState) {
+        this.syncManager.setLocalState(this.currentState);
+      }
+      
+      this.isInitialized = true;
+      
+      if (this.options.debugMode) {
+        console.log(`[SaveSystem] Инициализация завершена за ${Date.now() - startTime}мс`);
+      }
+      
+      return {
+        success: true,
+        message: "Система сохранения инициализирована",
+        data: { state: this.currentState },
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
     } catch (error) {
-      console.error('Ошибка при удалении локальных сохранений:', error);
-      return false;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка инициализации:`, error);
+      }
+      
+      return {
+        success: false,
+        message: "Ошибка инициализации системы сохранения",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
     }
+  }
+
+  /**
+   * Устанавливает новые опции для системы сохранения
+   * @param newOptions Новые опции
+   */
+  public setOptions(newOptions: Partial<SaveSystemOptions>): void {
+    // Сохраняем предыдущее значение для автосохранения
+    const prevAutoSave = this.options.autoSave;
+    
+    // Обновляем опции
+    this.options = {
+      ...this.options,
+      ...newOptions
+    };
+    
+    // Логируем обновление опций
+    if (this.options.debugMode) {
+      console.log(`[SaveSystem] Опции обновлены:`, newOptions);
+    }
+    
+    // Если изменился статус автосохранения
+    if (prevAutoSave !== this.options.autoSave) {
+      if (this.options.autoSave) {
+        this.startAutoSave();
+      } else {
+        this.stopAutoSave();
+      }
+    }
+    
+    // Обновляем настройки хранилища
+    this.storage.setOptions({
+      storageType: this.options.storageType,
+      autoCompress: this.options.compressData,
+      maxBackups: this.options.maxLocalBackups,
+    });
+    
+    // Обновляем настройки синхронизации
+    if (this.syncManager) {
+      this.syncManager.setOptions({
+        conflictResolution: this.options.conflictResolution,
+        compressData: this.options.compressData,
+        enableLogging: this.options.debugMode,
+      });
   }
 }
 
 /**
- * Создаем и экспортируем единственный экземпляр системы сохранения для использования во всем приложении
- */
-export const saveSystem = new SaveSystem(); 
+   * Создает состояние по умолчанию
+   * @returns Новое состояние
+   */
+  private createDefaultState(): ExtendedGameState {
+    return {
+      _saveVersion: 1,
+      _lastModified: Date.now(),
+      _userId: this.userId,
+      
+      inventory: {
+        snot: 0,
+        snotCoins: 0,
+        containerCapacity: 100,
+        containerCapacityLevel: 1,
+        fillingSpeed: 2,
+        fillingSpeedLevel: 1,
+        collectionEfficiency: 1,
+        containerSnot: 0,
+        Cap: 0
+      },
+      
+      container: {
+        level: 1,
+        capacity: 100,
+        currentAmount: 0,
+        fillRate: 1,
+        currentFill: 0
+      },
+      
+      upgrades: {
+        containerLevel: 1,
+        fillingSpeedLevel: 1,
+        collectionEfficiencyLevel: 1,
+        clickPower: { level: 1, value: 1 },
+        passiveIncome: { level: 1, value: 0.1 }
+      },
+      
+      settings: {
+        language: 'en',
+        theme: 'light',
+        notifications: true,
+        tutorialCompleted: false
+      },
+      
+      soundSettings: {
+        clickVolume: 0.5,
+        effectsVolume: 0.5,
+        backgroundMusicVolume: 0.3,
+        isMuted: false,
+        isEffectsMuted: false,
+        isBackgroundMusicMuted: false
+      },
+      
+      achievements: {
+        unlockedAchievements: []
+      },
+      
+      items: [],
+      
+      activeTab: 'main',
+      user: null,
+      validationStatus: "pending",
+      hideInterface: false,
+      isPlaying: false,
+      isLoading: false,
+      containerLevel: 1,
+      fillingSpeed: 1,
+      containerSnot: 0,
+      gameStarted: false,
+      highestLevel: 1,
+      consecutiveLoginDays: 0
+    };
+  }
+  
+  /**
+   * Запускает автоматическое сохранение
+   */
+  private startAutoSave(): void {
+    // Очищаем предыдущий таймер, если есть
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+    
+    // Устанавливаем новый таймер
+    if (this.options.autoSaveInterval > 0) {
+      this.autoSaveTimer = setInterval(() => {
+        if (this.currentState) {
+          this.save(this.currentState)
+            .catch(error => {
+              if (this.options.debugMode) {
+                console.error(`[SaveSystem] Ошибка автосохранения:`, error);
+              }
+            });
+        }
+      }, this.options.autoSaveInterval);
+      
+      if (this.options.debugMode) {
+        console.log(`[SaveSystem] Автосохранение запущено с интервалом ${this.options.autoSaveInterval}мс`);
+      }
+    }
+  }
+  
+  /**
+   * Останавливает автоматическое сохранение
+   */
+  private stopAutoSave(): void {
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+      
+      if (this.options.debugMode) {
+        console.log(`[SaveSystem] Автосохранение остановлено`);
+      }
+    }
+  }
+
+  /**
+   * Обработчик закрытия страницы
+   */
+  private handlePageClose = (event: BeforeUnloadEvent): void => {
+    // Сохраняем текущее состояние при закрытии страницы
+    if (this.currentState) {
+      // Используем синхронное сохранение для надежности
+      try {
+        // Сериализуем состояние
+        const serializedState = JSON.stringify(this.currentState);
+        
+        // Сохраняем в локальное хранилище напрямую
+        localStorage.setItem(`${this.userId}_${StorageKeys.GAME_STATE}`, serializedState);
+        
+        // Обновляем счетчик сохранений и время
+        this.saveCounter++;
+        this.lastSaveTime = Date.now();
+      } catch (error) {
+        console.error(`[SaveSystem] Ошибка сохранения при закрытии страницы:`, error);
+      }
+    }
+  };
+  
+  /**
+   * Сохраняет состояние игры
+   * @param state Состояние игры для сохранения
+   * @param forceFull Принудительное полное сохранение
+   * @returns Результат сохранения
+   */
+  public async save(state: ExtendedGameState, forceFull: boolean = false): Promise<SaveResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Проверяем инициализацию
+      if (!this.isInitialized) {
+        console.warn(`[SaveSystem] Попытка сохранения до инициализации системы, userId: ${this.userId}`);
+        
+        return {
+          success: false,
+          message: "Система сохранения не инициализирована",
+          error: "SaveSystem не инициализирована",
+          timestamp: Date.now(),
+          metrics: {
+            duration: Date.now() - startTime
+          }
+        };
+      }
+      
+      // Проверяем наличие userId в состоянии
+      if (!state._userId) {
+        console.warn(`[SaveSystem] В состоянии отсутствует _userId, используем userId из SaveSystem: ${this.userId}`);
+        state = {
+          ...state,
+          _userId: this.userId
+        };
+      } else if (state._userId !== this.userId) {
+        console.error(`[SaveSystem] Несоответствие userId: ${state._userId} (в состоянии) vs ${this.userId} (в SaveSystem)`);
+      }
+      
+      console.log(`[SaveSystem] Начинаем сохранение для пользователя ${this.userId}, forceFull=${forceFull}`);
+      
+      // Сохраняем предыдущее состояние
+      this.previousState = this.currentState ? JSON.parse(JSON.stringify(this.currentState)) : null;
+      
+      // Обновляем текущее состояние
+      this.currentState = state;
+      
+      // Определяем тип сохранения (полное или дельта)
+      let saveMethod = 'full';
+      let metrics: Record<string, any> = {};
+      
+      if (this.options.optimizeSaves && !forceFull && this.previousState) {
+        // Создаем дельту между состояниями
+        const delta = createDelta(
+          this.previousState, 
+          state, 
+          state._userId || 'unknown', 
+          state._saveVersion || 0
+        );
+        
+        // Если дельта содержит изменения, сохраняем её
+        if (delta && delta.delta && delta.delta.length > 0) {
+          // TODO: В полной реализации здесь будет сохранение дельты
+          // Сейчас просто сохраняем полное состояние для совместимости
+          
+          saveMethod = 'delta';
+          metrics.deltaSize = JSON.stringify(delta).length;
+          metrics.changeCount = delta.delta.length;
+          console.log(`[SaveSystem] Создана дельта с ${delta.delta.length} изменениями`);
+        } else {
+          console.log(`[SaveSystem] Дельта не содержит изменений, пропускаем сохранение`);
+        }
+      }
+      
+      // Сохраняем в локальное хранилище
+      console.log(`[SaveSystem] Сохраняем в локальное хранилище, метод: ${saveMethod}`);
+      const storageResult = await this.storage.saveGameState(state);
+      
+      if (!storageResult.success) {
+        console.error(`[SaveSystem] Ошибка сохранения в хранилище:`, storageResult.error);
+        throw new Error(`Ошибка сохранения в хранилище: ${storageResult.error}`);
+      }
+      
+      console.log(`[SaveSystem] Сохранение в локальное хранилище успешно`);
+      
+      // Оцениваем эффективность сжатия
+      if (this.options.debugMode) {
+        const compressionEstimate = estimateCompression(state);
+        metrics.compressionEstimate = compressionEstimate;
+        console.log(`[SaveSystem] Оценка сжатия:`, compressionEstimate);
+      }
+      
+      // Синхронизируем с сервером, если включено
+      if (this.options.syncWithServer && this.syncManager) {
+        console.log(`[SaveSystem] Начинаем синхронизацию с сервером`);
+        // Устанавливаем текущее состояние в менеджер синхронизации
+        this.syncManager.setLocalState(state);
+        
+        // Запускаем синхронизацию
+        const syncResult = await this.syncManager.syncIfNeeded();
+        
+        if (syncResult) {
+          metrics.syncResult = {
+            success: syncResult.success,
+            duration: syncResult.metrics?.syncDuration,
+            syncMethod: syncResult.appliedChanges ? 'delta' : 'full'
+          };
+          console.log(`[SaveSystem] Синхронизация завершена: ${syncResult.success ? 'успешно' : 'с ошибками'}`);
+          } else {
+          console.log(`[SaveSystem] Синхронизация не требуется`);
+          }
+        } else {
+        console.log(`[SaveSystem] Синхронизация с сервером отключена`);
+      }
+      
+      // Обновляем статистику сохранений
+      this.saveCounter++;
+      this.lastSaveTime = Date.now();
+      
+      // Формируем результат
+      const saveSize = JSON.stringify(state).length;
+      console.log(`[SaveSystem] Сохранение завершено успешно, размер: ${saveSize} байт`);
+      
+      return {
+        success: true,
+        message: `Состояние успешно сохранено (${saveMethod})`,
+        data: {
+          saveMethod,
+          saveCounter: this.saveCounter,
+          metrics
+        },
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime,
+          dataSize: saveSize,
+          ...metrics
+        }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[SaveSystem] Ошибка сохранения:`, error);
+      
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка сохранения:`, error);
+      }
+      
+      return {
+        success: false,
+        message: "Ошибка при сохранении состояния",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * Загружает состояние игры
+   * @returns Результат загрузки
+   */
+  public async load(): Promise<SaveResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Загружаем состояние из хранилища
+      const storageResult = await this.storage.loadGameState();
+      
+      if (!storageResult.success || !storageResult.data) {
+        // Если в локальном хранилище нет данных, пытаемся синхронизировать с сервером
+        if (this.options.syncWithServer && this.syncManager) {
+          const syncResult = await this.syncManager.sync(true);
+          
+          if (syncResult.success && syncResult.syncedData) {
+            // Если синхронизация успешна, преобразуем данные в состояние
+            const loadedState = this.structuredToGameState(syncResult.syncedData);
+            
+            // Проверяем целостность данных
+            if (this.options.validateOnLoad) {
+              this.currentState = validateAndRepairGameState(loadedState);
+            } else {
+              this.currentState = loadedState;
+            }
+            
+            return {
+              success: true,
+              message: "Состояние загружено с сервера",
+              data: { state: this.currentState, source: "server" },
+              timestamp: Date.now(),
+              metrics: {
+                duration: Date.now() - startTime,
+                dataSize: JSON.stringify(this.currentState).length
+              }
+            };
+          }
+        }
+        
+        // Если данных нет нигде, создаем новое состояние
+        this.currentState = this.createDefaultState();
+        
+        return {
+          success: true,
+          message: "Создано новое состояние (данные не найдены)",
+          data: { state: this.currentState, source: "default" },
+          timestamp: Date.now(),
+          metrics: {
+            duration: Date.now() - startTime,
+            dataSize: JSON.stringify(this.currentState).length
+          }
+        };
+      }
+      
+      // Проверяем целостность загруженных данных
+      if (this.options.validateOnLoad) {
+        this.currentState = validateAndRepairGameState(storageResult.data);
+      } else {
+        this.currentState = storageResult.data;
+      }
+      
+      if (this.options.debugMode) {
+        console.log(`[SaveSystem] Загрузка завершена за ${Date.now() - startTime}мс`);
+      }
+      
+      return {
+        success: true,
+        message: "Состояние успешно загружено",
+        data: { state: this.currentState, source: "local" },
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime,
+          dataSize: JSON.stringify(this.currentState).length
+        }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка загрузки:`, error);
+      }
+      
+      // В случае ошибки создаем новое состояние
+      this.currentState = this.createDefaultState();
+      
+      return {
+        success: false,
+        message: "Ошибка при загрузке состояния, создано новое",
+        error: errorMessage,
+        data: { state: this.currentState, source: "default_after_error" },
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    }
+  }
+  
+  /**
+   * Преобразует структурированное сохранение в объект состояния игры
+   * @param structuredSave Структурированное сохранение
+   * @returns Объект состояния игры
+   */
+  private structuredToGameState(structuredSave: StructuredGameSave): ExtendedGameState {
+    // Объединяем все части в одно состояние
+    const gameState: ExtendedGameState = {
+      // Критические данные
+      _saveVersion: structuredSave.critical.metadata.version,
+      _lastModified: structuredSave.critical.metadata.lastModified,
+      _userId: structuredSave.critical.metadata.userId,
+      
+      // Основные игровые элементы
+      inventory: structuredSave.critical.inventory,
+      upgrades: structuredSave.critical.upgrades,
+      container: structuredSave.critical.container || {
+        level: 1,
+        capacity: 100,
+        currentAmount: 0,
+        fillRate: 1
+      },
+      
+      // Обычные данные
+      items: structuredSave.regular?.items || [],
+      achievements: structuredSave.regular?.achievements || { unlockedAchievements: [] },
+      stats: structuredSave.regular?.stats || {},
+      
+      // Настройки
+      settings: structuredSave.extended?.settings || {
+        language: 'en',
+        theme: 'light',
+        notifications: true,
+        tutorialCompleted: false
+      },
+      
+      soundSettings: structuredSave.extended?.soundSettings || {
+        clickVolume: 0.5,
+        effectsVolume: 0.5,
+        backgroundMusicVolume: 0.3,
+        isMuted: false,
+        isEffectsMuted: false,
+        isBackgroundMusicMuted: false
+      },
+      
+      // Базовые поля состояния
+      activeTab: 'main',
+      user: null,
+      validationStatus: "pending",
+      hideInterface: false,
+      isPlaying: false,
+      isLoading: false,
+      containerLevel: structuredSave.critical.upgrades.containerLevel || 1,
+      fillingSpeed: structuredSave.critical.inventory.fillingSpeed || 1,
+      containerSnot: structuredSave.critical.inventory.containerSnot || 0,
+      gameStarted: true,
+      highestLevel: structuredSave.regular?.stats?.highestLevel || 1,
+      consecutiveLoginDays: structuredSave.regular?.stats?.consecutiveLoginDays || 0,
+      
+      // Расширенные данные
+      logs: structuredSave.extended?.logs || [],
+      analytics: structuredSave.extended?.analytics || {}
+    };
+    
+    return gameState;
+  }
+  
+  /**
+   * Получает текущее состояние
+   * @returns Текущее состояние или null
+   */
+  public getCurrentState(): ExtendedGameState | null {
+    return this.currentState;
+  }
+  
+  /**
+   * Получает информацию о сохранении
+   * @returns Информация о сохранении
+   */
+  public async getSaveInfo(): Promise<SaveInfo> {
+    // Получаем метаданные из хранилища
+    const metadata = await this.storage.getSaveMetadata();
+    
+    // Получаем информацию о синхронизации
+    let syncInfo: SyncInfo | null = null;
+    if (this.syncManager) {
+      syncInfo = this.syncManager.getLastSyncInfo();
+    }
+    
+    return {
+      lastSaved: new Date(this.lastSaveTime || (metadata?.lastSaved || Date.now())),
+      version: metadata?.saveVersion || 0,
+      saveCount: this.saveCounter,
+      hasLocalBackup: metadata !== null,
+      hasSyncedBackup: syncInfo !== null,
+      lastSync: syncInfo ? new Date(syncInfo.lastSyncTimestamp) : undefined
+    };
+  }
+  
+  /**
+   * Очищает все сохраненные данные
+   * @returns Результат операции
+   */
+  public async clearAll(): Promise<SaveResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Очищаем данные в хранилище
+      const clearResult = await this.storage.clearUserData();
+      
+      if (!clearResult.success) {
+        throw new Error(`Ошибка очистки хранилища: ${clearResult.error}`);
+      }
+      
+      // Сбрасываем локальное состояние
+      this.currentState = this.createDefaultState();
+      this.previousState = null;
+      this.saveCounter = 0;
+      this.lastSaveTime = 0;
+      
+      // Сбрасываем данные в менеджере синхронизации
+      if (this.syncManager) {
+        this.syncManager.resetLocalData();
+      }
+      
+      if (this.options.debugMode) {
+        console.log(`[SaveSystem] Данные успешно очищены`);
+      }
+      
+      return {
+        success: true,
+        message: "Все данные успешно очищены",
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка очистки данных:`, error);
+      }
+      
+      return {
+        success: false,
+        message: "Ошибка при очистке данных",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    }
+  }
+
+  /**
+   * Экспортирует состояние в сжатую строку для передачи
+   * @returns Строка с сжатым состоянием
+   */
+  public async exportState(): Promise<string | null> {
+    if (!this.currentState) {
+      return null;
+    }
+    
+    try {
+      // Сжимаем текущее состояние
+      const compressed = compressGameState(
+        this.currentState,
+        this.userId,
+        {
+          algorithm: CompressionAlgorithm.LZ_BASE64,
+          includeIntegrityInfo: true,
+          removeTempData: true,
+          removeLogs: true
+        }
+      );
+      
+      // Возвращаем строку с сжатыми данными
+      return JSON.stringify(compressed);
+    } catch (error) {
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка экспорта состояния:`, error);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Импортирует состояние из сжатой строки
+   * @param exportedState Строка с экспортированным состоянием
+   * @returns Результат операции
+   */
+  public async importState(exportedState: string): Promise<SaveResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Парсим строку в объект
+      const compressed = JSON.parse(exportedState);
+      
+      // Проверяем, что это действительно сжатое состояние
+      if (!compressed._isCompressed) {
+        throw new Error("Неверный формат экспортированных данных");
+      }
+      
+      // Распаковываем состояние
+      const decompressed = decompressGameState(compressed);
+      
+      if (!decompressed) {
+        throw new Error("Ошибка декомпрессии данных");
+      }
+      
+      // Проверяем целостность данных
+      if (this.options.validateOnLoad) {
+        this.currentState = validateAndRepairGameState(decompressed);
+      } else {
+        this.currentState = decompressed;
+      }
+      
+      // Сохраняем импортированное состояние
+      await this.save(this.currentState, true);
+      
+      return {
+        success: true,
+        message: "Состояние успешно импортировано",
+        data: { state: this.currentState },
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (this.options.debugMode) {
+        console.error(`[SaveSystem] Ошибка импорта состояния:`, error);
+      }
+      
+      return {
+        success: false,
+        message: "Ошибка при импорте состояния",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: {
+          duration: Date.now() - startTime
+        }
+      };
+    }
+  }
+  
+  /**
+   * Уничтожает экземпляр системы сохранения
+   */
+  public destroy(): void {
+    // Останавливаем автосохранение
+    this.stopAutoSave();
+    
+    // Удаляем обработчик закрытия страницы
+    if (this.options.saveOnPageClose && typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', this.handlePageClose);
+    }
+    
+    // Очищаем состояние
+    this.currentState = null;
+    this.previousState = null;
+    
+    if (this.options.debugMode) {
+      console.log(`[SaveSystem] Система сохранения уничтожена`);
+    }
+  }
+} 

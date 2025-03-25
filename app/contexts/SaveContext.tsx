@@ -1,170 +1,376 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { SaveSystem } from '../services/saveSystem';
-import { GameState } from '../types/gameTypes';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { SaveSystem, SaveSystemOptions, SaveResult, SaveInfo } from '../services/saveSystem';
+import { ExtendedGameState } from '../types/gameTypes';
 import { useGameContext } from '../contexts/GameContext';
 
+/**
+ * Интерфейс контекста сохранения
+ */
 interface SaveContextType {
-  saveGame: (options?: { forceFull?: boolean }) => Promise<boolean>;
-  loadGame: () => Promise<GameState | null>;
+  // Система сохранения
+  saveSystem: SaveSystem | null;
+  
+  // Состояние инициализации
+  isInitialized: boolean;
+  isInitializing: boolean;
+  
+  // Состояние сохранения
   isSaving: boolean;
-  lastSaved: Date | null;
-  resetGame: () => Promise<GameState>;
+  isLoading: boolean;
+  
+  // Результаты операций
+  lastSaveResult: SaveResult | null;
+  lastLoadResult: SaveResult | null;
+  
+  // Информация о сохранениях
+  saveInfo: SaveInfo | null;
+  
+  // Методы
+  saveState: (state: ExtendedGameState) => Promise<SaveResult>;
+  loadState: () => Promise<SaveResult>;
+  resetAllData: () => Promise<SaveResult>;
+  exportStateToString: () => Promise<string | null>;
+  importStateFromString: (exportedState: string) => Promise<SaveResult>;
+  
+  // Опции
+  setAutoSave: (enabled: boolean) => void;
+  setSyncWithServer: (enabled: boolean) => void;
 }
 
-// Создаем контекст с начальными значениями
-const SaveContext = createContext<SaveContextType>({
-  saveGame: async () => false,
-  loadGame: async () => null,
-  isSaving: false,
-  lastSaved: null,
-  resetGame: async () => ({} as GameState)
-});
+/**
+ * Контекст сохранения
+ */
+export const SaveContext = createContext<SaveContextType | undefined>(undefined);
 
-// Хук для использования контекста
-export const useSaveContext = () => useContext(SaveContext);
+/**
+ * Хук для использования контекста сохранения
+ */
+export const useSaveContext = (): SaveContextType => {
+  const context = useContext(SaveContext);
+  
+  if (!context) {
+    throw new Error('useSaveContext must be used within a SaveProvider');
+  }
+  
+  return context;
+};
 
-export const SaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Состояние сохранения
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [saveSystem] = useState(() => new SaveSystem());
+/**
+ * Свойства провайдера сохранения
+ */
+interface SaveProviderProps {
+  children: ReactNode;
+  userId: string;
+  options?: Partial<SaveSystemOptions>;
+}
+
+/**
+ * Провайдер контекста сохранения
+ */
+export const SaveProvider: React.FC<SaveProviderProps> = ({
+  children,
+  userId,
+  options
+}) => {
+  // Состояние системы сохранения
+  const [saveSystem, setSaveSystem] = useState<SaveSystem | null>(null);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  
+  // Состояние операций
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // Результаты операций
+  const [lastSaveResult, setLastSaveResult] = useState<SaveResult | null>(null);
+  const [lastLoadResult, setLastLoadResult] = useState<SaveResult | null>(null);
+  
+  // Информация о сохранениях
+  const [saveInfo, setSaveInfo] = useState<SaveInfo | null>(null);
   
   // Доступ к состоянию игры и диспетчеру
   const { state, dispatch } = useGameContext();
   
-  // Функция загрузки игры (объявляем до эффектов, использующих её)
-  const loadGame = useCallback(async (): Promise<GameState | null> => {
-    if (!saveSystem.isInitialized()) {
-      console.warn('Система сохранения не инициализирована');
-      return null;
+  // Инициализируем систему сохранения при монтировании компонента
+  useEffect(() => {
+    // Проверяем, имеем ли мы пользователя
+    if (!userId) {
+      console.warn('[SaveContext] userId не указан, система сохранения не инициализирована');
+      return;
     }
     
-    try {
-      const savedState = await saveSystem.load();
-      
-      if (savedState) {
-        // Обновляем состояние игры через диспетчер
-        dispatch({ type: "LOAD_GAME_STATE", payload: savedState });
-        return savedState;
+    // Создаем и инициализируем систему сохранения
+    const initializeSaveSystem = async () => {
+      try {
+        setIsInitializing(true);
+        
+        // Создаем систему сохранения с указанными опциями
+        const saveSystemInstance = new SaveSystem(userId, options);
+        setSaveSystem(saveSystemInstance);
+        
+        // Инициализируем систему сохранения
+        const initResult = await saveSystemInstance.initialize();
+        setLastLoadResult(initResult);
+        
+        // Получаем информацию о сохранениях
+        const info = await saveSystemInstance.getSaveInfo();
+        setSaveInfo(info);
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('[SaveContext] Ошибка инициализации системы сохранения:', error);
+      } finally {
+        setIsInitializing(false);
       }
-      
-      return null;
-    } catch (error) {
-      console.error('Ошибка при загрузке игры:', error);
-      return null;
-    }
-  }, [dispatch, saveSystem]);
+    };
+    
+    initializeSaveSystem();
+    
+    // Очистка при размонтировании
+    return () => {
+      if (saveSystem) {
+        saveSystem.destroy();
+      }
+    };
+  }, [userId, options]);
   
-  // Функция сохранения игры (объявляем до эффектов, использующих её)
-  const saveGame = useCallback(async (options = {}): Promise<boolean> => {
-    if (!saveSystem.isInitialized()) {
-      console.warn('Система сохранения не инициализирована');
-      return false;
+  // Обновляем информацию о сохранении после сохранения
+  useEffect(() => {
+    if (saveSystem && isInitialized && lastSaveResult?.success) {
+      saveSystem.getSaveInfo().then(info => {
+        setSaveInfo(info);
+      });
+    }
+  }, [saveSystem, isInitialized, lastSaveResult]);
+  
+  /**
+   * Сохраняет состояние игры
+   * @param state Состояние для сохранения
+   * @returns Результат сохранения
+   */
+  const saveState = async (state: ExtendedGameState): Promise<SaveResult> => {
+    if (!saveSystem || !isInitialized) {
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Система сохранения не инициализирована",
+        error: "SaveSystem не инициализирована",
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+      setLastSaveResult(errorResult);
+      return errorResult;
     }
     
-    setIsSaving(true);
-    
     try {
-      const success = await saveSystem.save(state, options);
+      setIsSaving(true);
       
-      if (success) {
-        setLastSaved(new Date());
-      }
+      // Сохраняем состояние
+      const result = await saveSystem.save(state);
+      setLastSaveResult(result);
       
-      return success;
+      // Обновляем информацию о сохранениях
+      const info = await saveSystem.getSaveInfo();
+      setSaveInfo(info);
+      
+      return result;
     } catch (error) {
-      console.error('Ошибка при сохранении игры:', error);
-      return false;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Ошибка при сохранении состояния",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+      
+      setLastSaveResult(errorResult);
+      return errorResult;
     } finally {
       setIsSaving(false);
     }
-  }, [state, saveSystem]);
+  };
   
-  // Инициализация системы сохранения
-  useEffect(() => {
-    if (state.user?.farcaster_fid || state.user?.fid) {
-      // Используем farcaster_fid как идентификатор для сохранений
-      saveSystem.setUserData(
-        (state.user.farcaster_fid || state.user.fid || '').toString(),
-        state.user.id || ""
-      );
-      
-      // Запускаем автосохранение через систему сохранения
-      saveSystem.startAutoSave();
-      
-      // Загружаем сохраненную игру при инициализации
-      loadGame().then(loadedState => {
-        if (loadedState) {
-          console.log('Игра успешно загружена');
-        }
-      }).catch(err => {
-        console.error('Ошибка при загрузке игры:', err);
-      });
-      
-      return () => {
-        // Останавливаем автосохранение при размонтировании
-        saveSystem.stopAutoSave();
+  /**
+   * Загружает состояние игры
+   * @returns Результат загрузки
+   */
+  const loadState = async (): Promise<SaveResult> => {
+    if (!saveSystem || !isInitialized) {
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Система сохранения не инициализирована",
+        error: "SaveSystem не инициализирована",
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
       };
-    }
-  }, [state.user?.farcaster_fid, state.user?.fid, state.user?.id, loadGame]);
-  
-  // Сохраняем при выходе со страницы
-  useEffect(() => {
-    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
-      if (saveSystem.isInitialized()) {
-        // Предотвращаем стандартное поведение браузера, чтобы успеть сохранить данные
-        event.preventDefault();
-        
-        try {
-          // Пытаемся сохранить игру перед выходом
-          await saveGame({ forceFull: true });
-        } catch (error) {
-          console.error('Ошибка при сохранении игры перед выходом:', error);
-        }
-        
-        // В современных браузерах это сообщение игнорируется, но нужно для старых
-        event.returnValue = '';
-      }
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [saveGame]);
-  
-  // Сброс игры до начального состояния
-  const resetGame = useCallback(async (): Promise<GameState> => {
-    if (!saveSystem.isInitialized()) {
-      throw new Error('Система сохранения не инициализирована');
+      setLastLoadResult(errorResult);
+      return errorResult;
     }
     
     try {
-      const initialState = await saveSystem.resetToInitial();
+      setIsLoading(true);
       
-      if (initialState) {
-        // Обновляем состояние игры через диспетчер
-        dispatch({ type: "LOAD_GAME_STATE", payload: initialState });
-        return initialState;
-      }
+      // Загружаем состояние
+      const result = await saveSystem.load();
+      setLastLoadResult(result);
       
-      throw new Error('Не удалось сбросить игру');
+      // Обновляем информацию о сохранениях
+      const info = await saveSystem.getSaveInfo();
+      setSaveInfo(info);
+      
+      return result;
     } catch (error) {
-      console.error('Ошибка при сбросе игры:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Ошибка при загрузке состояния",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+      
+      setLastLoadResult(errorResult);
+      return errorResult;
+    } finally {
+      setIsLoading(false);
     }
-  }, [dispatch, saveSystem]);
+  };
   
-  // Сохраняем контекст
-  const contextValue = {
-    saveGame,
-    loadGame,
+  /**
+   * Сбрасывает все данные
+   * @returns Результат операции
+   */
+  const resetAllData = async (): Promise<SaveResult> => {
+    if (!saveSystem || !isInitialized) {
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Система сохранения не инициализирована",
+        error: "SaveSystem не инициализирована",
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+      return errorResult;
+    }
+    
+    try {
+      // Очищаем все данные
+      const result = await saveSystem.clearAll();
+      
+      // Обновляем информацию о сохранениях
+      const info = await saveSystem.getSaveInfo();
+      setSaveInfo(info);
+      
+      // Загружаем новое состояние (будет создано по умолчанию)
+      const loadResult = await saveSystem.load();
+      setLastLoadResult(loadResult);
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      return {
+        success: false,
+        message: "Ошибка при сбросе данных",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+    }
+  };
+  
+  /**
+   * Экспортирует состояние в строку
+   * @returns Строка с экспортированным состоянием или null
+   */
+  const exportStateToString = async (): Promise<string | null> => {
+    if (!saveSystem || !isInitialized) {
+      return null;
+    }
+    
+    return await saveSystem.exportState();
+  };
+  
+  /**
+   * Импортирует состояние из строки
+   * @param exportedState Строка с экспортированным состоянием
+   * @returns Результат операции
+   */
+  const importStateFromString = async (exportedState: string): Promise<SaveResult> => {
+    if (!saveSystem || !isInitialized) {
+      const errorResult: SaveResult = {
+        success: false,
+        message: "Система сохранения не инициализирована",
+        error: "SaveSystem не инициализирована",
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+      return errorResult;
+    }
+    
+    try {
+      // Импортируем состояние
+      const result = await saveSystem.importState(exportedState);
+      setLastLoadResult(result);
+      
+      // Обновляем информацию о сохранениях
+      const info = await saveSystem.getSaveInfo();
+      setSaveInfo(info);
+      
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      return {
+        success: false,
+        message: "Ошибка при импорте состояния",
+        error: errorMessage,
+        timestamp: Date.now(),
+        metrics: { duration: 0 }
+      };
+    }
+  };
+  
+  /**
+   * Включает или выключает автосохранение
+   * @param enabled Включено ли автосохранение
+   */
+  const setAutoSave = (enabled: boolean): void => {
+    if (saveSystem && isInitialized) {
+      saveSystem.setOptions?.({ autoSave: enabled });
+    }
+  };
+  
+  /**
+   * Включает или выключает синхронизацию с сервером
+   * @param enabled Включена ли синхронизация
+   */
+  const setSyncWithServer = (enabled: boolean): void => {
+    if (saveSystem && isInitialized) {
+      saveSystem.setOptions?.({ syncWithServer: enabled });
+    }
+  };
+  
+  // Значение контекста
+  const contextValue: SaveContextType = {
+    saveSystem,
+    isInitialized,
+    isInitializing,
     isSaving,
-    lastSaved,
-    resetGame
+    isLoading,
+    lastSaveResult,
+    lastLoadResult,
+    saveInfo,
+    saveState,
+    loadState,
+    resetAllData,
+    exportStateToString,
+    importStateFromString,
+    setAutoSave,
+    setSyncWithServer
   };
   
   return (

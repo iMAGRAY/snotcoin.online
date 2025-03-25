@@ -7,12 +7,10 @@ import { verifyJWT, decodeToken } from '@/app/utils/jwt';
  */
 const publicPaths = [
   '/api/farcaster/auth',
-  '/api/farcaster/neynar-auth',
   '/api/frame',
   '/api/auth/logout',
   '/api/auth/refresh',
   '/api/health',
-  '/auth',
   '/'
 ];
 
@@ -68,7 +66,7 @@ export async function middleware(request: NextRequest) {
   // Получаем токен сессии из куки
   const sessionCookie = cookies().get('session');
   
-  // Если токена нет, перенаправляем на страницу авторизации или возвращаем ошибку
+  // Если токена нет, перенаправляем на главную страницу или возвращаем ошибку
   if (!sessionCookie) {
     if (isApiRequest(pathname)) {
       return NextResponse.json({
@@ -76,10 +74,8 @@ export async function middleware(request: NextRequest) {
         message: 'Требуется авторизация'
       }, { status: 401 });
     } else {
-      // Для обычных маршрутов перенаправляем на страницу авторизации
-      // с указанием, куда вернуться после авторизации
-      const url = new URL('/auth', request.url);
-      url.searchParams.set('redirect', pathname);
+      // Для обычных маршрутов перенаправляем на главную страницу
+      const url = new URL('/', request.url);
       return NextResponse.redirect(url);
     }
   }
@@ -93,7 +89,7 @@ export async function middleware(request: NextRequest) {
       const refreshTokenCookie = cookies().get('refresh_token');
       
       if (refreshTokenCookie) {
-        // Если есть refresh token, перенаправляем на страницу авторизации
+        // Если есть refresh token, перенаправляем на главную страницу
         // или возвращаем специальный ответ для API
         if (isApiRequest(pathname)) {
           return NextResponse.json({
@@ -102,10 +98,8 @@ export async function middleware(request: NextRequest) {
             requiresRefresh: true
           }, { status: 401 });
         } else {
-          // Для веб-страниц пусть клиент сам обрабатывает обновление токена
-          // через FarcasterContext
-          const url = new URL('/auth', request.url);
-          url.searchParams.set('redirect', pathname);
+          // Перенаправляем на главную страницу
+          const url = new URL('/', request.url);
           return NextResponse.redirect(url);
         }
       }
@@ -113,7 +107,7 @@ export async function middleware(request: NextRequest) {
       // Если нет refresh token, удаляем куки сессии
       cookies().delete('session');
       
-      // Возвращаем ошибку для API или перенаправляем на страницу авторизации
+      // Возвращаем ошибку для API или перенаправляем на главную страницу
       if (isApiRequest(pathname)) {
         return NextResponse.json({
           success: false,
@@ -121,8 +115,7 @@ export async function middleware(request: NextRequest) {
           error
         }, { status: 401 });
       } else {
-        const url = new URL('/auth', request.url);
-        url.searchParams.set('redirect', pathname);
+        const url = new URL('/', request.url);
         return NextResponse.redirect(url);
       }
     }
@@ -148,8 +141,7 @@ export async function middleware(request: NextRequest) {
         error: String(error)
       }, { status: 500 });
     } else {
-      const url = new URL('/auth', request.url);
-      url.searchParams.set('redirect', pathname);
+      const url = new URL('/', request.url);
       return NextResponse.redirect(url);
     }
   }

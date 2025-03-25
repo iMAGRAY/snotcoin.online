@@ -93,30 +93,47 @@ const HomeContent: React.FC = () => {
   const sessionCheckErrorCountRef = useRef(0);
   // Добавляем ref для отслеживания состояния проверки сессии
   const isCheckingSessionRef = useRef(false);
+  // Добавляем ref для отслеживания установки laboratory как активной вкладки
+  const hasSetLaboratoryTabRef = useRef(false);
+  // Добавляем ref для отслеживания обработки скрытия интерфейса
+  const hasProcessedHideInterfaceRef = useRef(false);
 
   // Также добавляем состояние для загрузки данных пользователя
   const [isUserDataLoading, setIsUserDataLoading] = React.useState(false)
+  // Создаем ref для состояния авторизации, чтобы избежать зацикливания
+  const authStateRef = useRef(false);
 
   const memoizedCheckAuth = useCallback(() => {
-    const prevAuthState = isAuthenticated;
+    // Если данные пользователя загружаются, пропускаем проверку авторизации
+    if (isUserDataLoading) return;
+    
+    const prevAuthState = authStateRef.current;
     const authResult = checkAuth(dispatch)
     
-    // Обновляем состояние, только если оно изменилось
+    // Обновляем состояние, только если оно изменилось, и используем ref 
+    // для отслеживания изменений во избежание циклов обновлений
     if (prevAuthState !== authResult) {
-      setIsAuthenticated(authResult)
+      authStateRef.current = authResult;
+      // Используем setTimeout для отложенного обновления состояния
+      // чтобы разорвать цикл обновлений
+      setTimeout(() => {
+        if (document.body) { // Проверяем, что компонент все еще монтирован
+          setIsAuthenticated(authResult);
+        }
+      }, 50);
     }
-  }, [dispatch, isAuthenticated])
+  }, [dispatch, isUserDataLoading])
 
   // Проверка auth состояния при монтировании и изменениях localStorage
   useEffect(() => {
-    // Флаг для отслеживания первого вызова
-    let isFirstRun = true;
+    // Однократная функция выполнения проверки авторизации
+    const performAuthCheck = () => {
+      // Удаляем проверку !authStateRef.current, чтобы избежать бесконечной рекурсии
+      memoizedCheckAuth();
+    };
     
     // Выполняем начальную проверку авторизации
-    if (isFirstRun) {
-      memoizedCheckAuth();
-      isFirstRun = false;
-    }
+    performAuthCheck();
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "isAuthenticated" || e.key === "authToken") {
@@ -135,7 +152,7 @@ const HomeContent: React.FC = () => {
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("logout", handleLogout)
     }
-  }, [memoizedCheckAuth])
+  }, [memoizedCheckAuth]) // Сохраняем только memoizedCheckAuth в зависимостях
 
   // Обновляем авторизацию с Farcaster, когда пользователь меняется
   useEffect(() => {
@@ -144,6 +161,18 @@ const HomeContent: React.FC = () => {
     
     // Маркируем, что мы выполняем проверку сессии
     isCheckingSessionRef.current = true;
+    
+    // Однократная функция установки вкладки laboratory
+    const setLaboratoryTab = () => {
+      if (!hasSetLaboratoryTabRef.current) {
+        hasSetLaboratoryTabRef.current = true;
+        
+        // Проверка на активную вкладку внутри функции для избежания зависимости
+        if (gameState.activeTab !== "laboratory") {
+          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+        }
+      }
+    };
     
     try {
       if (farcasterUser && isFarcasterAuth) {
@@ -157,9 +186,17 @@ const HomeContent: React.FC = () => {
             displayName: farcasterUser.displayName
           }});
           
-          // Обновляем состояние аутентификации перед любыми другими обновлениями UI
-          if (!isAuthenticated) {
-            setIsAuthenticated(true);
+          // Обновляем состояние авторизации перед любыми другими обновлениями UI
+          // Используем ref и отложенное обновление состояния
+          if (!authStateRef.current) {
+            authStateRef.current = true;
+            // Избегаем вызова setState здесь, чтобы предотвратить циклы обновлений
+            // Используем аккуратно setTimeout с достаточной задержкой
+            setTimeout(() => {
+              if (document.body) { // Убедимся, что компонент все еще монтирован
+                setIsAuthenticated(true);
+              }
+            }, 50);
           }
           
           // Устанавливаем флаг загрузки данных ПЕРЕД обновлением интерфейса
@@ -168,15 +205,17 @@ const HomeContent: React.FC = () => {
           
           // Показываем интерфейс и обновляем состояние игры
           dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-          dispatch({ type: "LOGIN" });
           
-          // Устанавливаем laboratory как активную вкладку, если она не активна
-          if (gameState.activeTab !== "laboratory") {
-            dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-          }
-          
-          // Отмечаем, что уже выполнили логин
+          // Отмечаем, что уже выполнили логин - перемещаем сюда, чтобы избежать race condition
           hasDispatchedLoginRef.current = true;
+          
+          // Используем setTimeout для предотвращения зацикливания обновлений
+          setTimeout(() => {
+            dispatch({ type: "LOGIN" });
+            
+            // Устанавливаем laboratory как активную вкладку в отдельном таймере
+            setTimeout(setLaboratoryTab, 100);
+          }, 100);
           
           // Устанавливаем таймер для завершения загрузки данных
           const timer = setTimeout(() => {
@@ -186,30 +225,70 @@ const HomeContent: React.FC = () => {
           
           return () => clearTimeout(timer);
         }
-      } else if (isAuthenticated && !isFarcasterAuth) {
+      } else if (authStateRef.current && !isFarcasterAuth) {
         // Если пользователь был аутентифицирован, но потерял авторизацию Farcaster
-        setIsAuthenticated(false);
+        authStateRef.current = false;
+        setTimeout(() => {
+          if (document.body) { // Убедимся, что компонент все еще монтирован
+            setIsAuthenticated(false);
+          }
+        }, 50);
         dispatch({ type: "SET_USER", payload: null });
         hasDispatchedLoginRef.current = false;
+        // Сбрасываем флаг установки вкладки laboratory
+        hasSetLaboratoryTabRef.current = false;
       }
     } finally {
-      // Сбрасываем флаг проверки сессии
-      isCheckingSessionRef.current = false;
+      // Сбрасываем флаг проверки сессии с небольшой задержкой
+      // чтобы избежать быстрых повторных вызовов
+      setTimeout(() => {
+        isCheckingSessionRef.current = false;
+      }, 50);
     }
-  }, [isFarcasterAuth, farcasterUser, dispatch]);
+  }, [farcasterUser, isFarcasterAuth, dispatch]);
 
   // Отдельный эффект для обработки изменения состояния интерфейса
   useEffect(() => {
-    // Если интерфейс скрыт, показываем его
-    if (gameState.hideInterface && isAuthenticated) {
+    // Предотвращаем обработку, если уже в процессе обновления
+    if (isCheckingSessionRef.current) return;
+    
+    // Используем локальную переменную для отслеживания внесённых изменений
+    let changesApplied = false;
+
+    // Используем ссылку на состояние авторизации вместо проверки isAuthenticated
+    const isUserAuthenticated = authStateRef.current;
+    
+    if (gameState.hideInterface && isUserAuthenticated && !hasProcessedHideInterfaceRef.current) {
+      // Устанавливаем флаг, что обработали скрытие интерфейса
+      hasProcessedHideInterfaceRef.current = true;
+      changesApplied = true;
+      
+      // Если интерфейс скрыт, показываем его
       dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
       
       // Если вкладка не laboratory, устанавливаем ее
       if (gameState.activeTab !== "laboratory") {
-        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+        setTimeout(() => {
+          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+        }, 50);
+      }
+    } else if (!gameState.hideInterface) {
+      // Сбрасываем флаг, если интерфейс не скрыт
+      if (hasProcessedHideInterfaceRef.current) {
+        hasProcessedHideInterfaceRef.current = false;
+        changesApplied = true;
       }
     }
-  }, [gameState.hideInterface, gameState.activeTab, isAuthenticated, dispatch]);
+    
+    // Если были внесены изменения, добавляем небольшую задержку
+    // перед следующим возможным обновлением для предотвращения циклов
+    if (changesApplied) {
+      isCheckingSessionRef.current = true;
+      setTimeout(() => {
+        isCheckingSessionRef.current = false;
+      }, 50);
+    }
+  }, [gameState.hideInterface, gameState.activeTab, dispatch]);
 
   // Фиксим мобильный viewport
   useEffect(() => {
@@ -225,7 +304,10 @@ const HomeContent: React.FC = () => {
   }, [])
 
   const renderActiveTab = () => {
-    if (isUserDataLoading || !isAuthenticated) {
+    // Используем актуальное значение из authStateRef для большей надежности
+    const isUserAuthenticated = authStateRef.current;
+    
+    if (isUserDataLoading || !isUserAuthenticated) {
       return (
         <LoadingScreen
           progress={isUserDataLoading ? 75 : 0}
@@ -290,7 +372,7 @@ const HomeContent: React.FC = () => {
       style={{ height: viewportHeight }}
     >
       <AnimatePresence mode="wait">
-        {!isAuthenticated ? (
+        {!authStateRef.current ? (
           <AuthenticationWindow key="auth" onAuthenticate={handleAuthentication} />
         ) : (
           <MotionDiv

@@ -173,17 +173,17 @@ const Storage: React.FC = () => {
         setRewardAmount(reward)
         setIsChestOpening(false)
         gameDispatch({ 
-          type: "REMOVE_FROM_INVENTORY", 
+          type: "SET_RESOURCE", 
           payload: { 
-            item: "snot", 
-            amount: currentChest.requiredSnot 
+            resource: "snot", 
+            value: gameState.inventory.snot - currentChest.requiredSnot 
           } 
         })
         gameDispatch({ 
-          type: "ADD_TO_INVENTORY", 
+          type: "SET_RESOURCE", 
           payload: { 
-            item: "snotCoins", 
-            amount: reward 
+            resource: "snotCoins", 
+            value: gameState.inventory.snotCoins + reward 
           } 
         })
       }, 1000)

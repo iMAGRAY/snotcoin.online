@@ -91,7 +91,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
     }
     
     // Проверяем, есть ли необходимые методы
-    if (!farcaster.getContext && !farcaster.getNeynarContext) {
+    if (!farcaster.getContext) {
       return false;
     }
     
@@ -161,7 +161,8 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
           });
           
           // Отправляем данные на сервер для валидации и создания JWT
-          const response = await fetch('/api/farcaster/auth', {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -186,14 +187,32 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
 
           const data = await response.json();
 
-          if (data.success) {
+          if (data.success && data.tokens) {
+            // Сохраняем в localStorage для совместимости с dataService
+            try {
+              localStorage.setItem('auth_token', data.tokens.accessToken);
+              console.log('[WarpcastAuth] Токен сохранен в localStorage для совместимости с dataService');
+              
+              // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
+              if (data.user && data.user.id) {
+                localStorage.setItem('user_id', data.user.id);
+                console.log(`[WarpcastAuth] ID пользователя ${data.user.id} сохранен в localStorage`);
+              }
+            } catch (storageError) {
+              console.warn('[WarpcastAuth] Не удалось сохранить токен в localStorage:', storageError);
+            }
+
+            // Вызываем колбэк успешной авторизации
+            if (data.user) {
+              onSuccess(data.user);
+            }
+
             logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация через Warpcast успешна');
             // Отмечаем в store, что пользователь уже аутентифицирован
             farcasterStore.setIsAuthenticated(true);
             isAuthenticatedRef.current = true;
             
             // Вызываем колбэк успеха перед обновлением состояния
-            onSuccess(data);
             safeSetIsLoading(false);
             return;
           } else {
@@ -249,8 +268,6 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       // Пробуем разные методы для получения контекста пользователя
       if (farcaster.getContext) {
         userContext = await farcaster.getContext();
-      } else if (farcaster.getNeynarContext) {
-        userContext = await farcaster.getNeynarContext();
       } else if ((window as any).fc && (window as any).fc.getContext) {
         userContext = await (window as any).fc.getContext();
       } else {
@@ -279,7 +296,8 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       });
 
       // Отправляем данные на сервер для валидации и создания JWT
-      const response = await fetch('/api/farcaster/auth', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -294,14 +312,32 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.tokens) {
+        // Сохраняем в localStorage для совместимости с dataService
+        try {
+          localStorage.setItem('auth_token', data.tokens.accessToken);
+          console.log('[WarpcastAuth] Токен сохранен в localStorage для совместимости с dataService');
+          
+          // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
+          if (data.user && data.user.id) {
+            localStorage.setItem('user_id', data.user.id);
+            console.log(`[WarpcastAuth] ID пользователя ${data.user.id} сохранен в localStorage`);
+          }
+        } catch (storageError) {
+          console.warn('[WarpcastAuth] Не удалось сохранить токен в localStorage:', storageError);
+        }
+
+        // Вызываем колбэк успешной авторизации
+        if (data.user) {
+          onSuccess(data.user);
+        }
+
         logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация через Warpcast успешна');
         // Отмечаем в store, что пользователь уже аутентифицирован
         farcasterStore.setIsAuthenticated(true);
         isAuthenticatedRef.current = true;
         
         // Вызываем колбэк успеха перед обновлением состояния
-        onSuccess(data);
         safeSetIsLoading(false);
       } else {
         logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка при обработке данных пользователя', { error: data.message });

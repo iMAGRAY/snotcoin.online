@@ -1,49 +1,17 @@
 /**
  * Типы данных для игры
  */
-// Типы для игровой механики
-export interface Inventory {
-  snot: number
-  snotCoins: number
-  collectionEfficiency: number
-  containerCapacityLevel: number
-  fillingSpeedLevel: number
-  fillingSpeed: number
-  containerCapacity: number
-  containerSnot: number
-  Cap: number
-  lastUpdateTimestamp?: number // Временная метка последнего обновления ресурсов
+
+// Типы для Farcaster
+export interface FarcasterUser {
+  id: string
+  fid: number
+  username: string
+  displayName?: string
+  pfp?: string
 }
 
-export interface Upgrades {
-  containerLevel: number
-  fillingSpeedLevel: number
-  collectionEfficiencyLevel: number
-}
-
-export interface Container {
-  level: number
-  capacity: number
-  currentAmount: number
-  fillRate: number
-}
-
-export interface Settings {
-  language: string
-  theme: string
-  notifications: boolean
-  tutorialCompleted: boolean
-}
-
-export interface SoundSettings {
-  clickVolume: number
-  effectsVolume: number
-  backgroundMusicVolume: number
-  isMuted: boolean
-  isEffectsMuted: boolean
-  isBackgroundMusicMuted: boolean
-}
-
+// Пользователь
 export interface User {
   id: string
   farcaster_fid?: number
@@ -59,88 +27,240 @@ export interface User {
   updated_at?: string
 }
 
+// Настройки
+export interface Settings {
+  language: string
+  theme: string
+  notifications: boolean
+  tutorialCompleted: boolean
+}
+
+// Настройки звука
+export interface SoundSettings {
+  clickVolume: number
+  effectsVolume: number
+  backgroundMusicVolume: number
+  isMuted: boolean
+  isEffectsMuted: boolean
+  isBackgroundMusicMuted: boolean
+}
+
+/**
+ * Состояние инвентаря
+ */
+export interface Inventory {
+  // Валюта и ресурсы
+  snot: number;
+  snotCoins: number;
+  
+  // Атрибуты контейнера
+  containerCapacity: number;
+  containerCapacityLevel: number;
+  fillingSpeed: number;
+  fillingSpeedLevel: number;
+  
+  // Дополнительные атрибуты для основной игры
+  collectionEfficiency: number;
+  containerSnot: number;
+  Cap: number;
+  lastUpdateTimestamp?: number;
+}
+
+/**
+ * Состояние контейнера
+ */
+export interface Container {
+  level: number;
+  capacity: number;
+  currentAmount: number;
+  fillRate: number;
+  currentFill?: number;
+}
+
+/**
+ * Улучшения
+ */
+export interface Upgrades {
+  containerLevel: number;
+  fillingSpeedLevel: number;
+  collectionEfficiencyLevel: number;
+  clickPower?: { level: number, value: number };
+  passiveIncome?: { level: number, value: number };
+}
+
+/**
+ * Информация о предмете
+ */
+export interface Item {
+  id: string;
+  type: string;
+  name: string;
+  rarity: string;
+  value: number;
+  effects?: Record<string, number>;
+  obtained?: number; // Timestamp
+  _lastModified?: number; // Timestamp
+}
+
+/**
+ * Состояние улучшения
+ */
+export interface Upgrade {
+  level: number;
+  value: number;
+  maxLevel?: number;
+  cost?: number;
+  unlocked?: boolean;
+}
+
+/**
+ * Состояние достижений
+ */
+export interface Achievements {
+  unlockedAchievements: string[];
+}
+
+/**
+ * Основное состояние игры
+ */
 export interface GameState {
-  activeTab: string
-  user: User | null
-  validationStatus: "pending" | "valid" | "invalid"
-  lastValidation?: number
-  inventory: Inventory
-  container: Container
-  upgrades: Upgrades
-  settings: Settings
-  soundSettings: SoundSettings
-  hideInterface: boolean
-  isPlaying: boolean
-  isLoading: boolean
-  containerLevel: number
-  fillingSpeed: number
-  containerSnot: number
-  gameStarted: boolean
-  highestLevel: number
-  consecutiveLoginDays: number
+  // Основные игровые элементы
+  inventory: Inventory;
+  container: Container;
+  upgrades: Upgrades;
+  
+  // Дополнительные элементы
+  items?: Item[];
+  achievements?: Achievements;
+  stats?: Record<string, number>;
+  
+  // Настройки
+  settings: Settings;
+  soundSettings: SoundSettings;
+  
+  // Состояние UI
+  activeTab: string;
+  hideInterface: boolean;
+  isPlaying: boolean;
+  isLoading: boolean;
+  
+  // Прогресс
+  containerLevel: number;
+  fillingSpeed: number;
+  containerSnot: number;
+  gameStarted: boolean;
+  highestLevel: number;
+  consecutiveLoginDays: number;
+  
+  // Пользователь
+  user: User | null;
+  validationStatus: "pending" | "valid" | "invalid";
+  lastValidation?: number;
+  
+  // Кошелек
   wallet?: {
     snotCoins: number
-  }
+  };
 }
 
+/**
+ * Расширенное состояние игры с метаданными сохранения
+ */
 export interface ExtendedGameState extends GameState {
-  // Дополнительные поля для расширенного состояния игры
-  _saveVersion?: number
-  _lastSaved?: string
-  _isRetry?: boolean
-  _isInitialState?: boolean
-  _isError?: boolean
-  _lastActionTime?: string
-  _lastAction?: string
-  _skippedLoad?: boolean  // Флаг, указывающий, что загрузка была пропущена из-за более новой локальной версии
-  _isForceSave?: boolean  // Флаг, указывающий на принудительное сохранение
-  _isBeforeUnloadSave?: boolean // Флаг для сохранения перед закрытием страницы
-  _isMerged?: boolean // Флаг, указывающий что состояние было получено путем слияния
-  _clientSentAt?: string // Метка времени отправки с клиента 
-  _tempData?: any // Временные данные, которые не должны сохраняться
+  // Версия сохранения
+  _saveVersion?: number;
+  
+  // Время последнего изменения
+  _lastModified?: number;
+  _lastSaved?: string;
+  
+  // ID пользователя
+  _userId?: string;
+  
+  // Флаги состояния
+  _isRetry?: boolean;
+  _isInitialState?: boolean;
+  _isError?: boolean;
+  _lastActionTime?: string;
+  _lastAction?: string;
+  _skippedLoad?: boolean;
+  _isForceSave?: boolean;
+  _isBeforeUnloadSave?: boolean;
+  _isMerged?: boolean;
+  _clientSentAt?: string;
+  _isRestoredFromBackup?: boolean;
+  _skipSave?: boolean;
+  _isSavingInProgress?: boolean;
+  _unmountSave?: boolean;
+  _lastSaveError?: string;
+  
+  // Информация о восстановлении данных
+  _wasRepaired?: boolean;
+  _repairedAt?: number;
+  _repairedFields?: string[];
+  
+  // Дополнительные данные для save system
+  _tempData?: any;
+  logs?: Array<any>;
+  analytics?: Record<string, any>;
+  
+  // Дата декомпрессии (для сжатых данных)
+  _decompressedAt?: string;
+  
+  // Предупреждение о целостности данных
+  _integrityWarning?: boolean;
+  
+  // Данные для дельта-компрессии
+  _saveId?: string;
+  _appliedDelta?: boolean;
+  _deltaAppliedAt?: number;
+  _deltaClientId?: string;
 }
 
-export type ActionType =
-  | 'SET_USER'
-  | 'SET_ACTIVE_TAB'
-  | 'SET_CONTAINER_LEVEL'
-  | 'SET_FILLING_SPEED_LEVEL'
-  | 'SET_COLLECTION_EFFICIENCY_LEVEL'
-  | 'UPDATE_CONTAINER'
-  | 'UPDATE_CONTAINER_LEVEL'
-  | 'UPDATE_CONTAINER_SNOT'
-  | 'UPDATE_FILLING_SPEED'
-  | 'UPDATE_RESOURCES'
-  | 'INITIALIZE_NEW_USER'
-  | 'RESET_GAME_STATE'
-  | 'LOAD_USER_DATA'
-  | 'SET_IS_PLAYING'
-  | 'LOGIN'
-  | 'LOAD_GAME_STATE'
-  | 'SET_GAME_STARTED'
-  | 'ADD_TO_INVENTORY'
-  | 'REMOVE_FROM_INVENTORY'
-  | 'FORCE_SAVE_GAME_STATE'
-  | 'SET_RESOURCE'
-  | 'UPGRADE_CONTAINER_CAPACITY'
-  | 'UPGRADE_FILLING_SPEED'
-  | 'ADD_SNOT'
-  | 'COLLECT_CONTAINER_SNOT'
-  | 'INCREMENT_CONTAINER_CAPACITY'
-  | 'SET_CLICK_SOUND_VOLUME'
-  | 'SET_BACKGROUND_MUSIC_VOLUME'
-  | 'SET_EFFECTS_SOUND_VOLUME'
-  | 'SET_MUTE'
-  | 'SET_EFFECTS_MUTE'
-  | 'SET_BACKGROUND_MUSIC_MUTE'
-  | 'CLEAR_GAME_DATA'
-  | 'MOVE_SC_TO_GAME'
-  | 'SET_HIDE_INTERFACE';
-
-export interface Action {
-  type: ActionType
-  payload?: any
-}
+export type Action =
+  | { type: "LOGIN" }
+  | { type: "SET_ACTIVE_TAB"; payload: string }
+  | { type: "SET_USER"; payload: any }
+  | { type: "UPDATE_CONTAINER_LEVEL"; payload: number }
+  | { type: "UPDATE_CONTAINER_SNOT"; payload: number }
+  | { type: "UPDATE_FILLING_SPEED"; payload: number }
+  | { type: "UPDATE_RESOURCES" }
+  | { type: "SET_RESOURCE"; payload: { resource: string; value: number } }
+  | { type: "ADD_SNOT"; payload: number }
+  | { type: "COLLECT_CONTAINER_SNOT"; payload: { amount: number } }
+  | { type: "UPGRADE_FILLING_SPEED" }
+  | { type: "UPGRADE_CONTAINER_CAPACITY" }
+  | { type: "INCREMENT_CONTAINER_CAPACITY" }
+  | { type: "INITIALIZE_NEW_USER"; payload?: ExtendedGameState }
+  | { type: "SET_HIDE_INTERFACE"; payload: boolean }
+  | { type: "SET_INVENTORY"; payload: Inventory }
+  | { type: "SET_CONTAINER"; payload: Container }
+  | { type: "SET_UPGRADES"; payload: Upgrades }
+  | { type: "FORCE_SAVE_GAME_STATE" }
+  | { type: "RESET_GAME_STATE" }
+  | { type: "ADD_ACHIEVEMENT"; payload: string }
+  | { type: "CONVERT_SNOT_TO_COINS"; payload: number }
+  | { type: "SET_ITEM"; payload: Item }
+  | { type: "ADD_ITEM"; payload: Item }
+  | { type: "REMOVE_ITEM"; payload: string }
+  | { type: "SET_SETTINGS"; payload: Settings }
+  | { type: "SET_SOUND_SETTINGS"; payload: SoundSettings }
+  | { type: "TOGGLE_MUSIC_MUTE" }
+  | { type: "TOGGLE_EFFECTS_MUTE" }
+  | { type: "SET_MUSIC_VOLUME"; payload: number }
+  | { type: "SET_EFFECTS_VOLUME"; payload: number }
+  | { type: "LOAD_GAME_STATE"; payload: ExtendedGameState }
+  | { type: "LOAD_USER_DATA"; payload: Partial<ExtendedGameState> }
+  | { type: "SET_IS_PLAYING"; payload: boolean }
+  | { type: "SET_GAME_STARTED"; payload: boolean }
+  | { type: "SET_CLICK_SOUND_VOLUME"; payload: number }
+  | { type: "SET_BACKGROUND_MUSIC_VOLUME"; payload: number }
+  | { type: "SET_EFFECTS_SOUND_VOLUME"; payload: number }
+  | { type: "SET_MUTE"; payload: boolean }
+  | { type: "SET_EFFECTS_MUTE"; payload: boolean }
+  | { type: "SET_BACKGROUND_MUSIC_MUTE"; payload: boolean }
+  | { type: "ADD_TO_INVENTORY"; payload: Item }
+  | { type: "REMOVE_FROM_INVENTORY"; payload: string };
 
 // Константы для улучшений
 export const CONTAINER_UPGRADES = [
@@ -169,11 +289,120 @@ export const FILLING_SPEED_UPGRADES = [
   { level: 10, speed: 512, cost: 72000, speedIncrease: 256 }
 ];
 
-// Типы для Farcaster
-export interface FarcasterUser {
-  id: string
-  fid: number
-  username: string
-  displayName?: string
-  pfp?: string
+export interface PlayerAction {
+  type: string;
+  value?: number;
+  timestamp: number;
+  target?: string;
+}
+
+export interface ChestItem {
+  id: string;
+  name: string;
+  rarity: string;
+  description?: string;
+  value: number;
+  icon: string;
+}
+
+export interface Chest {
+  id: string;
+  type: string;
+  rarity: string;
+  items: ChestItem[];
+}
+
+export enum GameEventType {
+  CLICK = 'click',
+  UPGRADE = 'upgrade',
+  COLLECT = 'collect',
+  OPEN_CHEST = 'open-chest',
+  ACHIEVEMENT = 'achievement',
+  PURCHASE = 'purchase',
+  LOGIN = 'login',
+  LOGOUT = 'logout',
+}
+
+export interface GameEvent {
+  type: GameEventType;
+  timestamp: number;
+  data: Record<string, any>;
+  userId?: string;
+}
+
+export interface GameStateUpdate {
+  type: 'inventory' | 'container' | 'upgrades' | 'achievements' | 'items' | 'full';
+  changes: Partial<GameState>;
+  timestamp: number;
+}
+
+/**
+ * Создает состояние игры по умолчанию
+ */
+export function createDefaultGameState(): GameState {
+  return {
+    activeTab: 'main',
+    user: null,
+    validationStatus: "pending",
+    inventory: {
+      snot: 0,
+      snotCoins: 0,
+      collectionEfficiency: 1,
+      containerCapacityLevel: 1,
+      fillingSpeedLevel: 1,
+      fillingSpeed: 1,
+      containerCapacity: 100,
+      containerSnot: 0,
+      Cap: 0
+    },
+    container: {
+      level: 1,
+      capacity: 100,
+      currentAmount: 0,
+      fillRate: 1,
+      currentFill: 0
+    },
+    upgrades: {
+      containerLevel: 1,
+      fillingSpeedLevel: 1,
+      collectionEfficiencyLevel: 1,
+      clickPower: { level: 1, value: 1 },
+      passiveIncome: { level: 1, value: 0.1 }
+    },
+    settings: {
+      language: 'en',
+      theme: 'light',
+      notifications: true,
+      tutorialCompleted: false
+    },
+    soundSettings: {
+      clickVolume: 0.5,
+      effectsVolume: 0.5,
+      backgroundMusicVolume: 0.3,
+      isMuted: false,
+      isEffectsMuted: false,
+      isBackgroundMusicMuted: false
+    },
+    hideInterface: false,
+    isPlaying: false,
+    isLoading: false,
+    containerLevel: 1,
+    fillingSpeed: 1,
+    containerSnot: 0,
+    gameStarted: false,
+    highestLevel: 1,
+    consecutiveLoginDays: 0
+  };
+}
+
+/**
+ * Создает расширенное состояние игры с метаданными сохранения
+ */
+export function createDefaultExtendedGameState(userId: string): ExtendedGameState {
+  return {
+    ...createDefaultGameState(),
+    _saveVersion: 1,
+    _lastModified: Date.now(),
+    _userId: userId,
+  };
 } 

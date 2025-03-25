@@ -240,74 +240,21 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       });
       
     case "LOAD_GAME_STATE": {
-      // Проверяем, что загружаемое состояние имеет необходимые поля
-      const loadedState = action.payload as ExtendedGameState;
+      // Нормализуем восстановленное состояние
+      const loadedState = action.payload;
+      console.log("[GameReducer] Загружаем сохраненное состояние игры", 
+        loadedState._isRestoredFromBackup ? "из резервной копии" : "");
       
-      if (!loadedState) {
-        return state;
-      }
+      // Проверяем и восстанавливаем критически важные части состояния
+      const normalizedState = {
+        ...loadedState,
+        // Обновляем метаданные для отслеживания восстановления
+        _lastActionTime: new Date().toISOString(),
+        _lastAction: action.type,
+        _loadedAt: new Date().toISOString()
+      };
       
-      // Проверяем наличие инвентаря
-      if (!loadedState.inventory) {
-        loadedState.inventory = initialState.inventory;
-      }
-      
-      // Проверяем основные свойства инвентаря и устанавливаем значения по умолчанию при необходимости
-      if (typeof loadedState.inventory.snot !== 'number' || isNaN(loadedState.inventory.snot)) {
-        loadedState.inventory.snot = initialState.inventory.snot;
-      }
-      
-      if (typeof loadedState.inventory.snotCoins !== 'number' || isNaN(loadedState.inventory.snotCoins)) {
-        loadedState.inventory.snotCoins = initialState.inventory.snotCoins;
-      }
-      
-      if (typeof loadedState.inventory.containerCapacity !== 'number' || 
-          isNaN(loadedState.inventory.containerCapacity) || 
-          loadedState.inventory.containerCapacity <= 0) {
-        loadedState.inventory.containerCapacity = initialState.inventory.containerCapacity;
-      }
-      
-      if (typeof loadedState.inventory.Cap !== 'number' || 
-          isNaN(loadedState.inventory.Cap) || 
-          loadedState.inventory.Cap <= 0) {
-        loadedState.inventory.Cap = initialState.inventory.Cap;
-      }
-      
-      // Синхронизируем Cap и containerCapacity
-      if (loadedState.inventory.Cap !== loadedState.inventory.containerCapacity) {
-        loadedState.inventory.Cap = loadedState.inventory.containerCapacity;
-      }
-      
-      if (typeof loadedState.inventory.containerSnot !== 'number' || 
-          isNaN(loadedState.inventory.containerSnot) || 
-          loadedState.inventory.containerSnot < 0) {
-        loadedState.inventory.containerSnot = initialState.inventory.containerSnot;
-      }
-      
-      // Проверяем, что количество снота в контейнере не превышает емкость
-      if (loadedState.inventory.containerSnot > loadedState.inventory.containerCapacity) {
-        loadedState.inventory.containerSnot = loadedState.inventory.containerCapacity;
-      }
-      
-      if (typeof loadedState.inventory.fillingSpeed !== 'number' || 
-          isNaN(loadedState.inventory.fillingSpeed) || 
-          loadedState.inventory.fillingSpeed <= 0) {
-        loadedState.inventory.fillingSpeed = initialState.inventory.fillingSpeed;
-      }
-      
-      if (typeof loadedState.inventory.fillingSpeedLevel !== 'number' || 
-          isNaN(loadedState.inventory.fillingSpeedLevel) || 
-          loadedState.inventory.fillingSpeedLevel <= 0) {
-        loadedState.inventory.fillingSpeedLevel = initialState.inventory.fillingSpeedLevel;
-      }
-      
-      if (typeof loadedState.inventory.containerCapacityLevel !== 'number' || 
-          isNaN(loadedState.inventory.containerCapacityLevel) || 
-          loadedState.inventory.containerCapacityLevel <= 0) {
-        loadedState.inventory.containerCapacityLevel = initialState.inventory.containerCapacityLevel;
-      }
-      
-      return loadedState;
+      return normalizedState;
     }
 
     case "SET_GAME_STARTED":

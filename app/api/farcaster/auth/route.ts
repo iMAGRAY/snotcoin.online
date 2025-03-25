@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // Создаем временный ID пользователя без сохранения в БД
-    const mockUserId = `user_${fid}_${Date.now()}`;
-    console.log('Created mock user ID:', mockUserId);
+    // Создаем стабильный ID пользователя на основе FID
+    const mockUserId = `user_${fid}`;
+    console.log('Using stable user ID:', mockUserId);
     
     // Создаем JWT токен
     const { token: accessToken, expiresAt } = await generateJWT(mockUserId);
@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Распарсим userId (формат user_fid_timestamp)
+    // Распарсим userId (формат user_fid)
     const userParts = userId.split('_');
     const fid = userParts.length > 1 ? userParts[1] : '0';
     

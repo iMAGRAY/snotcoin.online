@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 import { PrismaClient } from '@prisma/client';
+import { UserModel } from './models';
 
 // Создаем клиент, но больше не используем его активно
 const prisma = new PrismaClient();
@@ -46,7 +47,6 @@ export async function generateRefreshToken(userId: string): Promise<{ token: str
   expiresAt.setSeconds(expiresAt.getSeconds() + expiresIn);
   
   console.log(`Создан refresh токен для пользователя ${userId}, истекает ${expiresAt.toISOString()}`);
-  console.log(`Важно: токен не сохраняется в БД в текущей версии`);
   
   return { token: refreshToken, expiresAt };
 }
@@ -83,25 +83,34 @@ export async function refreshTokens(refreshToken: string): Promise<{
   try {
     console.log('Попытка обновления токенов через refresh token:', refreshToken.substring(0, 10) + '...');
     
-    // В текущей версии для упрощения генерируем новый идентификатор
-    // В будущем здесь нужно будет декодировать токен, проверять в БД и т.д.
-    const tempUserId = `user_temp_${Date.now()}`;
-    console.log(`Используем временный userId: ${tempUserId} (БД не используется)`);
+    // Декодируем старый токен для получения userId
+    // В будущей версии нужно реализовать полную проверку refresh токена в БД
+    const decoded = decodeJwt(refreshToken);
+    const userId = decoded.userId as string;
+    
+    if (!userId) {
+      throw new Error('Не удалось получить userId из refresh токена');
+    }
+
+    console.log(`Обновление токенов для пользователя ${userId}`);
     
     // Генерируем новый access токен
-    const { token: newAccessToken, expiresAt } = await generateJWT(tempUserId);
+    const { token: newAccessToken, expiresAt } = await generateJWT(userId);
     
     // Генерируем новый refresh токен
-    const { token: newRefreshToken } = await generateRefreshToken(tempUserId);
+    const { token: newRefreshToken } = await generateRefreshToken(userId);
     
-    console.log('Токены успешно обновлены без использования БД');
+    // Сохраняем токен в базе данных
+    await UserModel.updateToken(userId, newAccessToken);
+    
+    console.log('Токены успешно обновлены и сохранены в БД');
     
     return {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
       expiresAt,
       success: true,
-      userId: tempUserId
+      userId
     };
   } catch (error) {
     console.error('Ошибка при обновлении токенов:', error);

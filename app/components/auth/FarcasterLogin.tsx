@@ -51,7 +51,8 @@ export default function FarcasterLogin({
       }
 
       // Отправляем данные на наш сервер для авторизации
-      const response = await fetch('/api/farcaster/auth', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,6 +69,22 @@ export default function FarcasterLogin({
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || 'Ошибка при авторизации');
+      }
+
+      // Сохраняем токен в localStorage для совместимости с dataService
+      if (data.token) {
+        try {
+          localStorage.setItem('auth_token', data.token);
+          console.log('[FarcasterLogin] Токен сохранен в localStorage для совместимости с dataService');
+          
+          // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
+          if (data.user && data.user.id) {
+            localStorage.setItem('user_id', data.user.id);
+            console.log(`[FarcasterLogin] ID пользователя ${data.user.id} сохранен в localStorage`);
+          }
+        } catch (storageError) {
+          console.warn('[FarcasterLogin] Не удалось сохранить токен в localStorage:', storageError);
+        }
       }
 
       // Обновляем данные в контексте

@@ -52,7 +52,8 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   const refreshUserData = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/farcaster/auth');
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${baseUrl}/api/farcaster/auth`);
       const data = await response.json();
       
       if (data.authenticated && data.user) {
@@ -83,7 +84,8 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   // Обновление токенов через refresh token
   const refreshTokens = async () => {
     try {
-      const response = await fetch('/api/auth/refresh', {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${baseUrl}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,6 +96,15 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       
       if (data.success && data.tokens) {
         setTokens(data.tokens);
+        
+        // Сохраняем токен в localStorage для совместимости с dataService
+        try {
+          localStorage.setItem('auth_token', data.tokens.accessToken);
+          console.log('[FarcasterContext] Обновленный токен сохранен в localStorage');
+        } catch (storageError) {
+          console.warn('[FarcasterContext] Не удалось сохранить токен в localStorage:', storageError);
+        }
+        
         return true;
       }
       

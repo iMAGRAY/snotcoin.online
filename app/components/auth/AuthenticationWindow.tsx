@@ -8,7 +8,6 @@ import { useGameDispatch } from "../../contexts/GameContext"
 import { ICONS } from "../../constants/uiConstants"
 import { AuthLogType, AuthStep, logAuth, logAuthInfo, setUserId } from "../../utils/auth-logger"
 import WarpcastAuth from "./WarpcastAuth"
-import NeynarAuth from "./NeynarAuth"
 
 interface AuthenticationWindowProps {
   onAuthenticate: (userData: any) => void

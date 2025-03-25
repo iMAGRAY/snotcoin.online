@@ -7,32 +7,28 @@ import { refreshTokens } from '@/app/utils/jwt';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Получаем refresh token из куки
-    const refreshTokenCookie = cookies().get('refresh_token');
+    // Получаем refresh токен из куки
+    const refreshToken = cookies().get('refresh_token')?.value;
     
-    if (!refreshTokenCookie) {
+    if (!refreshToken) {
       return NextResponse.json({
         success: false,
-        message: 'Refresh token не найден'
-      }, { status: 400 });
+        message: 'Refresh токен отсутствует'
+      }, { status: 401 });
     }
     
-    // Обновляем токены с помощью refresh token
-    const result = await refreshTokens(refreshTokenCookie.value);
+    // Обновляем токены
+    const result = await refreshTokens(refreshToken);
     
     if (!result.success) {
-      // Удаляем устаревшие токены
-      cookies().delete('session');
-      cookies().delete('refresh_token');
-      
       return NextResponse.json({
         success: false,
-        message: 'Невозможно обновить токены',
+        message: 'Не удалось обновить токены',
         error: result.error
       }, { status: 401 });
     }
     
-    // Устанавливаем новый access token в куки
+    // Устанавливаем новый токен в куки
     cookies().set({
       name: 'session',
       value: result.accessToken,
@@ -42,7 +38,7 @@ export async function POST(request: NextRequest) {
       path: '/'
     });
     
-    // Устанавливаем новый refresh token в куки
+    // Устанавливаем новый refresh токен в куки
     cookies().set({
       name: 'refresh_token',
       value: result.refreshToken,
@@ -52,7 +48,7 @@ export async function POST(request: NextRequest) {
       path: '/'
     });
     
-    // Возвращаем новые токены
+    // Возвращаем успешный ответ
     return NextResponse.json({
       success: true,
       message: 'Токены успешно обновлены',
@@ -63,11 +59,11 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    console.error('Ошибка при обновлении токенов:', error);
     
     return NextResponse.json({
       success: false,
-      message: 'Ошибка обновления токенов',
+      message: 'Произошла ошибка при обновлении токенов',
       error: String(error)
     }, { status: 500 });
   }

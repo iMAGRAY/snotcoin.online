@@ -79,14 +79,11 @@ interface FarcasterCastOption {
  * Интерфейс для Farcaster SDK, предоставляемого Warpcast
  */
 interface FarcasterSDK {
-  /** Функция для сообщения Farcaster, что фрейм готов */
+  /** Проверка готовности SDK */
   ready: () => void;
   
   /** Получение контекста текущего пользователя */
   getContext: () => Promise<FarcasterContext>;
-  
-  /** Получение контекста из Neynar (альтернативный метод) */
-  getNeynarContext?: () => Promise<FarcasterContext>;
   
   /** Получение пользователя по FID */
   fetchUserByFid?: (fid: number) => Promise<any>;

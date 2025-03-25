@@ -5,6 +5,18 @@
 import { jwtDecode } from "jwt-decode";
 import { logAuth, AuthStep, AuthLogType } from '../utils/auth-logger';
 
+// Расширяем глобальный интерфейс Window для поддержки authStore
+declare global {
+  interface Window {
+    authStore?: {
+      getAuthToken: () => string | null;
+      getIsAuthenticated: () => boolean;
+      setAuthToken: (token: string) => void;
+      clearAuthData: () => void;
+    };
+  }
+}
+
 // Интерфейс для JWT payload
 interface JwtPayload {
   id: string;
@@ -27,13 +39,49 @@ export const getToken = (): string | null => {
   if (typeof window === 'undefined') return null;
   
   try {
-    const token = localStorage.getItem('authToken');
-    return token;
+    // Сначала проверяем localStorage
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      console.log(`[AuthService] Получен токен из localStorage`);
+      return token;
+    }
+    
+    // Затем проверяем authStore, если он существует
+    if (typeof window.authStore !== 'undefined' && window.authStore.getAuthToken) {
+      const storeToken = window.authStore.getAuthToken();
+      if (storeToken) {
+        console.log(`[AuthService] Получен токен из authStore`);
+        // Сохраняем в localStorage для синхронизации
+        try {
+          localStorage.setItem('auth_token', storeToken);
+        } catch (storageError) {
+          console.warn('[AuthService] Не удалось сохранить токен в localStorage:', storageError);
+        }
+        return storeToken;
+      }
+    }
+    
+    // Проверяем в sessionStorage как запасной вариант
+    const sessionToken = sessionStorage.getItem('auth_token');
+    if (sessionToken) {
+      console.log(`[AuthService] Получен токен из sessionStorage`);
+      // Сохраняем в localStorage для синхронизации
+      try {
+        localStorage.setItem('auth_token', sessionToken);
+      } catch (storageError) {
+        console.warn('[AuthService] Не удалось сохранить токен в localStorage:', storageError);
+      }
+      return sessionToken;
+    }
+    
+    console.log(`[AuthService] Токен не найден ни в одном из хранилищ`);
+    return null;
   } catch (error) {
+    console.error('[AuthService] Ошибка получения токена из хранилищ:', error);
     logAuth(
       AuthStep.TOKEN_VALIDATION, 
       AuthLogType.ERROR, 
-      'Ошибка получения токена из localStorage',
+      'Ошибка получения токена из хранилищ',
       { error: error instanceof Error ? error.message : 'Неизвестная ошибка' }
     );
     return null;
@@ -45,13 +93,15 @@ export const setToken = (token: string): void => {
   if (typeof window === 'undefined') return;
   
   try {
-    localStorage.setItem('authToken', token);
+    localStorage.setItem('auth_token', token);
+    console.log('[AuthService] Токен сохранен в localStorage');
     logAuth(
       AuthStep.TOKEN_RECEIVED, 
       AuthLogType.INFO, 
       'Токен сохранен в localStorage'
     );
   } catch (error) {
+    console.error('[AuthService] Ошибка сохранения токена в localStorage:', error);
     logAuth(
       AuthStep.TOKEN_RECEIVED, 
       AuthLogType.ERROR, 
@@ -66,13 +116,15 @@ export const removeToken = (): void => {
   if (typeof window === 'undefined') return;
   
   try {
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('auth_token');
+    console.log('[AuthService] Токен удален из localStorage');
     logAuth(
       AuthStep.USER_INTERACTION, 
       AuthLogType.INFO, 
       'Токен удален из localStorage'
     );
   } catch (error) {
+    console.error('[AuthService] Ошибка удаления токена из localStorage:', error);
     logAuth(
       AuthStep.USER_INTERACTION, 
       AuthLogType.ERROR, 
@@ -89,6 +141,7 @@ export const getUserFromToken = (): FarcasterUser | null => {
   
   try {
     const decoded = jwtDecode<JwtPayload>(token);
+    console.log(`[AuthService] Декодирован токен, ID пользователя: ${decoded.id}, FID: ${decoded.fid}`);
     
     return {
       id: decoded.id,
@@ -96,6 +149,7 @@ export const getUserFromToken = (): FarcasterUser | null => {
       exp: decoded.exp
     };
   } catch (error) {
+    console.error('[AuthService] Ошибка декодирования токена:', error);
     logAuth(
       AuthStep.TOKEN_VALIDATION, 
       AuthLogType.ERROR, 
