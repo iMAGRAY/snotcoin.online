@@ -43,7 +43,15 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz; frame-src 'self' https://warpcast.com https://*.warpcast.com; frame-ancestors 'self' https://warpcast.com https://*.warpcast.com; img-src 'self' data: https:; connect-src 'self' https://hub.farcaster.xyz;"
+            value: `
+              default-src 'self';
+              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
+              style-src 'self' 'unsafe-inline';
+              img-src 'self' data: https: blob:;
+              connect-src 'self' https://hub.farcaster.xyz wss://hub.farcaster.xyz;
+              frame-src 'self' https://warpcast.com https://*.warpcast.com;
+              frame-ancestors 'self' https://warpcast.com https://*.warpcast.com;
+            `.replace(/\s+/g, ' ').trim()
           },
           {
             key: 'X-Frame-Options',

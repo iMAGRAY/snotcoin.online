@@ -8,7 +8,9 @@
     "start": "next start",
     "start:ssl": "sudo node server.js",
     "start:dev:ssl": "NODE_ENV=development sudo node server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "download-sdk": "node scripts/download-sdk.js",
+    "postinstall": "npm run download-sdk"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

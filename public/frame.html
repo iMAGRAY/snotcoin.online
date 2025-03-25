@@ -6,29 +6,82 @@
   <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com">
   <title>Snotcoin - Play to Earn Game</title>
   
-  <!-- Обязательные метатеги для Farcaster Frames v2 -->
-  <meta name="fc:frame" content="{&quot;version&quot;:&quot;next&quot;,&quot;imageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;button&quot;:{&quot;title&quot;:&quot;Play Snotcoin 🎮&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;launch_frame&quot;,&quot;name&quot;:&quot;Snotcoin&quot;,&quot;url&quot;:&quot;https://snotcoin.online&quot;,&quot;splashImageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;splashBackgroundColor&quot;:&quot;#0F172A&quot;}}}" />
+  <!-- Farcaster Frame Meta Tags -->
+  <meta property="fc:frame" content="vNext" />
+  <meta property="og:image" content="https://snotcoin.online/game/cast.webp" />
+  <meta property="fc:frame:button:1" content="Play now" />
+  <meta property="fc:frame:button:1:action" content="post_redirect" />
+  <meta property="fc:frame:button:1:target" content="https://snotcoin.online/api/frame" />
+  
+  <!-- OpenGraph Meta Tags -->
   <meta property="og:title" content="Snotcoin - Play to Earn Game" />
   <meta property="og:description" content="Play to earn game on Farcaster" />
   <meta property="og:image" content="https://snotcoin.online/game/cast.webp" />
   <meta property="og:url" content="https://snotcoin.online/frame.html" />
   <meta property="og:type" content="website" />
 
-  <!-- Farcaster SDK -->
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #000;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .container {
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 20px;
+    }
+    p {
+      font-size: 1.2em;
+      margin-bottom: 30px;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #4CAF50;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    .button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to Snotcoin!</h1>
+    <p>Click the button to start playing.</p>
+    <a href="https://snotcoin.online/?embed=true" class="button">Play Now</a>
+  </div>
+
   <script>
-    // Инициализация Farcaster SDK
+    // Загружаем SDK Farcaster локально
     (function() {
       const script = document.createElement('script');
-      script.src = 'https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js';
+      script.src = '/farcaster.js';
       script.onload = function() {
         if (window.farcaster) {
           window.farcaster.ready();
         }
       };
+      script.onerror = function() {
+        console.error('Failed to load Farcaster SDK');
+      };
       document.head.appendChild(script);
     })();
   </script>
-</head>
-<body>
 </body>
 </html> 
