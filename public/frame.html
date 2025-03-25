@@ -73,12 +73,12 @@
       const script = document.createElement('script');
       script.src = '/farcaster.js';
       script.onload = function() {
-        if (window.farcaster) {
+        if (window.farcaster?.ready) {
           window.farcaster.ready();
         }
       };
-      script.onerror = function() {
-        console.error('Failed to load Farcaster SDK');
+      script.onerror = function(error) {
+        console.error('Failed to load Farcaster SDK:', error);
       };
       document.head.appendChild(script);
     })();
