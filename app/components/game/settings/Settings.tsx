@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronDown, X, GamepadIcon, MapIcon, CoinsIcon, InfoIcon, LogOut } from "lucide-react"
-import { XIcon, TelegramIcon } from "../../../components/icons/SocialIcons"
+import { XIcon } from "../../../components/icons/SocialIcons"
 import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 import { useTranslation } from "../../../contexts/TranslationContext"
 import GamesPage from "./GamesPage"
@@ -13,6 +13,7 @@ import AboutPage from "./AboutPage"
 import { useRouter } from "next/navigation"
 import MenuItem from "../../../components/ui/menu-item"
 import { authStore } from '../../auth/AuthenticationWindow';
+import Link from "next/link"
 
 interface SettingsProps {
   isOpen?: boolean
@@ -42,6 +43,13 @@ const SettingsToggle: React.FC<{ icon: React.ReactNode; text: string; isOn: bool
     </motion.button>
   </div>
 )
+
+// Добавляем новую иконку для Warpcast
+export const WarpcastIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <path d="M18.344 9.333c1.032 0 1.865.834 1.865 1.867v5.733c0 1.032-.833 1.867-1.865 1.867H5.656c-1.032 0-1.865-.835-1.865-1.867V11.2c0-1.033.833-1.867 1.865-1.867h12.688zm0 1.867H5.656V16.933h12.688V11.2zM14.812 5.2c1.032 0 1.865.834 1.865 1.867H7.323C7.323 6.034 8.156 5.2 9.188 5.2h5.624z" fill="currentColor"/>
+  </svg>
+);
 
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const gameState = useGameState()
@@ -181,14 +189,15 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                         >
                           <XIcon className="w-6 h-6" />
                         </motion.a>
-                        <motion.a
-                          href="#"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="p-2 bg-[#4a7a9e] rounded-full text-white hover:bg-[#5889ae] transition-colors"
+                        <Link
+                          href="https://warpcast.com/~/channel/snotcoin" 
+                          target="_blank"
+                          rel="noopener noreferrer" 
+                          className="flex items-center bg-purple-600 text-white px-4 py-3 rounded-lg mb-2"
                         >
-                          <TelegramIcon className="w-6 h-6" />
-                        </motion.a>
+                          <WarpcastIcon className="w-6 h-6" />
+                          <span className="ml-2">Warpcast</span>
+                        </Link>
                       </div>
                     </div>
                   </motion.div>

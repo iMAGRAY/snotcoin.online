@@ -8,17 +8,15 @@ export type GameStateData = Record<string, any>;
  */
 export class UserModel {
   /**
-   * Поиск пользователя по telegram_id
+   * Поиск пользователя по farcaster_fid
    */
-  static async findByTelegramId(telegramId: number) {
+  static async findByFarcasterId(fid: number) {
     try {
-      // Вместо прямого использования telegram_id (которого нет в схеме)
-      // используем farcaster_fid как близкий аналог
-      return prisma.user.findFirst({
-        where: { farcaster_fid: telegramId }
+      return await prisma.user.findUnique({
+        where: { farcaster_fid: fid }
       });
     } catch (error) {
-      console.error('Ошибка при поиске пользователя по ID:', error);
+      console.error('Ошибка при поиске пользователя по farcaster_fid:', error);
       return null;
     }
   }
@@ -27,19 +25,20 @@ export class UserModel {
    * Создание нового пользователя
    */
   static async create(userData: {
-    telegram_id: number;
+    farcaster_fid: number;
     username?: string;
     first_name?: string;
     last_name?: string;
+    photo_url?: string;
   }) {
     try {
-      // Адаптируем поля telegram_* к полям farcaster_*
-      return prisma.user.create({
+      // Используем напрямую поля farcaster_*
+      return await prisma.user.create({
         data: {
-          farcaster_fid: userData.telegram_id,
+          farcaster_fid: userData.farcaster_fid,
           farcaster_username: userData.username || '',
-          farcaster_displayname: userData.first_name || null,
-          farcaster_pfp: null
+          farcaster_displayname: userData.first_name || '',
+          farcaster_pfp: userData.photo_url || '',
         }
       });
     } catch (error) {

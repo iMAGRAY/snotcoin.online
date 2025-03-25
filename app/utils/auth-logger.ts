@@ -15,38 +15,27 @@ export enum AuthLogType {
   TELEMETRY = 'TELEMETRY'
 }
 
-// Типы шагов авторизации
+// Этапы авторизации
 export enum AuthStep {
-  // Клиентские шаги
-  INIT = 'INIT',                        // Инициализация процесса авторизации
-  TELEGRAM_INIT = 'TELEGRAM_INIT',      // Инициализация Telegram авторизации
-  TELEGRAM_WEB_APP_DATA = 'TELEGRAM_WEB_APP_DATA', // Получение данных из WebApp
-  TELEGRAM_HASH_CHECK = 'TELEGRAM_HASH_CHECK', // Проверка хеша в клиенте
-  TELEGRAM_API_REQUEST = 'TELEGRAM_API_REQUEST', // Запрос к API
-  TELEGRAM_VERIFY_DATA = 'TELEGRAM_VERIFY_DATA', // Проверка данных Telegram
-  TELEGRAM_SUCCESS = 'TELEGRAM_SUCCESS', // Успешная авторизация через Telegram
-  TOKEN_RECEIVED = 'TOKEN_RECEIVED',    // Получение токена от сервера
-  AUTH_COMPLETE = 'AUTH_COMPLETE',      // Завершение авторизации
-  AUTH_ERROR = 'AUTH_ERROR',            // Ошибка авторизации
-  AUTH_RETRY = 'AUTH_RETRY',            // Повторная попытка авторизации
-  
-  // Серверные шаги
-  SERVER_REQUEST = 'SERVER_REQUEST',    // Получение запроса на сервере
-  VALIDATE_TELEGRAM = 'VALIDATE_TELEGRAM', // Валидация Telegram данных
-  DATABASE_QUERY = 'DATABASE_QUERY',    // Запрос к базе данных
-  USER_CREATED = 'USER_CREATED',        // Создание пользователя
-  USER_UPDATED = 'USER_UPDATED',        // Обновление пользователя
-  TOKEN_GENERATED = 'TOKEN_GENERATED',  // Генерация JWT токена
-  SERVER_RESPONSE = 'SERVER_RESPONSE',  // Ответ сервера
-  SERVER_ERROR = 'SERVER_ERROR',        // Ошибка на сервере
-  
-  // Шаги состояния
-  SESSION_CHECK = 'SESSION_CHECK',      // Проверка валидности сессии
-  SESSION_RESTORE = 'SESSION_RESTORE',  // Восстановление сессии
-  SESSION_EXPIRED = 'SESSION_EXPIRED',  // Истечение сессии
-  
-  // Пользовательское взаимодействие
-  USER_INTERACTION = 'USER_INTERACTION'  // Взаимодействие с пользователем
+  INIT = 'INIT',              // Инициализация процесса авторизации
+  AUTH_START = 'AUTH_START',  // Начало процесса авторизации
+  AUTH_ERROR = 'AUTH_ERROR',  // Ошибки в процессе авторизации
+  AUTH_COMPLETE = 'AUTH_COMPLETE', // Успешная авторизация
+  USER_INTERACTION = 'USER_INTERACTION', // Взаимодействие пользователя
+  TOKEN_RECEIVED = 'TOKEN_RECEIVED', // Получение токена
+  TOKEN_VALIDATION = 'TOKEN_VALIDATION', // Валидация токена
+  FARCASTER_INIT = 'FARCASTER_INIT',      // Инициализация Farcaster авторизации
+  FARCASTER_REQUEST = 'FARCASTER_REQUEST', // Запрос к API Farcaster
+  FARCASTER_QR_DISPLAY = 'FARCASTER_QR_DISPLAY', // Отображение QR-кода
+  FARCASTER_POLLING = 'FARCASTER_POLLING', // Ожидание подтверждения
+  FARCASTER_VERIFY_DATA = 'FARCASTER_VERIFY_DATA', // Проверка данных Farcaster
+  FARCASTER_SUCCESS = 'FARCASTER_SUCCESS', // Успешная авторизация через Farcaster
+  SESSION_CHECK = 'SESSION_CHECK', // Проверка сессии
+  SESSION_ERROR = 'SESSION_ERROR', // Ошибки сессии
+  SESSION_REFRESH = 'SESSION_REFRESH', // Обновление сессии
+  VALIDATE_DATA = 'VALIDATE_DATA', // Валидация данных пользователя
+  VALIDATE_FARCASTER = 'VALIDATE_FARCASTER', // Валидация Farcaster данных
+  AUTH_RETRY = 'AUTH_RETRY', // Повторная попытка авторизации
 }
 
 // Интерфейс записи лога

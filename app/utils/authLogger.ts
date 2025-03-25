@@ -5,66 +5,30 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
-// Типы событий авторизации
-export enum AuthEventType {
+// События авторизации
+export enum AuthEvent {
   // Общие события
   AUTH_STARTED = 'AUTH_STARTED',
-  AUTH_COMPLETED = 'AUTH_COMPLETED',
+  AUTH_SUCCESS = 'AUTH_SUCCESS',
   AUTH_FAILED = 'AUTH_FAILED',
-  
-  // События компонентов UI
-  UI_COMPONENT_MOUNTED = 'UI_COMPONENT_MOUNTED',
-  UI_COMPONENT_ERROR = 'UI_COMPONENT_ERROR',
-  UI_RENDER = 'UI_RENDER',
-  UI_STATE_CHANGED = 'UI_STATE_CHANGED',
-  
-  // События Telegram
-  TELEGRAM_AUTH_STARTED = 'TELEGRAM_AUTH_STARTED',
-  TELEGRAM_AUTH_SUCCESS = 'TELEGRAM_AUTH_SUCCESS',
-  TELEGRAM_AUTH_FAILED = 'TELEGRAM_AUTH_FAILED',
-  TELEGRAM_DATA_RECEIVED = 'TELEGRAM_DATA_RECEIVED',
-  TELEGRAM_DATA_SENT = 'TELEGRAM_DATA_SENT',
-  TELEGRAM_DATA_VALIDATION = 'TELEGRAM_DATA_VALIDATION',
-  
-  // События API
-  API_REQUEST_STARTED = 'API_REQUEST_STARTED',
-  API_REQUEST_COMPLETED = 'API_REQUEST_COMPLETED',
-  API_REQUEST_FAILED = 'API_REQUEST_FAILED',
-  API_RESPONSE_RECEIVED = 'API_RESPONSE_RECEIVED',
-  
-  // События базы данных
-  DB_QUERY_STARTED = 'DB_QUERY_STARTED',
-  DB_QUERY_COMPLETED = 'DB_QUERY_COMPLETED',
-  DB_QUERY_FAILED = 'DB_QUERY_FAILED',
-  DB_USER_CREATED = 'DB_USER_CREATED',
-  DB_USER_UPDATED = 'DB_USER_UPDATED',
-  DB_USER_FETCH_FAILED = 'DB_USER_FETCH_FAILED',
-  
-  // События токенов
-  TOKEN_GENERATED = 'TOKEN_GENERATED',
+  USER_CREATED = 'USER_CREATED',
+  USER_UPDATED = 'USER_UPDATED',
+  SESSION_CREATED = 'SESSION_CREATED',
+  SESSION_REFRESHED = 'SESSION_REFRESHED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  SESSION_INVALIDATED = 'SESSION_INVALIDATED',
+  TOKEN_ISSUED = 'TOKEN_ISSUED',
+  TOKEN_REFRESHED = 'TOKEN_REFRESHED',
   TOKEN_VALIDATED = 'TOKEN_VALIDATED',
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-  TOKEN_INVALID = 'TOKEN_INVALID',
-  TOKEN_SAVED = 'TOKEN_SAVED',
   
-  // События сессии
-  SESSION_CREATED = 'SESSION_CREATED',
-  SESSION_RESTORED = 'SESSION_RESTORED',
-  SESSION_EXPIRED = 'SESSION_EXPIRED',
-  SESSION_TERMINATED = 'SESSION_TERMINATED',
-  SESSION_VALIDATION = 'SESSION_VALIDATION',
-  
-  // События сохранения
-  SAVE_STARTED = 'SAVE_STARTED',
-  SAVE_COMPLETED = 'SAVE_COMPLETED',
-  SAVE_FAILED = 'SAVE_FAILED',
-  
-  // События ошибок
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  INTERNAL_ERROR = 'INTERNAL_ERROR',
-  UNEXPECTED_ERROR = 'UNEXPECTED_ERROR',
-  TIMEOUT_ERROR = 'TIMEOUT_ERROR'
+  // События Farcaster
+  FARCASTER_AUTH_STARTED = 'FARCASTER_AUTH_STARTED',
+  FARCASTER_AUTH_SUCCESS = 'FARCASTER_AUTH_SUCCESS',
+  FARCASTER_AUTH_FAILED = 'FARCASTER_AUTH_FAILED',
+  FARCASTER_DATA_RECEIVED = 'FARCASTER_DATA_RECEIVED',
+  FARCASTER_DATA_SENT = 'FARCASTER_DATA_SENT',
+  FARCASTER_DATA_VALIDATION = 'FARCASTER_DATA_VALIDATION',
 }
 
 // Уровни логирования
@@ -83,7 +47,7 @@ export interface AuthLogEvent {
   sessionId: string;
   userId?: string | number;
   telegramId?: string | number;
-  eventType: AuthEventType;
+  eventType: AuthEvent;
   level: LogLevel;
   message: string;
   component?: string;
@@ -151,7 +115,7 @@ class AuthLogger {
       // Логируем начало новой сессии
       this.log(
         LogLevel.INFO,
-        AuthEventType.SESSION_CREATED,
+        AuthEvent.SESSION_CREATED,
         'Новая сессия авторизации начата',
         {
           browser: browserInfo.browser,
@@ -225,7 +189,7 @@ class AuthLogger {
    * @param data Дополнительные данные
    * @param error Объект ошибки
    */
-  log(level: LogLevel, eventType: AuthEventType, message: string, data?: any, error?: any): string {
+  log(level: LogLevel, eventType: AuthEvent, message: string, data?: any, error?: any): string {
     try {
       // Обновляем время последней активности
       this.lastActivityTime = Date.now();
@@ -296,23 +260,23 @@ class AuthLogger {
   /**
    * Уровни логирования со стандартными значениями
    */
-  debug(eventType: AuthEventType, message: string, data?: any): string {
+  debug(eventType: AuthEvent, message: string, data?: any): string {
     return this.log(LogLevel.DEBUG, eventType, message, data);
   }
   
-  info(eventType: AuthEventType, message: string, data?: any): string {
+  info(eventType: AuthEvent, message: string, data?: any): string {
     return this.log(LogLevel.INFO, eventType, message, data);
   }
   
-  warn(eventType: AuthEventType, message: string, data?: any): string {
+  warn(eventType: AuthEvent, message: string, data?: any): string {
     return this.log(LogLevel.WARN, eventType, message, data);
   }
   
-  error(eventType: AuthEventType, message: string, data?: any, error?: any): string {
+  error(eventType: AuthEvent, message: string, data?: any, error?: any): string {
     return this.log(LogLevel.ERROR, eventType, message, data, error);
   }
   
-  critical(eventType: AuthEventType, message: string, data?: any, error?: any): string {
+  critical(eventType: AuthEvent, message: string, data?: any, error?: any): string {
     return this.log(LogLevel.CRITICAL, eventType, message, data, error);
   }
   
@@ -322,7 +286,7 @@ class AuthLogger {
    * @param label Метка для замера
    * @param callback Функция, производительность которой измеряется
    */
-  async measure<T>(eventType: AuthEventType, label: string, callback: () => Promise<T>): Promise<T> {
+  async measure<T>(eventType: AuthEvent, label: string, callback: () => Promise<T>): Promise<T> {
     const startTime = performance.now();
     const requestId = uuidv4();
     
@@ -545,7 +509,7 @@ class AuthLogger {
     searchTerm
   }: {
     level?: LogLevel;
-    eventType?: AuthEventType;
+    eventType?: AuthEvent;
     fromDate?: Date;
     toDate?: Date;
     userId?: string | number;
@@ -608,7 +572,7 @@ class AuthLogger {
     this.lastActivityTime = Date.now();
     
     this.info(
-      AuthEventType.SESSION_CREATED,
+      AuthEvent.SESSION_CREATED,
       'Новая сессия создана',
       {
         previousSessionDuration: `${Math.floor((this.lastActivityTime - this.startTime) / 1000)}s`
@@ -623,7 +587,7 @@ class AuthLogger {
     const sessionDuration = Date.now() - this.startTime;
     
     this.info(
-      AuthEventType.SESSION_TERMINATED,
+      AuthEvent.SESSION_EXPIRED,
       `Сессия завершена: ${reason || 'По запросу'}`,
       {
         sessionDuration: `${Math.floor(sessionDuration / 1000)}s`,
@@ -644,7 +608,7 @@ export const authLogger = new AuthLogger();
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     authLogger.critical(
-      AuthEventType.UNEXPECTED_ERROR,
+      AuthEvent.AUTH_FAILED,
       `Необработанная ошибка: ${event.message}`,
       {
         filename: event.filename,
@@ -657,7 +621,7 @@ if (typeof window !== 'undefined') {
   
   window.addEventListener('unhandledrejection', (event) => {
     authLogger.critical(
-      AuthEventType.UNEXPECTED_ERROR,
+      AuthEvent.AUTH_FAILED,
       `Необработанное отклонение промиса: ${event.reason?.message || 'Неизвестная причина'}`,
       {},
       event.reason
@@ -667,7 +631,7 @@ if (typeof window !== 'undefined') {
   // Логируем при закрытии страницы
   window.addEventListener('beforeunload', () => {
     authLogger.info(
-      AuthEventType.SESSION_TERMINATED,
+      AuthEvent.SESSION_EXPIRED,
       'Сессия завершена: Страница закрыта',
       {
         sessionDuration: `${Math.floor((Date.now() - authLogger['startTime']) / 1000)}s`,

@@ -46,14 +46,17 @@ export interface SoundSettings {
 
 export interface User {
   id: string
-  fid?: number
-  username?: string
-  displayName?: string
-  pfp?: string
-  telegram_id?: number
-  first_name?: string
-  last_name?: string
-  photo_url?: string
+  farcaster_fid?: number
+  fid?: number  // Алиас для farcaster_fid
+  farcaster_username?: string
+  username?: string  // Алиас для farcaster_username
+  farcaster_displayname?: string
+  displayName?: string  // Алиас для farcaster_displayname
+  farcaster_pfp?: string
+  pfp?: string  // Алиас для farcaster_pfp
+  email?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface GameState {
@@ -99,7 +102,6 @@ export interface ExtendedGameState extends GameState {
 
 export type ActionType =
   | 'SET_USER'
-  | 'SET_TELEGRAM_USER'
   | 'SET_ACTIVE_TAB'
   | 'SET_CONTAINER_LEVEL'
   | 'SET_FILLING_SPEED_LEVEL'
@@ -167,12 +169,11 @@ export const FILLING_SPEED_UPGRADES = [
   { level: 10, speed: 512, cost: 72000, speedIncrease: 256 }
 ];
 
-// Типы для Telegram
-export interface TelegramUser {
+// Типы для Farcaster
+export interface FarcasterUser {
   id: string
-  first_name: string
-  last_name?: string
-  username?: string
-  telegram_id?: number
-  photo_url?: string
+  fid: number
+  username: string
+  displayName?: string
+  pfp?: string
 } 

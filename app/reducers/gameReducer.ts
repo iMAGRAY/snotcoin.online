@@ -30,19 +30,20 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       });
 
     case "SET_USER":
-      return withMetadata({ user: action.payload });
-
-    case "SET_TELEGRAM_USER":
-      return withMetadata({ 
-        user: { 
-          id: action.payload.id.toString(),
-          telegram_id: action.payload.telegram_id,
-          first_name: action.payload.first_name,
-          last_name: action.payload.last_name,
-          username: action.payload.username,
-          photo_url: action.payload.photo_url,
-        } 
-      });
+      if (action.payload) {
+        // Обновляем state с данными пользователя из Farcaster
+        return withMetadata({ 
+          user: { 
+            id: action.payload.id?.toString() || action.payload.id,
+            farcaster_fid: action.payload.fid || action.payload.farcaster_fid,
+            username: action.payload.username,
+            displayName: action.payload.displayName,
+            pfp: action.payload.pfp
+          } 
+        });
+      }
+      // Если payload null, сбрасываем пользователя
+      return withMetadata({ user: null });
 
     case "UPDATE_CONTAINER_LEVEL":
       return withMetadata({

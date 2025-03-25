@@ -58,6 +58,10 @@ const nextConfig = {
   // Добавляем настройки публичных переменных среды
   env: {
     NEXT_PUBLIC_DOMAIN: DOMAIN,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_FARCASTER_FRAME_URL: process.env.NEXT_PUBLIC_FARCASTER_FRAME_URL,
+    NEXT_PUBLIC_NEYNAR_CLIENT_ID: process.env.NEYNAR_CLIENT_ID,
+    NEXT_PUBLIC_IMAGE_HOST: process.env.NEXT_PUBLIC_IMAGE_HOST,
   },
   webpack: (config) => {
     config.resolve.alias = {

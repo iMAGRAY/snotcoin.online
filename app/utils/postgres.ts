@@ -22,19 +22,21 @@ pool.on('error', (err: Error) => {
 // Класс для работы с пользователями
 export class UserModel {
   /**
-   * Поиск пользователя по telegram_id
+   * Поиск пользователя по farcaster_fid
    */
-  static async findByTelegramId(telegramId: number) {
+  static async findByFarcasterId(fid: number) {
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        'SELECT * FROM users WHERE telegram_id = $1',
-        [telegramId]
+      const result = await client.query(
+        'SELECT * FROM users WHERE farcaster_fid = $1',
+        [fid]
       );
-      
       return result.rows[0] || null;
     } catch (error) {
-      console.error('Ошибка при поиске пользователя:', error);
-      throw error;
+      console.error('Ошибка при поиске пользователя по farcaster_fid:', error);
+      return null;
+    } finally {
+      client.release();
     }
   }
 
@@ -42,22 +44,24 @@ export class UserModel {
    * Создание нового пользователя
    */
   static async create(userData: {
-    telegram_id: number;
+    farcaster_fid: number;
     username?: string;
     first_name?: string;
     last_name?: string;
+    photo_url?: string;
   }) {
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        `INSERT INTO users (
-          telegram_id, username, first_name, last_name, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, NOW(), NOW()) 
-        RETURNING *`,
+      const result = await client.query(
+        `INSERT INTO users (farcaster_fid, username, display_name, pfp, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [
-          userData.telegram_id,
+          userData.farcaster_fid,
           userData.username || null,
           userData.first_name || null,
-          userData.last_name || null
+          userData.photo_url || null,
+          new Date(),
+          new Date()
         ]
       );
       
@@ -65,6 +69,8 @@ export class UserModel {
     } catch (error) {
       console.error('Ошибка при создании пользователя:', error);
       throw error;
+    } finally {
+      client.release();
     }
   }
 

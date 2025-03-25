@@ -49,11 +49,11 @@ const ProfilePage: React.FC = () => {
   const getUserDisplayName = () => {
     if (!gameState.user) return "Player"
 
-    const { displayName, username } = gameState.user
-    if (displayName) {
-      return displayName
+    const { displayName, username, farcaster_displayname, farcaster_username } = gameState.user
+    if (displayName || farcaster_displayname) {
+      return displayName || farcaster_displayname || ""
     }
-    return username || "Player"
+    return username || farcaster_username || "Player"
   }
 
   const handleLogout = useCallback(() => {
@@ -117,7 +117,7 @@ const ProfilePage: React.FC = () => {
               >
                 <Image
                   src={
-                    gameState.user?.pfp ||
+                    gameState.user?.pfp || gameState.user?.farcaster_pfp ||
                     ICONS.PROFILE.AVATAR.DEFAULT
                   }
                   alt="Profile"
@@ -137,7 +137,7 @@ const ProfilePage: React.FC = () => {
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>
-                      FID: {gameState.user?.fid || "N/A"}
+                      FID: {gameState.user?.farcaster_fid || gameState.user?.fid || "N/A"}
                     </motion.p>
                   </div>
                 </motion.div>

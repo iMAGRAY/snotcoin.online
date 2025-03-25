@@ -149,7 +149,7 @@ const translations: Translations = {
     aboutDescription:
       "SnotCoin is an exciting crypto mining game where you collect, merge, and earn virtual currency.",
     authentication: "Authentication",
-    loginWithTelegram: "Login with Telegram",
+    loginWithFarcaster: "Login with Farcaster",
     loginAsGuest: "Login as Guest",
     logout: "Logout",
     questsTab: "Quests",

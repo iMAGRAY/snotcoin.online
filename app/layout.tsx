@@ -17,8 +17,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "Snotcoin - Farcaster Frames Game",
-  description: "Play to earn game on Farcaster",
+  title: 'SnotCoin',
+  description: 'A Farcaster-based crypto mining game',
   generator: 'v0.dev',
   metadataBase: new URL(siteUrl),
   openGraph: {

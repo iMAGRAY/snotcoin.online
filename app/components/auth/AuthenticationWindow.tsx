@@ -1,14 +1,13 @@
 "use client"
 
-import type React from "react"
-import { useCallback, useEffect } from "react"
+import React, { useCallback, useEffect } from "react"
 import Image from "next/image"
 import { useTranslation } from "../../contexts/TranslationContext"
-import TelegramAuth from "./telegram/TelegramAuth"
 import { MotionDiv } from "../motion/MotionWrapper"
 import { useGameDispatch } from "../../contexts/GameContext"
 import { ICONS } from "../../constants/uiConstants"
 import { AuthLogType, AuthStep, logAuth, logAuthInfo, setUserId } from "../../utils/auth-logger"
+import NeynarAuth from "./NeynarAuth"
 
 interface AuthenticationWindowProps {
   onAuthenticate: (userData: any) => void
@@ -29,12 +28,12 @@ export const authStore = {
       AuthStep.TOKEN_RECEIVED, 
       AuthLogType.INFO, 
       'Данные авторизации сохранены в хранилище', 
-      { isAuthenticated: isAuth, hasToken: !!token, userId: token?.user?.telegram_id }
+      { isAuthenticated: isAuth, hasToken: !!token, userId: token?.user?.id }
     );
     
     // Сохраняем идентификатор пользователя в системе логирования
-    if (token?.user?.telegram_id) {
-      setUserId(token.user.telegram_id);
+    if (token?.user?.id) {
+      setUserId(token.user.id);
     }
   },
   
@@ -73,7 +72,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
           AuthStep.AUTH_COMPLETE, 
           AuthLogType.INFO, 
           'Авторизация успешна, обновление состояния игры', 
-          { userId: userData?.user?.id, telegramId: userData?.user?.telegram_id }
+          { userId: userData?.user?.id, farcasterId: userData?.user?.fid }
         );
         
         // Проверяем, не был ли пользователь уже аутентифицирован
@@ -120,6 +119,15 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
     [gameDispatch, onAuthenticate],
   )
 
+  const handleAuthError = (error: string) => {
+    logAuth(
+      AuthStep.AUTH_ERROR,
+      AuthLogType.ERROR,
+      'Ошибка авторизации через Farcaster',
+      { error }
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <Image
@@ -153,7 +161,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
 
         <div className="space-y-6">
           <MotionDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <TelegramAuth onAuthenticate={handleAuthentication} />
+            <NeynarAuth onSuccess={handleAuthentication} onError={handleAuthError} />
           </MotionDiv>
         </div>
 

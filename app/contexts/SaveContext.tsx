@@ -84,10 +84,10 @@ export const SaveProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Инициализация системы сохранения
   useEffect(() => {
-    if (state.user?.telegram_id) {
-      // Используем telegram_id как идентификатор для сохранений
+    if (state.user?.farcaster_fid || state.user?.fid) {
+      // Используем farcaster_fid как идентификатор для сохранений
       saveSystem.setUserData(
-        state.user.telegram_id.toString(),
+        (state.user.farcaster_fid || state.user.fid || '').toString(),
         state.user.id || ""
       );
       
@@ -108,7 +108,7 @@ export const SaveProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saveSystem.stopAutoSave();
       };
     }
-  }, [state.user?.telegram_id, state.user?.id, loadGame]);
+  }, [state.user?.farcaster_fid, state.user?.fid, state.user?.id, loadGame]);
   
   // Сохраняем при выходе со страницы
   useEffect(() => {

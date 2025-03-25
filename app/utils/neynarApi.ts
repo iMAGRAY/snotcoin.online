@@ -36,8 +36,8 @@ export interface NeynarUserResponse {
  */
 export async function validateFarcasterUser(fid: number): Promise<NeynarUserResponse | null> {
   try {
-    // URL для получения пользователя по FID
-    const url = `${NEYNAR_API_URL}/farcaster/user?fid=${fid}`;
+    // Используем актуальный эндпоинт для Neynar User API v2
+    const url = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`;
     
     // Выполняем запрос к Neynar API
     const response = await fetch(url, {
@@ -56,7 +56,23 @@ export async function validateFarcasterUser(fid: number): Promise<NeynarUserResp
     
     // Получаем данные пользователя
     const data = await response.json();
-    return data as NeynarUserResponse;
+    
+    // Проверяем, что пользователь найден
+    if (data && data.users && data.users.length > 0) {
+      const user = data.users[0];
+      return {
+        user: {
+          fid: user.fid,
+          username: user.username,
+          displayName: user.display_name || user.displayName,
+          pfp: {
+            url: user.pfp_url || user.pfp
+          }
+        }
+      };
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error validating Farcaster user:', error);
     return null;
@@ -120,7 +136,8 @@ export async function createSignInWithFarcasterRequest(): Promise<{
   expiresAt: Date;
 } | null> {
   try {
-    const url = `${NEYNAR_API_URL}/farcaster/auth/request`;
+    // Используем актуальный эндпоинт для Neynar Auth API v2
+    const url = 'https://api.neynar.com/v2/siwn/request';
     
     const response = await fetch(url, {
       method: 'POST',
@@ -128,7 +145,11 @@ export async function createSignInWithFarcasterRequest(): Promise<{
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'api_key': NEYNAR_API_KEY
-      }
+      },
+      body: JSON.stringify({
+        app_name: "SnotCoin", // Название вашего приложения
+        permissions: ["publish_cast"], // Запрашиваемые разрешения
+      })
     });
     
     if (!response.ok) {
@@ -144,9 +165,9 @@ export async function createSignInWithFarcasterRequest(): Promise<{
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
     
     return {
-      token: data.token,
-      url: data.url,
-      qrCode: data.qr_code,
+      token: data.token || data.signer_uuid,
+      url: data.url || data.signer_approval_url,
+      qrCode: data.qr_code || data.qrcode,
       expiresAt
     };
   } catch (error) {
@@ -168,7 +189,8 @@ export async function checkFarcasterAuthStatus(token: string): Promise<{
   pfp?: string;
 } | null> {
   try {
-    const url = `${NEYNAR_API_URL}/farcaster/auth/status?token=${token}`;
+    // Используем актуальный эндпоинт для Neynar Auth API v2
+    const url = `https://api.neynar.com/v2/siwn/status?token=${token}`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -192,8 +214,8 @@ export async function checkFarcasterAuthStatus(token: string): Promise<{
         status: 'approved',
         fid: data.user.fid,
         username: data.user.username,
-        displayName: data.user.display_name,
-        pfp: data.user.pfp_url
+        displayName: data.user.display_name || data.user.displayName,
+        pfp: data.user.pfp_url || data.user.pfp
       };
     }
     
