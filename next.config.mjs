@@ -39,6 +39,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
             value: `
               default-src 'self';
               script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
@@ -54,13 +55,20 @@ const nextConfig = {
 =======
             value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
 >>>>>>> parent of cdf6f88 (Farcaster здравствуй)
+=======
+            value: "frame-ancestors 'self' https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me"
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
           },
           {
             // Remove X-Frame-Options header
             key: 'X-Frame-Options',
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
             value: 'ALLOW-FROM https://warpcast.com'
+=======
+            value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
+>>>>>>> parent of cdf6f88 (Farcaster здравствуй)
 =======
             value: 'ALLOW-FROM https://*.telegram.org https://telegram.org https://*.telegram.me https://telegram.me'
 >>>>>>> parent of cdf6f88 (Farcaster здравствуй)
