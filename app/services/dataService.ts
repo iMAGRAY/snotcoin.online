@@ -42,10 +42,10 @@ const backupStore = new Map<number, {
 /**
  * Сохраняет резервную копию состояния в памяти приложения
  */
-function saveBackup(telegramId: number, gameState: ExtendedGameState, error?: unknown): void {
+function saveBackup(fid: number, gameState: ExtendedGameState, error?: unknown): void {
   try {
-    if (gameState && telegramId) {
-      backupStore.set(telegramId, {
+    if (gameState && fid) {
+      backupStore.set(fid, {
         data: gameState,
         timestamp: Date.now()
       });
@@ -65,9 +65,9 @@ function saveBackup(telegramId: number, gameState: ExtendedGameState, error?: un
 /**
  * Получает резервную копию из памяти приложения
  */
-function getBackup(telegramId: number): ExtendedGameState | null {
+function getBackup(fid: number): ExtendedGameState | null {
   try {
-    const backup = backupStore.get(telegramId);
+    const backup = backupStore.get(fid);
     if (backup && backup.data) {
       return backup.data;
     }
@@ -123,8 +123,8 @@ function limitCacheSize(): void {
 /**
  * Восстанавливает данные из кэша
  */
-function restoreFromCache(telegramId: number, gameState: ExtendedGameState): ExtendedGameState {
-  const cachedEntry = gameStateCache.get(telegramId);
+function restoreFromCache(fid: number, gameState: ExtendedGameState): ExtendedGameState {
+  const cachedEntry = gameStateCache.get(fid);
   if (cachedEntry && cachedEntry.integrity) {
     // Создаем новый объект с данными из кэша для критических полей
     return {
@@ -138,9 +138,9 @@ function restoreFromCache(telegramId: number, gameState: ExtendedGameState): Ext
 /**
  * Сохраняет состояние игры с оптимизацией
  */
-export async function saveGameState(telegramId: number, gameState: ExtendedGameState): Promise<void> {
+export async function saveGameState(fid: number, gameState: ExtendedGameState): Promise<void> {
   try {
-    if (!telegramId || !gameState) {
+    if (!fid || !gameState) {
       throw new Error('Invalid arguments for saveGameState');
     }
     
@@ -148,13 +148,13 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     const isDataValid = checkDataIntegrity(gameState);
     if (!isDataValid) {
       // Пытаемся восстановить данные из кэша
-      gameState = restoreFromCache(telegramId, gameState);
+      gameState = restoreFromCache(fid, gameState);
     }
     
     // Обновляем версию состояния
-    const currentVersion = stateVersions.get(telegramId) || 0;
+    const currentVersion = stateVersions.get(fid) || 0;
     const newVersion = currentVersion + 1;
-    stateVersions.set(telegramId, newVersion);
+    stateVersions.set(fid, newVersion);
     
     // Подготавливаем состояние для сохранения
     const stateToSave = { 
@@ -164,7 +164,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     };
     
     // Обновляем кэш немедленно
-    gameStateCache.set(telegramId, {
+    gameStateCache.set(fid, {
       data: stateToSave,
       timestamp: Date.now(),
       version: newVersion,
@@ -176,7 +176,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     
     // Проверяем, не слишком ли часто сохраняем
     const now = Date.now();
-    const lastSave = lastSaveTimestamps.get(telegramId) || 0;
+    const lastSave = lastSaveTimestamps.get(fid) || 0;
     
     // Если прошло меньше времени, чем SAVE_DEBOUNCE_TIME, добавляем в очередь
     if (now - lastSave < SAVE_DEBOUNCE_TIME) {
@@ -185,7 +185,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
         await processBatchSaves();
       }
       
-      pendingSaves.set(telegramId, stateToSave);
+      pendingSaves.set(fid, stateToSave);
       
       // Запускаем таймер для пакетного сохранения, если еще не запущен
       if (!batchSaveTimer) {
@@ -195,194 +195,71 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     }
     
     // Обновляем временную метку последнего сохранения
-    lastSaveTimestamps.set(telegramId, now);
+    lastSaveTimestamps.set(fid, now);
     
     // Добавляем в очередь сохранений
     saveQueue.enqueue(async () => {
-      await saveToPostgres(telegramId, stateToSave);
+      await saveToPostgres(fid, stateToSave);
     });
     
+    // Создаем резервную копию для восстановления в случае ошибки
+    saveBackup(fid, stateToSave);
   } catch (error) {
-    // Ошибка сохранения состояния
-    saveBackup(telegramId, gameState, error);
+    // Создаем резервную копию в случае ошибки
+    saveBackup(fid, gameState, error);
     throw error;
   }
 }
 
 /**
- * Сохраняет состояние в PostgreSQL с повторными попытками
+ * Сохраняет состояние игры в PostgreSQL
  */
-async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, attempt = 1): Promise<void> {
+async function saveToPostgres(fid: number, gameState: ExtendedGameState, attempt = 1): Promise<void> {
   try {
-    // Проверка целостности данных перед отправкой
-    if (!checkDataIntegrity(gameState)) {
-      // Пытаемся восстановить данные из кэша перед отправкой
-      gameState = restoreFromCache(telegramId, gameState);
-      
-      // Если после восстановления данные все еще некорректны, создаем резервную копию и выходим
-      if (!checkDataIntegrity(gameState)) {
-        saveBackup(telegramId, gameState, new Error('Data integrity check failed'));
-        throw new Error('Data integrity check failed, unable to save to server');
-      }
+    // Максимальное количество попыток
+    if (attempt > MAX_RETRY_ATTEMPTS) {
+      throw new Error(`Failed to save game state after ${MAX_RETRY_ATTEMPTS} attempts`);
     }
     
-    // Удаляем ненужные данные перед отправкой
-    const cleanedState = { ...gameState };
-    
-    // Удаляем предыдущие состояния, если они есть
-    if ((cleanedState as any)._previousState) {
-      delete (cleanedState as any)._previousState;
-    }
-    
-    // Удаляем другие большие или временные данные
-    const fieldsToClean = [
-      '_thrownBalls', 
-      '_worldRef', 
-      '_bodiesMap', 
-      '_tempData',
-      '_physicsObjects',
-      '_sceneObjects',
-      '_renderData',
-      '_debugInfo',
-      '_frameData'
-    ];
-    
-    fieldsToClean.forEach(field => {
-      if ((cleanedState as any)[field]) {
-        delete (cleanedState as any)[field];
-      }
+    // API для сохранения
+    const response = await fetch('/api/game/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fid,
+        gameState,
+        clientTimestamp: Date.now(),
+        saveVersion: gameState._saveVersion || 0
+      }),
     });
     
-    // Проверяем размер данных перед отправкой
-    const serializedState = JSON.stringify(cleanedState);
-    const dataSize = serializedState.length;
-    
-    let stateToSend: ExtendedGameState | CompressedGameState = cleanedState;
-    let isCompressed = false;
-    
-    // Если данные слишком большие, сжимаем их
-    if (dataSize > 1000000) { // ~1MB
-      console.warn(`Данные слишком большие (${dataSize} байт), выполняем сжатие`);
-      
-      // Удаляем неважные данные
-      const nonCriticalFields = [
-        'settings.debug', 
-        'soundSettings.audioBuffers', 
-        'history', 
-        'logs', 
-        'analytics'
-      ];
-      
-      for (const field of nonCriticalFields) {
-        const parts = field.split('.');
-        let current: any = stateToSend;
-        
-        for (let i = 0; i < parts.length - 1; i++) {
-          if (!current || typeof current !== 'object') break;
-          current = current[parts[i]];
-        }
-        
-        if (current && typeof current === 'object') {
-          const lastPart = parts[parts.length - 1];
-          if (current[lastPart] !== undefined) {
-            delete current[lastPart];
-          }
-        }
-      }
-      
-      // Если после очистки данные все еще большие, применяем сжатие
-      const cleanedJson = JSON.stringify(stateToSend);
-      if (cleanedJson.length > 800000) { // Все еще больше 800KB
-        try {
-          const LZString = await import('lz-string');
-          const compressed = LZString.compressToUTF16(cleanedJson);
-          
-          stateToSend = {
-            _isCompressed: true,
-            _compressedData: compressed,
-            _originalSize: cleanedJson.length,
-            _compressedSize: compressed.length,
-            _compression: 'lz-string-utf16',
-            _compressedAt: new Date().toISOString(),
-            _integrity: {
-              telegramId,
-              saveVersion: gameState._saveVersion,
-              snot: gameState.inventory?.snot,
-              snotCoins: gameState.inventory?.snotCoins
-            }
-          };
-          
-          isCompressed = true;
-          console.log(`Данные сжаты: ${cleanedJson.length} -> ${compressed.length} байт`);
-        } catch (compressionError) {
-          console.error('Ошибка при сжатии данных:', compressionError);
-          // Продолжаем с несжатыми данными, но предупреждаем об этом
-        }
-      }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error saving game state: ${response.status} ${errorText}`);
     }
     
-    // Добавляем метку времени отправки
-    if (!isCompressed) {
-      (stateToSend as ExtendedGameState)._clientSentAt = new Date().toISOString();
+    // Получаем и проверяем ответ
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(`Error saving game state: ${result.message}`);
     }
     
-    // Отправляем данные на сервер с таймаутом
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
-    
-    try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/game/save-progress', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : ''
-        },
-        body: JSON.stringify({ 
-          telegramId, 
-          gameState: stateToSend,
-          clientTimestamp: new Date().toISOString(),
-          isCompressed
-        }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save game progress');
-      }
-      
-      const result = await response.json();
-      
-      // Обновляем версию на основе ответа сервера
-      if (result.version) {
-        stateVersions.set(telegramId, result.version);
-      }
-      
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      throw fetchError;
+    // Успешное сохранение - обновляем версию состояния
+    if (result.saveVersion) {
+      stateVersions.set(fid, result.saveVersion);
     }
-    
   } catch (error) {
-    // Проверяем на ошибки сети
-    const isNetworkError = error instanceof Error && 
-      (error.message.includes('network') || 
-       error.message.includes('abort') || 
-       error.message.includes('timeout'));
-    
-    // Повторяем попытку, если не превышено максимальное количество
-    if (attempt < MAX_RETRY_ATTEMPTS && (isNetworkError || error instanceof TypeError)) {
-      const retryDelay = RETRY_DELAY * Math.pow(2, attempt - 1); // Экспоненциальная задержка
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return saveToPostgres(telegramId, gameState, attempt + 1);
+    // Если это не последняя попытка, пробуем еще раз с задержкой
+    if (attempt < MAX_RETRY_ATTEMPTS) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+      return saveToPostgres(fid, gameState, attempt + 1);
+    } else {
+      // Добавляем в резервное хранилище
+      saveBackup(fid, gameState, error);
+      throw error;
     }
-    
-    // Создаем резервную копию при окончательной неудаче
-    saveBackup(telegramId, gameState, error);
-    throw error;
   }
 }
 
@@ -480,217 +357,161 @@ async function processBatchSaves(): Promise<void> {
 }
 
 /**
- * Загружает состояние игры с кэшированием
+ * Загружает состояние игры по идентификатору пользователя
  */
-export async function loadGameState(telegramId: number): Promise<ExtendedGameState | null> {
+export async function loadGameState(fid: number): Promise<ExtendedGameState | null> {
   try {
-    if (!telegramId) {
-      return null;
-    }
+    if (!fid) return null;
     
-    // Проверяем кэш
-    const cachedEntry = gameStateCache.get(telegramId);
+    // Проверяем наличие в кэше
+    const cachedEntry = gameStateCache.get(fid);
     if (cachedEntry && Date.now() - cachedEntry.timestamp < CACHE_TTL) {
-      // Проверяем целостность кэшированных данных
-      if (cachedEntry.integrity) {
-        return cachedEntry.data;
-      }
-    }
-    
-    // Пробуем загрузить резервную копию из памяти, если загрузка с сервера не удалась
-    let backupData: ExtendedGameState | null = null;
-    try {
-      backupData = getBackup(telegramId);
-    } catch (backupError) {
-      // Ошибка чтения резервной копии
-    }
-    
-    // Загружаем данные с сервера
-    // Устанавливаем таймаут для запроса
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
-    
-    try {
-      // Получаем токен авторизации
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/game/load-progress?telegramId=${telegramId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : ''
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // В случае 404 (пользователь не найден) возвращаем резервную копию или null
-      if (response.status === 404) {
-        return backupData;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load game progress');
-      }
-      
-      const data = await response.json();
-      
-      // Проверяем, является ли полученный результат сжатым состоянием
-      let typedData: ExtendedGameState;
-      
-      if (isCompressedGameState(data)) {
-        try {
-          // Распаковываем сжатые данные
-          const { decompressGameState } = await import('../utils/saveQueue');
-          const decompressedData = await decompressGameState(data);
-          
-          console.log('Данные успешно распакованы из сжатого формата');
-          typedData = decompressedData as ExtendedGameState;
-        } catch (decompressError) {
-          console.error('Ошибка при распаковке сжатых данных:', decompressError);
-          // В случае ошибки распаковки, возвращаем резервную копию
-          if (backupData) {
-            return backupData;
-          }
-          throw decompressError;
-        }
-      } else {
-        typedData = data as ExtendedGameState;
-      }
-      
-      // Проверяем целостность загруженных данных
-      const isDataValid = checkDataIntegrity(typedData);
-      
-      if (!isDataValid && backupData) {
-        // Если данные с сервера некорректны, но есть резервная копия - используем ее
-        return backupData;
-      }
-      
-      // Обновляем кэш
-      gameStateCache.set(telegramId, {
-        data: typedData,
-        timestamp: Date.now(),
-        version: typedData._saveVersion || 0,
-        integrity: isDataValid
-      });
-      
-      // Ограничиваем размер кэша
-      limitCacheSize();
-      
-      // Обновляем версию
-      stateVersions.set(telegramId, typedData._saveVersion || 0);
-      
-      return typedData;
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      // Ошибка получения данных с сервера
-      
-      // В случае ошибки, возвращаем резервную копию, если она есть
-      if (backupData) {
-        return backupData;
-      }
-      
-      throw fetchError;
-    }
-  } catch (error) {
-    // Ошибка загрузки состояния игры
-    
-    // В случае критической ошибки, пробуем вернуть данные из кэша, даже если они просрочены
-    const cachedEntry = gameStateCache.get(telegramId);
-    if (cachedEntry) {
       return cachedEntry.data;
     }
     
+    // Если есть ожидающие сохранения, используем их данные
+    if (pendingSaves.has(fid)) {
+      const pendingState = pendingSaves.get(fid);
+      if (pendingState) {
+        return pendingState;
+      }
+    }
+    
+    // Если есть резервная копия, используем её как запасной вариант
+    const backup = getBackup(fid);
+    
+    try {
+      // Запрашиваем данные с сервера
+      const response = await fetch(`/api/game/load?fid=${fid}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        // Если у нас есть резервная копия, используем её
+        if (backup) {
+          console.warn('Используем резервную копию из-за ошибки загрузки:', response.status);
+          return backup;
+        }
+        throw new Error(`Error loading game state: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success || !result.gameState) {
+        // Если нет данных, но есть резервная копия, используем её
+        if (backup) {
+          return backup;
+        }
+        
+        return null;
+      }
+      
+      // Получаем данные игры
+      let gameState = result.gameState;
+      
+      // Проверяем целостность данных
+      const isDataValid = checkDataIntegrity(gameState);
+      
+      // Если данные повреждены, но есть резервная копия, 
+      // используем её для восстановления критических полей
+      if (!isDataValid && backup) {
+        gameState = {
+          ...gameState,
+          inventory: backup.inventory,
+        };
+      }
+      
+      // Обновляем кэш
+      gameStateCache.set(fid, {
+        data: gameState,
+        timestamp: Date.now(),
+        version: gameState._saveVersion || 0,
+        integrity: checkDataIntegrity(gameState)
+      });
+      
+      // Обновляем версию состояния
+      if (gameState._saveVersion) {
+        stateVersions.set(fid, gameState._saveVersion);
+      }
+      
+      return gameState;
+    } catch (error) {
+      // Если есть резервная копия, возвращаем её при ошибке
+      if (backup) {
+        return backup;
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Ошибка при загрузке состояния игры:', error);
     return null;
   }
 }
 
 /**
- * Принудительно сохраняет состояние игры
+ * Принудительное сохранение состояния игры
+ * Обходит проверку времени и сразу отправляет данные
  */
-export async function forceSaveGameState(telegramId: number, gameState: ExtendedGameState): Promise<void> {
+export async function forceSaveGameState(fid: number, gameState: ExtendedGameState): Promise<void> {
+  if (!fid || !gameState) {
+    throw new Error('Invalid arguments for forceSaveGameState');
+  }
+  
   try {
-    if (!telegramId || !gameState) {
-      throw new Error('Invalid arguments for forceSaveGameState');
-    }
-    
-    // Проверяем целостность данных перед сохранением
-    const isDataValid = checkDataIntegrity(gameState);
-    if (!isDataValid) {
-      gameState = restoreFromCache(telegramId, gameState);
-    }
-    
     // Обновляем версию состояния
-    const currentVersion = stateVersions.get(telegramId) || 0;
+    const currentVersion = stateVersions.get(fid) || 0;
     const newVersion = currentVersion + 1;
-    stateVersions.set(telegramId, newVersion);
+    stateVersions.set(fid, newVersion);
     
-    // Подготавливаем состояние для сохранения
+    // Подготавливаем состояние с дополнительной информацией
     const stateToSave = { 
       ...gameState,
       _saveVersion: newVersion,
       _lastSaved: new Date().toISOString(),
-      _isForceSave: true,
-      _isBeforeUnloadSave: true
+      _isForce: true // Маркер принудительного сохранения
     };
     
-    // Создаем резервную копию в памяти при принудительном сохранении
-    saveBackup(telegramId, stateToSave);
-    
-    // Обновляем кэш
-    gameStateCache.set(telegramId, {
+    // Обновляем кэш немедленно
+    gameStateCache.set(fid, {
       data: stateToSave,
       timestamp: Date.now(),
       version: newVersion,
       integrity: checkDataIntegrity(stateToSave)
     });
     
-    // Обновляем временную метку последнего сохранения
-    lastSaveTimestamps.set(telegramId, Date.now());
+    // Обновляем временную метку последнего сохранения и отправляем
+    lastSaveTimestamps.set(fid, Date.now());
     
-    // Очищаем очередь ожидающих сохранений
-    if (pendingSaves.has(telegramId)) {
-      pendingSaves.delete(telegramId);
-    }
+    // Выполняем сохранение напрямую, без очереди
+    const savePromise = saveToPostgres(fid, stateToSave);
     
-    // Сохраняем напрямую, без очереди и с таймаутом
-    const savePromise = saveToPostgres(telegramId, stateToSave);
+    // Создаем резервную копию на случай ошибки
+    saveBackup(fid, stateToSave);
     
-    // Устанавливаем максимальное время ожидания для принудительного сохранения
-    const timeoutPromise = new Promise<void>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Force save timeout'));
-      }, 3000); // Уменьшаем таймаут до 3 секунд для быстрого выхода
-    });
-    
-    // Используем Promise.race для ограничения времени ожидания
-    try {
-      await Promise.race([savePromise, timeoutPromise]);
-    } catch (raceError) {
-      // Полагаемся на резервную копию в памяти
-    }
+    await savePromise;
   } catch (error) {
-    // Ошибка принудительного сохранения
-    
-    // Создаем резервную копию в памяти
-    saveBackup(telegramId, gameState, error);
+    // Создаем резервную копию в случае ошибки
+    saveBackup(fid, gameState, error);
     throw error;
   }
 }
 
 /**
- * Очищает кэш для пользователя
+ * Инвалидирует кэш для указанного пользователя
  */
-export function invalidateCache(telegramId: number): void {
-  gameStateCache.delete(telegramId);
+export function invalidateCache(fid: number): void {
+  gameStateCache.delete(fid);
+  pendingSaves.delete(fid);
 }
 
 /**
- * Проверяет, есть ли несохраненные изменения
+ * Проверяет, есть ли ожидающие изменения для пользователя
  */
-export function hasPendingChanges(telegramId: number): boolean {
-  return pendingSaves.has(telegramId);
+export function hasPendingChanges(fid: number): boolean {
+  return pendingSaves.has(fid);
 }
 
 /**
@@ -703,49 +524,55 @@ export async function saveAllPendingChanges(): Promise<void> {
 }
 
 /**
- * Настраивает обработчики событий для сохранения при выходе
+ * Настраивает обработчик события beforeunload для сохранения данных перед закрытием
  */
-export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () => ExtendedGameState): () => void {
+export function setupBeforeUnloadHandler(fid: number, getLatestState: () => ExtendedGameState): () => void {
   if (typeof window === 'undefined') return () => {};
   
   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
     try {
+      // Получаем последнее состояние игры
       const state = getLatestState();
       
-      // Устанавливаем флаг для сохранения перед закрытием
-      state._isBeforeUnloadSave = true;
+      if (!state) return;
       
-      // Сохраняем в память как резервную копию
-      saveBackup(telegramId, state);
+      // Сохраняем данные при закрытии
+      saveBackup(fid, state);
       
-      // Используем Beacon API для надежной отправки перед закрытием
-      if (navigator.sendBeacon) {
-        // Получаем JWT-токен
-        const token = localStorage.getItem('auth_token');
-        
-        // Подготавливаем данные для отправки
-        const payload = {
-          telegramId,
-          gameState: state,
-          clientTimestamp: new Date().toISOString(),
-          token: token // Добавляем токен напрямую в данные, так как нельзя установить заголовки в sendBeacon
-        };
-        
-        const data = JSON.stringify(payload);
-        const blob = new Blob([data], { type: 'application/json' });
-        navigator.sendBeacon('/api/game/save-progress', blob);
+      // Добавляем в очередь сохранений с высоким приоритетом
+      const stateToSave = { 
+        ...state,
+        _isBeforeUnloadSave: true,
+        _saveVersion: (state._saveVersion || 0) + 1,
+        _lastSaved: new Date().toISOString()
+      };
+      
+      // Устанавливаем признак синхронного сохранения
+      try {
+        // Используем localStorage для хранения информации о несохраненных данных
+        localStorage.setItem(`game_pending_save_${fid}`, JSON.stringify({
+          timestamp: Date.now(),
+          saveVersion: stateToSave._saveVersion
+        }));
+      } catch (storageError) {
+        // Игнорируем ошибки localStorage
       }
       
-      // Отменяем стандартное сообщение подтверждения выхода
+      // Добавляем в очередь сохранения с высоким приоритетом
+      pendingSaves.set(fid, stateToSave);
+      
+      // Принудительно выполняем все ожидающие сохранения
+      processBatchSaves();
+      
+      // Показываем подтверждение в некоторых браузерах
       event.preventDefault();
-      // Chrome требует возврата значения
       event.returnValue = '';
+      return 'Игра имеет несохраненный прогресс. Вы уверены, что хотите выйти?';
     } catch (error) {
-      // Ошибка в обработчике beforeUnload
+      // Игнорируем ошибки в обработчике beforeunload
     }
   };
   
-  // Добавляем обработчик
   window.addEventListener('beforeunload', handleBeforeUnload);
   
   // Возвращаем функцию для удаления обработчика

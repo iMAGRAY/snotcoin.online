@@ -11,7 +11,7 @@ const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
   ssr: false,
 })
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
-import AuthenticationWindow from "./auth/AuthenticationWindow"
+import { AuthenticationWindow } from "./auth/AuthenticationWindow"
 import { authStore } from './auth/AuthenticationWindow'
 
 // Dynamically import components that use browser APIs

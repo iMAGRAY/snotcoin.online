@@ -1,5 +1,7 @@
-import { Prisma } from '@prisma/client';
-import prisma from './prisma';
+import { PrismaClient } from '@prisma/client';
+import { WarpcastUser } from '../types/warpcastAuth';
+
+const prisma = new PrismaClient();
 
 // Тип для хранения игрового состояния
 export type GameStateData = Record<string, any>;
@@ -9,11 +11,11 @@ export type GameStateData = Record<string, any>;
  */
 export class UserModel {
   /**
-   * Поиск пользователя по telegram_id
+   * Поиск пользователя по fid (Farcaster ID)
    */
-  static async findByTelegramId(telegramId: number) {
-    return prisma.user.findUnique({
-      where: { telegram_id: telegramId }
+  static async findByFid(fid: number) {
+    return await prisma.user.findUnique({
+      where: { fid }
     });
   }
 
@@ -21,17 +23,19 @@ export class UserModel {
    * Создание нового пользователя
    */
   static async create(userData: {
-    telegram_id: number;
-    username?: string;
-    first_name?: string;
-    last_name?: string;
+    fid: number;
+    username: string;
+    displayName?: string | null;
+    pfp?: string | null;
+    address?: string | null;
   }) {
-    return prisma.user.create({
+    return await prisma.user.create({
       data: {
-        telegram_id: userData.telegram_id,
-        username: userData.username || null,
-        first_name: userData.first_name || null,
-        last_name: userData.last_name || null
+        fid: userData.fid,
+        username: userData.username,
+        displayName: userData.displayName || null,
+        pfp: userData.pfp || null,
+        address: userData.address || null
       }
     });
   }
@@ -59,7 +63,7 @@ export class UserModel {
    * Обновление JWT токена пользователя
    */
   static async updateToken(userId: string, token: string) {
-    return prisma.user.update({
+    return await prisma.user.update({
       where: { id: userId },
       data: { jwt_token: token }
     });
@@ -77,6 +81,28 @@ export class UserModel {
     });
     
     return !!user;
+  }
+
+  /**
+   * Создание или обновление пользователя
+   */
+  static async upsert(user: WarpcastUser) {
+    return await prisma.user.upsert({
+      where: { fid: user.fid },
+      update: {
+        username: user.username,
+        displayName: user.displayName,
+        pfp: user.pfp,
+        address: user.address
+      },
+      create: {
+        fid: user.fid,
+        username: user.username,
+        displayName: user.displayName,
+        pfp: user.pfp,
+        address: user.address
+      }
+    });
   }
 }
 

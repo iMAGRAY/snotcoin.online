@@ -10,43 +10,43 @@ export enum AuthLogType {
   INFO = 'INFO',
   WARNING = 'WARNING',
   ERROR = 'ERROR',
-  DEBUG = 'DEBUG',
-  SECURITY = 'SECURITY',
-  TELEMETRY = 'TELEMETRY'
+  DEBUG = 'DEBUG'
 }
 
 // Типы шагов авторизации
 export enum AuthStep {
-  // Клиентские шаги
-  INIT = 'INIT',                        // Инициализация процесса авторизации
-  TELEGRAM_INIT = 'TELEGRAM_INIT',      // Инициализация Telegram авторизации
-  TELEGRAM_WEB_APP_DATA = 'TELEGRAM_WEB_APP_DATA', // Получение данных из WebApp
-  TELEGRAM_HASH_CHECK = 'TELEGRAM_HASH_CHECK', // Проверка хеша в клиенте
-  TELEGRAM_API_REQUEST = 'TELEGRAM_API_REQUEST', // Запрос к API
-  TELEGRAM_VERIFY_DATA = 'TELEGRAM_VERIFY_DATA', // Проверка данных Telegram
-  TELEGRAM_SUCCESS = 'TELEGRAM_SUCCESS', // Успешная авторизация через Telegram
-  TOKEN_RECEIVED = 'TOKEN_RECEIVED',    // Получение токена от сервера
-  AUTH_COMPLETE = 'AUTH_COMPLETE',      // Завершение авторизации
-  AUTH_ERROR = 'AUTH_ERROR',            // Ошибка авторизации
-  AUTH_RETRY = 'AUTH_RETRY',            // Повторная попытка авторизации
-  
-  // Серверные шаги
-  SERVER_REQUEST = 'SERVER_REQUEST',    // Получение запроса на сервере
-  VALIDATE_TELEGRAM = 'VALIDATE_TELEGRAM', // Валидация Telegram данных
-  DATABASE_QUERY = 'DATABASE_QUERY',    // Запрос к базе данных
-  USER_CREATED = 'USER_CREATED',        // Создание пользователя
-  USER_UPDATED = 'USER_UPDATED',        // Обновление пользователя
-  TOKEN_GENERATED = 'TOKEN_GENERATED',  // Генерация JWT токена
-  SERVER_RESPONSE = 'SERVER_RESPONSE',  // Ответ сервера
-  SERVER_ERROR = 'SERVER_ERROR',        // Ошибка на сервере
-  
-  // Шаги состояния
-  SESSION_CHECK = 'SESSION_CHECK',      // Проверка валидности сессии
-  SESSION_RESTORE = 'SESSION_RESTORE',  // Восстановление сессии
-  SESSION_EXPIRED = 'SESSION_EXPIRED',  // Истечение сессии
-  
-  // Пользовательское взаимодействие
-  USER_INTERACTION = 'USER_INTERACTION'  // Взаимодействие с пользователем
+  INIT = 'INIT',
+  LOGIN_INIT = 'LOGIN_INIT',
+  LOGOUT = 'LOGOUT',
+  WARPCAST_INIT = 'WARPCAST_INIT',
+  WARPCAST_VERIFY = 'WARPCAST_VERIFY',
+  WARPCAST_SUCCESS = 'WARPCAST_SUCCESS',
+  WARPCAST_ERROR = 'WARPCAST_ERROR',
+  USER_INTERACTION = 'USER_INTERACTION',
+  AUTH_COMPLETE = 'AUTH_COMPLETE',
+  AUTH_ERROR = 'AUTH_ERROR',
+  TOKEN_RECEIVED = 'TOKEN_RECEIVED',
+  // Telegram specific steps
+  TELEGRAM_INIT = 'TELEGRAM_INIT',
+  TELEGRAM_VERIFY = 'TELEGRAM_VERIFY',
+  TELEGRAM_SUCCESS = 'TELEGRAM_SUCCESS',
+  TELEGRAM_ERROR = 'TELEGRAM_ERROR',
+  TELEGRAM_WEB_APP_DATA = 'TELEGRAM_WEB_APP_DATA',
+  TELEGRAM_VERIFY_DATA = 'TELEGRAM_VERIFY_DATA',
+  // Server steps
+  SERVER_REQUEST = 'SERVER_REQUEST',
+  SERVER_RESPONSE = 'SERVER_RESPONSE',
+  SERVER_ERROR = 'SERVER_ERROR',
+  // Database steps
+  DATABASE_QUERY = 'DATABASE_QUERY',
+  // User steps
+  USER_CREATED = 'USER_CREATED',
+  // Token steps
+  TOKEN_GENERATED = 'TOKEN_GENERATED',
+  // Validation steps
+  VALIDATE_TELEGRAM = 'VALIDATE_TELEGRAM',
+  // Auth retry
+  AUTH_RETRY = 'AUTH_RETRY'
 }
 
 // Интерфейс записи лога
@@ -77,7 +77,7 @@ export interface AuthLogEntry {
 
 // Хранилище для сессионных ID
 let currentSessionId: string | null = null;
-let currentUserId: number | string | null = null;
+let currentUserId: string | null = null;
 
 /**
  * Создает или возвращает существующий ID сессии
@@ -110,35 +110,14 @@ export function getSessionId(): string {
 /**
  * Устанавливает ID пользователя для логов
  */
-export function setUserId(userId: number | string): void {
+export const setUserId = (userId: string) => {
   currentUserId = userId;
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem('auth_user_id', String(userId));
-    }
-  } catch (e) {
-    // Игнорируем ошибки localStorage
-  }
-}
+};
 
 /**
  * Получает сохраненный ID пользователя
  */
-export function getUserId(): number | string | null {
-  if (!currentUserId && typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const storedUserId = localStorage.getItem('auth_user_id');
-      if (storedUserId) {
-        if (!isNaN(Number(storedUserId))) {
-          currentUserId = Number(storedUserId);
-        } else {
-          currentUserId = storedUserId;
-        }
-      }
-    } catch (e) {
-      // Игнорируем ошибки localStorage
-    }
-  }
+export function getUserId(): string | null {
   return currentUserId;
 }
 
@@ -151,7 +130,6 @@ export function resetSession(): void {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem('auth_session_id');
-      localStorage.removeItem('auth_user_id');
     }
   } catch (e) {
     // Игнорируем ошибки localStorage
@@ -205,117 +183,55 @@ function processError(error: any): any {
   return { message: String(error) };
 }
 
+const getLogPrefix = (step: AuthStep, type: AuthLogType) => {
+  const timestamp = new Date().toISOString();
+  const userId = currentUserId ? `[User: ${currentUserId}]` : '';
+  return `[${timestamp}] [${step}] [${type}] ${userId}`;
+};
+
 /**
  * Основная функция логирования
  */
-export function logAuth(
-  step: AuthStep,
-  type: AuthLogType,
-  message: string,
-  data?: any,
-  error?: any,
-  serverInfo?: AuthLogEntry['serverInfo']
-): AuthLogEntry {
-  const logEntry: AuthLogEntry = {
-    timestamp: new Date().toISOString(),
-    sessionId: getSessionId(),
-    userId: getUserId() || undefined,
-    step,
-    type,
-    message,
-    data: data ? (typeof data === 'object' ? { ...data } : data) : undefined,
-    error: error ? processError(error) : undefined,
-    clientInfo: getClientInfo(),
-    serverInfo
-  };
+export const logAuth = (step: AuthStep, type: AuthLogType, message: string, data?: any) => {
+  const prefix = getLogPrefix(step, type);
+  const logMessage = `${prefix} ${message}`;
   
-  // Вывод в консоль с соответствующим форматированием
-  const consolePrefix = `[AUTH:${type}:${step}]`;
   switch (type) {
     case AuthLogType.ERROR:
-      console.error(consolePrefix, message, { ...logEntry });
+      console.error(logMessage, data || '');
       break;
     case AuthLogType.WARNING:
-      console.warn(consolePrefix, message, { ...logEntry });
-      break;
-    case AuthLogType.SECURITY:
-      console.warn(consolePrefix, message, { ...logEntry });
+      console.warn(logMessage, data || '');
       break;
     case AuthLogType.DEBUG:
-      console.debug(consolePrefix, message, { ...logEntry });
+      console.debug(logMessage, data || '');
       break;
     default:
-      console.log(consolePrefix, message, { ...logEntry });
+      console.log(logMessage, data || '');
   }
-  
-  // Если это ошибка, также отправляем в аналитику или мониторинг ошибок
-  if (type === AuthLogType.ERROR) {
-    try {
-      sendErrorToMonitoring(logEntry);
-    } catch (e) {
-      // Игнорируем ошибки отправки
-    }
-  }
-  
-  // Сохраняем в localStorage для отладки
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const logs = JSON.parse(localStorage.getItem('auth_debug_logs') || '[]');
-      logs.push(logEntry);
-      
-      // Ограничиваем количество логов
-      if (logs.length > 100) logs.shift();
-      
-      localStorage.setItem('auth_debug_logs', JSON.stringify(logs));
-    } catch (e) {
-      // Игнорируем ошибки localStorage
-    }
-  }
-  
-  return logEntry;
-}
+};
 
 /**
  * Вспомогательные функции для разных типов логов
  */
-export function logAuthInfo(step: AuthStep, message: string, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.INFO, message, data);
-}
+export const logAuthInfo = (step: AuthStep, message: string, data?: any) => {
+  logAuth(step, AuthLogType.INFO, message, data);
+};
 
-export function logAuthWarning(step: AuthStep, message: string, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.WARNING, message, data);
-}
+export const logAuthWarning = (step: AuthStep, message: string, data?: any) => {
+  logAuth(step, AuthLogType.WARNING, message, data);
+};
 
-export function logAuthError(step: AuthStep, message: string, error?: any, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.ERROR, message, data, error);
-}
+export const logAuthError = (step: AuthStep, message: string, error: Error) => {
+  logAuth(step, AuthLogType.ERROR, message, {
+    error: error.message,
+    stack: error.stack
+  });
+};
 
-export function logAuthDebug(step: AuthStep, message: string, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.DEBUG, message, data);
-}
-
-export function logAuthSecurity(step: AuthStep, message: string, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.SECURITY, message, data);
-}
-
-/**
- * Отправляет ошибку в систему мониторинга если она настроена
- */
-function sendErrorToMonitoring(logEntry: AuthLogEntry): void {
-  // Здесь можно добавить интеграцию с Sentry, LogRocket, или другими системами мониторинга
-  // Например:
-  // if (typeof window !== 'undefined' && (window as any).Sentry) {
-  //   (window as any).Sentry.captureException(logEntry.error, {
-  //     extra: {
-  //       step: logEntry.step,
-  //       message: logEntry.message,
-  //       data: logEntry.data,
-  //       userId: logEntry.userId,
-  //       sessionId: logEntry.sessionId
-  //     }
-  //   });
-  // }
-}
+export const logAuthDebug = (step: AuthStep, message: string, data?: any) => {
+  logAuth(step, AuthLogType.DEBUG, message, data);
+};
 
 /**
  * Получает все сохраненные логи для отладки

@@ -5,6 +5,7 @@ import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
 import { TelegramWebAppProvider } from "./contexts/TelegramWebAppContext"
+import "./styles/auth.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -13,41 +14,42 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "SnotCoin Mining Game",
-  description: "A Telegram-based crypto mining game",
-  generator: 'v0.dev',
-  metadataBase: new URL(siteUrl),
+  title: "Snotcoin - Play to Earn Game",
+  description: "Play to earn game on Farcaster",
+  metadataBase: new URL('https://snotcoin.online'),
   openGraph: {
-    title: 'SnotCoin Mining Game',
-    description: 'A Telegram-based crypto mining game',
+    title: 'Snotcoin - Play to Earn Game',
+    description: 'Play to earn game on Farcaster',
+    url: 'https://snotcoin.online',
+    siteName: 'Snotcoin',
     images: [
       {
-        url: imageUrl,
+        url: '/og-image.png',
         width: 1200,
-        height: 628,
-      }
+        height: 630,
+        alt: 'Snotcoin Game',
+      },
     ],
+    locale: 'en_US',
+    type: 'website',
   },
-  // Farcaster Frames metadata
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Snotcoin - Play to Earn Game',
+    description: 'Play to earn game on Farcaster',
+    images: ['/og-image.png'],
+  },
+  // Farcaster Frame метаданные
   other: {
-    // Основные метатеги для Frames v2
     'fc:frame': 'vNext',
-    'fc:frame:image': imageUrl,
-    'fc:frame:image:aspect_ratio': '1.91:1',
-    'fc:frame:post_url': siteUrl,
-    
-    // Кнопки действий
-    'fc:frame:button:1': 'Play SnotCoin Game',
-    'fc:frame:button:1:target': siteUrl,
-    'fc:frame:button:2': 'Learn More',
-    'fc:frame:button:2:target': `${siteUrl}/about`,
-    
-    // Дополнительные метатеги
-    'fc:frame:state': '',
-    'fc:frame:support:content': 'rich',
-    'fc:frame:support:refresh': 'auto',
-    'fc:frame:support:resend': 'conditional'
-  }
+    'fc:frame:image': 'https://snotcoin.online/og-image.png',
+    'fc:frame:button:1': 'Play Game',
+    'fc:frame:button:1:action': 'link',
+    'fc:frame:button:1:target': 'https://snotcoin.online',
+    'fc:frame:button:2': 'View Leaderboard',
+    'fc:frame:button:2:action': 'link',
+    'fc:frame:button:2:target': 'https://snotcoin.online/leaderboard',
+  },
 }
 
 export default function RootLayout({

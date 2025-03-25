@@ -17,10 +17,11 @@ datasource db {
 // Модель пользователя
 model User {
   id          String      @id @default(uuid())
-  telegram_id Int         @unique
+  fid         Int         @unique  // Farcaster ID пользователя
   username    String?
-  first_name  String?
-  last_name   String?
+  displayName String?
+  pfp         String?     // URL аватара пользователя
+  address     String?     // Ethereum-адрес пользователя
   jwt_token   String?     // JWT токен для аутентификации
   created_at  DateTime    @default(now())
   updated_at  DateTime    @updatedAt

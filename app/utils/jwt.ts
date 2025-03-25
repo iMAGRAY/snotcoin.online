@@ -1,76 +1,87 @@
 import jwt from 'jsonwebtoken';
-import { TelegramUser } from '../types/telegramAuth';
+import { WarpcastUser } from '../types/warpcastAuth';
 
-const JWT_SECRET = process.env.JWT_SECRET_KEY || 'default-secret-key-not-for-production';
-const JWT_EXPIRATION = '7d'; // Токен действителен 7 дней
+// Секретный ключ для подписи JWT
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
+
+// Срок действия токена (30 дней)
+const TOKEN_EXPIRATION = '30d';
 
 /**
- * Создает JWT токен для пользователя
+ * Генерация JWT токена для пользователя
  */
 export const generateToken = (user: {
   id: string;
-  telegram_id: number;
-  username?: string;
-  first_name?: string;
-  last_name?: string;
+  fid: number;
+  username: string;
+  displayName?: string | null;
+  pfp?: string | null;
+  address?: string | null;
 }): string => {
-  const payload = {
-    sub: user.id,
-    telegram_id: user.telegram_id,
-    username: user.username,
-    first_name: user.first_name,
-    last_name: user.last_name
-  };
-
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRATION });
+  return jwt.sign(
+    {
+      id: user.id,
+      fid: user.fid,
+      username: user.username,
+      displayName: user.displayName || null,
+      pfp: user.pfp || null,
+      address: user.address || null
+    },
+    JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRATION }
+  );
 };
 
 /**
- * Проверяет валидность JWT токена
+ * Верификация JWT токена
  */
-export const verifyToken = (token: string): { 
-  valid: boolean; 
-  user?: TelegramUser; 
-  error?: string 
+export const verifyToken = (token: string): {
+  valid: boolean;
+  expired: boolean;
+  user?: WarpcastUser;
 } => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     
-    return { 
+    return {
       valid: true,
+      expired: false,
       user: {
-        id: decoded.sub,
-        telegram_id: decoded.telegram_id,
-        username: decoded.username || '',
-        first_name: decoded.first_name || '',
-        last_name: decoded.last_name || ''
+        fid: decoded.fid,
+        username: decoded.username,
+        displayName: decoded.displayName,
+        pfp: decoded.pfp,
+        address: decoded.address
       }
     };
   } catch (error) {
-    return { 
+    // Проверяем, истек ли токен
+    const isExpired = (error as any).name === 'TokenExpiredError';
+    
+    return {
       valid: false,
-      error: error instanceof Error ? error.message : 'Invalid token'
+      expired: isExpired,
+      user: undefined
     };
   }
 };
 
 /**
- * Декодирует JWT токен без проверки подписи
+ * Декодирование JWT токена без верификации
  */
-export const decodeToken = (token: string): TelegramUser | null => {
+export const decodeToken = (token: string): WarpcastUser | null => {
   try {
+    // Декодируем без проверки подписи
     const decoded = jwt.decode(token) as any;
     
-    if (!decoded || !decoded.sub) {
-      return null;
-    }
+    if (!decoded) return null;
     
     return {
-      id: decoded.sub,
-      telegram_id: decoded.telegram_id,
-      username: decoded.username || '',
-      first_name: decoded.first_name || '',
-      last_name: decoded.last_name || ''
+      fid: decoded.fid,
+      username: decoded.username,
+      displayName: decoded.displayName,
+      pfp: decoded.pfp,
+      address: decoded.address
     };
   } catch (error) {
     console.error('Ошибка декодирования токена:', error);

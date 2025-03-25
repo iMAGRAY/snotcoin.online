@@ -46,11 +46,11 @@ export interface SoundSettings {
 
 export interface User {
   id: string
-  telegram_id?: number
-  first_name: string
-  last_name?: string
+  fid?: number
   username?: string
-  photo_url?: string
+  displayName?: string
+  pfp?: string
+  address?: string
 }
 
 export interface GameState {
@@ -162,14 +162,4 @@ export const FILLING_SPEED_UPGRADES = [
   { level: 8, speed: 128, cost: 18000, speedIncrease: 64 },
   { level: 9, speed: 256, cost: 36000, speedIncrease: 128 },
   { level: 10, speed: 512, cost: 72000, speedIncrease: 256 }
-];
-
-// Типы для Telegram
-export interface TelegramUser {
-  id: string
-  first_name: string
-  last_name?: string
-  username?: string
-  telegram_id?: number
-  photo_url?: string
-} 
+]; 

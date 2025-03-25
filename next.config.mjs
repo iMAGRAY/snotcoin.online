@@ -33,6 +33,7 @@ const nextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     unoptimized: true,
+    domains: ['snotcoin.online', 'warpcast.com'],
   },
   // Update security headers configuration
   async headers() {
@@ -42,15 +43,23 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+            value: `
+              default-src 'self';
+              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://warpcast.com;
+              style-src 'self' 'unsafe-inline';
+              img-src 'self' data: https: blob:;
+              connect-src 'self' https://telegram.org https://warpcast.com wss://warpcast.com;
+              frame-src 'self' https://warpcast.com;
+              frame-ancestors 'self' https://warpcast.com;
+            `.replace(/\s+/g, ' ').trim()
           },
           {
             key: 'X-Frame-Options',
-            value: 'ALLOWALL'
+            value: 'ALLOW-FROM https://warpcast.com'
           }
-        ]
-      }
-    ]
+        ],
+      },
+    ];
   },
   compiler: {
     removeConsole: false,
