@@ -7,6 +7,7 @@ import { MotionDiv } from "../motion/MotionWrapper"
 import { useGameDispatch } from "../../contexts/GameContext"
 import { ICONS } from "../../constants/uiConstants"
 import { AuthLogType, AuthStep, logAuth, logAuthInfo, setUserId } from "../../utils/auth-logger"
+import WarpcastAuth from "./WarpcastAuth"
 import NeynarAuth from "./NeynarAuth"
 
 interface AuthenticationWindowProps {
@@ -161,7 +162,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
 
         <div className="space-y-6">
           <MotionDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <NeynarAuth onSuccess={handleAuthentication} onError={handleAuthError} />
+            <WarpcastAuth onSuccess={handleAuthentication} onError={handleAuthError} />
           </MotionDiv>
         </div>
 
