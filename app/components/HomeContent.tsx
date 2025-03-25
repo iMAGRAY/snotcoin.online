@@ -273,7 +273,7 @@ const HomeContent: React.FC = () => {
           </header>
         )}
 
-        <main className="flex-grow overflow-hidden relative">
+        <main className="flex-grow overflow-hidden relative" style={{ paddingBottom: 'var(--tab-bar-height, 4rem)' }}>
           <ErrorBoundary fallback={<ErrorDisplay message="Произошла непредвиденная ошибка в игре. Попробуйте перезагрузить страницу." />}>
             {renderActiveTab()}
           </ErrorBoundary>

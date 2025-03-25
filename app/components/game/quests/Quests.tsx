@@ -15,6 +15,9 @@ export default function Quests() {
           backgroundRepeat: "no-repeat",
         }}
       />
+      <div className="relative z-10 w-full h-full overflow-auto pb-24">
+        {/* Здесь должен быть контент квестов */}
+      </div>
     </div>
   )
 } 

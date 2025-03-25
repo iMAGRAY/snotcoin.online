@@ -121,7 +121,7 @@ const Laboratory: React.FC = () => {
         />
       </div>
       
-      <div className="w-full px-4 py-4 flex items-center justify-center space-x-4">
+      <div className="w-full px-4 py-4 flex items-center justify-center space-x-4 mb-6">
         <CollectButton 
           onCollect={handleCollect} 
           containerSnot={inventory.containerSnot} 

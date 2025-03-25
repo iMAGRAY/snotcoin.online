@@ -35,22 +35,25 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
   return (
     <motion.button
       onClick={handleClick}
-      className={`relative px-6 py-3 bg-gradient-to-r from-[#bbeb25] to-[#a3d119] rounded-full font-bold 
-        text-slate-800 shadow-lg shadow-[#bbeb25]/20 focus:outline-none focus:ring-2 
-        focus:ring-[#bbeb25] transition-all duration-200 ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl hover:from-[#c8f832] hover:to-[#b1df21]'}`}
-      whileHover={!isDisabled ? { scale: 1.05 } : {}}
+      className={`relative px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-lg font-bold 
+        text-white shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
+        focus:ring-yellow-300 focus:ring-opacity-50 h-16 flex-grow ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      whileHover={!isDisabled ? { 
+        scale: 1.05,
+        boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
+      } : {}}
       whileTap={!isDisabled ? { scale: 0.95 } : {}}
       disabled={isDisabled}
     >
       <div className="flex items-center justify-center space-x-2">
         <Image 
           src={ICONS.LABORATORY.BUTTONS.CLAIM} 
-          width={24} 
-          height={24} 
+          width={28} 
+          height={28} 
           alt={t("collectResources")} 
           className="inline-block" 
         />
-        <span>{`${t("collectResources")} (${containerSnotValue})`}</span>
+        <span>{t("collect")}</span>
       </div>
     </motion.button>
   )

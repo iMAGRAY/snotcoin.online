@@ -206,7 +206,7 @@ const Storage: React.FC = () => {
             />
           </div>
         </div>
-        <div className="p-4">
+        <div className="p-4 mb-16">
           <motion.button
             onClick={handleOpenChest}
             className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center justify-center space-x-2"

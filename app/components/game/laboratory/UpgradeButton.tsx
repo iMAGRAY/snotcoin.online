@@ -22,22 +22,22 @@ const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => 
   return (
     <motion.button
       onClick={handleClick}
-      className="relative px-6 py-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-full font-bold 
-        text-white shadow-lg shadow-[#4a7a9e]/20 focus:outline-none focus:ring-2 
-        focus:ring-[#4a7a9e] transition-all duration-200 hover:shadow-xl hover:from-[#5189b0] hover:to-[#455a72]"
-      whileHover={{ scale: 1.05 }}
+      className="relative p-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-lg font-bold 
+        text-white shadow-lg border-2 border-[#5889ae] focus:outline-none focus:ring-2 
+        focus:ring-[#4a7a9e] transition-all duration-200 h-16 w-16 flex items-center justify-center"
+      whileHover={{ 
+        scale: 1.05,
+        boxShadow: "0 0 12px rgba(74, 122, 158, 0.7)",
+      }}
       whileTap={{ scale: 0.95 }}
     >
-      <div className="flex items-center justify-center space-x-2">
-        <Image 
-          src={ICONS.LABORATORY.BUTTONS.UPGRADE} 
-          width={24} 
-          height={24} 
-          alt={t("upgradeResources")} 
-          className="inline-block" 
-        />
-        <span>{t("upgradeResources")}</span>
-      </div>
+      <Image 
+        src={ICONS.LABORATORY.BUTTONS.UPGRADE} 
+        width={32} 
+        height={32} 
+        alt={t("upgradeResources")} 
+        className="inline-block" 
+      />
     </motion.button>
   )
 })

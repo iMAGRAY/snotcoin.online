@@ -93,7 +93,7 @@ const ProfilePage: React.FC = () => {
 
       <LayoutGroup>
         <motion.div
-          className="relative z-20 p-6 space-y-6 overflow-y-auto h-full"
+          className="relative z-20 p-6 space-y-6 overflow-y-auto h-full pb-24"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
