@@ -11,6 +11,12 @@ interface FarcasterUser {
   pfp?: string;
 }
 
+interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+}
+
 interface FarcasterContextType {
   user: FarcasterUser | null;
   isLoading: boolean;
@@ -18,6 +24,7 @@ interface FarcasterContextType {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUserData: () => Promise<boolean>;
+  refreshTokens: () => Promise<boolean>;
   getUserByFid: (fid: string) => Promise<any>;
 }
 
@@ -38,8 +45,10 @@ interface FarcasterProviderProps {
 export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   const [user, setUser] = useState<FarcasterUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const router = useRouter();
 
+  // Обновление данных пользователя с сервера
   const refreshUserData = async () => {
     try {
       setIsLoading(true);
@@ -49,6 +58,15 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       if (data.authenticated && data.user) {
         setUser(data.user);
         return true;
+      } else if (data.refreshable) {
+        // Если токен истек, но может быть обновлен
+        const refreshSuccess = await refreshTokens();
+        if (refreshSuccess) {
+          return await refreshUserData();
+        }
+        
+        setUser(null);
+        return false;
       } else {
         setUser(null);
         return false;
@@ -59,6 +77,30 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       return false;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Обновление токенов через refresh token
+  const refreshTokens = async () => {
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.tokens) {
+        setTokens(data.tokens);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error refreshing tokens:', error);
+      return false;
     }
   };
 
@@ -85,10 +127,10 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
     refreshUserData();
   }, []);
 
-  // Функция для входа в систему
+  // Функция для входа в систему через Neynar
   const login = async () => {
     try {
-      // Просто перенаправляем на страницу авторизации
+      // Перенаправляем на страницу авторизации
       router.push('/auth');
     } catch (error) {
       console.error('Login error:', error);
@@ -104,6 +146,7 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       
       if (response.ok) {
         setUser(null);
+        setTokens(null);
         // Обновляем страницу или делаем что-то еще после выхода
         if (typeof window !== 'undefined') {
           window.location.reload();
@@ -121,6 +164,7 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
     login,
     logout,
     refreshUserData,
+    refreshTokens,
     getUserByFid,
   };
 

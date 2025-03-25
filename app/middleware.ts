@@ -1,53 +1,171 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
-import { verifyToken } from "./utils/jwt"
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyJWT, decodeToken } from '@/app/utils/jwt';
 
-export function middleware(request: NextRequest) {
-  const response = NextResponse.next()
+/**
+ * Пути, которые не требуют аутентификации
+ */
+const publicPaths = [
+  '/api/farcaster/auth',
+  '/api/farcaster/neynar-auth',
+  '/api/frame',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+  '/api/health',
+  '/auth',
+  '/'
+];
 
-  // Проверяем, является ли запрос API-запросом, требующим авторизации
-  const isApiRequest = request.nextUrl.pathname.startsWith('/api/') && 
-    !request.nextUrl.pathname.startsWith('/api/auth/');
+/**
+ * Защищенные пути API, которые требуют аутентификации
+ */
+const protectedApiPaths = [
+  '/api/game',
+  '/api/user',
+  // Добавьте другие защищенные пути API здесь
+];
 
-  if (isApiRequest) {
-    // Получаем токен авторизации из заголовка
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.startsWith('Bearer ') 
-      ? authHeader.substring(7) 
-      : request.cookies.get('auth_token')?.value;
+/**
+ * Проверка, является ли запрос к API
+ */
+const isApiRequest = (pathname: string) => {
+  return pathname.startsWith('/api/');
+};
 
-    // Если токен отсутствует, возвращаем ошибку
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized access' },
-        { status: 401 }
-      );
-    }
+/**
+ * Проверка, является ли путь публичным
+ */
+const isPublicPath = (pathname: string) => {
+  return publicPaths.some(path => pathname.startsWith(path));
+};
 
-    // Проверяем токен
-    const { valid, error } = verifyToken(token);
-    
-    if (!valid) {
-      return NextResponse.json(
-        { error: 'Invalid token', details: error },
-        { status: 401 }
-      );
+/**
+ * Проверка, требует ли API путь аутентификации
+ */
+const isProtectedApiPath = (pathname: string) => {
+  return protectedApiPaths.some(path => pathname.startsWith(path));
+};
+
+/**
+ * Middleware для проверки авторизации
+ */
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // Пропускаем публичные пути без проверки
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+  
+  // Проверяем, требует ли API путь аутентификации
+  const isProtectedApi = isApiRequest(pathname) && isProtectedApiPath(pathname);
+  
+  // Если это не защищенный API, пропускаем
+  if (isApiRequest(pathname) && !isProtectedApi) {
+    return NextResponse.next();
+  }
+  
+  // Получаем токен сессии из куки
+  const sessionCookie = cookies().get('session');
+  
+  // Если токена нет, перенаправляем на страницу авторизации или возвращаем ошибку
+  if (!sessionCookie) {
+    if (isApiRequest(pathname)) {
+      return NextResponse.json({
+        success: false,
+        message: 'Требуется авторизация'
+      }, { status: 401 });
+    } else {
+      // Для обычных маршрутов перенаправляем на страницу авторизации
+      // с указанием, куда вернуться после авторизации
+      const url = new URL('/auth', request.url);
+      url.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(url);
     }
   }
-
-  // Remove X-Frame-Options header as we'll use CSP instead
-  response.headers.delete("X-Frame-Options")
-
-  // Set Content-Security-Policy to allow framing from any domain
-  response.headers.set(
-    "Content-Security-Policy",
-    "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://telegram.org https://*.telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
-  )
-
-  return response
+  
+  try {
+    // Проверяем JWT токен
+    const { valid, userId, error } = await verifyJWT(sessionCookie.value);
+    
+    if (!valid || !userId) {
+      // Пробуем получить refresh token
+      const refreshTokenCookie = cookies().get('refresh_token');
+      
+      if (refreshTokenCookie) {
+        // Если есть refresh token, перенаправляем на страницу авторизации
+        // или возвращаем специальный ответ для API
+        if (isApiRequest(pathname)) {
+          return NextResponse.json({
+            success: false,
+            message: 'Токен истек',
+            requiresRefresh: true
+          }, { status: 401 });
+        } else {
+          // Для веб-страниц пусть клиент сам обрабатывает обновление токена
+          // через FarcasterContext
+          const url = new URL('/auth', request.url);
+          url.searchParams.set('redirect', pathname);
+          return NextResponse.redirect(url);
+        }
+      }
+      
+      // Если нет refresh token, удаляем куки сессии
+      cookies().delete('session');
+      
+      // Возвращаем ошибку для API или перенаправляем на страницу авторизации
+      if (isApiRequest(pathname)) {
+        return NextResponse.json({
+          success: false,
+          message: 'Требуется авторизация',
+          error
+        }, { status: 401 });
+      } else {
+        const url = new URL('/auth', request.url);
+        url.searchParams.set('redirect', pathname);
+        return NextResponse.redirect(url);
+      }
+    }
+    
+    // Токен валиден, продолжаем запрос
+    const response = NextResponse.next();
+    
+    // Добавляем идентификатор пользователя в заголовки запроса
+    // для использования в API обработчиках
+    response.headers.set('X-User-ID', userId);
+    
+    return response;
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    
+    // В случае ошибки удаляем куки сессии
+    cookies().delete('session');
+    
+    if (isApiRequest(pathname)) {
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка аутентификации',
+        error: String(error)
+      }, { status: 500 });
+    } else {
+      const url = new URL('/auth', request.url);
+      url.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(url);
+    }
+  }
 }
 
+/**
+ * Настраиваем, какие маршруты обрабатывает middleware
+ */
 export const config = {
-  matcher: "/:path*",
-}
+  matcher: [
+    /*
+     * Матчим все маршруты, кроме:
+     * - Файлов статики (изображения, шрифты, иконки и т.д.)
+     * - Путей по умолчанию Next.js (_next)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|logo.png|images/|fonts/).*)',
+  ],
+};
 

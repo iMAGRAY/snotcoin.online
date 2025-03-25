@@ -1,6 +1,9 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
+// IMPORTANT: Для применения изменений требуется выполнить миграцию:
+// npx prisma migrate dev --name add_jwt_fields
+
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
@@ -15,20 +18,17 @@ datasource db {
 
 // Модель пользователя
 model User {
-  id            String      @id @default(uuid())
-  telegram_id   Int?        @unique // Опциональный, для обратной совместимости
-  farcaster_fid Int?        @unique // Farcaster ID пользователя
-  farcaster_username String? // Имя пользователя в Farcaster
-  farcaster_displayname String? // Отображаемое имя в Farcaster
-  farcaster_pfp String?     // URL аватара в Farcaster
-  username      String?     // Общее имя пользователя
-  first_name    String?     // Общее имя
-  last_name     String?     // Общая фамилия
-  auth_type     String      @default("telegram") // Тип аутентификации: "telegram" или "farcaster"
-  jwt_token     String?     // JWT токен для аутентификации
-  created_at    DateTime    @default(now())
-  updated_at    DateTime    @updatedAt
-  progress      Progress?   // Связь с прогрессом пользователя
+  id                  String      @id @default(uuid())
+  farcaster_fid       Int         @unique // Farcaster ID пользователя
+  farcaster_username  String      // Имя пользователя в Farcaster
+  farcaster_displayname String?   // Отображаемое имя в Farcaster
+  farcaster_pfp       String?     // URL аватара в Farcaster
+  jwt_token           String?     // JWT токен для аутентификации
+  refresh_token       String?     // Токен для обновления JWT
+  token_expires_at    DateTime?   // Дата истечения срока действия токена
+  created_at          DateTime    @default(now())
+  updated_at          DateTime    @updatedAt
+  progress            Progress?   // Связь с прогрессом пользователя
 
   @@map("users")
 }

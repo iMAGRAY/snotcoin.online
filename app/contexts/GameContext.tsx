@@ -5,7 +5,6 @@ import type { GameState, Action, ExtendedGameState } from '../types/gameTypes'
 import { gameReducer } from '../reducers/gameReducer'
 import { initialState } from '../constants/gameConstants'
 import { debounce } from 'lodash'
-import { isUserAuthenticated, markUserAuthenticated, isSameAuthenticatedUser } from '../utils/telegram-auth'
 import * as dataService from '../services/dataService'
 
 const GameStateContext = createContext<ExtendedGameState | null>(null)
@@ -115,7 +114,7 @@ export function GameProvider({ children }: GameProviderProps) {
 
   // Универсальная функция сохранения состояния
   const saveState = useCallback(async (stateToSave: ExtendedGameState, isForced: boolean = false) => {
-    if (!stateToSave.user?.telegram_id || !isInitialized) {
+    if (!stateToSave.user?.id || !isInitialized) {
       return false;
     }
     
@@ -135,7 +134,7 @@ export function GameProvider({ children }: GameProviderProps) {
         dataService.forceSaveGameState : 
         dataService.saveGameState;
       
-      await saveMethod(stateToSave.user.telegram_id, preparedState);
+      await saveMethod(stateToSave.user.id, preparedState);
       return true;
     } catch (error) {
       // Пробуем повторно сохранить только при обычном сохранении
@@ -150,7 +149,7 @@ export function GameProvider({ children }: GameProviderProps) {
             _isRetry: true
           };
           
-          await dataService.saveGameState(stateToSave.user.telegram_id, retryState);
+          await dataService.saveGameState(stateToSave.user.id, retryState);
           return true;
         } catch (retryError) {
           return false;
@@ -171,12 +170,14 @@ export function GameProvider({ children }: GameProviderProps) {
   // Загрузка сохраненного состояния
   useEffect(() => {
     const loadSavedState = async () => {
-      if (state.user?.telegram_id && !isInitialized) {
+      if (state.user?.id && !isInitialized) {
         try {
           // Проверяем, был ли этот пользователь уже аутентифицирован
-          if (isSameAuthenticatedUser(state.user.telegram_id)) {
+          const isAuthenticated = memoryStore.authenticatedUserIds?.includes(state.user.id);
+          
+          if (isAuthenticated) {
             // Загружаем состояние с сервера для обеспечения актуальности данных
-            const savedState = await dataService.loadGameState(state.user.telegram_id);
+            const savedState = await dataService.loadGameState(state.user.id);
             
             if (savedState) {
               // Синхронизируем ресурсы
@@ -214,7 +215,7 @@ export function GameProvider({ children }: GameProviderProps) {
           }
           
           // Загружаем состояние напрямую с сервера
-          const savedState = await dataService.loadGameState(state.user.telegram_id);
+          const savedState = await dataService.loadGameState(state.user.id);
           
           if (savedState) {
             // Синхронизируем ресурсы сервера с локальными
@@ -254,7 +255,11 @@ export function GameProvider({ children }: GameProviderProps) {
           }
           
           // Помечаем пользователя как аутентифицированного
-          markUserAuthenticated(state.user.telegram_id);
+          if (!memoryStore.authenticatedUserIds) {
+            memoryStore.authenticatedUserIds = [];
+          }
+          memoryStore.authenticatedUserIds.push(state.user.id);
+          
           setIsInitialized(true);
         } catch (error) {
           // Создаем начальное состояние даже при ошибке
@@ -274,7 +279,7 @@ export function GameProvider({ children }: GameProviderProps) {
     };
 
     loadSavedState();
-  }, [state.user?.telegram_id, isInitialized, dispatch, state, synchronizeResources, saveState]);
+  }, [state.user?.id, isInitialized, dispatch, state, synchronizeResources, saveState]);
 
   // Сохранение состояния с debounce
   const debouncedSaveState = useMemo(
@@ -286,11 +291,11 @@ export function GameProvider({ children }: GameProviderProps) {
 
   // Обработчик beforeunload для сохранения при закрытии
   useEffect(() => {
-    if (!state.user?.telegram_id || !isInitialized) return;
+    if (!state.user?.id || !isInitialized) return;
     
     // Настраиваем обработчик для сохранения при закрытии
     const removeHandler = dataService.setupBeforeUnloadHandler(
-      state.user.telegram_id,
+      state.user.id,
       () => ({ 
         ...state, 
         _saveVersion: (state._saveVersion || 0) + 1,
@@ -300,11 +305,11 @@ export function GameProvider({ children }: GameProviderProps) {
     );
     
     return removeHandler;
-  }, [state.user?.telegram_id, isInitialized, state]);
+  }, [state.user?.id, isInitialized, state]);
 
   // Отслеживание изменений состояния
   useEffect(() => {
-    if (state.user?.telegram_id && isInitialized) {
+    if (state.user?.id && isInitialized) {
       debouncedSaveState(state as ExtendedGameState);
     }
   }, [state, debouncedSaveState, isInitialized]);
@@ -313,7 +318,7 @@ export function GameProvider({ children }: GameProviderProps) {
   const wrappedDispatch = useCallback((action: Action) => {
     // Игнорируем повторные установки того же пользователя
     if (action.type === "SET_USER" && 
-        action.payload?.telegram_id === state.user?.telegram_id) {
+        action.payload?.id === state.user?.id) {
       return;
     }
     
@@ -359,7 +364,7 @@ export function GameProvider({ children }: GameProviderProps) {
   // Форсированное сохранение при размонтировании компонента
   useEffect(() => {
     return () => {
-      if (state.user?.telegram_id && isInitialized) {
+      if (state.user?.id && isInitialized) {
         // Сохраняем все ожидающие изменения
         dataService.saveAllPendingChanges();
         

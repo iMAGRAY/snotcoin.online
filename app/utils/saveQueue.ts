@@ -6,28 +6,48 @@
 type SaveTask = () => Promise<void>;
 
 /**
- * Класс для управления очередью сохранений с защитой от перегрузки
+ * Элемент очереди
+ */
+interface QueueItem {
+  task: () => Promise<void>;
+  priority: number;
+  timestamp: number;
+  resolve: (value: void | PromiseLike<void>) => void;
+  reject: (reason?: any) => void;
+}
+
+/**
+ * Очередь сохранений с приоритетами
  */
 class SaveQueue {
-  private queue: SaveTask[] = [];
+  private items: QueueItem[] = [];
   private isProcessing: boolean = false;
-  private maxConcurrent: number = 2;
+  private maxConcurrent: number = 1;
   private activeCount: number = 0;
+  private isShuttingDown: boolean = false;
   private maxRetries: number = 3;
   
   /**
-   * Добавляет задачу в очередь и начинает обработку, если она не запущена
+   * Добавляет задачу в очередь
    * @param task Задача для выполнения
-   * @returns Промис, который разрешится после выполнения задачи
+   * @param priority Приоритет задачи (меньше = выше приоритет)
+   * @returns Promise, который разрешится, когда задача будет выполнена
    */
-  enqueue(task: SaveTask): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const wrappedTask = async () => {
+  enqueue<T>(task: () => Promise<T>, priority: number = 5): Promise<T> {
+    // Проверяем, не закрывается ли очередь
+    if (this.isShuttingDown) {
+      return Promise.reject(new Error('Queue is shutting down'));
+    }
+    
+    // Создаем и возвращаем Promise
+    return new Promise<T>((resolve, reject) => {
+      // Оборачиваем задачу, чтобы отслеживать её выполнение
+      const wrappedTask = async (): Promise<void> => {
         let retries = 0;
         while (retries <= this.maxRetries) {
           try {
-            await task();
-            resolve();
+            const result = await task();
+            resolve(result);
             return;
           } catch (error) {
             retries++;
@@ -41,69 +61,116 @@ class SaveQueue {
         }
       };
       
-      this.queue.push(wrappedTask);
-      this.processQueue();
+      // Добавляем задачу в очередь
+      this.items.push({
+        task: wrappedTask,
+        priority,
+        timestamp: Date.now(),
+        resolve: resolve as any,
+        reject
+      });
+      
+      // Сортируем очередь по приоритету
+      this.items.sort((a, b) => {
+        // Сначала по приоритету
+        if (a.priority !== b.priority) {
+          return a.priority - b.priority;
+        }
+        // Затем по времени (FIFO)
+        return a.timestamp - b.timestamp;
+      });
+      
+      // Запускаем обработку, если она еще не идет
+      if (!this.isProcessing) {
+        this.processNext();
+      }
     });
   }
   
   /**
-   * Обрабатывает очередь задач с ограничением на количество одновременных операций
+   * Обрабатывает следующую задачу в очереди
    */
-  private processQueue(): void {
-    if (this.isProcessing || this.queue.length === 0 || this.activeCount >= this.maxConcurrent) {
+  private processNext(): void {
+    // Если нет задач или достигнут лимит параллельных задач, выходим
+    if (this.items.length === 0 || this.activeCount >= this.maxConcurrent) {
+      this.isProcessing = false;
       return;
     }
     
+    // Берем следующую задачу из очереди
+    const item = this.items.shift();
+    if (!item) {
+      this.isProcessing = false;
+      return;
+    }
+    
+    // Устанавливаем флаг обработки
     this.isProcessing = true;
+    this.activeCount++;
     
-    const processNext = async () => {
-      if (this.queue.length === 0) {
-        this.isProcessing = false;
-        return;
-      }
-      
-      if (this.activeCount < this.maxConcurrent) {
-        const task = this.queue.shift();
-        if (task) {
-          this.activeCount++;
-          
-          try {
-            await task();
-          } catch (error) {
-            console.error('Ошибка выполнения задачи:', error);
-          } finally {
-            this.activeCount--;
-            // Продолжаем обработку очереди
-            processNext();
-          }
-        }
-      }
-      
-      // Если есть еще задачи и не достигнут лимит одновременных операций, 
-      // запускаем следующую задачу
-      if (this.queue.length > 0 && this.activeCount < this.maxConcurrent) {
-        processNext();
-      } else if (this.activeCount === 0) {
-        this.isProcessing = false;
-      }
-    };
-    
-    // Запускаем обработку очереди
-    processNext();
+    // Запускаем задачу
+    setTimeout(() => {
+      item.task().catch(item.reject);
+      this.processNext();
+    }, 0);
   }
   
   /**
-   * Очищает очередь задач
+   * Останавливает очередь
+   */
+  shutdown(): Promise<void> {
+    this.isShuttingDown = true;
+    
+    // Ждем завершения всех активных задач
+    if (this.activeCount === 0) {
+      return Promise.resolve();
+    }
+    
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (this.activeCount === 0) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+  
+  /**
+   * Очищает очередь
    */
   clear(): void {
-    this.queue = [];
+    // Отклоняем все ожидающие задачи
+    for (const item of this.items) {
+      item.reject(new Error('Queue cleared'));
+    }
+    this.items = [];
   }
   
   /**
    * Возвращает количество задач в очереди
    */
-  size(): number {
-    return this.queue.length;
+  get size(): number {
+    return this.items.length;
+  }
+  
+  /**
+   * Проверяет, есть ли активные задачи
+   */
+  get isActive(): boolean {
+    return this.isProcessing || this.activeCount > 0;
+  }
+  
+  /**
+   * Устанавливает максимальное количество параллельных задач
+   */
+  setMaxConcurrent(value: number): void {
+    this.maxConcurrent = Math.max(1, value);
+    
+    // Запускаем дополнительные задачи, если можно
+    while (this.activeCount < this.maxConcurrent && this.items.length > 0) {
+      this.processNext();
+    }
   }
   
   /**
@@ -117,7 +184,7 @@ class SaveQueue {
    * Проверяет, есть ли задачи в очереди или активные задачи
    */
   hasActiveTasks(): boolean {
-    return this.queue.length > 0 || this.activeCount > 0;
+    return this.items.length > 0 || this.activeCount > 0;
   }
   
   /**
@@ -153,7 +220,7 @@ class SaveQueue {
   }
 }
 
-// Экспортируем единственный экземпляр очереди для использования в приложении
+// Создаем и экспортируем экземпляр очереди
 export const saveQueue = new SaveQueue();
 
 // Типы для обработки сжатых данных
@@ -165,7 +232,7 @@ export interface CompressedGameState {
   _compression: string;
   _compressedAt: string;
   _integrity: {
-    telegramId: number;
+    userId: string;
     saveVersion?: number;
     snot?: number;
     snotCoins?: number;

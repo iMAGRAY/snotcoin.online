@@ -1,119 +1,95 @@
-import { NextResponse } from 'next/server'
-import { UserModel, ProgressModel } from '../../../utils/models'
-import { verifyToken } from '../../../utils/jwt'
+import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+import { verifyJWT } from '../../../utils/jwt'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
 
-export async function POST(request: Request) {
-  const requestStartTime = Date.now()
+const prisma = new PrismaClient();
 
+export async function POST(request: NextRequest) {
+  // Извлекаем токен из заголовка Authorization
+  const authHeader = request.headers.get('Authorization');
+  
+  // Проверяем наличие токена
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Отсутствует токен авторизации' }, { status: 401 });
+  }
+  
+  const token = authHeader.substring(7);
+  
   try {
-    // Получаем токен из заголовка
-    let token: string | null = null;
-    const authHeader = request.headers.get('Authorization');
+    // Получаем данные из тела запроса
+    const body = await request.json();
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-    
-    // Валидация токена
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - no token' },
-        { status: 401 }
-      )
+    // Проверяем валидность данных
+    if (!body || !body.progress) {
+      return NextResponse.json({ error: 'Некорректные данные' }, { status: 400 });
     }
     
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, userId, error: tokenError } = await verifyJWT(token);
     
-    if (!valid || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
-        { status: 401 }
-      )
-    }
-
-    // Получаем данные от клиента
-    let requestData;
-    try {
-      requestData = await request.json()
-    } catch (err) {
-      const error = err as Error
-      return NextResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
-      )
-    }
-
-    // Проверяем наличие необходимых полей
-    if (!requestData.telegramId || !requestData.gameState) {
-      return NextResponse.json(
-        { error: 'Missing required fields: telegramId and gameState' },
-        { status: 400 }
-      )
-    }
-
-    const { telegramId, gameState } = requestData
-
-    // Проверяем, соответствует ли telegramId пользователю из токена
-    if (user.telegram_id.toString() !== telegramId.toString()) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
-        { status: 403 }
-      )
+    if (!valid || !userId) {
+      return NextResponse.json({
+        error: 'Невалидный токен авторизации',
+        details: tokenError
+      }, { status: 401 });
     }
     
-    // Получаем пользователя из БД
-    const dbUser = await UserModel.findByTelegramId(parseInt(telegramId.toString()));
+    // Находим пользователя по ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
     
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
+    if (!user) {
+      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 });
     }
     
-    // Очищаем игровое состояние перед сохранением
-    const cleanedGameState = cleanGameState(gameState);
+    // Обновляем или создаем запись прогресса
+    const progressData = body.progress;
     
-    // Сохраняем прогресс в БД
-    const updatedProgress = await ProgressModel.update(dbUser.id, cleanedGameState);
+    const upsertedProgress = await prisma.progress.upsert({
+      where: { user_id: user.id },
+      create: {
+        user_id: user.id,
+        game_state: {
+          level: progressData.level || 1,
+          experience: progressData.experience || 0,
+          inventory: progressData.inventory || { snot: 0, snotCoins: 0, items: [] }
+        }
+      },
+      update: {
+        game_state: {
+          level: progressData.level,
+          experience: progressData.experience,
+          inventory: progressData.inventory
+        }
+      }
+    });
+    
+    // Парсим game_state из JSON
+    const gameState = upsertedProgress.game_state as Record<string, any>;
     
     return NextResponse.json({
       success: true,
-      version: updatedProgress.version,
-      updated_at: updatedProgress.updated_at
+      progress: {
+        userId: upsertedProgress.user_id,
+        level: gameState?.level || 1,
+        experience: gameState?.experience || 0,
+        inventory: gameState?.inventory || {
+          snot: 0,
+          snotCoins: 0,
+          items: []
+        },
+        lastUpdated: upsertedProgress.updated_at
+      }
     });
   } catch (error) {
-    console.error('Error saving progress:', error)
+    console.error('Error saving progress:', error);
     
-    return NextResponse.json(
-      { error: 'Server error', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
-  } finally {
-    // Логируем время выполнения запроса
-    const requestEndTime = Date.now()
-    console.log(`Save progress request processed in ${requestEndTime - requestStartTime}ms`)
+    return NextResponse.json({
+      error: 'Ошибка при сохранении прогресса',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
-}
-
-/**
- * Очищает состояние игры перед сохранением
- */
-function cleanGameState(gameState: any): any {
-  // Создаем копию объекта для безопасного изменения
-  const cleanedState = JSON.parse(JSON.stringify(gameState));
-  
-  // Удаляем ненужные для сохранения временные поля
-  delete cleanedState._loadedFromServer;
-  delete cleanedState._serverLoadedAt;
-  
-  // Добавляем метаданные
-  cleanedState._saveVersion = (cleanedState._saveVersion || 0) + 1;
-  cleanedState._lastSaved = new Date().toISOString();
-  
-  return cleanedState;
 } 

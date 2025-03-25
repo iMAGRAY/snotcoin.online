@@ -49,9 +49,9 @@ const ProfilePage: React.FC = () => {
   const getUserDisplayName = () => {
     if (!gameState.user) return "Player"
 
-    const { first_name, last_name, username } = gameState.user
-    if (first_name || last_name) {
-      return `${first_name || ""} ${last_name || ""}`.trim()
+    const { displayName, username } = gameState.user
+    if (displayName) {
+      return displayName
     }
     return username || "Player"
   }
@@ -117,7 +117,7 @@ const ProfilePage: React.FC = () => {
               >
                 <Image
                   src={
-                    gameState.user?.photo_url ||
+                    gameState.user?.pfp ||
                     ICONS.PROFILE.AVATAR.DEFAULT
                   }
                   alt="Profile"
@@ -137,7 +137,7 @@ const ProfilePage: React.FC = () => {
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>
-                      ID: {gameState.user?.id || "N/A"}
+                      FID: {gameState.user?.fid || "N/A"}
                     </motion.p>
                   </div>
                 </motion.div>

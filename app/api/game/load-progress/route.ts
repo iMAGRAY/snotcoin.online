@@ -1,100 +1,89 @@
 import { NextResponse } from 'next/server'
-import { UserModel, ProgressModel } from '../../../utils/models'
-import { verifyToken } from '../../../utils/jwt'
+import { PrismaClient } from '@prisma/client'
+import { verifyJWT } from '../../../utils/jwt'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
+
+const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
-  const requestStartTime = Date.now()
-
+  // Извлекаем токен из заголовка Authorization
+  const authHeader = request.headers.get('Authorization');
+  
+  // Проверяем наличие токена
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Отсутствует токен авторизации' }, { status: 401 });
+  }
+  
+  const token = authHeader.substring(7);
+  
   try {
-    // Получаем токен из заголовка
-    let token: string | null = null;
-    const authHeader = request.headers.get('Authorization');
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-    
-    // Валидация токена
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - no token' },
-        { status: 401 }
-      )
-    }
-    
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, userId, error: tokenError } = await verifyJWT(token);
     
-    if (!valid || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
-        { status: 401 }
-      )
-    }
-
-    // Получаем telegram_id из запроса
-    const url = new URL(request.url)
-    const telegramId = url.searchParams.get('telegramId')
-    
-    if (!telegramId) {
-      return NextResponse.json(
-        { error: 'Missing telegramId parameter' },
-        { status: 400 }
-      )
+    if (!valid || !userId) {
+      return NextResponse.json({
+        error: 'Невалидный токен авторизации',
+        details: tokenError
+      }, { status: 401 });
     }
     
-    // Проверяем, соответствует ли telegramId пользователю из токена
-    if (user.telegram_id.toString() !== telegramId) {
-      return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
-        { status: 403 }
-      )
+    // Находим пользователя по ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 });
     }
     
-    // Получаем данные пользователя из БД
-    const dbUser = await UserModel.findByTelegramId(parseInt(telegramId))
-    
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
-    }
-    
-    // Получаем прогресс пользователя
-    const progress = await ProgressModel.findByUserId(dbUser.id)
+    // Получаем прогресс для пользователя
+    const progress = await prisma.progress.findUnique({
+      where: { user_id: user.id }
+    });
     
     if (!progress) {
-      // Если прогресс не найден, создаем и возвращаем пустой начальный прогресс
+      // Если прогресса нет, возвращаем пустой прогресс
       return NextResponse.json({
-        game_state: {},
-        version: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+        success: true,
+        progress: {
+          userId: user.id,
+          level: 1,
+          experience: 0,
+          inventory: {
+            snot: 0,
+            snotCoins: 0,
+            items: []
+          },
+          lastUpdated: new Date()
+        }
+      });
     }
     
-    // Возвращаем данные прогресса пользователя
+    // Парсим game_state из JSON
+    const gameState = progress.game_state as Record<string, any>;
+    
+    // Если прогресс найден, возвращаем его
     return NextResponse.json({
-      game_state: progress.game_state,
-      version: progress.version,
-      created_at: progress.created_at,
-      updated_at: progress.updated_at
-    })
-    
+      success: true,
+      progress: {
+        userId: progress.user_id,
+        level: gameState?.level || 1,
+        experience: gameState?.experience || 0,
+        inventory: gameState?.inventory || {
+          snot: 0,
+          snotCoins: 0,
+          items: []
+        },
+        lastUpdated: progress.updated_at
+      }
+    });
   } catch (error) {
-    console.error('Error loading progress:', error)
+    console.error('Error loading progress:', error);
     
-    return NextResponse.json(
-      { error: 'Server error', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
-  } finally {
-    // Логируем время выполнения запроса
-    const requestEndTime = Date.now()
-    console.log(`Load progress request processed in ${requestEndTime - requestStartTime}ms`)
+    return NextResponse.json({
+      error: 'Ошибка при загрузке прогресса',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 } 

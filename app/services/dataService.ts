@@ -19,22 +19,22 @@ const MAX_PENDING_SAVES = 20;
 const INTEGRITY_CHECK_FIELDS = ['inventory'] as const;
 
 // Кэш для данных игры
-const gameStateCache = new Map<number, CacheEntry<ExtendedGameState>>();
+const gameStateCache = new Map<string, CacheEntry<ExtendedGameState>>();
 
 // Отслеживание последних сохранений для предотвращения частых запросов
-const lastSaveTimestamps = new Map<number, number>();
+const lastSaveTimestamps = new Map<string, number>();
 
 // Отслеживание версий для предотвращения конфликтов
-const stateVersions = new Map<number, number>();
+const stateVersions = new Map<string, number>();
 
 // Очередь сохранений для пакетной обработки
-const pendingSaves = new Map<number, ExtendedGameState>();
+const pendingSaves = new Map<string, ExtendedGameState>();
 
 // Таймер для пакетной обработки
 let batchSaveTimer: NodeJS.Timeout | null = null;
 
 // Хранилище резервных копий в памяти
-const backupStore = new Map<number, {
+const backupStore = new Map<string, {
   data: ExtendedGameState;
   timestamp: number;
 }>();
@@ -42,10 +42,10 @@ const backupStore = new Map<number, {
 /**
  * Сохраняет резервную копию состояния в памяти приложения
  */
-function saveBackup(telegramId: number, gameState: ExtendedGameState, error?: unknown): void {
+function saveBackup(userId: string, gameState: ExtendedGameState, error?: unknown): void {
   try {
-    if (gameState && telegramId) {
-      backupStore.set(telegramId, {
+    if (gameState && userId) {
+      backupStore.set(userId, {
         data: gameState,
         timestamp: Date.now()
       });
@@ -65,9 +65,9 @@ function saveBackup(telegramId: number, gameState: ExtendedGameState, error?: un
 /**
  * Получает резервную копию из памяти приложения
  */
-function getBackup(telegramId: number): ExtendedGameState | null {
+function getBackup(userId: string): ExtendedGameState | null {
   try {
-    const backup = backupStore.get(telegramId);
+    const backup = backupStore.get(userId);
     if (backup && backup.data) {
       return backup.data;
     }
@@ -123,8 +123,8 @@ function limitCacheSize(): void {
 /**
  * Восстанавливает данные из кэша
  */
-function restoreFromCache(telegramId: number, gameState: ExtendedGameState): ExtendedGameState {
-  const cachedEntry = gameStateCache.get(telegramId);
+function restoreFromCache(userId: string, gameState: ExtendedGameState): ExtendedGameState {
+  const cachedEntry = gameStateCache.get(userId);
   if (cachedEntry && cachedEntry.integrity) {
     // Создаем новый объект с данными из кэша для критических полей
     return {
@@ -138,9 +138,9 @@ function restoreFromCache(telegramId: number, gameState: ExtendedGameState): Ext
 /**
  * Сохраняет состояние игры с оптимизацией
  */
-export async function saveGameState(telegramId: number, gameState: ExtendedGameState): Promise<void> {
+export async function saveGameState(userId: string, gameState: ExtendedGameState): Promise<void> {
   try {
-    if (!telegramId || !gameState) {
+    if (!userId || !gameState) {
       throw new Error('Invalid arguments for saveGameState');
     }
     
@@ -148,13 +148,13 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     const isDataValid = checkDataIntegrity(gameState);
     if (!isDataValid) {
       // Пытаемся восстановить данные из кэша
-      gameState = restoreFromCache(telegramId, gameState);
+      gameState = restoreFromCache(userId, gameState);
     }
     
     // Обновляем версию состояния
-    const currentVersion = stateVersions.get(telegramId) || 0;
+    const currentVersion = stateVersions.get(userId) || 0;
     const newVersion = currentVersion + 1;
-    stateVersions.set(telegramId, newVersion);
+    stateVersions.set(userId, newVersion);
     
     // Подготавливаем состояние для сохранения
     const stateToSave = { 
@@ -164,7 +164,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     };
     
     // Обновляем кэш немедленно
-    gameStateCache.set(telegramId, {
+    gameStateCache.set(userId, {
       data: stateToSave,
       timestamp: Date.now(),
       version: newVersion,
@@ -176,7 +176,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     
     // Проверяем, не слишком ли часто сохраняем
     const now = Date.now();
-    const lastSave = lastSaveTimestamps.get(telegramId) || 0;
+    const lastSave = lastSaveTimestamps.get(userId) || 0;
     
     // Если прошло меньше времени, чем SAVE_DEBOUNCE_TIME, добавляем в очередь
     if (now - lastSave < SAVE_DEBOUNCE_TIME) {
@@ -185,7 +185,7 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
         await processBatchSaves();
       }
       
-      pendingSaves.set(telegramId, stateToSave);
+      pendingSaves.set(userId, stateToSave);
       
       // Запускаем таймер для пакетного сохранения, если еще не запущен
       if (!batchSaveTimer) {
@@ -195,16 +195,16 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
     }
     
     // Обновляем временную метку последнего сохранения
-    lastSaveTimestamps.set(telegramId, now);
+    lastSaveTimestamps.set(userId, now);
     
     // Добавляем в очередь сохранений
     saveQueue.enqueue(async () => {
-      await saveToPostgres(telegramId, stateToSave);
+      await saveToPostgres(userId, stateToSave);
     });
     
   } catch (error) {
     // Ошибка сохранения состояния
-    saveBackup(telegramId, gameState, error);
+    saveBackup(userId, gameState, error);
     throw error;
   }
 }
@@ -212,16 +212,16 @@ export async function saveGameState(telegramId: number, gameState: ExtendedGameS
 /**
  * Сохраняет состояние в PostgreSQL с повторными попытками
  */
-async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, attempt = 1): Promise<void> {
+async function saveToPostgres(userId: string, gameState: ExtendedGameState, attempt = 1): Promise<void> {
   try {
     // Проверка целостности данных перед отправкой
     if (!checkDataIntegrity(gameState)) {
       // Пытаемся восстановить данные из кэша перед отправкой
-      gameState = restoreFromCache(telegramId, gameState);
+      gameState = restoreFromCache(userId, gameState);
       
       // Если после восстановления данные все еще некорректны, создаем резервную копию и выходим
       if (!checkDataIntegrity(gameState)) {
-        saveBackup(telegramId, gameState, new Error('Data integrity check failed'));
+        saveBackup(userId, gameState, new Error('Data integrity check failed'));
         throw new Error('Data integrity check failed, unable to save to server');
       }
     }
@@ -305,7 +305,7 @@ async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, 
             _compression: 'lz-string-utf16',
             _compressedAt: new Date().toISOString(),
             _integrity: {
-              telegramId,
+              userId,
               saveVersion: gameState._saveVersion,
               snot: gameState.inventory?.snot,
               snotCoins: gameState.inventory?.snotCoins
@@ -339,7 +339,7 @@ async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, 
           'Authorization': token ? `Bearer ${token}` : ''
         },
         body: JSON.stringify({ 
-          telegramId, 
+          userId, 
           gameState: stateToSend,
           clientTimestamp: new Date().toISOString(),
           isCompressed
@@ -358,7 +358,7 @@ async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, 
       
       // Обновляем версию на основе ответа сервера
       if (result.version) {
-        stateVersions.set(telegramId, result.version);
+        stateVersions.set(userId, result.version);
       }
       
     } catch (fetchError) {
@@ -377,11 +377,11 @@ async function saveToPostgres(telegramId: number, gameState: ExtendedGameState, 
     if (attempt < MAX_RETRY_ATTEMPTS && (isNetworkError || error instanceof TypeError)) {
       const retryDelay = RETRY_DELAY * Math.pow(2, attempt - 1); // Экспоненциальная задержка
       await new Promise(resolve => setTimeout(resolve, retryDelay));
-      return saveToPostgres(telegramId, gameState, attempt + 1);
+      return saveToPostgres(userId, gameState, attempt + 1);
     }
     
     // Создаем резервную копию при окончательной неудаче
-    saveBackup(telegramId, gameState, error);
+    saveBackup(userId, gameState, error);
     throw error;
   }
 }
@@ -405,26 +405,26 @@ async function processBatchSaves(): Promise<void> {
     const backupSaves = new Map(savesToProcess);
     
     // Массив для отслеживания сбойных сохранений
-    const failedSaves: [number, ExtendedGameState][] = [];
+    const failedSaves: [string, ExtendedGameState][] = [];
     
     // Обрабатываем каждое сохранение
     const savePromises: Promise<void>[] = [];
     
-    savesToProcess.forEach((state, telegramId) => {
+    savesToProcess.forEach((state, userId) => {
       // Создаем резервную копию перед сохранением
-      saveBackup(telegramId, state);
+      saveBackup(userId, state);
       
       // Обновляем временную метку последнего сохранения
-      lastSaveTimestamps.set(telegramId, Date.now());
+      lastSaveTimestamps.set(userId, Date.now());
       
       // Добавляем операцию в массив промисов с обработкой ошибок
       const savePromise = saveQueue.enqueue(async () => {
         try {
-          await saveToPostgres(telegramId, state);
+          await saveToPostgres(userId, state);
         } catch (saveError) {
-          console.error(`Ошибка сохранения для пользователя ${telegramId}:`, saveError);
+          console.error(`Ошибка сохранения для пользователя ${userId}:`, saveError);
           // Сохраняем информацию о неудачном сохранении
-          failedSaves.push([telegramId, state]);
+          failedSaves.push([userId, state]);
         }
       }) as Promise<void>;
       
@@ -440,83 +440,67 @@ async function processBatchSaves(): Promise<void> {
       console.warn(`${failedSaves.length} сохранений не удалось выполнить, планируем повторную попытку`);
       
       // Добавляем неудачные сохранения обратно в очередь
-      for (const [telegramId, state] of failedSaves) {
-        pendingSaves.set(telegramId, state);
+      for (const [userId, state] of failedSaves) {
+        pendingSaves.set(userId, state);
       }
       
       // Запускаем таймер для повторной попытки с меньшим интервалом
       batchSaveTimer = setTimeout(
         () => processBatchSaves(), 
-        Math.floor(SAVE_DEBOUNCE_TIME / 2)
+        Math.min(SAVE_DEBOUNCE_TIME / 2, 5000)
       );
     }
-  } catch (batchError) {
-    console.error('Критическая ошибка при пакетном сохранении:', batchError);
+  } catch (error) {
+    console.error('Ошибка в процессе пакетной обработки сохранений:', error);
     
-    // В случае критической ошибки, пробуем сохранить каждое состояние индивидуально
-    try {
-      const failedBatchIds = Array.from(pendingSaves.keys());
-      console.warn(`Попытка индивидуального сохранения для ${failedBatchIds.length} пользователей`);
-      
-      // Очищаем текущую очередь
-      pendingSaves.clear();
-      
-      // Запускаем индивидуальное сохранение для каждого пользователя с увеличенным таймаутом
-      for (const [telegramId, state] of Array.from(pendingSaves.entries())) {
-        saveQueue.enqueue(async () => {
-          try {
-            await saveToPostgres(telegramId, state);
-          } catch (individualError) {
-            console.error(`Индивидуальная ошибка сохранения для пользователя ${telegramId}:`, individualError);
-            // Создаем резервную копию при окончательной неудаче
-            saveBackup(telegramId, state, individualError);
-          }
-        });
+    // Пробуем индивидуально сохранить каждое состояние при ошибке пакетной обработки
+    for (const [userId, state] of Array.from(pendingSaves.entries())) {
+      try {
+        await saveToPostgres(userId, state);
+      } catch (individualError) {
+        console.error(`Индивидуальная ошибка сохранения для пользователя ${userId}:`, individualError);
+        // Создаем резервную копию при ошибке
+        saveBackup(userId, state, individualError);
       }
-    } catch (finalError) {
-      console.error('Критическая ошибка при индивидуальном сохранении:', finalError);
     }
+    
+    // Очищаем очередь после индивидуальных попыток
+    pendingSaves.clear();
   }
 }
 
 /**
- * Загружает состояние игры с кэшированием
+ * Загружает состояние игры с оптимизацией
  */
-export async function loadGameState(telegramId: number): Promise<ExtendedGameState | null> {
+export async function loadGameState(userId: string): Promise<ExtendedGameState | null> {
   try {
-    if (!telegramId) {
-      return null;
+    if (!userId) {
+      throw new Error('Invalid userId for loadGameState');
     }
     
-    // Проверяем кэш
-    const cachedEntry = gameStateCache.get(telegramId);
-    if (cachedEntry && Date.now() - cachedEntry.timestamp < CACHE_TTL) {
-      // Проверяем целостность кэшированных данных
-      if (cachedEntry.integrity) {
-        return cachedEntry.data;
-      }
+    // Проверяем кэш сначала
+    const cachedEntry = gameStateCache.get(userId);
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_TTL) && cachedEntry.integrity) {
+      return cachedEntry.data;
     }
     
-    // Пробуем загрузить резервную копию из памяти, если загрузка с сервера не удалась
+    // Переменная для хранения резервной копии
     let backupData: ExtendedGameState | null = null;
-    try {
-      backupData = getBackup(telegramId);
-    } catch (backupError) {
-      // Ошибка чтения резервной копии
-    }
     
-    // Загружаем данные с сервера
-    // Устанавливаем таймаут для запроса
+    // Проверяем, есть ли резервная копия
+    backupData = getBackup(userId);
+    
+    // Настраиваем таймаут для запроса
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-секундный таймаут
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-секундный таймаут
     
     try {
-      // Получаем токен авторизации
+      // Получаем токен авторизации, если он есть
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/game/load-progress?telegramId=${telegramId}`, {
-        method: 'GET',
+      
+      // Делаем запрос к API
+      const response = await fetch(`/api/game/load-progress?userId=${userId}`, {
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
         signal: controller.signal
@@ -524,29 +508,43 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
       
       clearTimeout(timeoutId);
       
-      // В случае 404 (пользователь не найден) возвращаем резервную копию или null
-      if (response.status === 404) {
-        return backupData;
-      }
-      
       if (!response.ok) {
+        // Если ответ не 200 OK, используем резервную копию
+        if (backupData) {
+          return backupData;
+        }
+        
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to load game progress');
       }
       
+      // Получаем данные из ответа
       const data = await response.json();
       
-      // Проверяем, является ли полученный результат сжатым состоянием
+      if (!data.progress) {
+        // Если данных нет, используем резервную копию
+        if (backupData) {
+          return backupData;
+        }
+        
+        return null;
+      }
+      
+      // Создаем правильно типизированную переменную
       let typedData: ExtendedGameState;
       
+      // Проверяем, сжаты ли данные
       if (isCompressedGameState(data)) {
+        // Распаковываем сжатые данные
         try {
-          // Распаковываем сжатые данные
-          const { decompressGameState } = await import('../utils/saveQueue');
-          const decompressedData = await decompressGameState(data);
+          const LZString = await import('lz-string');
+          const decompressed = LZString.decompressFromUTF16(data._compressedData);
           
-          console.log('Данные успешно распакованы из сжатого формата');
-          typedData = decompressedData as ExtendedGameState;
+          if (!decompressed) {
+            throw new Error('Decompression failed, got empty result');
+          }
+          
+          typedData = JSON.parse(decompressed) as ExtendedGameState;
         } catch (decompressError) {
           console.error('Ошибка при распаковке сжатых данных:', decompressError);
           // В случае ошибки распаковки, возвращаем резервную копию
@@ -568,7 +566,7 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
       }
       
       // Обновляем кэш
-      gameStateCache.set(telegramId, {
+      gameStateCache.set(userId, {
         data: typedData,
         timestamp: Date.now(),
         version: typedData._saveVersion || 0,
@@ -579,7 +577,7 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
       limitCacheSize();
       
       // Обновляем версию
-      stateVersions.set(telegramId, typedData._saveVersion || 0);
+      stateVersions.set(userId, typedData._saveVersion || 0);
       
       return typedData;
     } catch (fetchError) {
@@ -597,7 +595,7 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
     // Ошибка загрузки состояния игры
     
     // В случае критической ошибки, пробуем вернуть данные из кэша, даже если они просрочены
-    const cachedEntry = gameStateCache.get(telegramId);
+    const cachedEntry = gameStateCache.get(userId);
     if (cachedEntry) {
       return cachedEntry.data;
     }
@@ -609,22 +607,22 @@ export async function loadGameState(telegramId: number): Promise<ExtendedGameSta
 /**
  * Принудительно сохраняет состояние игры
  */
-export async function forceSaveGameState(telegramId: number, gameState: ExtendedGameState): Promise<void> {
+export async function forceSaveGameState(userId: string, gameState: ExtendedGameState): Promise<void> {
   try {
-    if (!telegramId || !gameState) {
+    if (!userId || !gameState) {
       throw new Error('Invalid arguments for forceSaveGameState');
     }
     
     // Проверяем целостность данных перед сохранением
     const isDataValid = checkDataIntegrity(gameState);
     if (!isDataValid) {
-      gameState = restoreFromCache(telegramId, gameState);
+      gameState = restoreFromCache(userId, gameState);
     }
     
     // Обновляем версию состояния
-    const currentVersion = stateVersions.get(telegramId) || 0;
+    const currentVersion = stateVersions.get(userId) || 0;
     const newVersion = currentVersion + 1;
-    stateVersions.set(telegramId, newVersion);
+    stateVersions.set(userId, newVersion);
     
     // Подготавливаем состояние для сохранения
     const stateToSave = { 
@@ -636,10 +634,10 @@ export async function forceSaveGameState(telegramId: number, gameState: Extended
     };
     
     // Создаем резервную копию в памяти при принудительном сохранении
-    saveBackup(telegramId, stateToSave);
+    saveBackup(userId, stateToSave);
     
     // Обновляем кэш
-    gameStateCache.set(telegramId, {
+    gameStateCache.set(userId, {
       data: stateToSave,
       timestamp: Date.now(),
       version: newVersion,
@@ -647,15 +645,15 @@ export async function forceSaveGameState(telegramId: number, gameState: Extended
     });
     
     // Обновляем временную метку последнего сохранения
-    lastSaveTimestamps.set(telegramId, Date.now());
+    lastSaveTimestamps.set(userId, Date.now());
     
     // Очищаем очередь ожидающих сохранений
-    if (pendingSaves.has(telegramId)) {
-      pendingSaves.delete(telegramId);
+    if (pendingSaves.has(userId)) {
+      pendingSaves.delete(userId);
     }
     
     // Сохраняем напрямую, без очереди и с таймаутом
-    const savePromise = saveToPostgres(telegramId, stateToSave);
+    const savePromise = saveToPostgres(userId, stateToSave);
     
     // Устанавливаем максимальное время ожидания для принудительного сохранения
     const timeoutPromise = new Promise<void>((_, reject) => {
@@ -674,7 +672,7 @@ export async function forceSaveGameState(telegramId: number, gameState: Extended
     // Ошибка принудительного сохранения
     
     // Создаем резервную копию в памяти
-    saveBackup(telegramId, gameState, error);
+    saveBackup(userId, gameState, error);
     throw error;
   }
 }
@@ -682,19 +680,19 @@ export async function forceSaveGameState(telegramId: number, gameState: Extended
 /**
  * Очищает кэш для пользователя
  */
-export function invalidateCache(telegramId: number): void {
-  gameStateCache.delete(telegramId);
+export function invalidateCache(userId: string): void {
+  gameStateCache.delete(userId);
 }
 
 /**
- * Проверяет, есть ли несохраненные изменения
+ * Проверяет, есть ли ожидающие изменения для данного пользователя
  */
-export function hasPendingChanges(telegramId: number): boolean {
-  return pendingSaves.has(telegramId);
+export function hasPendingChanges(userId: string): boolean {
+  return pendingSaves.has(userId);
 }
 
 /**
- * Сохраняет все несохраненные изменения
+ * Сохраняет все ожидающие изменения немедленно
  */
 export async function saveAllPendingChanges(): Promise<void> {
   if (pendingSaves.size > 0) {
@@ -703,9 +701,9 @@ export async function saveAllPendingChanges(): Promise<void> {
 }
 
 /**
- * Настраивает обработчики событий для сохранения при выходе
+ * Настраивает обработчик для события beforeunload
  */
-export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () => ExtendedGameState): () => void {
+export function setupBeforeUnloadHandler(userId: string, getLatestState: () => ExtendedGameState): () => void {
   if (typeof window === 'undefined') return () => {};
   
   const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -716,7 +714,7 @@ export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () 
       state._isBeforeUnloadSave = true;
       
       // Сохраняем в память как резервную копию
-      saveBackup(telegramId, state);
+      saveBackup(userId, state);
       
       // Используем Beacon API для надежной отправки перед закрытием
       if (navigator.sendBeacon) {
@@ -725,7 +723,7 @@ export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () 
         
         // Подготавливаем данные для отправки
         const payload = {
-          telegramId,
+          userId,
           gameState: state,
           clientTimestamp: new Date().toISOString(),
           token: token // Добавляем токен напрямую в данные, так как нельзя установить заголовки в sendBeacon
@@ -755,72 +753,53 @@ export function setupBeforeUnloadHandler(telegramId: number, getLatestState: () 
 }
 
 /**
- * Очищает все кэши и очереди
+ * Очищает все кэши и состояния
  */
 export function clearAllCaches(): void {
   gameStateCache.clear();
   lastSaveTimestamps.clear();
   stateVersions.clear();
   pendingSaves.clear();
+  backupStore.clear();
   
   if (batchSaveTimer) {
     clearTimeout(batchSaveTimer);
     batchSaveTimer = null;
   }
-  
-  saveQueue.clear();
 }
 
-// Удаляем проверку энергии при загрузке
+/**
+ * Валидирует данные игры
+ */
 export function validateGameData(data: any): boolean {
-  if (!data || 
-      !data.inventory || 
-      data.inventory.snotCoins === undefined ||
-      !data.container ||
-      !data.upgrades ||
-      !data.settings ||
-      !data.soundSettings) {
-    console.error("Невозможно загрузить данные игры: данные некорректны или отсутствуют");
+  // Базовая проверка
+  if (!data || typeof data !== 'object') {
     return false;
   }
-
-  // Проверяем основные поля инвентаря
-  const requiredFields = ['snot', 'snotCoins', 'containerSnot', 'containerCapacity'];
-  for (const field of requiredFields) {
-    if (typeof data.inventory[field] !== 'number' || isNaN(data.inventory[field])) {
-      console.error(`Некорректное значение поля ${field} в инвентаре:`, data.inventory[field]);
-      return false;
-    }
+  
+  // Проверка обязательных полей
+  if (!data.inventory || !data.user || !data.container) {
+    return false;
   }
-
-  // Удаляем проверку энергии
+  
+  // Проверка типов данных
+  if (typeof data.inventory.snot !== 'number' || 
+      typeof data.inventory.snotCoins !== 'number') {
+    return false;
+  }
+  
+  // Проверка пользовательских данных
+  if (!data.user.id) {
+    return false;
+  }
   
   return true;
 }
 
 /**
- * Отменяет все текущие запросы и очищает очереди
+ * Отменяет все активные запросы
  */
 export function cancelAllRequests(): void {
-  try {
-    // Очищаем все сохранения в очереди
-    saveQueue.clear();
-    
-    // Очищаем ожидающие сохранения
-    pendingSaves.clear();
-    
-    // Очищаем таймер пакетного сохранения
-    if (batchSaveTimer) {
-      clearTimeout(batchSaveTimer);
-      batchSaveTimer = null;
-    }
-    
-    // Сбрасываем временные метки для предотвращения троттлинга после выхода
-    lastSaveTimestamps.clear();
-    
-    // Не очищаем кэш и резервные копии, так как они могут быть полезны
-    // при повторном входе
-  } catch (error) {
-    console.error("Error cancelling requests:", error);
-  }
+  // Можно реализовать с помощью AbortController, если необходимо
+  console.warn('cancelAllRequests: Not implemented');
 } 

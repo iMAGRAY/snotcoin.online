@@ -6,7 +6,7 @@ import dynamic from "next/dynamic"
 import { GameProvider, useGameState, useGameDispatch } from "../contexts/GameContext"
 import { TranslationProvider } from "../contexts/TranslationContext"
 import type { Action } from "../types/gameTypes"
-import type { TelegramWebApp } from "../types/telegram"
+import { useFarcaster } from "../contexts/FarcasterContext"
 const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
   ssr: false,
 })
@@ -84,6 +84,7 @@ const HomeContent: React.FC = () => {
   const gameState = useGameState()
   const [viewportHeight, setViewportHeight] = React.useState("100vh")
   const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const { user: farcasterUser, isAuthenticated: isFarcasterAuth } = useFarcaster();
   
   // Создаем ref на уровне компонента, а не внутри эффекта
   const hasDispatchedLoginRef = useRef(false);
@@ -91,32 +92,9 @@ const HomeContent: React.FC = () => {
   const sessionCheckErrorCountRef = useRef(0);
   // Добавляем ref для отслеживания состояния проверки сессии
   const isCheckingSessionRef = useRef(false);
-  
-  // Инициализируем Telegram WebApp API при монтировании компонента
-  useEffect(() => {
-    // Сигнализируем Telegram о готовности WebApp и расширяем его
-    if (window.Telegram?.WebApp) {
-      console.log('[Telegram WebApp] Вызов метода ready() для инициализации WebApp');
-      
-      // Приводим к правильному типу
-      const webApp = window.Telegram.WebApp as TelegramWebApp;
-      
-      // Сообщаем Telegram, что приложение загружено и готово к работе
-      webApp.ready();
-      
-      // Расширяем приложение на весь экран
-      webApp.expand();
-      
-      // Устанавливаем обработчик для сообщений от MainButton
-      if (webApp.MainButton) {
-        webApp.MainButton.onClick(() => {
-          console.log('[Telegram WebApp] MainButton нажата');
-        });
-      }
-    } else {
-      console.warn('[Telegram WebApp] API не найден при инициализации. WebApp может работать некорректно.');
-    }
-  }, []);
+
+  // Также добавляем состояние для загрузки данных пользователя
+  const [isUserDataLoading, setIsUserDataLoading] = React.useState(false)
 
   const memoizedCheckAuth = useCallback(() => {
     const prevAuthState = isAuthenticated;
@@ -158,42 +136,47 @@ const HomeContent: React.FC = () => {
     }
   }, [memoizedCheckAuth])
 
-  // Используем один эффект для обработки аутентификации и всех связанных действий
+  // Обновляем авторизацию с Farcaster, когда пользователь меняется
   useEffect(() => {
-    // Предотвращаем выполнение, если проверка аутентификации не завершена
-    if (!isAuthenticated || !gameState.user?.telegram_id) {
-      return;
-    }
-    
-    // Если пользователь аутентифицирован впервые
-    if (!hasDispatchedLoginRef.current) {
-      // Сбрасываем связанные флаги
-      dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+    if (farcasterUser && isFarcasterAuth) {
+      dispatch({ type: "SET_USER", payload: {
+        id: farcasterUser.id,
+        farcaster_fid: farcasterUser.fid,
+        username: farcasterUser.username,
+        displayName: farcasterUser.displayName
+      }});
+      setIsAuthenticated(true);
       
-      dispatch({ type: "LOGIN" });
-      
-      // Устанавливаем laboratory как активную вкладку (если не установлено)
-      if (gameState.activeTab !== "laboratory") {
-        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-      }
-      
-      // Инициируем загрузку данных пользователя
-      dispatch({ type: "LOAD_USER_DATA", payload: { isLoading: true } });
-      
-      hasDispatchedLoginRef.current = true;
-      
-      // Завершаем загрузку через 3 секунды
-      const timer = setTimeout(() => {
-        dispatch({ type: "LOAD_USER_DATA", payload: { isLoading: false } });
+      if (!hasDispatchedLoginRef.current) {
+        dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+        dispatch({ type: "LOGIN" });
         
-        // Дополнительная защита для гарантии правильного состояния
-        if (gameState.activeTab !== "laboratory" || gameState.hideInterface) {
-          dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+        if (gameState.activeTab !== "laboratory") {
           dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
         }
-      }, 3000);
-      
-      return () => clearTimeout(timer);
+        
+        // Устанавливаем состояние загрузки данных
+        setIsUserDataLoading(true);
+        
+        hasDispatchedLoginRef.current = true;
+        
+        const timer = setTimeout(() => {
+          // Снимаем состояние загрузки данных
+          setIsUserDataLoading(false);
+          
+          if (gameState.activeTab !== "laboratory" || gameState.hideInterface) {
+            dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+            dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+          }
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+      }
+    } else {
+      if (isAuthenticated) {
+        setIsAuthenticated(false);
+        dispatch({ type: "SET_USER", payload: null });
+      }
     }
     
     // Проверяем, нужно ли сбросить состояние
@@ -205,222 +188,94 @@ const HomeContent: React.FC = () => {
         dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
       }
     }
-  }, [isAuthenticated, gameState.user?.telegram_id, dispatch, gameState.hideInterface, gameState.activeTab]);
+  }, [isFarcasterAuth, farcasterUser, dispatch, gameState.hideInterface, gameState.activeTab, isAuthenticated]);
 
-  // Подписываемся на событие истечения сессии и проверяем актуальность авторизации
+  // Фиксим мобильный viewport
   useEffect(() => {
-    if (!isAuthenticated || !gameState.user?.telegram_id) {
-      return; // Не проверяем сессию, если пользователь не аутентифицирован
+    const fixViewportHeight = () => {
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty("--vh", `${vh}px`)
+      setViewportHeight(`${window.innerHeight}px`)
     }
-    
-    // Обработчик истечения сессии
-    const handleSessionExpired = () => {
-      // Предотвращаем ререндер, если уже выполняется выход
-      if (!isAuthenticated) return;
-      
-      authStore.clearAuthData();
-      setIsAuthenticated(false);
-      dispatch({ type: "SET_USER", payload: null });
-    };
-    
-    // Проверка статуса сессии
-    const checkSession = async () => {
-      // Предотвращаем одновременные проверки
-      if (isCheckingSessionRef.current || !isAuthenticated || !gameState.user?.telegram_id) {
-        return;
-      }
-      
-      isCheckingSessionRef.current = true;
-      
-      try {
-        // Получаем токен авторизации
-        const authToken = authStore.getAuthToken();
-        if (!authToken) {
-          handleSessionExpired();
-          isCheckingSessionRef.current = false;
-          return;
-        }
-        
-        // Подготавливаем токен для заголовка
-        const token = typeof authToken === 'string' ? authToken : JSON.stringify(authToken);
-        
-        // Проверяем статус авторизации через API
-        const response = await fetch('/api/auth/check-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            telegram_id: gameState.user.telegram_id
-          })
-        });
-        
-        if (!response.ok) {
-          handleSessionExpired();
-          sessionCheckErrorCountRef.current = 0; // Сбрасываем счетчик ошибок
-        } else {
-          // Сбрасываем счетчик ошибок при успешном запросе
-          sessionCheckErrorCountRef.current = 0;
-        }
-      } catch (error) {
-        // Учитываем количество неудачных попыток подключения
-        sessionCheckErrorCountRef.current += 1;
-        
-        // Если ошибки сети продолжаются слишком долго, выполняем logout
-        if (sessionCheckErrorCountRef.current > 3) {
-          handleSessionExpired();
-          sessionCheckErrorCountRef.current = 0;
-        }
-      } finally {
-        isCheckingSessionRef.current = false;
-      }
-    };
-    
-    window.addEventListener('session_expired', handleSessionExpired);
-    
-    // Выполняем первую проверку с задержкой
-    const initialCheckTimeout = setTimeout(() => {
-      checkSession();
-    }, 10000); // Задержка в 10 секунд перед первой проверкой
-    
-    // Настраиваем периодическую проверку сессии
-    const sessionCheckInterval = setInterval(checkSession, 5 * 60 * 1000);
-    
-    return () => {
-      window.removeEventListener('session_expired', handleSessionExpired);
-      clearTimeout(initialCheckTimeout);
-      clearInterval(sessionCheckInterval);
-    };
-  }, [isAuthenticated, gameState.user, dispatch]);
 
-  const handleAuthentication = useCallback(
-    (userData: any) => {
-      // Сбрасываем связанные флаги
-      dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-      
-      // Устанавливаем пользователя
-      dispatch({ type: "SET_USER", payload: userData });
-      
-      // Явно устанавливаем laboratory как активную вкладку
-      dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-      
-      // Меняем состояние аутентификации последним, чтобы эффекты сработали корректно
-      setIsAuthenticated(true);
-    },
-    [dispatch],
-  )
+    fixViewportHeight()
+    window.addEventListener("resize", fixViewportHeight)
+    return () => window.removeEventListener("resize", fixViewportHeight)
+  }, [])
 
-  const renderActivePage = useMemo(() => {
-    // Если после аутентификации активная вкладка всё ещё не установлена,
-    // используем Laboratory по умолчанию
-    if (!gameState.activeTab && isAuthenticated) {
-      // Устанавливаем активную вкладку, чтобы в следующий раз она была определена
-      setTimeout(() => {
-        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-      }, 0);
-      return <Laboratory />;
+  const renderActiveTab = () => {
+    if (isUserDataLoading || !isAuthenticated) {
+      return (
+        <LoadingScreen
+          progress={isUserDataLoading ? 75 : 0}
+          statusMessage={isUserDataLoading ? "Загрузка данных..." : "Инициализация..."}
+        />
+      )
     }
-    
-    // Обработка других вкладок
+
     switch (gameState.activeTab) {
       case "laboratory":
         return <Laboratory />
       case "storage":
         return <Storage />
-      case "quests":
-        return <Quests />
       case "profile":
         return <ProfilePage />
+      case "quests":
+        return <Quests />
       default:
-        // Если ни один из кейсов не сработал, используем Laboratory
         return <Laboratory />
     }
-  }, [gameState.activeTab, isAuthenticated, dispatch])
-
-  const handleLogout = useCallback(() => {
-    // Очищаем данные авторизации в нашем хранилище
-    authStore.clearAuthData();
-    
-    // Обновляем состояние аутентификации
-    setIsAuthenticated(false);
-    
-    // Сбрасываем состояние в GameContext
-    dispatch({ type: "SET_USER", payload: null });
-    dispatch({ type: "RESET_GAME_STATE" });
-    
-    // Очищаем ref для повторной авторизации
-    hasDispatchedLoginRef.current = false;
-    
-    // Уведомляем другие части приложения о выходе
-    const logoutEvent = new Event('logout');
-    window.dispatchEvent(logoutEvent);
-  }, [dispatch]);
-
-  if (!isAuthenticated) {
-    return <AuthenticationWindow onAuthenticate={handleAuthentication} />
   }
 
+  // Функция для обработки аутентификации
+  const handleAuthentication = (userData: any) => {
+    // Обработка успешной аутентификации
+    console.log('Authenticated:', userData);
+  };
+
   return (
-    <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
-      <main
-        className="flex flex-col w-full overflow-hidden bg-gradient-to-b from-gray-900 to-black relative"
-        style={{
-          height: viewportHeight,
-          maxHeight: viewportHeight,
-          maxWidth: "100vw",
-          margin: "0 auto",
-          backgroundColor: "var(--tg-theme-bg-color, #1c1c1e)",
-          color: "var(--tg-theme-text-color, #ffffff)",
-        }}
-      >
-        {gameState.isLoading ? (
-          <LoadingScreen progress={75} statusMessage="Initializing game..." />
-        ) : (
-          <div className="flex flex-col h-full">
-            {gameState.activeTab !== "profile" && !gameState.hideInterface && (
-              <Suspense fallback={<LoadingScreen progress={50} statusMessage="Loading resources..." />}>
-                <Resources
-                  isVisible={true}
-                  activeTab={gameState.activeTab}
-                  snot={gameState.inventory.snot}
-                  snotCoins={gameState.inventory.snotCoins}
-                />
-              </Suspense>
-            )}
-            <div className="flex-grow relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50 z-10" />
-              <div className="relative z-20 h-full overflow-y-auto">
-                <AnimatePresence mode="wait">
-                  <Suspense fallback={<LoadingScreen progress={75} statusMessage="Loading content..." />}>
-                    <ErrorBoundary fallback={<ErrorDisplay message="Failed to load game content. Please try again." />}>
-                      {renderActivePage}
-                    </ErrorBoundary>
-                  </Suspense>
-                </AnimatePresence>
-              </div>
-            </div>
-            {!gameState.hideInterface && (
-              <Suspense fallback={<LoadingScreen progress={90} statusMessage="Loading navigation..." />}>
-                <TabBar />
-              </Suspense>
-            )}
-          </div>
-        )}
-      </main>
-    </ErrorBoundary>
+    <div
+      className="game-container flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800"
+      style={{ height: viewportHeight }}
+    >
+      {!isAuthenticated ? (
+        <AnimatePresence mode="wait">
+          <AuthenticationWindow key="auth" onAuthenticate={handleAuthentication} />
+        </AnimatePresence>
+      ) : (
+        <>
+          {!gameState.hideInterface && (
+            <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md">
+              <Resources 
+                isVisible={true} 
+                activeTab={gameState.activeTab} 
+                snot={0} 
+                snotCoins={0} 
+              />
+            </header>
+          )}
+
+          <main className="flex-grow overflow-hidden relative">
+            <ErrorBoundary fallback={<ErrorDisplay message="Произошла непредвиденная ошибка в игре. Попробуйте перезагрузить страницу." />}>
+              {renderActiveTab()}
+            </ErrorBoundary>
+          </main>
+
+          {!gameState.hideInterface && <TabBar />}
+        </>
+      )}
+    </div>
   )
 }
 
 export default function HomeContentWrapper() {
+  // Wrap the component in error boundary
   return (
-    <GameProvider>
-      <TranslationProvider>
-        <ErrorBoundary fallback={<ErrorDisplay message="An unexpected error occurred. Please try again." />}>
-          <HomeContent />
-        </ErrorBoundary>
-      </TranslationProvider>
-    </GameProvider>
+    <ErrorBoundary fallback={<ErrorDisplay message="Не удалось загрузить игру. Пожалуйста, перезагрузите страницу." />}>
+      <Suspense fallback={<LoadingScreen progress={10} statusMessage="Загрузка игры..." />}>
+        <HomeContent />
+      </Suspense>
+    </ErrorBoundary>
   )
 }
 

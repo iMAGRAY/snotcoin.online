@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { generateJWT, generateRefreshToken, verifyJWT } from '@/app/utils/jwt';
 
 const prisma = new PrismaClient();
 
@@ -37,10 +37,9 @@ export async function POST(request: NextRequest) {
       user = await prisma.user.create({
         data: {
           farcaster_fid: Number(fid),
-          farcaster_username: username,
+          farcaster_username: username || `user${fid}`,
           farcaster_displayname: displayName,
-          farcaster_pfp: pfp,
-          auth_type: 'farcaster'
+          farcaster_pfp: pfp
         }
       });
     } else {
@@ -50,28 +49,36 @@ export async function POST(request: NextRequest) {
           id: user.id
         },
         data: {
-          farcaster_username: username,
+          farcaster_username: username || user.farcaster_username,
           farcaster_displayname: displayName,
-          farcaster_pfp: pfp,
-          auth_type: 'farcaster'
+          farcaster_pfp: pfp
         }
       });
     }
     
     // Создаем JWT токен
-    const token = jwt.sign(
-      { userId: user.id },
-      JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const { token: accessToken, expiresAt } = await generateJWT(user.id);
     
-    // Устанавливаем куки
+    // Создаем refresh токен
+    const { token: refreshToken } = await generateRefreshToken(user.id);
+    
+    // Устанавливаем основной токен в куки
     cookies().set({
       name: 'session',
-      value: token,
+      value: accessToken,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 30 * 24 * 60 * 60, // 30 дней
+      path: '/'
+    });
+    
+    // Устанавливаем refresh токен в куки
+    cookies().set({
+      name: 'refresh_token',
+      value: refreshToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 90 * 24 * 60 * 60, // 90 дней
       path: '/'
     });
     
@@ -84,6 +91,11 @@ export async function POST(request: NextRequest) {
         username: user.farcaster_username,
         displayName: user.farcaster_displayname,
         pfp: user.farcaster_pfp
+      },
+      tokens: {
+        accessToken,
+        refreshToken,
+        expiresAt
       }
     });
   } catch (error) {
@@ -113,29 +125,40 @@ export async function GET(request: NextRequest) {
     }
     
     // Верифицируем JWT токен
-    const decodedToken = jwt.verify(sessionCookie.value, JWT_SECRET) as {
-      userId: string;
-    };
+    const { valid, userId, error } = await verifyJWT(sessionCookie.value);
     
-    if (!decodedToken || !decodedToken.userId) {
+    if (!valid || !userId) {
+      // Пробуем обновить токен через refresh_token
+      const refreshTokenCookie = cookies().get('refresh_token');
+      
+      if (refreshTokenCookie) {
+        // Попытка обновить токены через refresh token
+        // Эта логика должна быть реализована в отдельном API маршруте
+        return NextResponse.json({
+          authenticated: false,
+          refreshable: true,
+          message: 'Токен истек, но может быть обновлен'
+        });
+      }
+      
       return NextResponse.json({
         authenticated: false,
-        message: 'Неверный токен сессии'
+        message: 'Неверный токен сессии',
+        error
       });
     }
     
     // Находим пользователя по ID
     const user = await prisma.user.findUnique({
       where: {
-        id: decodedToken.userId
+        id: userId
       },
       select: {
         id: true,
         farcaster_fid: true,
         farcaster_username: true,
         farcaster_displayname: true,
-        farcaster_pfp: true,
-        auth_type: true
+        farcaster_pfp: true
       }
     });
     
@@ -143,14 +166,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         authenticated: false,
         message: 'Пользователь не найден'
-      });
-    }
-    
-    // Проверяем, что пользователь авторизован через Farcaster
-    if (user.auth_type !== 'farcaster') {
-      return NextResponse.json({
-        authenticated: false,
-        message: 'Пользователь авторизован не через Farcaster'
       });
     }
     

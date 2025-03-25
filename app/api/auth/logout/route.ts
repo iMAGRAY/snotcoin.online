@@ -2,20 +2,25 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 /**
- * Обработчик запросов на выход из системы
+ * Обработчик для выхода из системы
  */
 export async function POST() {
   try {
-    // Удаляем куки сессии
+    // Удаляем оба куки: session и refresh_token
     cookies().delete('session');
+    cookies().delete('refresh_token');
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: 'Выход выполнен успешно'
+    });
   } catch (error) {
     console.error('Logout error:', error);
     
-    return NextResponse.json(
-      { error: 'Logout failed', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      message: 'Ошибка при выходе из системы',
+      error: String(error)
+    }, { status: 500 });
   }
 } 

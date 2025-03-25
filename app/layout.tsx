@@ -4,19 +4,21 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
-import { TelegramWebAppProvider } from "./contexts/TelegramWebAppContext"
 import { FarcasterProvider } from "./contexts/FarcasterContext"
 import Header from './components/Header'
 
-const inter = Inter({ subsets: ["latin", "cyrillic"] })
+const inter = Inter({ 
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-inter',
+})
 
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "SnotCoin Mining Game",
-  description: "A Telegram-based crypto mining game",
+  title: "Snotcoin - Farcaster Frames Game",
+  description: "Play to earn game on Farcaster",
   generator: 'v0.dev',
   metadataBase: new URL(siteUrl),
   openGraph: {
@@ -60,18 +62,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com" />
+        <meta httpEquiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com" />
       </head>
       <body className={inter.className}>
         <FarcasterProvider>
           <Header />
           <GameProvider>
             <TranslationProvider>
-              <TelegramWebAppProvider>
-                <div className="pt-16">
-                  {children}
-                </div>
-              </TelegramWebAppProvider>
+              <div className="pt-16">
+                {children}
+              </div>
             </TranslationProvider>
           </GameProvider>
         </FarcasterProvider>

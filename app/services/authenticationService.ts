@@ -186,8 +186,7 @@ export const authenticateWithForceLogin = async (userData: ForceLoginData): Prom
       id: userData.telegramId,
       first_name: userData.first_name,
       last_name: userData.last_name,
-      username: userData.username,
-      language_code: "ru"
+      username: userData.username
     };
     
     const timestamp = Math.floor(Date.now() / 1000);
@@ -257,7 +256,7 @@ export const authenticateWithForceLogin = async (userData: ForceLoginData): Prom
   } catch (error) {
     return {
       success: false,
-      error: `Ошибка при форсированном входе: ${error instanceof Error ? error.message : String(error)}`
+      error: `Ошибка аутентификации: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }; 

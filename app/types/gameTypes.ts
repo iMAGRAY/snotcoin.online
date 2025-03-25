@@ -46,10 +46,13 @@ export interface SoundSettings {
 
 export interface User {
   id: string
-  telegram_id?: number
-  first_name: string
-  last_name?: string
+  fid?: number
   username?: string
+  displayName?: string
+  pfp?: string
+  telegram_id?: number
+  first_name?: string
+  last_name?: string
   photo_url?: string
 }
 
