@@ -1,11 +1,11 @@
-import jwt from 'jsonwebtoken';
+import jwt, { TokenExpiredError } from 'jsonwebtoken';
 import { WarpcastUser } from '../types/warpcastAuth';
 
 // Секретный ключ для подписи JWT
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
 
-// Срок действия токена (30 дней)
-const TOKEN_EXPIRATION = '30d';
+// Срок жизни токена - 7 дней
+const TOKEN_EXPIRES_IN = '7d';
 
 /**
  * Генерация JWT токена для пользователя
@@ -28,7 +28,7 @@ export const generateToken = (user: {
       address: user.address || null
     },
     JWT_SECRET,
-    { expiresIn: TOKEN_EXPIRATION }
+    { expiresIn: TOKEN_EXPIRES_IN }
   );
 };
 
@@ -38,30 +38,39 @@ export const generateToken = (user: {
 export const verifyToken = (token: string): {
   valid: boolean;
   expired: boolean;
-  user?: WarpcastUser;
+  user: {
+    id: string;
+    fid: number;
+    username: string;
+    displayName?: string;
+    pfp?: string;
+    address?: string;
+  } | null;
 } => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    // Верификация токена
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      fid: number;
+      username: string;
+      displayName?: string;
+      pfp?: string;
+      address?: string;
+    };
     
     return {
       valid: true,
       expired: false,
-      user: {
-        fid: decoded.fid,
-        username: decoded.username,
-        displayName: decoded.displayName,
-        pfp: decoded.pfp,
-        address: decoded.address
-      }
+      user: decoded
     };
   } catch (error) {
     // Проверяем, истек ли токен
-    const isExpired = (error as any).name === 'TokenExpiredError';
+    const isExpired = error instanceof TokenExpiredError;
     
     return {
       valid: false,
       expired: isExpired,
-      user: undefined
+      user: null
     };
   }
 };
@@ -87,4 +96,24 @@ export const decodeToken = (token: string): WarpcastUser | null => {
     console.error('Ошибка декодирования токена:', error);
     return null;
   }
-}; 
+};
+
+/**
+ * Создание нового JWT токена для пользователя
+ */
+export function createToken(user: Pick<WarpcastUser, 'fid' | 'username' | 'displayName' | 'pfp' | 'address'> & { id: string }) {
+  // Добавляем к payload ID пользователя и время создания токена
+  return jwt.sign(
+    {
+      id: user.id,
+      fid: user.fid,
+      username: user.username,
+      displayName: user.displayName,
+      pfp: user.pfp,
+      address: user.address,
+      iat: Math.floor(Date.now() / 1000),
+    },
+    JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRES_IN }
+  );
+} 

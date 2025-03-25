@@ -49,9 +49,9 @@ const ProfilePage: React.FC = () => {
   const getUserDisplayName = () => {
     if (!gameState.user) return "Player"
 
-    const { first_name, last_name, username } = gameState.user
-    if (first_name || last_name) {
-      return `${first_name || ""} ${last_name || ""}`.trim()
+    const { displayName, username } = gameState.user
+    if (displayName) {
+      return displayName
     }
     return username || "Player"
   }
@@ -117,7 +117,7 @@ const ProfilePage: React.FC = () => {
               >
                 <Image
                   src={
-                    gameState.user?.photo_url ||
+                    gameState.user?.pfp ||
                     ICONS.PROFILE.AVATAR.DEFAULT
                   }
                   alt="Profile"
@@ -137,7 +137,7 @@ const ProfilePage: React.FC = () => {
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>
-                      ID: {gameState.user?.id || "N/A"}
+                      FID: {gameState.user?.fid || "N/A"}
                     </motion.p>
                   </div>
                 </motion.div>
@@ -248,30 +248,27 @@ const ProfilePage: React.FC = () => {
               >
                 <X size={24} />
               </motion.button>
-              <h2 className="text-2xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-6">
-                {t(activeSection)}
-              </h2>
-              {activeSection === "settings" ? <SettingsModal /> : null}
+              <div className="pt-6">
+                {activeSection === "stats" && <StatsSection />}
+                {activeSection === "inventory" && <InventorySection />}
+                {activeSection === "achievements" && <AchievementsSection />}
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-      {isSettingsOpen && <Settings onClose={() => setIsSettingsOpen(false)} />}
 
-      {/* Add Logout button */}
-      <motion.button
-        onClick={handleLogout}
-        className="absolute bottom-4 right-4 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        {t("logout")}
-      </motion.button>
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <SettingsModal
+            onClose={() => setIsSettingsOpen(false)}
+            onLogout={handleLogout}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-ProfilePage.displayName = "ProfilePage"
-
-export default ProfilePage
-
+export default ProfilePage 

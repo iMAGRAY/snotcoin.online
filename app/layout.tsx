@@ -4,7 +4,6 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
-import { TelegramWebAppProvider } from "./contexts/TelegramWebAppContext"
 import "./styles/auth.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -62,9 +61,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <GameProvider>
           <TranslationProvider>
-            <TelegramWebAppProvider>
-              {children}
-            </TelegramWebAppProvider>
+            {children}
           </TranslationProvider>
         </GameProvider>
       </body>

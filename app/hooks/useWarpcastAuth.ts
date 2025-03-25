@@ -111,9 +111,9 @@ export const useWarpcastAuth = (): WarpcastAuthHookResult => {
       }
       
       // Получаем контекст пользователя
-      const context = await window.farcaster.context;
+      const contextData = await window.farcaster.getContext();
       
-      if (!context || !context.fid) {
+      if (!contextData || !contextData.fid) {
         logAuthError(
           AuthStep.WARPCAST_VERIFY as AuthStep,
           'Не удалось получить FID пользователя',
@@ -124,11 +124,11 @@ export const useWarpcastAuth = (): WarpcastAuthHookResult => {
       
       // Формируем данные пользователя
       const userData: WarpcastUser = {
-        fid: context.fid,
-        username: context.username || `user_${context.fid}`,
-        displayName: context.displayName || null,
-        pfp: context.pfp || null,
-        address: context.address || null
+        fid: contextData.fid,
+        username: contextData.username || `user_${contextData.fid}`,
+        displayName: contextData.displayName || null,
+        pfp: contextData.pfp?.url || null,
+        address: contextData.custody?.address || null
       };
       
       // Генерируем токен
@@ -294,11 +294,11 @@ export const useWarpcastAuth = (): WarpcastAuthHookResult => {
     user: state.user,
     status: state.status,
     isLoading: state.status === AuthStatus.LOADING,
-    handleAuth,
+    handleAuth: authenticateWithWarpcast,
     handleRetry,
     isAuthenticated,
     authToken,
-    errorMessage: state.error,
+    errorMessage: state.error || null,
     login,
     logout
   };

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import { WarpcastUser } from '../types/warpcastAuth';
 
 const prisma = new PrismaClient();
@@ -7,13 +7,18 @@ const prisma = new PrismaClient();
 export type GameStateData = Record<string, any>;
 
 /**
+ * Тип пользователя из БД
+ */
+export type DbUser = User;
+
+/**
  * Модель для работы с пользователями
  */
 export class UserModel {
   /**
    * Поиск пользователя по fid (Farcaster ID)
    */
-  static async findByFid(fid: number) {
+  static async findByFid(fid: number): Promise<DbUser | null> {
     return await prisma.user.findUnique({
       where: { fid }
     });
@@ -46,15 +51,17 @@ export class UserModel {
   static async update(userData: {
     id: string;
     username?: string;
-    first_name?: string;
-    last_name?: string;
+    displayName?: string | null;
+    pfp?: string | null;
+    address?: string | null;
   }) {
     return prisma.user.update({
       where: { id: userData.id },
       data: {
         username: userData.username || undefined,
-        first_name: userData.first_name || undefined,
-        last_name: userData.last_name || undefined,
+        displayName: userData.displayName || null,
+        pfp: userData.pfp || null,
+        address: userData.address || null
       }
     });
   }
@@ -74,13 +81,10 @@ export class UserModel {
    */
   static async validateToken(userId: string, token: string) {
     const user = await prisma.user.findUnique({
-      where: { 
-        id: userId,
-        jwt_token: token
-      }
+      where: { id: userId }
     });
     
-    return !!user;
+    return user?.jwt_token === token;
   }
 
   /**

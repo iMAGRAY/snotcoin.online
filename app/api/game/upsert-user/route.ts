@@ -24,11 +24,11 @@ export async function POST(request: Request) {
     }
     
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, user, expired } = verifyToken(token);
     
     if (!valid || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
+        { error: 'Unauthorized access - invalid token', details: expired ? 'Token expired' : 'Invalid token' },
         { status: 401 }
       )
     }
@@ -46,45 +46,47 @@ export async function POST(request: Request) {
     }
 
     // Проверяем наличие необходимых полей
-    if (!requestData.telegramId || !requestData.username || !requestData.firstName) {
+    if (!requestData.fid || !requestData.username || !requestData.displayName) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: fid, username, displayName' },
         { status: 400 }
       )
     }
 
-    const { telegramId, username, firstName, lastName = '', initialGameState = {} } = requestData
+    const { fid, username, displayName, pfp = null, address = null, initialGameState = {} } = requestData
 
-    // Проверяем соответствие telegramId пользователя с токеном
-    if (user.telegram_id.toString() !== telegramId.toString()) {
+    // Проверяем соответствие fid пользователя с токеном
+    if (user.fid.toString() !== fid.toString()) {
       return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
+        { error: 'Unauthorized access - fid mismatch' },
         { status: 403 }
       )
     }
 
     try {
       // Проверяем, существует ли пользователь
-      const existingUser = await UserModel.findByTelegramId(parseInt(telegramId.toString()));
+      const existingUser = await UserModel.findByFid(parseInt(fid.toString()));
       let userId;
 
       if (existingUser) {
         // Если пользователь существует, обновляем его данные
-        const updatedUser = await UserModel.update({
-          id: existingUser.id,
+        const updatedUser = await UserModel.upsert({
+          fid: parseInt(fid.toString()),
           username,
-          first_name: firstName,
-          last_name: lastName
+          displayName,
+          pfp,
+          address
         });
 
         userId = existingUser.id;
       } else {
         // Если пользователь не существует, создаем нового
         const newUser = await UserModel.create({
-          telegram_id: parseInt(telegramId.toString()),
+          fid: parseInt(fid.toString()),
           username,
-          first_name: firstName,
-          last_name: lastName
+          displayName,
+          pfp,
+          address
         });
 
         userId = newUser.id;

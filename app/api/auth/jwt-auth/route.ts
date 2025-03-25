@@ -12,40 +12,50 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { telegramId, firstName, lastName, username } = body
+    const { fid, username, displayName, pfp, address } = body
 
-    if (!telegramId) {
-      return NextResponse.json({ error: "Telegram ID is required" }, { status: 400 })
+    if (!fid) {
+      return NextResponse.json({ error: "Farcaster ID (FID) is required" }, { status: 400 })
     }
 
-    // Проверяем существует ли пользователь
-    let user = await UserModel.findByTelegramId(telegramId)
+    // Проверяем id пользователя
+    const fidNumber = typeof fid === 'string' ? parseInt(fid) : fid
+    
+    if (isNaN(fidNumber)) {
+      return NextResponse.json({ error: 'Invalid Farcaster ID' }, { status: 400 })
+    }
+
+    // Проверяем существование пользователя
+    let user = await UserModel.findByFid(fidNumber)
     
     if (user) {
       // Обновляем существующего пользователя
-      user = await UserModel.update({
-        id: user.id,
+      await UserModel.upsert({
+        fid: fidNumber,
         username: username || "",
-        first_name: firstName || "",
-        last_name: lastName || ""
+        displayName: displayName || null,
+        pfp: pfp || null,
+        address: address || null
       })
     } else {
       // Создаем нового пользователя
       user = await UserModel.create({
-        telegram_id: telegramId,
+        fid: fidNumber,
         username: username || "",
-        first_name: firstName || "",
-        last_name: lastName || ""
+        displayName: displayName || null,
+        pfp: pfp || null,
+        address: address || null
       })
     }
 
     // Создаем JWT токен
     const token = generateToken({
       id: user.id,
-      telegram_id: telegramId,
+      fid: fidNumber,
       username: username || "",
-      first_name: firstName || "",
-      last_name: lastName || ""
+      displayName: displayName || null,
+      pfp: pfp || null,
+      address: address || null
     })
 
     // Сохраняем токен в базе данных
@@ -63,10 +73,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       user: {
         id: user.id,
-        telegram_id: telegramId,
-        first_name: firstName,
-        last_name: lastName,
+        fid: fidNumber,
         username: username,
+        displayName: displayName || null,
+        pfp: pfp || null,
+        address: address || null
       },
       token: token
     })

@@ -161,7 +161,7 @@ const HomeContent: React.FC = () => {
   // Используем один эффект для обработки аутентификации и всех связанных действий
   useEffect(() => {
     // Предотвращаем выполнение, если проверка аутентификации не завершена
-    if (!isAuthenticated || !gameState.user?.telegram_id) {
+    if (!isAuthenticated || !gameState.user?.fid) {
       return;
     }
     
@@ -205,11 +205,11 @@ const HomeContent: React.FC = () => {
         dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
       }
     }
-  }, [isAuthenticated, gameState.user?.telegram_id, dispatch, gameState.hideInterface, gameState.activeTab]);
+  }, [isAuthenticated, gameState.user?.fid, dispatch, gameState.hideInterface, gameState.activeTab]);
 
   // Подписываемся на событие истечения сессии и проверяем актуальность авторизации
   useEffect(() => {
-    if (!isAuthenticated || !gameState.user?.telegram_id) {
+    if (!isAuthenticated || !gameState.user?.fid) {
       return; // Не проверяем сессию, если пользователь не аутентифицирован
     }
     
@@ -226,7 +226,7 @@ const HomeContent: React.FC = () => {
     // Проверка статуса сессии
     const checkSession = async () => {
       // Предотвращаем одновременные проверки
-      if (isCheckingSessionRef.current || !isAuthenticated || !gameState.user?.telegram_id) {
+      if (isCheckingSessionRef.current || !isAuthenticated || !gameState.user?.fid) {
         return;
       }
       
@@ -252,7 +252,7 @@ const HomeContent: React.FC = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            telegram_id: gameState.user.telegram_id
+            fid: gameState.user.fid
           })
         });
         

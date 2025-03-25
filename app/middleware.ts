@@ -25,11 +25,11 @@ export function middleware(request: NextRequest) {
     }
 
     // Проверяем токен
-    const { valid, error } = verifyToken(token);
+    const { valid, expired } = verifyToken(token);
     
     if (!valid) {
       return NextResponse.json(
-        { error: 'Invalid token', details: error },
+        { error: 'Invalid token', details: expired ? 'Token expired' : 'Invalid token' },
         { status: 401 }
       );
     }

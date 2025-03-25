@@ -84,31 +84,27 @@ export const SaveProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Инициализация системы сохранения
   useEffect(() => {
-    if (state.user?.telegram_id) {
-      // Используем telegram_id как идентификатор для сохранений
+    if (!state.isLoading) {
+      const savedGame = loadGame();
+      if (savedGame) {
+        dispatch({ type: "LOAD_GAME_STATE", payload: savedGame });
+      }
+    }
+  }, [dispatch, state.isLoading, loadGame]);
+  
+  // Сохраняем состояние игры при изменении
+  useEffect(() => {
+    if (state.user?.fid) {
+      // Инициализируем систему сохранения с идентификатором пользователя
       saveSystem.setUserData(
-        state.user.telegram_id.toString(),
+        state.user.fid.toString(),
         state.user.id || ""
       );
       
-      // Запускаем автосохранение через систему сохранения
-      saveSystem.startAutoSave();
-      
-      // Загружаем сохраненную игру при инициализации
-      loadGame().then(loadedState => {
-        if (loadedState) {
-          console.log('Игра успешно загружена');
-        }
-      }).catch(err => {
-        console.error('Ошибка при загрузке игры:', err);
-      });
-      
-      return () => {
-        // Останавливаем автосохранение при размонтировании
-        saveSystem.stopAutoSave();
-      };
+      // Сохраняем текущее состояние
+      saveGame();
     }
-  }, [state.user?.telegram_id, state.user?.id, loadGame]);
+  }, [state.user?.fid, state.user?.id, saveGame, saveSystem]);
   
   // Сохраняем при выходе со страницы
   useEffect(() => {

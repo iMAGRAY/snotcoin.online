@@ -26,11 +26,11 @@ export async function POST(request: Request) {
     }
     
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, user, expired } = verifyToken(token);
     
     if (!valid || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
+        { error: 'Unauthorized access - invalid token', details: expired ? 'Token expired' : 'Invalid token' },
         { status: 401 }
       )
     }
@@ -48,25 +48,25 @@ export async function POST(request: Request) {
     }
 
     // Проверяем наличие необходимых полей
-    if (!requestData.telegramId || !requestData.gameState) {
+    if (!requestData.fid || !requestData.gameState) {
       return NextResponse.json(
-        { error: 'Missing required fields: telegramId and gameState' },
+        { error: 'Missing required fields: fid and gameState' },
         { status: 400 }
       )
     }
 
-    const { telegramId, gameState } = requestData
+    const { fid, gameState } = requestData
 
-    // Проверяем, соответствует ли telegramId пользователю из токена
-    if (user.telegram_id.toString() !== telegramId.toString()) {
+    // Проверяем, соответствует ли fid пользователю из токена
+    if (user.fid.toString() !== fid.toString()) {
       return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
+        { error: 'Unauthorized access - fid mismatch' },
         { status: 403 }
       )
     }
     
     // Получаем пользователя из БД
-    const dbUser = await UserModel.findByTelegramId(parseInt(telegramId.toString()));
+    const dbUser = await UserModel.findByFid(parseInt(fid.toString()));
     
     if (!dbUser) {
       return NextResponse.json(

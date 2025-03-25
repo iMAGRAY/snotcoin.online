@@ -26,36 +26,36 @@ export async function GET(request: Request) {
     }
     
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, user, expired } = verifyToken(token);
     
     if (!valid || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
+        { error: 'Unauthorized access - invalid token', details: expired ? 'Token expired' : 'Invalid token' },
         { status: 401 }
       )
     }
 
-    // Получаем telegram_id из запроса
+    // Получаем fid из запроса
     const url = new URL(request.url)
-    const telegramId = url.searchParams.get('telegramId')
+    const fidParam = url.searchParams.get('fid')
     
-    if (!telegramId) {
+    if (!fidParam) {
       return NextResponse.json(
-        { error: 'Missing telegramId parameter' },
+        { error: 'Missing fid parameter' },
         { status: 400 }
       )
     }
     
-    // Проверяем, соответствует ли telegramId пользователю из токена
-    if (user.telegram_id.toString() !== telegramId) {
+    // Проверяем, соответствует ли fid пользователю из токена
+    if (user.fid.toString() !== fidParam) {
       return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
+        { error: 'Unauthorized access - fid mismatch' },
         { status: 403 }
       )
     }
     
     // Получаем данные пользователя из БД
-    const dbUser = await UserModel.findByTelegramId(parseInt(telegramId))
+    const dbUser = await UserModel.findByFid(parseInt(fidParam))
     
     if (!dbUser) {
       return NextResponse.json(

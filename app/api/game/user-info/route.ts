@@ -24,36 +24,36 @@ export async function GET(request: Request) {
     }
     
     // Проверяем валидность токена
-    const { valid, user, error: tokenError } = verifyToken(token);
+    const { valid, user, expired } = verifyToken(token);
     
     if (!valid || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized access - invalid token', details: tokenError },
+        { error: 'Unauthorized access - invalid token', details: expired ? 'Token expired' : 'Invalid token' },
         { status: 401 }
       )
     }
 
-    // Получаем telegramId из URL
+    // Получаем fid из URL
     const url = new URL(request.url)
-    const telegramId = url.searchParams.get('telegramId')
+    const fidParam = url.searchParams.get('fid')
     
-    if (!telegramId) {
+    if (!fidParam) {
       return NextResponse.json(
-        { error: 'Missing telegramId parameter' },
+        { error: 'Missing fid parameter' },
         { status: 400 }
       )
     }
     
-    // Проверяем, соответствует ли telegramId пользователю из токена
-    if (user.telegram_id.toString() !== telegramId) {
+    // Проверяем, соответствует ли fid пользователю из токена
+    if (user.fid.toString() !== fidParam) {
       return NextResponse.json(
-        { error: 'Unauthorized access - telegramId mismatch' },
+        { error: 'Unauthorized access - fid mismatch' },
         { status: 403 }
       )
     }
     
     // Получаем данные пользователя из БД
-    const dbUser = await UserModel.findByTelegramId(parseInt(telegramId))
+    const dbUser = await UserModel.findByFid(parseInt(fidParam))
     
     if (!dbUser) {
       return NextResponse.json(
@@ -65,10 +65,11 @@ export async function GET(request: Request) {
     // Возвращаем информацию о пользователе без чувствительных данных
     return NextResponse.json({
       id: dbUser.id,
-      telegram_id: dbUser.telegram_id,
-      username: dbUser.username,
-      first_name: dbUser.first_name,
-      last_name: dbUser.last_name,
+      fid: dbUser.fid,
+      username: dbUser.username || "",
+      displayName: dbUser.displayName || "",
+      pfp: dbUser.pfp || null,
+      address: dbUser.address || null,
       created_at: dbUser.created_at,
       updated_at: dbUser.updated_at
     })

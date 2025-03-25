@@ -30,18 +30,32 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       });
 
     case "SET_USER":
-      return withMetadata({ user: action.payload });
+      return withMetadata({ 
+        user: action.payload ? {
+          id: action.payload.id,
+          fid: action.payload.fid,
+          username: action.payload.username,
+          displayName: action.payload.displayName,
+          pfp: action.payload.pfp,
+          address: action.payload.address
+        } : null,
+        validationStatus: action.payload ? "valid" : "invalid",
+        lastValidation: action.payload ? Date.now() : undefined
+      });
 
     case "SET_TELEGRAM_USER":
+      // Устаревший тип действия, преобразуем в формат Warpcast
       return withMetadata({ 
-        user: { 
+        user: action.payload ? { 
           id: action.payload.id.toString(),
-          telegram_id: action.payload.telegram_id,
-          first_name: action.payload.first_name,
-          last_name: action.payload.last_name,
-          username: action.payload.username,
-          photo_url: action.payload.photo_url,
-        } 
+          fid: parseInt(action.payload.id.toString()),
+          username: action.payload.username || "",
+          displayName: action.payload.first_name || "",
+          pfp: action.payload.photo_url || null,
+          address: undefined
+        } : null,
+        validationStatus: action.payload ? "valid" : "invalid",
+        lastValidation: action.payload ? Date.now() : undefined
       });
 
     case "UPDATE_CONTAINER_LEVEL":
