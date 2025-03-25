@@ -16,35 +16,13 @@ export async function POST(req: NextRequest) {
     // Формирование данных пользователя из Farcaster
     const fid = body?.untrustedData?.fid;
     const username = body?.untrustedData?.username || 'user';
+    const buttonIndex = body?.untrustedData?.buttonIndex;
     
-    // Возвращаем HTML с игрой в iFrame
-    return new NextResponse(
-      `<!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <meta property="fc:frame" content="vNext" />
-          <meta property="fc:frame:image" content="${BASE_URL}/game/gameplay.png" />
-          <meta property="fc:frame:button:1" content="Back to Menu" />
-          <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/back" />
-          <title>Snotcoin Game</title>
-          <style>
-            body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
-            iframe { border: none; width: 100%; height: 100%; }
-          </style>
-        </head>
-        <body>
-          <iframe src="${BASE_URL}/?fid=${fid}&username=${username}&embed=true" allow="fullscreen" allowfullscreen></iframe>
-        </body>
-      </html>`,
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html',
-        },
-      }
+    // Редирект на игровую страницу с параметрами
+    // Используем redirect вместо iframe для лучшей интеграции с Warpcast
+    return NextResponse.redirect(
+      `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`,
+      { status: 302 }
     );
   } catch (error) {
     console.error('Error in Farcaster Frame game handler:', error);

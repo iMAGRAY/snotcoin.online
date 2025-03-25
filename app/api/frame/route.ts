@@ -18,6 +18,16 @@ export async function POST(req: NextRequest) {
     const fid = body?.untrustedData?.fid;
     const username = body?.untrustedData?.username || 'Player';
     
+    // Проверяем, был ли нажата кнопка
+    if (body?.untrustedData?.buttonIndex === 1) {
+      // Если кнопка была нажата, редиректим пользователя на игровую страницу
+      // с параметрами для идентификации пользователя
+      return NextResponse.redirect(
+        `${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true`, 
+        { status: 302 }
+      );
+    }
+    
     // Возвращаем HTML с начальным экраном
     return new NextResponse(
       `<!DOCTYPE html>
@@ -28,8 +38,8 @@ export async function POST(req: NextRequest) {
           <meta property="fc:frame" content="vNext" />
           <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
           <meta property="fc:frame:button:1" content="Play Game" />
-          <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
+          <meta property="fc:frame:button:1:action" content="post_redirect" />
+          <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
           <title>Snotcoin Game</title>
         </head>
         <body>
@@ -91,8 +101,8 @@ export async function GET() {
         <meta property="fc:frame" content="vNext" />
         <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
         <meta property="fc:frame:button:1" content="Play Game" />
-        <meta property="fc:frame:button:1:action" content="post" />
-        <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
+        <meta property="fc:frame:button:1:action" content="post_redirect" />
+        <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
         <title>Snotcoin Game</title>
       </head>
       <body>
