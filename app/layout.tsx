@@ -45,9 +45,6 @@ export const metadata: Metadata = {
     'fc:frame:button:1': 'Play Game',
     'fc:frame:button:1:action': 'post',
     'fc:frame:button:1:post_url': 'https://snotcoin.online/api/frame/game',
-    'fc:frame:button:2': 'View Leaderboard',
-    'fc:frame:button:2:action': 'post',
-    'fc:frame:button:2:post_url': 'https://snotcoin.online/api/frame/leaderboard',
   },
 }
 

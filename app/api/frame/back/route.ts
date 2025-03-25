@@ -29,9 +29,6 @@ export async function POST(req: NextRequest) {
           <meta property="fc:frame:button:1" content="Play Game" />
           <meta property="fc:frame:button:1:action" content="post" />
           <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
-          <meta property="fc:frame:button:2" content="View Leaderboard" />
-          <meta property="fc:frame:button:2:action" content="post" />
-          <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/leaderboard" />
           <title>Snotcoin Game</title>
         </head>
         <body>
@@ -39,7 +36,7 @@ export async function POST(req: NextRequest) {
             <div>
               <h1>Snotcoin - Play to Earn Game</h1>
               <p>Welcome back, ${username}!</p>
-              <p>Choose an option to continue.</p>
+              <p>Click the button to play.</p>
             </div>
           </div>
         </body>
@@ -97,9 +94,6 @@ export async function GET() {
         <meta property="fc:frame:button:1" content="Play Game" />
         <meta property="fc:frame:button:1:action" content="post" />
         <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
-        <meta property="fc:frame:button:2" content="View Leaderboard" />
-        <meta property="fc:frame:button:2:action" content="post" />
-        <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/leaderboard" />
         <title>Snotcoin Game</title>
       </head>
       <body>

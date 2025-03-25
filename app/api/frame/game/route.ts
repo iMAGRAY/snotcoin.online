@@ -29,9 +29,6 @@ export async function POST(req: NextRequest) {
           <meta property="fc:frame:button:1" content="Back to Menu" />
           <meta property="fc:frame:button:1:action" content="post" />
           <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/back" />
-          <meta property="fc:frame:button:2" content="Restart Game" />
-          <meta property="fc:frame:button:2:action" content="post" />
-          <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/game" />
           <title>Snotcoin Game</title>
           <style>
             body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
@@ -95,9 +92,6 @@ export async function GET() {
         <meta property="fc:frame:button:1" content="Back to Menu" />
         <meta property="fc:frame:button:1:action" content="post" />
         <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/back" />
-        <meta property="fc:frame:button:2" content="Restart Game" />
-        <meta property="fc:frame:button:2:action" content="post" />
-        <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/game" />
         <title>Snotcoin Game</title>
       </head>
       <body>
