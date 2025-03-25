@@ -57,7 +57,7 @@ export default function RootLayout({
         {/* Farcaster Frame метатеги */}
         <meta name="fc:frame" content="vNext" />
         <meta name="fc:frame:image" content={imageUrl} />
-        <meta name="fc:frame:button:1" content="Play Game" />
+        <meta name="fc:frame:button:1" content="Play Now" />
         <meta name="fc:frame:button:1:action" content="link" />
         <meta name="fc:frame:button:1:target" content="https://snotcoin.online/?embed=true" />
       </head>

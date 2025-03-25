@@ -1,131 +1,114 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Константа для определения хоста
+// Базовый URL сайта
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const IMAGE_URL = `${BASE_URL}/game/cast.webp`;
 
 /**
- * Обработчик POST запросов для Farcaster Frames
- * Возвращает HTML с экраном для запуска игры
+ * Обработчик POST запросов от Farcaster Frame
  */
 export async function POST(req: NextRequest) {
   try {
+    // Логируем данные запроса для отладки
+    console.log('POST request to /api/frame', await req.json());
+    
+    // Получаем данные пользователя из запроса
     const body = await req.json();
+    const { fid, username } = body.untrustedData?.messageData || {};
     
-    // Логирование данных запроса для отладки
-    console.log('Farcaster Frame request data:', JSON.stringify(body, null, 2));
+    // Проверяем, какая кнопка была нажата
+    const buttonIndex = body.untrustedData?.buttonIndex;
     
-    // Получаем данные пользователя Farcaster из запроса
-    const fid = body?.untrustedData?.fid;
-    const username = body?.untrustedData?.username || 'Player';
+    // Если нажата первая кнопка (Play Game), перенаправляем на игру
+    if (buttonIndex === 1) {
+      // Формируем URL для редиректа с параметрами пользователя
+      const redirectUrl = `${BASE_URL}/?embed=true&fid=${fid || ''}&username=${username || ''}`;
+      
+      return NextResponse.redirect(redirectUrl, {
+        status: 302,
+        headers: {
+          'Location': redirectUrl
+        }
+      });
+    }
     
-    // Возвращаем HTML с экраном, направляющим прямо на игру
-    return new NextResponse(
-      `<!DOCTYPE html>
+    // Если кнопка не была нажата или это другая кнопка, 
+    // возвращаем HTML с приветствием и кнопкой
+    return new NextResponse(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Snotcoin Game</title>
-          
-          <!-- Farcaster Frame метатеги -->
-          <meta name="fc:frame" content="vNext">
-          <meta name="fc:frame:image" content="${IMAGE_URL}">
-          <meta name="fc:frame:button:1" content="Play Game">
-          <meta name="fc:frame:button:1:action" content="link">
-          <meta name="fc:frame:button:1:target" content="${BASE_URL}/?fid=${fid}&username=${encodeURIComponent(username)}&embed=true">
-          
-          <!-- OpenGraph метатеги -->
-          <meta property="og:image" content="${IMAGE_URL}">
-          <meta property="og:title" content="Snotcoin Game">
-          <meta property="og:description" content="Play to earn game on Farcaster">
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="${IMAGE_URL}" />
+          <meta property="og:image" content="${IMAGE_URL}" />
+          <meta property="fc:frame:button:1" content="Play Now" />
+          <meta property="fc:frame:button:1:action" content="link" />
+          <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
         </head>
         <body>
-          <div style="text-align: center; padding: 20px;">
-            <h1>Snotcoin Game</h1>
-            <p>Welcome, ${username}!</p>
-            <p>Click "Play Game" to start playing.</p>
-          </div>
+          <h1>Welcome to Snotcoin Game!</h1>
+          <p>Click the button to start playing.</p>
         </body>
-      </html>`,
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html',
-        },
+      </html>
+    `, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html'
       }
-    );
+    });
+    
   } catch (error) {
-    console.error('Error in Farcaster Frame handler:', error);
+    console.error('Error in /api/frame POST handler:', error);
     
-    // Возвращаем страницу с ошибкой
-    return new NextResponse(
-      `<!DOCTYPE html>
+    // В случае ошибки возвращаем страницу ошибки с кнопкой "Попробовать снова"
+    return new NextResponse(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Error</title>
-          
-          <!-- Farcaster Frame метатеги -->
-          <meta name="fc:frame" content="vNext">
-          <meta name="fc:frame:image" content="${BASE_URL}/error.png">
-          <meta name="fc:frame:button:1" content="Try Again">
-          <meta name="fc:frame:button:1:action" content="link">
-          <meta name="fc:frame:button:1:target" content="${BASE_URL}/frame.html">
-          
-          <!-- OpenGraph метатеги -->
-          <meta property="og:image" content="${BASE_URL}/error.png">
-          <meta property="og:title" content="Error - Snotcoin Game">
-          <meta property="og:description" content="Something went wrong. Please try again.">
+          <meta property="fc:frame" content="vNext" />
+          <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
+          <meta property="og:image" content="${BASE_URL}/error.png" />
+          <meta property="fc:frame:button:1" content="Try Again" />
+          <meta property="fc:frame:button:1:action" content="post" />
         </head>
         <body>
-          <h1>Something went wrong. Please try again.</h1>
+          <h1>Error</h1>
+          <p>Something went wrong. Please try again.</p>
         </body>
-      </html>`,
-      {
-        status: 200, // Важно! Для фреймов даже при ошибке возвращаем 200
-        headers: {
-          'Content-Type': 'text/html',
-        },
+      </html>
+    `, {
+      status: 200, // Важно! Даже для ошибок возвращаем 200, чтобы фрейм обработался
+      headers: {
+        'Content-Type': 'text/html'
       }
-    );
+    });
   }
 }
 
 /**
  * Обработчик GET запросов для предпросмотра фрейма
  */
-export async function GET() {
-  return new NextResponse(
-    `<!DOCTYPE html>
+export async function GET(req: NextRequest) {
+  return new NextResponse(`
+    <!DOCTYPE html>
     <html>
       <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Snotcoin Game</title>
-        
-        <!-- Farcaster Frame метатеги -->
-        <meta name="fc:frame" content="vNext">
-        <meta name="fc:frame:image" content="${IMAGE_URL}">
-        <meta name="fc:frame:button:1" content="Play Game">
-        <meta name="fc:frame:button:1:action" content="link">
-        <meta name="fc:frame:button:1:target" content="${BASE_URL}/?embed=true">
-        
-        <!-- OpenGraph метатеги -->
-        <meta property="og:image" content="${IMAGE_URL}">
-        <meta property="og:title" content="Snotcoin Game">
-        <meta property="og:description" content="Play to earn game on Farcaster">
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content="${IMAGE_URL}" />
+        <meta property="og:image" content="${IMAGE_URL}" />
+        <meta property="fc:frame:button:1" content="Play Now" />
+        <meta property="fc:frame:button:1:action" content="link" />
+        <meta property="fc:frame:button:1:target" content="${BASE_URL}/?embed=true" />
       </head>
       <body>
-        <p>This is a Farcaster Frame for Snotcoin Game</p>
+        <h1>Snotcoin Game Preview</h1>
+        <p>This is a preview of the Snotcoin Game frame.</p>
       </body>
-    </html>`,
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html',
-      },
+    </html>
+  `, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html'
     }
-  );
+  });
 } 
