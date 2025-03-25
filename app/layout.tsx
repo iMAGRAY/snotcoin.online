@@ -38,21 +38,6 @@ export const metadata: Metadata = {
     description: 'Play to earn game on Farcaster',
     images: ['/game/cast.webp'],
   },
-  // Farcaster Frame метаданные по спецификации v2
-  other: {
-    // Обязательное поле, указывающее что это Farcaster Frame
-    'fc:frame': 'vNext',
-    // Изображение для отображения во фрейме (обязательное)
-    'fc:frame:image': imageUrl,
-    // Дублирование для OpenGraph совместимости
-    'og:image': imageUrl,
-    // Соотношение сторон изображения (опционально)
-    'fc:frame:image:aspect_ratio': '1.91:1',
-    // Кнопка 1
-    'fc:frame:button:1': 'Play Game',
-    'fc:frame:button:1:action': 'link',
-    'fc:frame:button:1:target': 'https://snotcoin.online/?embed=true',
-  },
 }
 
 export default function RootLayout({
@@ -69,10 +54,9 @@ export default function RootLayout({
           async 
           defer
         />
-        {/* Farcaster Frame метатеги с использованием name вместо property */}
+        {/* Farcaster Frame метатеги */}
         <meta name="fc:frame" content="vNext" />
         <meta name="fc:frame:image" content={imageUrl} />
-        <meta name="fc:frame:image:aspect_ratio" content="1.91:1" />
         <meta name="fc:frame:button:1" content="Play Game" />
         <meta name="fc:frame:button:1:action" content="link" />
         <meta name="fc:frame:button:1:target" content="https://snotcoin.online/?embed=true" />
