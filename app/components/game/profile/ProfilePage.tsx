@@ -8,7 +8,6 @@ import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
 import { X, Star, BarChart2, Package, Award, Cog, Calendar } from "lucide-react"
 import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
-import Resources from "../../common/Resources"
 import { useRouter } from "next/navigation"
 import Settings from "../settings/Settings"
 import { authStore } from '../../auth/AuthenticationWindow'
@@ -31,7 +30,6 @@ const ProfilePage: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const router = useRouter()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const state = { activeTab: "profile" } // Added state for activeTab
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
@@ -123,7 +121,8 @@ const ProfilePage: React.FC = () => {
                   alt="Profile"
                   width={80}
                   height={80}
-                  className="object-cover w-full h-full"
+                  style={{ objectFit: "cover" }}
+                  className="w-full h-full"
                 />
               </motion.div>
               <motion.div className="flex-grow" layout>
