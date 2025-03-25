@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors 'self' https://warpcast.com https://*.warpcast.com">
   <title>Snotcoin - Play to Earn Game</title>
-  
-  <!-- Farcaster SDK -->
-  <script src="https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js"></script>
   
   <!-- Обязательные метатеги для Farcaster Frames v2 -->
   <meta name="fc:frame" content="{&quot;version&quot;:&quot;next&quot;,&quot;imageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;button&quot;:{&quot;title&quot;:&quot;Play Snotcoin 🎮&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;launch_frame&quot;,&quot;name&quot;:&quot;Snotcoin&quot;,&quot;url&quot;:&quot;https://snotcoin.online&quot;,&quot;splashImageUrl&quot;:&quot;https://snotcoin.online/game/cast.webp&quot;,&quot;splashBackgroundColor&quot;:&quot;#0F172A&quot;}}}" />
@@ -16,13 +14,19 @@
   <meta property="og:url" content="https://snotcoin.online/frame.html" />
   <meta property="og:type" content="website" />
 
+  <!-- Farcaster SDK -->
   <script>
     // Инициализация Farcaster SDK
-    window.addEventListener('load', function() {
-      if (window.farcaster) {
-        window.farcaster.ready();
-      }
-    });
+    (function() {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.farcaster.xyz/sdk/v0.0.31/farcaster.js';
+      script.onload = function() {
+        if (window.farcaster) {
+          window.farcaster.ready();
+        }
+      };
+      document.head.appendChild(script);
+    })();
   </script>
 </head>
 <body>

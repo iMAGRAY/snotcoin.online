@@ -43,37 +43,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: `
-              default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://warpcast.com https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
-              style-src 'self' 'unsafe-inline';
-              img-src 'self' data: https: blob:;
-              connect-src 'self' https://telegram.org https://warpcast.com wss://warpcast.com https://hub.farcaster.xyz wss://hub.farcaster.xyz wss://gc.kis.v2.scr.kaspersky-labs.com;
-              frame-src 'self' https://warpcast.com;
-              frame-ancestors 'none';
-            `.replace(/\s+/g, ' ').trim()
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY'
-          }
-        ],
-      },
-      {
-        // Специальные заголовки для frame.html, чтобы его можно было встроить в Warpcast
-        source: '/frame.html',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: `
-              default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://warpcast.com https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
-              style-src 'self' 'unsafe-inline';
-              img-src 'self' data: https: blob:;
-              connect-src 'self' https://telegram.org https://warpcast.com wss://warpcast.com https://hub.farcaster.xyz wss://hub.farcaster.xyz wss://gc.kis.v2.scr.kaspersky-labs.com;
-              frame-src 'self' https://warpcast.com;
-              frame-ancestors 'self' https://warpcast.com;
-            `.replace(/\s+/g, ' ').trim()
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.farcaster.xyz; frame-src 'self' https://warpcast.com https://*.warpcast.com; frame-ancestors 'self' https://warpcast.com https://*.warpcast.com; img-src 'self' data: https:; connect-src 'self' https://hub.farcaster.xyz;"
           },
           {
             key: 'X-Frame-Options',
@@ -81,29 +51,7 @@ const nextConfig = {
           }
         ],
       },
-      {
-        // Специальные заголовки для API маршрутов, связанных с фреймами
-        source: '/api/frame/:path*',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: `
-              default-src 'self';
-              script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://warpcast.com https://cdn.farcaster.xyz https://gc.kis.v2.scr.kaspersky-labs.com;
-              style-src 'self' 'unsafe-inline';
-              img-src 'self' data: https: blob:;
-              connect-src 'self' https://telegram.org https://warpcast.com wss://warpcast.com https://hub.farcaster.xyz wss://hub.farcaster.xyz wss://gc.kis.v2.scr.kaspersky-labs.com;
-              frame-src 'self' https://warpcast.com;
-              frame-ancestors 'self' https://warpcast.com;
-            `.replace(/\s+/g, ' ').trim()
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'ALLOW-FROM https://warpcast.com'
-          }
-        ],
-      },
-    ];
+    ]
   },
   compiler: {
     removeConsole: false,
