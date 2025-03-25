@@ -69,20 +69,17 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
     }
     
     if (typeof window === 'undefined') {
-      logAuthInfo(AuthStep.AUTH_ERROR, 'Window объект недоступен (серверный рендеринг)');
       return false;
     }
     
     // Проверяем, доступен ли объект fc в мобильном приложении
     if (typeof (window as any).fc !== 'undefined') {
       const fc = (window as any).fc as FrameObject;
-      logAuthInfo(AuthStep.INIT, 'Обнаружен Farcaster Frame API объект fc');
       return true;
     }
     
     // Проверяем, доступен ли объект farcaster в браузере
     if (!(window as any).farcaster) {
-      logAuthInfo(AuthStep.AUTH_ERROR, `Farcaster SDK не найден в window, попытка: ${sdkCheckAttempts + 1}`);
       return false;
     }
     
@@ -90,27 +87,14 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
     
     // Проверяем наличие Frames SDK
     if (typeof farcaster.frame !== 'undefined') {
-      logAuthInfo(AuthStep.INIT, 'Обнаружен Farcaster Frames SDK');
       return true;
     }
     
     // Проверяем, есть ли необходимые методы
     if (!farcaster.getContext && !farcaster.getNeynarContext) {
-      // В новых версиях SDK может использоваться другой метод
-      let availableMethods: string[] = [];
-      for (const key in farcaster) {
-        if (typeof farcaster[key] === 'function') {
-          availableMethods.push(key);
-        }
-      }
-      
-      logAuthInfo(AuthStep.AUTH_ERROR, 'Farcaster SDK найден, но необходимые методы отсутствуют', {
-        availableMethods: availableMethods.join(', ')
-      });
       return false;
     }
     
-    logAuthInfo(AuthStep.INIT, 'Farcaster SDK найден и содержит необходимые методы');
     return true;
   };
 
@@ -121,18 +105,9 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       return;
     }
     
-    logAuthInfo(AuthStep.INIT, 'Загрузка Farcaster SDK скрипта');
-    
     // Определяем, находимся ли мы в фрейме
     const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
     const isFrameMode = isInIframe || document.referrer.includes('warpcast.com');
-    
-    logAuthInfo(AuthStep.INIT, 'Проверка режима работы', {
-      isInIframe,
-      isFrameMode,
-      userAgent: navigator.userAgent,
-      referrer: document.referrer
-    });
     
     // Загружаем только официальный Warpcast SDK
     const script = document.createElement('script');
@@ -140,21 +115,16 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
     script.id = 'farcaster-sdk-script';
     script.async = true;
     script.onload = () => {
-      logAuthInfo(AuthStep.INIT, 'Официальный Farcaster SDK скрипт загружен');
-      
       // При загрузке скрипта попробуем сразу инициализировать SDK
       if (window.farcaster && typeof window.farcaster.ready === 'function') {
         try {
           window.farcaster.ready();
-          logAuthInfo(AuthStep.INIT, 'Вызван метод farcaster.ready() после загрузки SDK');
         } catch (error) {
-          logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка при вызове farcaster.ready()', {
-            error: error instanceof Error ? error.message : String(error)
-          });
+          console.error('Ошибка при вызове farcaster.ready()', error);
         }
       }
     };
-    script.onerror = () => logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка загрузки официального Farcaster SDK скрипта');
+    script.onerror = () => console.error('Ошибка загрузки Farcaster SDK скрипта');
     document.body.appendChild(script);
   };
 
@@ -172,7 +142,6 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       
       // Проверяем, не авторизован ли пользователь уже
       if (farcasterStore.isSDKInitialized() && farcasterStore.isAuthenticated()) {
-        logAuthInfo(AuthStep.INIT, 'Пользователь уже аутентифицирован, пропускаем инициализацию');
         isAuthenticatedRef.current = true;
         safeSetIsLoading(false);
         return;
@@ -181,13 +150,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       logAuthInfo(AuthStep.INIT, 'Инициализация авторизации через Warpcast');
       
       // Проверяем, доступен ли SDK через FarcasterFrameHandler
-      logAuthInfo(AuthStep.INIT, 'Проверка farcasterStore.isSDKInitialized()', {
-        isInitialized: farcasterStore.isSDKInitialized()
-      });
-      
       if (farcasterStore.isSDKInitialized()) {
-        logAuthInfo(AuthStep.INIT, 'SDK доступен через FarcasterFrameHandler');
-        
         // Получаем контекст пользователя
         const userContext = await farcasterStore.getUserContext();
         

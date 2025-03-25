@@ -5,7 +5,6 @@ import { Inter } from "next/font/google"
 import { GameProvider } from "./contexts/GameContext"
 import { TranslationProvider } from "./contexts/TranslationContext"
 import { FarcasterProvider } from "./contexts/FarcasterContext"
-import Header from './components/Header'
 
 const inter = Inter({ 
   subsets: ['latin', 'cyrillic'],
@@ -66,12 +65,9 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <FarcasterProvider>
-          <Header />
           <GameProvider>
             <TranslationProvider>
-              <div className="pt-16">
-                {children}
-              </div>
+              {children}
             </TranslationProvider>
           </GameProvider>
         </FarcasterProvider>

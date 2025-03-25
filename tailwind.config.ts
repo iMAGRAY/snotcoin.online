@@ -91,6 +91,25 @@ const config: Config = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    function({ addUtilities }: { addUtilities: (utilities: Record<string, Record<string, string>>) => void }) {
+      const newUtilities = {
+        '.pb-safe': {
+          paddingBottom: 'env(safe-area-inset-bottom, 0.5rem)'
+        },
+        '.pt-safe': {
+          paddingTop: 'env(safe-area-inset-top, 0.5rem)'
+        },
+        '.pl-safe': {
+          paddingLeft: 'env(safe-area-inset-left, 0.5rem)'
+        },
+        '.pr-safe': {
+          paddingRight: 'env(safe-area-inset-right, 0.5rem)'
+        }
+      }
+      addUtilities(newUtilities);
+    }
+  ],
 };
 export default config;

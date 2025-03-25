@@ -109,22 +109,7 @@ const Laboratory: React.FC = () => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* Верхняя панель с ресурсами и статусом */}
-      <div className="absolute top-0 left-0 right-0 z-30">
-        <Resources
-          isVisible={true}
-          activeTab="laboratory"
-          snot={inventory.snot}
-          snotCoins={inventory.snotCoins}
-          containerCapacity={inventory.containerCapacity}
-          containerLevel={inventory.containerCapacityLevel}
-          containerSnot={inventory.containerSnot}
-          containerFillingSpeed={inventory.fillingSpeed}
-          fillingSpeedLevel={inventory.fillingSpeedLevel}
-        />
-      </div>
-      
-      <div className={`w-full flex-grow relative ${LAYOUT.TOP_PADDING}`}>
+      <div className={`w-full flex-grow relative`}>
         <BackgroundImage
           store={gameState}
           onContainerClick={null}

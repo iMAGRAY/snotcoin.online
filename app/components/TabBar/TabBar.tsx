@@ -38,8 +38,9 @@ const TabBar: React.FC<TabBarProps> = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 w-full bg-gradient-to-t from-[#1a2b3d] via-[#2a3b4d] to-[#3a4c62] border-t-2 border-[#4a7a9e] backdrop-blur-md relative z-50"
+      className="fixed bottom-0 left-0 right-0 w-full bg-gradient-to-t from-[#1a2b3d] via-[#2a3b4d] to-[#3a4c62] border-t-2 border-[#4a7a9e] backdrop-blur-md z-50 pb-safe"
       aria-label={t("mainNavigation")}
+      style={{ height: 'var(--tab-bar-height, 4rem)', maxHeight: 'var(--tab-bar-height, 4rem)' }}
     >
       <div className="flex justify-between h-16 max-w-md mx-auto px-4">{tabButtons}</div>
     </nav>

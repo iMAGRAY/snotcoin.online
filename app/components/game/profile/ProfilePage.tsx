@@ -93,7 +93,7 @@ const ProfilePage: React.FC = () => {
 
       <LayoutGroup>
         <motion.div
-          className="relative z-20 p-6 space-y-6 overflow-y-auto h-full pb-20"
+          className="relative z-20 p-6 space-y-6 overflow-y-auto h-full"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
@@ -149,21 +149,6 @@ const ProfilePage: React.FC = () => {
                 </motion.div>
               </motion.div>
             </motion.div>
-
-            {/* Balance Bar */}
-            <div className="mt-4">
-              <motion.div className="h-12 bg-gradient-to-r from-[#3a5c82] to-[#4a7a9e] rounded-xl border border-[#5889ae]/30 shadow-md flex items-center justify-between px-2">
-                <div className="flex-1">
-                  <Resources
-                    isVisible={true}
-                    activeTab={gameState.activeTab}
-                    showOnlySnotCoin={true}
-                    snot={gameState.inventory.snot}
-                    snotCoins={gameState.inventory.snotCoins}
-                  />
-                </div>
-              </motion.div>
-            </div>
           </motion.div>
 
           {/* Buttons */}

@@ -156,10 +156,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     return (
       <ErrorBoundary fallback={<div className="text-red-500">Error loading resources</div>}>
         <motion.div
-          className={containerClass}
+          className={`${containerClass} w-full`}
           {...ANIMATIONS.RESOURCE_PANEL}
         >
-          <div className="flex flex-col">
+          <div className="flex flex-col w-full">
             {/* Блок с ресурсами - всегда отображается */}
             <div className="flex justify-between items-center">
               <div className="flex space-x-2 sm:space-x-3">

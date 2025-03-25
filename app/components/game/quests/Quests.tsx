@@ -4,7 +4,7 @@ import { ICONS } from "../../../constants/uiConstants"
 
 export default function Quests() {
   return (
-    <div className="h-full w-full relative overflow-hidden">
+    <div className="relative flex flex-col h-full w-full overflow-auto">
       <div
         className="absolute inset-0 w-full h-full"
         style={{

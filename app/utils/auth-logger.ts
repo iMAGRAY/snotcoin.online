@@ -218,34 +218,12 @@ export function logAuth(
     serverInfo
   };
   
-  // Вывод в консоль с соответствующим форматированием, 
-  // пропускаем частые инициализации/размонтирования для уменьшения спама
-  const skipConsoleLog = 
-    (step === AuthStep.INIT && message === 'Окно аутентификации инициализировано') ||
-    (step === AuthStep.USER_INTERACTION && message === 'Окно аутентификации размонтировано');
-  
-  if (!skipConsoleLog) {
-    const consolePrefix = `[AUTH:${type}:${step}]`;
-    switch (type) {
-      case AuthLogType.ERROR:
-        console.error(consolePrefix, message, { ...logEntry });
-        break;
-      case AuthLogType.WARNING:
-        console.warn(consolePrefix, message, { ...logEntry });
-        break;
-      case AuthLogType.SECURITY:
-        console.warn(consolePrefix, message, { ...logEntry });
-        break;
-      case AuthLogType.DEBUG:
-        console.debug(consolePrefix, message, { ...logEntry });
-        break;
-      default:
-        console.log(consolePrefix, message, { ...logEntry });
-    }
-  }
-  
-  // Если это ошибка, также отправляем в аналитику или мониторинг ошибок
+  // Выводим в консоль только ошибки
   if (type === AuthLogType.ERROR) {
+    const consolePrefix = `[AUTH:${type}:${step}]`;
+    console.error(consolePrefix, message, { ...logEntry });
+    
+    // Отправляем в аналитику или мониторинг ошибок
     try {
       sendErrorToMonitoring(logEntry);
     } catch (e) {

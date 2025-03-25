@@ -5,6 +5,7 @@
 :root {
   --app-height: 100vh;
   --vh: 1vh;
+  --tab-bar-height: 4rem;
 }
 
 html,

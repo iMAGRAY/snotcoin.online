@@ -40,38 +40,30 @@ export const farcasterStore = {
   
   // Метод для получения SDK
   getSDK() {
-    console.log('Getting SDK from store, initialized:', this.isInitialized, 'sdk:', this.sdk ? 'available' : 'null');
     return this.sdk;
   },
   
   // Метод для получения контекста пользователя
   async getUserContext() {
-    console.log('Getting user context from store, context:', this.userContext ? 'available' : 'null');
-    
     try {
       // Если у нас уже есть контекст пользователя, возвращаем его
       if (this.userContext && this.userContext.fid) {
-        console.log('Returning cached user context:', this.userContext);
         return this.userContext;
       }
       
       // Если SDK не инициализирован, проверяем window.farcaster
       if (!this.sdk) {
-        console.log('SDK not initialized, checking window.farcaster');
-        
         if (typeof window !== 'undefined' && (window as any).farcaster) {
           const farcaster = (window as any).farcaster;
           
           try {
             // Попытка получить контекст через нативный SDK
             if (farcaster.getContext) {
-              console.log('Trying to get context via window.farcaster.getContext');
               const nativeContext = await farcaster.getContext();
               
               if (nativeContext) {
                 const transformedContext = transformUserContext(nativeContext);
                 this.userContext = transformedContext;
-                console.log('Retrieved user context from window.farcaster:', transformedContext);
                 return transformedContext;
               }
             }
@@ -84,16 +76,13 @@ export const farcasterStore = {
       }
       
       // Попытка получить контекст через SDK модуль
-      console.log('Trying to get context via SDK module');
       if (this.sdk.context) {
         try {
           const sdkContext = await this.sdk.context;
-          console.log('Raw SDK context:', sdkContext);
           
           if (sdkContext) {
             const transformedContext = transformUserContext(sdkContext);
             this.userContext = transformedContext;
-            console.log('Retrieved and transformed user context from SDK:', transformedContext);
             return transformedContext;
           }
         } catch (error) {
@@ -114,11 +103,8 @@ export const farcasterStore = {
     const isInit = this.isInitialized && this.sdk !== null;
     const hasWindowFarcaster = typeof window !== 'undefined' && !!(window as any).farcaster;
     
-    console.log('Checking if SDK initialized:', isInit, 'store state:', this.isInitialized, 'window.farcaster:', hasWindowFarcaster);
-    
     // Если SDK не инициализирован в store, но доступен в window, инициализируем его
     if (!isInit && hasWindowFarcaster && typeof (window as any).farcaster.getContext === 'function') {
-      console.log('SDK found in window.farcaster, initializing store');
       this.setSDK((window as any).farcaster);
       return true;
     }
@@ -128,7 +114,6 @@ export const farcasterStore = {
   
   // Метод для установки SDK
   setSDK(sdk: any) {
-    console.log('Setting SDK in store', sdk ? 'SDK available' : 'SDK null');
     this.sdk = sdk;
     this.isInitialized = true;
   },
@@ -136,19 +121,16 @@ export const farcasterStore = {
   // Метод для установки контекста пользователя
   setUserContext(context: any) {
     const transformedContext = transformUserContext(context);
-    console.log('Setting user context in store:', transformedContext);
     this.userContext = transformedContext;
   },
   
-  // Новый метод для проверки, аутентифицирован ли пользователь
+  // Метод для проверки, аутентифицирован ли пользователь
   isAuthenticated() {
-    console.log('Checking if user is authenticated:', this._isAuthenticated);
     return this._isAuthenticated;
   },
   
-  // Новый метод для установки состояния аутентификации
+  // Метод для установки состояния аутентификации
   setIsAuthenticated(value: boolean) {
-    console.log('Setting authentication state:', value);
     this._isAuthenticated = value;
   }
 };
@@ -188,8 +170,6 @@ const FarcasterFrameHandler = () => {
     
     // Проверяем наличие нативного SDK в window
     if (typeof window !== 'undefined' && (window as any).farcaster) {
-      console.log('Native Farcaster SDK detected in window');
-      
       try {
         const nativeSdk = (window as any).farcaster;
         farcasterStore.setSDK(nativeSdk);
@@ -197,13 +177,11 @@ const FarcasterFrameHandler = () => {
         // Если есть метод ready(), вызываем его
         if (typeof nativeSdk.ready === 'function') {
           nativeSdk.ready();
-          console.log('Called ready() on native Farcaster SDK');
         }
         
         // Пытаемся получить контекст пользователя
         if (typeof nativeSdk.getContext === 'function') {
           nativeSdk.getContext().then((context: any) => {
-            console.log('Retrieved context from native SDK:', context);
             farcasterStore.setUserContext(context);
           }).catch((error: any) => {
             console.warn('Failed to get context from native SDK:', error);
@@ -235,7 +213,6 @@ const FarcasterFrameHandler = () => {
         
         // Сохраняем SDK в глобальное хранилище
         farcasterStore.setSDK(sdk);
-        console.log('SDK set in store, initialized:', farcasterStore.isInitialized);
         
         // Проверяем, что компонент все еще смонтирован
         if (!isMountedRef.current) return;
@@ -246,7 +223,6 @@ const FarcasterFrameHandler = () => {
         // Получаем контекст SDK
         try {
           const context = await sdk.context;
-          console.log('Farcaster Frame SDK initialized', context);
           
           // Сохраняем контекст пользователя в хранилище
           farcasterStore.setUserContext(context);
@@ -256,7 +232,6 @@ const FarcasterFrameHandler = () => {
           
           // Вызываем метод ready() для уведомления Farcaster, что фрейм готов
           sdk.actions.ready();
-          console.log('Farcaster ready() called');
           
           // Обновляем состояние только если компонент смонтирован
           safeSetState(setIsLoaded, true);
@@ -268,7 +243,6 @@ const FarcasterFrameHandler = () => {
           if (isMountedRef.current) {
             try {
               sdk.actions.ready();
-              console.log('Farcaster ready() called despite context error');
               
               safeSetState(setIsLoaded, true);
               safeSetState(setSdkInitialized, true);

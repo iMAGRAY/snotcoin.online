@@ -251,7 +251,6 @@ const HomeContent: React.FC = () => {
   // Функция для обработки аутентификации
   const handleAuthentication = (userData: any) => {
     // Обработка успешной аутентификации
-    console.log('Authenticated:', userData);
   };
 
   // Функция рендеринга содержимого при аутентификации
@@ -259,12 +258,17 @@ const HomeContent: React.FC = () => {
     return (
       <>
         {!gameState.hideInterface && (
-          <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md">
+          <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md z-10">
             <Resources 
               isVisible={true} 
               activeTab={gameState.activeTab} 
-              snot={0} 
-              snotCoins={0} 
+              snot={gameState.inventory?.snot || 0} 
+              snotCoins={gameState.inventory?.snotCoins || 0}
+              containerCapacity={gameState.inventory?.containerCapacity}
+              containerLevel={gameState.inventory?.containerCapacityLevel}
+              containerSnot={gameState.inventory?.containerSnot}
+              containerFillingSpeed={gameState.inventory?.fillingSpeed}
+              fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}
             />
           </header>
         )}

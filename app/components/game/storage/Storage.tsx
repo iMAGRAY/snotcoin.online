@@ -176,7 +176,12 @@ const Storage: React.FC = () => {
   }, [currentIndex, gameState.inventory.snot, gameDispatch])
 
   return (
-    <div className="h-full w-full relative overflow-hidden">
+    <motion.div 
+      className="w-full h-full flex flex-col overflow-hidden bg-gradient-to-b from-gray-900 to-gray-800"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <div
         className="absolute inset-0 z-0"
         style={{
@@ -217,7 +222,7 @@ const Storage: React.FC = () => {
         maxAmount={500} // Assuming 500 is the max reward
         setRewardAmount={setRewardAmount}
       />
-    </div>
+    </motion.div>
   )
 }
 
