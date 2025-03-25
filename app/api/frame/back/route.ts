@@ -13,25 +13,34 @@ export async function POST(req: NextRequest) {
     // Логирование данных запроса для отладки
     console.log('Farcaster Frame back request data:', JSON.stringify(body, null, 2));
     
+    // Получаем данные пользователя из запроса
+    const fid = body?.untrustedData?.fid;
+    const username = body?.untrustedData?.username || 'Player';
+    
     // Возвращаем HTML с начальным экраном
     return new NextResponse(
       `<!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta property="fc:frame" content="vNext" />
           <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
-          <meta property="og:image" content="${BASE_URL}/og-image.png" />
           <meta property="fc:frame:button:1" content="Play Game" />
           <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame" />
+          <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
           <meta property="fc:frame:button:2" content="View Leaderboard" />
           <meta property="fc:frame:button:2:action" content="post" />
-          <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame/leaderboard" />
+          <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/leaderboard" />
           <title>Snotcoin Game</title>
         </head>
         <body>
-          <div style="display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center;">
-            <h1>Snotcoin - Play to Earn Game</h1>
+          <div style="display: flex; justify-content: center; align-items: center; text-align: center; padding: 20px;">
+            <div>
+              <h1>Snotcoin - Play to Earn Game</h1>
+              <p>Welcome back, ${username}!</p>
+              <p>Choose an option to continue.</p>
+            </div>
           </div>
         </body>
       </html>`,
@@ -50,12 +59,13 @@ export async function POST(req: NextRequest) {
       `<!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta property="fc:frame" content="vNext" />
           <meta property="fc:frame:image" content="${BASE_URL}/error.png" />
-          <meta property="og:image" content="${BASE_URL}/error.png" />
           <meta property="fc:frame:button:1" content="Try Again" />
           <meta property="fc:frame:button:1:action" content="post" />
-          <meta property="fc:frame:post_url" content="${BASE_URL}/api/frame/back" />
+          <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/back" />
           <title>Error</title>
         </head>
         <body>
@@ -63,7 +73,7 @@ export async function POST(req: NextRequest) {
         </body>
       </html>`,
       {
-        status: 500,
+        status: 200, // Важно! Для фреймов даже при ошибке возвращаем 200
         headers: {
           'Content-Type': 'text/html',
         },
@@ -73,15 +83,33 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Обработчик GET запросов (может быть полезен для тестирования)
+ * Обработчик GET запросов для предпросмотра фрейма
  */
 export async function GET() {
   return new NextResponse(
-    JSON.stringify({ message: 'This endpoint only accepts POST requests from Farcaster Frames' }),
+    `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content="${BASE_URL}/og-image.png" />
+        <meta property="fc:frame:button:1" content="Play Game" />
+        <meta property="fc:frame:button:1:action" content="post" />
+        <meta property="fc:frame:button:1:post_url" content="${BASE_URL}/api/frame/game" />
+        <meta property="fc:frame:button:2" content="View Leaderboard" />
+        <meta property="fc:frame:button:2:action" content="post" />
+        <meta property="fc:frame:button:2:post_url" content="${BASE_URL}/api/frame/leaderboard" />
+        <title>Snotcoin Game</title>
+      </head>
+      <body>
+        <p>This is a Farcaster Frame for Snotcoin Game - Main Menu</p>
+      </body>
+    </html>`,
     {
-      status: 405,
+      status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/html',
       },
     }
   );
