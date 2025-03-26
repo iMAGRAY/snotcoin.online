@@ -176,8 +176,47 @@ export interface GameState {
   isLoading?: boolean;
 }
 
+/**
+ * Расширенная версия состояния игры с метаинформацией
+ */
 export interface ExtendedGameState extends GameState {
-  [key: string]: any;
+  _userId?: string;
+  _gameId?: string;
+  _saveVersion?: number;
+  _saveReason?: string;
+  _tempData?: Record<string, any>;
+  _savedAt?: string;
+  _createdAt?: string;
+  _loadedAt?: string;
+  _mergedAt?: string;
+  _lastModified?: number;
+  _decompressedAt?: string;
+  _wasRepaired?: boolean;
+  _repairedAt?: number;
+  _repairedFields?: string[];
+  _isCriticalBackup?: boolean;
+  _client?: {
+    version: string;
+    platform: string;
+    device?: string;
+  };
+  _mergeInfo?: {
+    conflicts?: number;
+    resolved?: number;
+    strategy?: string;
+    duration?: number;
+  };
+  _dataSignature?: string; // Подпись для проверки целостности данных
+  _integrityInfo?: {
+    userId: string;
+    saveVersion: number;
+    criticalDataHash: string;
+    timestamp: number;
+  };
+  _debug?: Record<string, any>;
+  
+  // Прямые свойства для быстрого доступа
+  containerSnot?: number;
 }
 
 export type ActionType =
@@ -207,6 +246,7 @@ export type ActionType =
   | "UPGRADE_CONTAINER_CAPACITY"
   | "UPGRADE_FILLING_SPEED"
   | "LOAD_GAME_STATE"
+  | "SET_GAME_STATE"
   | "RESET_GAME_STATE"
   | "FORCE_SAVE_GAME_STATE"
   | "LOGIN"
@@ -230,7 +270,9 @@ export type ActionType =
   | "SET_BACKGROUND_MUSIC_MUTE"
   | "UPDATE_INVENTORY"
   | "UPDATE_CONTAINER"
-  | "UPDATE_UPGRADES";
+  | "UPDATE_UPGRADES"
+  | "SET_ERROR"
+  | "SET_LOADING";
 
 export interface Action {
   type: ActionType;

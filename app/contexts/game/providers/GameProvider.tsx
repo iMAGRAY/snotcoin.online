@@ -3,13 +3,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GameStateContext, GameDispatchContext, IsSavingContext } from '../contexts'
 import { gameReducer } from '../../../reducers/gameReducer'
-import { createInitialGameState, Action, GameState } from '../../../types/gameTypes'
+import { createInitialGameState, Action, GameState, ExtendedGameState } from '../../../types/gameTypes'
 import { 
-  saveGameStateWithIntegrity as saveGameState, 
-  loadGameStateWithIntegrity as loadGameState,
+  saveGameStateWithIntegrity as saveGame, 
+  loadGameStateWithIntegrity as loadGame,
   createBackup,
-  API_ROUTES 
+  API_ROUTES,
+  SaveResponse
 } from '../../../services/gameDataService'
+import * as dataService from '../../../services/dataServiceModular'
+import { updateResources } from '../../../actions/gameActions'
+import { signGameState, verifyDataSignature } from '../../../utils/dataIntegrity'
+import { localStorageService } from '../../../services/storage/localStorageService'
+// import { gameDataService } from '../../../services/gameDataService'
+// import { GameContext } from '../gameContext'
 
 interface GameProviderProps {
   children: React.ReactNode
@@ -27,6 +34,11 @@ const unmountInProgress: Record<string, boolean> = {};
 const unmountTimestamps: Record<string, number> = {};
 // Счетчик для отслеживания общего количества записей
 let unmountRecordsCount = 0;
+
+// Для отслеживания последних инициализаций компонента
+const lastInitializationMap = new Map<string, number>();
+// Минимальный интервал между повторными инициализациями (3 секунды)
+const MIN_INITIALIZATION_INTERVAL = 3000;
 
 /**
  * Очищает старые записи о размонтировании, если их количество превышает лимит
@@ -48,13 +60,14 @@ const cleanupUnmountRecords = () => {
     }
   }
   
-  // Если по времени ничего не удалилось, а счетчик всё еще высокий, 
-  // удаляем 20% самых старых записей для предотвращения переполнения
+  // Если по времени ничего не удалилось, а счетчик всё еще высокий,
+  // удаляем 30% самых старых записей для предотвращения переполнения
   if (cleanedCount === 0 && unmountRecordsCount > MAX_UNMOUNT_RECORDS) {
     const entries = Object.entries(unmountTimestamps);
     entries.sort(([, a], [, b]) => a - b);
     
-    const keysToRemove = entries.slice(0, Math.ceil(entries.length * 0.2)).map(([key]) => key);
+    // Увеличен процент очистки с 20% до 30%
+    const keysToRemove = entries.slice(0, Math.ceil(entries.length * 0.3)).map(([key]) => key);
     
     keysToRemove.forEach(key => {
       delete unmountInProgress[key];
@@ -62,6 +75,13 @@ const cleanupUnmountRecords = () => {
       unmountRecordsCount--;
       cleanedCount++;
     });
+    
+    // Проверяем счетчик, если он не соответствует реальному количеству
+    const actualCount = Object.keys(unmountInProgress).length;
+    if (unmountRecordsCount !== actualCount) {
+      console.log(`[GameProvider] Исправление счетчика записей: ${unmountRecordsCount} -> ${actualCount}`);
+      unmountRecordsCount = actualCount;
+    }
   }
   
   if (cleanedCount > 0) {
@@ -89,12 +109,122 @@ const getUserIdFromStorage = (): string | null => {
   }
 };
 
+/**
+ * Проверяет и обновляет при необходимости структуру состояния
+ */
+const migrateStateIfNeeded = (state: ExtendedGameState): ExtendedGameState => {
+  // Если состояние уже верной версии, проверим только критические поля
+  if (state._saveVersion && state._saveVersion >= 2) {
+    // Дополнительно проверяем критические поля даже для новых версий
+    const migratedState = { ...state };
+    let needsRepair = false;
+
+    // Проверяем поле Cap в инвентаре
+    if (migratedState.inventory && migratedState.inventory.Cap === undefined) {
+      console.log("[GameProvider] Отсутствует поле Cap в инвентаре, исправляем");
+      migratedState.inventory.Cap = migratedState.inventory.containerCapacity || 100;
+      needsRepair = true;
+    }
+
+    // Если обновления не требуются, возвращаем исходное состояние
+    if (!needsRepair) {
+      return state;
+    }
+
+    // Обновляем метаданные о ремонте, но не меняем версию
+    if (!migratedState._repairedFields) migratedState._repairedFields = [];
+    migratedState._repairedFields.push('critical_fields_repair');
+    migratedState._wasRepaired = true;
+    migratedState._repairedAt = Date.now();
+
+    return migratedState;
+  }
+
+  console.log("[GameProvider] Миграция устаревшей структуры данных");
+  
+  // Создаем копию состояния для безопасного обновления
+  const migratedState = { ...state };
+  
+  // Устанавливаем версию
+  migratedState._saveVersion = 2;
+  migratedState._lastModified = Date.now();
+  
+  // Проверка наличия базовых структур
+  if (!migratedState.inventory) {
+    console.log("[GameProvider] Отсутствует инвентарь, создаем базовую структуру");
+    migratedState.inventory = {
+      snot: 0,
+      snotCoins: 0,
+      containerCapacity: 100,
+      containerSnot: 0,
+      fillingSpeed: 1,
+      collectionEfficiency: 1,
+      Cap: 100,
+      containerCapacityLevel: 1,
+      fillingSpeedLevel: 1,
+      lastUpdateTimestamp: Date.now()
+    };
+  } else {
+    // Проверяем наличие поля Cap в инвентаре
+    if (migratedState.inventory.Cap === undefined) {
+      console.log("[GameProvider] Отсутствует поле Cap в инвентаре, создаем на основе containerCapacity");
+      migratedState.inventory.Cap = migratedState.inventory.containerCapacity || 100;
+    }
+  }
+  
+  if (!migratedState.container) {
+    console.log("[GameProvider] Отсутствует контейнер, создаем базовую структуру");
+    migratedState.container = {
+      level: 1,
+      capacity: 100,
+      currentAmount: 0,
+      fillRate: 1
+    };
+  }
+  
+  if (!migratedState.upgrades) {
+    console.log("[GameProvider] Отсутствуют улучшения, создаем базовую структуру");
+    migratedState.upgrades = {
+      clickPower: { level: 1, value: 1 },
+      passiveIncome: { level: 1, value: 0.1 },
+      collectionEfficiencyLevel: 1,
+      containerLevel: 1,
+      fillingSpeedLevel: 1
+    };
+  }
+  
+  // Проверка на наличие stats
+  if (!migratedState.stats) {
+    console.log("[GameProvider] Отсутствуют статистики, создаем базовую структуру");
+    migratedState.stats = {
+      clickCount: 0,
+      playTime: 0,
+      startDate: new Date().toISOString(),
+      totalSnot: 0,
+      totalSnotCoins: 0,
+      highestLevel: 1,
+      consecutiveLoginDays: 0
+    };
+  }
+  
+  // Отметка о миграции
+  migratedState._wasRepaired = true;
+  migratedState._repairedAt = Date.now();
+  migratedState._repairedFields = migratedState._repairedFields || [];
+  migratedState._repairedFields.push('structure_migration_v2');
+  
+  console.log("[GameProvider] Миграция данных успешно выполнена");
+  
+  return migratedState;
+};
+
 export function GameProvider({
   children,
   initialState,
   userId: propUserId,
   enableAutoSave = true,
-  autoSaveInterval = 5000
+  // Увеличенный интервал автосохранения до 30 секунд для снижения нагрузки
+  autoSaveInterval = 30000
 }: GameProviderProps) {
   // Используем userId из props или из localStorage
   const [userId, setUserId] = useState<string | undefined>(propUserId);
@@ -145,70 +275,177 @@ export function GameProvider({
     cleanupUnmountRecords();
   }, [propUserId]);
 
-  // Загрузка сохраненного состояния
-  const loadSavedState = useCallback(async () => {
-    if (!userId) {
-      console.log('[GameProvider] Пропуск загрузки состояния: отсутствует userId');
-      return false;
+  // Загружаем сохраненные данные
+  useEffect(() => {
+    // Если данные уже загружены, не выполняем повторную загрузку
+    if (initialLoadDoneRef.current) {
+      console.log("[GameProvider] Начальная загрузка данных уже выполнена, пропускаем");
+      return;
     }
     
-    try {
-      setIsLoading(true);
-      console.log(`[GameProvider] Загрузка состояния для пользователя: ${userId}`);
-      
-      const loadedState = await loadGameState(userId);
-      
-      // Проверяем, что компонент не был размонтирован во время загрузки
-      if (userId && unmountInProgress[userId]) {
-        console.log(`[GameProvider] Отмена обработки загруженного состояния - компонент размонтирован`);
-        return false;
-      }
-      
-      // Проверяем, получены ли правильные данные перед их применением
-      if (loadedState.success && loadedState.data) {
-        // Синхронизируем состояние игры
-        console.log(`[GameProvider] Успешно загружено состояние для ${userId}`, loadedState);
+    const loadSavedData = async () => {
+      try {
+        const storedUserId = getUserIdFromStorage()
+        if (!storedUserId) {
+          console.log("Пользователь не найден в хранилище");
+          // Устанавливаем флаг, что загрузка завершена даже если не нашли userId
+          initialLoadDoneRef.current = true;
+          return;
+        }
         
-        // Обновляем состояние через редьюсер
+        // Проверяем, не слишком ли рано для повторной инициализации
+        // чтобы избежать частых запросов
+        const now = Date.now();
+        const lastInitTime = lastInitializationMap.get(storedUserId) || 0;
+        const timeSinceLast = now - lastInitTime;
+        
+        if (timeSinceLast < 3000) { // 3 секунды
+          console.log(`[GameProvider] Слишком частая инициализация для ${storedUserId}, последняя была ${timeSinceLast}мс назад`);
+          return;
+        }
+        
+        lastInitializationMap.set(storedUserId, now);
+        
         dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: {
-            ...loadedState.data,
-            _userId: userId,
-            // Установка версии сервера, если имеется
-            _saveVersion: loadedState.version || 1
+          type: 'SET_LOADING',
+          payload: true
+        });
+        
+        try {
+          const localSavedGame = localStorageService.getItem(`gameState_${storedUserId}`) as string;
+          
+          if (localSavedGame) {
+            try {
+              // Пытаемся загрузить из локального хранилища
+              const parsedState = JSON.parse(localSavedGame) as ExtendedGameState;
+              
+              // Проверяем и мигрируем структуру если нужно
+              const validatedState = migrateStateIfNeeded(parsedState);
+              
+              // Обновляем состояние
+              console.log("[GameProvider] Загрузка из локального хранилища", validatedState);
+              dispatch({
+                type: 'SET_GAME_STATE',
+                payload: validatedState
+              });
+              
+              // Обновляем userId
+              dispatch({
+                type: 'SET_USER_ID',
+                payload: storedUserId
+              });
+            } catch (parseError) {
+              console.error("Ошибка при парсинге локального состояния:", parseError);
+            }
+          } else {
+            console.log("[GameProvider] Локальное сохранение не найдено, инициализируем");
+            
+            // Пытаемся загрузить с сервера
+            try {
+              // Инициализируем userId
+              dispatch({
+                type: 'SET_USER_ID',
+                payload: storedUserId
+              });
+              
+              const result = await dataService.initializeGameState(storedUserId);
+              
+              if (result.success && result.data) {
+                // Проверяем и мигрируем структуру если нужно
+                const validatedState = migrateStateIfNeeded(result.data);
+                
+                // Инициализируем состояние
+                console.log("[GameProvider] Загрузка с сервера", validatedState);
+                dispatch({
+                  type: 'SET_GAME_STATE',
+                  payload: validatedState
+                });
+              } else {
+                console.error("[GameProvider] Ошибка инициализации состояния:", result.error);
+                dispatch({
+                  type: 'SET_ERROR',
+                  payload: result.error || "Ошибка загрузки данных"
+                });
+              }
+            } catch (serverError) {
+              console.error("[GameProvider] Ошибка загрузки с сервера:", serverError);
+            }
           }
-        });
-        
-        // Сохраняем последний userId
-        lastUserIdRef.current = userId;
-        
-        // Отмечаем, что загрузка выполнена
-        initialLoadDoneRef.current = true;
-        return true;
-      } else {
-        console.log(`[GameProvider] Нет данных для пользователя ${userId}, инициализируем новое состояние`);
-        // Если нет данных, инициализируем новое состояние с userId
-        dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: createInitialGameState(userId)
-        });
-        initialLoadDoneRef.current = true;
-        return false;
+          
+          // Отмечаем, что начальная загрузка выполнена
+          initialLoadDoneRef.current = true;
+        } catch (error) {
+          console.error("[GameProvider] Ошибка при загрузке данных:", error);
+        } finally {
+          dispatch({
+            type: 'SET_LOADING',
+            payload: false
+          });
+        }
+      } catch (e) {
+        console.error("Ошибка загрузки сохраненных данных:", e);
       }
-    } catch (error) {
-      console.error('[GameProvider] Ошибка при загрузке состояния:', error);
-      // В случае ошибки инициализируем новое состояние
-      dispatch({
-        type: 'LOAD_GAME_STATE',
-        payload: createInitialGameState(userId)
-      });
-      initialLoadDoneRef.current = true;
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId]);
+    };
+    
+    loadSavedData();
+  }, [dispatch]);
+
+  // Функция для сохранения состояния игры с таймаутом
+  const saveGameState = useCallback(
+    async (isCritical = false): Promise<SaveResponse> => {
+      try {
+        // Проверяем наличие userId
+        if (!state._userId) {
+          console.error("ID пользователя отсутствует в состоянии");
+          return { success: false, error: "ID пользователя отсутствует" };
+        }
+        
+        // Подписываем данные перед сохранением
+        const signedState = signGameState(state._userId, state);
+        
+        // Сохраняем в localStorage для резервного копирования
+        localStorageService.saveGameState(state._userId, signedState);
+        
+        // Сохраняем на сервер с таймаутом
+        console.log(`Сохраняем игровое состояние для пользователя ${state._userId}`);
+        
+        // Создаем промис с таймаутом
+        const saveWithTimeout = async () => {
+          const SAVE_TIMEOUT = 10000; // 10 секунд
+          
+          // Создаем промис, который завершается по таймауту
+          const timeoutPromise = new Promise<SaveResponse>((_, reject) => {
+            setTimeout(() => {
+              reject(new Error(`Превышено время ожидания сохранения (${SAVE_TIMEOUT}ms)`));
+            }, SAVE_TIMEOUT);
+          });
+          
+          // Создаем промис для сохранения
+          const savePromise = saveGame(state._userId!, signedState) as Promise<SaveResponse>;
+          
+          // Используем Promise.race для выбора первого завершенного промиса
+          return Promise.race([savePromise, timeoutPromise]);
+        };
+        
+        const result = await saveWithTimeout();
+        
+        if (!result.success) {
+          console.error("Ошибка сохранения:", result.error);
+        } else {
+          console.log("Успешно сохранено, версия:", result.version);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error("Ошибка в процессе сохранения:", error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : "Неизвестная ошибка" 
+        };
+      }
+    },
+    [state]
+  );
 
   // Автоматическое сохранение состояния игры
   const saveState = useCallback(async () => {
@@ -249,7 +486,9 @@ export function GameProvider({
       console.log(`[GameProvider] Сохранение состояния для пользователя: ${userId}`);
       
       // Сохраняем состояние игры
-      const saveResult = await saveGameState(userId, stateToSave);
+      const saveResult = await saveGameState(
+        typeof (state as any)._isCriticalSave === 'boolean' ? (state as any)._isCriticalSave : false
+      );
       
       // Проверяем, не был ли компонент размонтирован во время сохранения
       if (userId && unmountInProgress[userId] && !finalSaveSentRef.current) {
@@ -286,10 +525,40 @@ export function GameProvider({
     } catch (error) {
       console.error('[GameProvider] Ошибка при сохранении состояния:', error);
       
-      // Создаем резервную копию в случае ошибки
+      // Создаем резервную копию в случае ошибки с большим количеством попыток
       if (typeof window !== 'undefined' && window.localStorage && userId) {
-        createBackup(userId, state, state._saveVersion || 1);
-        console.log('[GameProvider] Создана резервная копия из-за ошибки при сохранении');
+        try {
+          // Создаем основную резервную копию
+          const backupCreated = createBackup(userId, state, state._saveVersion || 1);
+          
+          // Создаем дополнительную резервную копию с временной меткой для отличия
+          const timestampedBackupKey = `backup_emergency_${userId}_${Date.now()}`;
+          const backupData = {
+            gameState: state,
+            timestamp: Date.now(),
+            version: (state._saveVersion || 1) + 1000, // Используем большую версию для отличия
+            error: error instanceof Error ? error.message : String(error)
+          };
+          localStorage.setItem(timestampedBackupKey, JSON.stringify(backupData));
+          
+          console.log('[GameProvider] Созданы резервные копии (основная и экстренная) из-за ошибки при сохранении');
+        } catch (backupError) {
+          console.error('[GameProvider] Ошибка при создании резервных копий:', backupError);
+          
+          // Попытка создать самую минимальную резервную копию в критическом случае
+          try {
+            // Сохраняем только критические данные
+            const criticalData = {
+              _userId: userId,
+              inventory: state.inventory,
+              timestamp: Date.now()
+            };
+            localStorage.setItem(`emergency_${userId}_${Date.now()}`, JSON.stringify(criticalData));
+            console.log('[GameProvider] Создана минимальная экстренная копия критических данных');
+          } catch (emergencyError) {
+            console.error('[GameProvider] Критическая ошибка сохранения, все попытки резервного копирования не удались');
+          }
+        }
       }
       
       // Событие ошибки сохранения
@@ -332,7 +601,11 @@ export function GameProvider({
         const isCriticalAction = action.type === 'SET_USER' || 
                                action.type === 'LOAD_GAME_STATE' ||
                                action.type === 'UPGRADE_CONTAINER_CAPACITY' ||
-                               action.type === 'UPGRADE_FILLING_SPEED';
+                               action.type === 'UPGRADE_FILLING_SPEED' ||
+                               action.type === 'UPDATE_RESOURCES' ||
+                               action.type === 'ADD_SNOT' ||
+                               action.type === 'COLLECT_CONTAINER_SNOT' ||
+                               action.type === 'UPDATE_CONTAINER_SNOT';
                                
         if (isCriticalAction) {
           console.log(`[GameProvider] Критическое действие ${action.type}, запуск немедленного сохранения`);
@@ -358,10 +631,24 @@ export function GameProvider({
     
     // Загружаем сохраненное состояние при монтировании или изменении userId
     if (userId && !initialLoadDoneRef.current) {
+      // Проверка интервала повторной инициализации
+      const now = Date.now();
+      const lastInitTime = lastInitializationMap.get(userId);
+      
+      if (lastInitTime && now - lastInitTime < MIN_INITIALIZATION_INTERVAL) {
+        console.log(`[GameProvider] Слишком частая повторная инициализация для ${userId}, прошло ${now - lastInitTime}мс`);
+        // Устанавливаем флаг, что загрузка завершена для предотвращения циклов
+        initialLoadDoneRef.current = true;
+        return;
+      }
+      
+      // Запоминаем время инициализации
+      lastInitializationMap.set(userId, now);
+      
       console.log(`[GameProvider] Запуск загрузки состояния для ${userId}`);
       
       // Добавляем обработку ошибок при загрузке
-      loadSavedState().catch(error => {
+      saveState().catch(error => {
         console.error(`[GameProvider] Критическая ошибка при загрузке состояния:`, error);
         // Устанавливаем флаг, что загрузка завершена (чтобы избежать циклов повторных загрузок)
         initialLoadDoneRef.current = true;
@@ -379,7 +666,7 @@ export function GameProvider({
         unmountInProgress[userId] = false;
       }
     }
-  }, [userId, loadSavedState]);
+  }, [userId, saveState]);
   
   // Обработчик события закрытия страницы
   useEffect(() => {
@@ -491,6 +778,9 @@ export function GameProvider({
 
   // Обработка размонтирования компонента
   useEffect(() => {
+    // Идентификатор таймера сохранения при размонтировании
+    let unmountSaveTimerId: NodeJS.Timeout | null = null;
+    
     // Очищаем таймер автосохранения при размонтировании
     return () => {
       const userId = state._userId;
@@ -502,55 +792,88 @@ export function GameProvider({
         autoSaveTimerRef.current = null;
       }
       
-      // Устанавливаем флаг размонтирования
-      unmountInProgress[userId] = true;
-      unmountTimestamps[userId] = Date.now();
-      unmountRecordsCount++;
+      // Очищаем таймер сохранения при размонтировании, если он существует
+      if (unmountSaveTimerId) {
+        clearTimeout(unmountSaveTimerId);
+        unmountSaveTimerId = null;
+      }
       
+      // Проверяем, не начат ли уже процесс размонтирования для этого userId
+      if (unmountInProgress[userId]) {
+        console.log(`[GameProvider] Размонтирование уже в процессе для userId: ${userId}, пропускаем повторную обработку`);
+        return;
+      }
+      
+      // Сохраняем ссылку на userId при размонтировании
+      const userIdCopy = userId;
+      
+      // Устанавливаем флаг размонтирования
+      unmountInProgress[userIdCopy] = true;
+      unmountTimestamps[userIdCopy] = Date.now();
+      unmountRecordsCount++;
+
       // Проверяем необходимость очистки старых записей
       cleanupUnmountRecords();
-      
-      console.log(`[GameProvider] Компонент размонтирован для userId: ${userId}`);
-      
+
+      console.log(`[GameProvider] Компонент размонтирован для userId: ${userIdCopy}`);
+
       // Приоритетное сохранение при размонтировании
       if (enableAutoSave && !state._skipSave) {
         // Сброс флага финального сохранения
         finalSaveSentRef.current = false;
         
+        // Создаем копию стейта на момент размонтирования
+        const finalState = { ...state };
+        
         // Асинхронное сохранение с нулевой задержкой для избегания блокировки размонтирования
-        setTimeout(async () => {
+        unmountSaveTimerId = setTimeout(async () => {
           // Проверяем, что компонент все еще в процессе размонтирования (не был повторно смонтирован)
-          if (userId && unmountInProgress[userId]) {
-            console.log(`[GameProvider] Выполняется приоритетное сохранение при размонтировании для userId: ${userId}`);
+          if (userIdCopy && unmountInProgress[userIdCopy]) {
+            console.log(`[GameProvider] Выполняется приоритетное сохранение при размонтировании для userId: ${userIdCopy}`);
             
             // Устанавливаем флаг финального сохранения
             finalSaveSentRef.current = true;
             
             try {
-              await saveState();
-              console.log(`[GameProvider] Приоритетное сохранение при размонтировании успешно выполнено для userId: ${userId}`);
+              // Используем сохраненное состояние вместо текущего state
+              const stateCopy = {
+                ...finalState,
+                _lastSaved: new Date().toISOString(),
+                _isCriticalSave: true
+              };
+              
+              // Подписываем данные непосредственно перед сохранением
+              const signedState = signGameState(userIdCopy, stateCopy);
+              
+              // Сохраняем копию в localStorage
+              localStorageService.saveGameState(userIdCopy, signedState);
+              
+              // Сохраняем на сервер
+              const result = await saveGame(userIdCopy, signedState) as SaveResponse;
+              
+              console.log(`[GameProvider] Приоритетное сохранение при размонтировании успешно выполнено для userId: ${userIdCopy}`);
             } catch (error) {
-              console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${userId}:`, error);
+              console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${userIdCopy}:`, error);
               
               // Создаем резервную копию в случае ошибки при финальном сохранении
-              createBackup(userId, state, state._saveVersion || 1);
+              createBackup(userIdCopy, finalState, finalState._saveVersion || 1);
               console.log('[GameProvider] Создана резервная копия из-за ошибки при финальном сохранении');
             } finally {
               // Сбрасываем флаг размонтирования после завершения сохранения
-              if (userId) {
-                delete unmountInProgress[userId];
-                delete unmountTimestamps[userId];
+              if (userIdCopy && unmountInProgress[userIdCopy]) {
+                delete unmountInProgress[userIdCopy];
+                delete unmountTimestamps[userIdCopy];
                 unmountRecordsCount--;
-                console.log(`[GameProvider] Флаг размонтирования сброшен для userId: ${userId}`);
+                console.log(`[GameProvider] Флаг размонтирования сброшен для userId: ${userIdCopy}`);
               }
             }
           } else {
-            console.log(`[GameProvider] Приоритетное сохранение при размонтировании отменено - компонент уже не в процессе размонтирования для userId: ${userId}`);
+            console.log(`[GameProvider] Приоритетное сохранение при размонтировании отменено - компонент уже не в процессе размонтирования для userId: ${userIdCopy}`);
             
             // Сбрасываем флаг размонтирования, если компонент не в процессе размонтирования
-            if (userId) {
-              delete unmountInProgress[userId];
-              delete unmountTimestamps[userId];
+            if (userIdCopy && unmountInProgress[userIdCopy]) {
+              delete unmountInProgress[userIdCopy];
+              delete unmountTimestamps[userIdCopy];
               unmountRecordsCount--;
             }
           }

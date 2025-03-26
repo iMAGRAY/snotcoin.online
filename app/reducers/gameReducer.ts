@@ -93,7 +93,14 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       
       // Получаем скорость заполнения и вместимость с проверками
       const fillingSpeed = Math.max(0.01, state.inventory.fillingSpeed || 0.01);
-      const containerCapacity = Math.max(1, state.inventory.Cap || 100);
+      
+      // Проверяем наличие поля Cap, и если его нет, используем containerCapacity
+      const containerCapacity = Math.max(1, 
+        state.inventory.Cap !== undefined 
+          ? state.inventory.Cap 
+          : (state.inventory.containerCapacity || 100)
+      );
+      
       const currentContainerSnot = Math.max(0, state.inventory.containerSnot || 0);
       
       // Рассчитываем прирост в зависимости от скорости наполнения и времени
@@ -109,6 +116,8 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         inventory: {
           ...state.inventory,
           containerSnot: newContainerSnot,
+          // Если поле Cap отсутствовало, добавляем его
+          ...(state.inventory.Cap === undefined && { Cap: state.inventory.containerCapacity || 100 }),
           lastUpdateTimestamp: currentTime
         }
       });
@@ -162,21 +171,33 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         },
       });
 
-    case "UPGRADE_CONTAINER_CAPACITY":
+    case "UPGRADE_CONTAINER_CAPACITY": {
+      const currentCapacity = state.inventory.containerCapacity || 100;
+      const newCapacity = currentCapacity * 1.2; // Увеличиваем на 20%
+      
       return withMetadata({
         inventory: {
           ...state.inventory,
-          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
+          containerCapacity: newCapacity,
+          // Обновляем также поле Cap, чтобы они синхронизировались
+          Cap: newCapacity
         },
       });
+    }
 
-    case "INCREMENT_CONTAINER_CAPACITY":
+    case "INCREMENT_CONTAINER_CAPACITY": {
+      const currentCapacity = state.inventory.containerCapacity || 100;
+      const newCapacity = currentCapacity * 1.2; // Увеличиваем на 20%
+      
       return withMetadata({
         inventory: {
           ...state.inventory,
-          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
+          containerCapacity: newCapacity,
+          // Обновляем также поле Cap, чтобы они синхронизировались
+          Cap: newCapacity
         },
       });
+    }
 
     case "INITIALIZE_NEW_USER": {
       // Если передан payload, используем его

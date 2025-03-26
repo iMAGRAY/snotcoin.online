@@ -121,14 +121,15 @@ export interface CacheStats {
 }
 
 /**
- * Информация о сохранении клиента
+ * Интерфейс для информации о сохранении клиента
  */
 export interface ClientSaveInfo {
-  /** Идентификатор клиента */
   client_id: string;
-  /** Время сохранения */
   timestamp: number;
-  /** Метаданные */
+  save_count?: number;
+  concurrent_count?: number;
+  last_ip?: string;
+  last_source?: string;
   metadata?: Record<string, any>;
 }
 
