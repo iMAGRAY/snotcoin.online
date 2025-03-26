@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react"
 import { motion } from "framer-motion"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 import { formatTime, formatSnotValue } from "../../../utils/formatters"
 import { calculateFillingTime } from "../../../utils/gameUtils"
 import { validateContainerParams } from "../../../utils/resourceUtils"

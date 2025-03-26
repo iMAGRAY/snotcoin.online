@@ -1,48 +1,37 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// IMPORTANT: Для применения изменений требуется выполнить миграцию:
-// npx prisma migrate dev --name add_jwt_fields
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// Модель пользователя
 model User {
-  id                  String      @id @default(uuid())
-  farcaster_fid       String      @unique // Farcaster ID пользователя
-  farcaster_username  String      // Имя пользователя в Farcaster
-  farcaster_displayname String?   // Отображаемое имя в Farcaster
-  farcaster_pfp       String?     // URL аватара в Farcaster
-  jwt_token           String?     // JWT токен для аутентификации
-  refresh_token       String?     // Токен для обновления JWT
-  token_expires_at    DateTime?   // Дата истечения срока действия токена
-  created_at          DateTime    @default(now())
-  updated_at          DateTime    @updatedAt
-  progress            Progress?   // Связь с прогрессом пользователя
+  id                    String    @id @default(uuid())
+  jwt_token             String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  farcaster_displayname String?
+  farcaster_pfp         String?
+  farcaster_username    String
+  refresh_token         String?
+  token_expires_at      DateTime?
+  farcaster_fid         String    @unique
+  progress              Progress?
 
   @@map("users")
 }
 
-// Модель прогресса игры
 model Progress {
-  id          String      @id @default(uuid())
-  user_id     String      @unique
-  user        User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  game_state  Json        // Хранение состояния игры в формате JSON
-  version     Int         @default(1) // Версия для отслеживания изменений
-  is_compressed Boolean   @default(false) // Флаг сжатия данных
-  created_at  DateTime    @default(now())
-  updated_at  DateTime    @updatedAt
+  id            String   @id @default(uuid())
+  user_id       String   @unique
+  game_state    Json
+  version       Int      @default(1)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  is_compressed Boolean  @default(false)
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("user_progress")
 }

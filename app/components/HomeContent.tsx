@@ -1,10 +1,9 @@
 "use client"
 
-import React, { useRef, useEffect, useCallback, useMemo, Suspense } from "react"
+import React, { useRef, useEffect, useCallback, useMemo, Suspense, useState, useReducer } from "react"
 import { AnimatePresence } from "framer-motion"
 import dynamic from "next/dynamic"
-import { GameProvider, useGameState, useGameDispatch } from "../contexts/GameContext"
-import { TranslationProvider } from "../contexts/TranslationContext"
+import { useGameState, useGameDispatch } from "../contexts"
 import type { Action } from "../types/gameTypes"
 import { useFarcaster } from "../contexts/FarcasterContext"
 import { MotionDiv } from "./motion/MotionWrapper"
@@ -14,6 +13,7 @@ const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import AuthenticationWindow from "./auth/AuthenticationWindow"
 import { authStore } from './auth/AuthenticationWindow'
+import DevTools from './DevTools'
 
 // Dynamically import components that use browser APIs
 const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
@@ -46,12 +46,33 @@ const Quests = dynamic(() => import("./game/quests/Quests"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Quests..." />,
 })
 
+// Типы для локального редьюсера состояния
+type AuthState = {
+  isAuthenticated: boolean;
+  isUserDataLoading: boolean;
+  hasProcessedFrameParams: boolean;
+  hasProcessedFarcasterFrame: boolean;
+  hasDispatchedLogin: boolean;
+};
+
+type AuthAction = 
+  | { type: 'SET_AUTHENTICATED'; payload: boolean }
+  | { type: 'SET_USER_DATA_LOADING'; payload: boolean }
+  | { type: 'SET_PROCESSED_FRAME_PARAMS'; payload: boolean }
+  | { type: 'SET_PROCESSED_FARCASTER_FRAME'; payload: boolean } 
+  | { type: 'SET_DISPATCHED_LOGIN'; payload: boolean };
+
+// Функция для проверки авторизации
 const checkAuth = (dispatch: React.Dispatch<Action>) => {
   const isAuth = authStore.getIsAuthenticated()
   const authToken = authStore.getAuthToken()
 
   if (!isAuth || !authToken) {
     dispatch({ type: "SET_USER", payload: null })
+    
+    // Даже если нет авторизации, убедимся, что у игры есть уникальный ID
+    ensureGameHasUniqueId();
+    
     return false
   }
 
@@ -76,263 +97,255 @@ const checkAuth = (dispatch: React.Dispatch<Action>) => {
     // Ошибка парсинга токена
     authStore.clearAuthData();
     dispatch({ type: "SET_USER", payload: null });
+    
+    // Даже при ошибке, гарантируем наличие ID
+    ensureGameHasUniqueId();
+    
     return false;
   }
 }
 
+// Редьюсер для локального состояния
+const authReducer = (state: AuthState, action: AuthAction): AuthState => {
+  switch (action.type) {
+    case 'SET_AUTHENTICATED':
+      return { ...state, isAuthenticated: action.payload };
+    case 'SET_USER_DATA_LOADING':
+      return { ...state, isUserDataLoading: action.payload };
+    case 'SET_PROCESSED_FRAME_PARAMS':
+      return { ...state, hasProcessedFrameParams: action.payload };
+    case 'SET_PROCESSED_FARCASTER_FRAME':
+      return { ...state, hasProcessedFarcasterFrame: action.payload };
+    case 'SET_DISPATCHED_LOGIN':
+      return { ...state, hasDispatchedLogin: action.payload };
+    default:
+      return state;
+  }
+};
+
+// Функция для создания и сохранения уникального ID игры
+const ensureGameHasUniqueId = () => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    // Проверяем, есть ли уже ID игры
+    let gameId = localStorage.getItem('game_id');
+    
+    if (!gameId) {
+      // Создаем уникальный ID игры
+      gameId = `anonymous_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem('game_id', gameId);
+      localStorage.setItem('user_id', gameId); // Дублируем для совместимости
+      console.log(`[HomeContent] Создан новый анонимный ID игры: ${gameId}`);
+    }
+  } catch (error) {
+    console.error("[HomeContent] Ошибка при создании ID игры:", error);
+  }
+};
+
 const HomeContent: React.FC = () => {
-  const dispatch = useGameDispatch()
-  const gameState = useGameState()
-  const [viewportHeight, setViewportHeight] = React.useState("100vh")
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false)
+  const dispatch = useGameDispatch();
+  const gameState = useGameState();
+  const [viewportHeight, setViewportHeight] = React.useState("100vh");
   const { user: farcasterUser, isAuthenticated: isFarcasterAuth } = useFarcaster();
   
-  // Создаем ref на уровне компонента, а не внутри эффекта
-  const hasDispatchedLoginRef = useRef(false);
-  // Переносим sessionCheckErrorCountRef на уровень компонента
-  const sessionCheckErrorCountRef = useRef(0);
-  // Добавляем ref для отслеживания состояния проверки сессии
-  const isCheckingSessionRef = useRef(false);
-  // Добавляем ref для отслеживания установки laboratory как активной вкладки
-  const hasSetLaboratoryTabRef = useRef(false);
-  // Добавляем ref для отслеживания обработки скрытия интерфейса
-  const hasProcessedHideInterfaceRef = useRef(false);
-
-  // Также добавляем состояние для загрузки данных пользователя
-  const [isUserDataLoading, setIsUserDataLoading] = React.useState(false)
-  // Создаем ref для состояния авторизации, чтобы избежать зацикливания
-  const authStateRef = useRef(false);
-
-  const memoizedCheckAuth = useCallback(() => {
-    // Если данные пользователя загружаются, пропускаем проверку авторизации
-    if (isUserDataLoading) return;
-    
-    const prevAuthState = authStateRef.current;
-    const authResult = checkAuth(dispatch)
-    
-    // Обновляем состояние, только если оно изменилось, и используем ref 
-    // для отслеживания изменений во избежание циклов обновлений
-    if (prevAuthState !== authResult) {
-      authStateRef.current = authResult;
-      // Используем setTimeout для отложенного обновления состояния
-      // чтобы разорвать цикл обновлений
-      setTimeout(() => {
-        if (document.body) { // Проверяем, что компонент все еще монтирован
-          setIsAuthenticated(authResult);
-        }
-      }, 50);
-    }
-  }, [dispatch, isUserDataLoading])
-
-  // Проверка auth состояния при монтировании и изменениях localStorage
+  // При инициализации компонента убеждаемся, что у игры есть уникальный ID
   useEffect(() => {
-    // Однократная функция выполнения проверки авторизации
-    const performAuthCheck = () => {
-      // Удаляем проверку !authStateRef.current, чтобы избежать бесконечной рекурсии
-      memoizedCheckAuth();
+    ensureGameHasUniqueId();
+  }, []);
+  
+  // Ref для безопасного отслеживания предыдущего состояния авторизации
+  const prevAuthValueRef = useRef<boolean | null>(null);
+  
+  // Используем useReducer вместо множественных useState
+  const [localState, localDispatch] = useReducer(authReducer, {
+    isAuthenticated: false,
+    isUserDataLoading: false,
+    hasProcessedFrameParams: false,
+    hasProcessedFarcasterFrame: false,
+    hasDispatchedLogin: false
+  });
+  
+  // Мемоизированная функция проверки авторизации
+  const checkAuthentication = useCallback(() => {
+    return checkAuth(dispatch);
+  }, [dispatch]);
+
+  // Выносим функцию updateAuthState на верхний уровень компонента
+  const updateAuthState = useCallback((newAuthState: boolean) => {
+    // Используем ref для отслеживания предыдущего значения
+    // чтобы избежать сравнения с localState, которое может вызвать цикл обновлений
+    if (prevAuthValueRef.current !== newAuthState) {
+      prevAuthValueRef.current = newAuthState;
+      localDispatch({ type: 'SET_AUTHENTICATED', payload: newAuthState });
+    }
+  }, []);
+
+  // Эффект для обработки авторизации
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Функция для проверки авторизации
+    const performAuthCheck = async () => {
+      try {
+        if (!isMounted) return;
+        
+        const isAuthValid = await checkAuthentication();
+        updateAuthState(isAuthValid);
+      } catch (error) {
+        console.error("Auth check error:", error);
+      }
     };
     
-    // Выполняем начальную проверку авторизации
-    performAuthCheck();
-
+    // Только первоначальная проверка при монтировании
+    if (prevAuthValueRef.current === null) {
+      performAuthCheck();
+    }
+    
+    // Обработчики событий
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "isAuthenticated" || e.key === "authToken") {
-        memoizedCheckAuth()
-      }
-    }
-
-    const handleLogout = () => {
-      memoizedCheckAuth()
-    }
-
-    window.addEventListener("storage", handleStorageChange)
-    window.addEventListener("logout", handleLogout)
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange)
-      window.removeEventListener("logout", handleLogout)
-    }
-  }, [memoizedCheckAuth]) // Сохраняем только memoizedCheckAuth в зависимостях
-
-  // Обновляем авторизацию с Farcaster, когда пользователь меняется
-  useEffect(() => {
-    // Предотвращаем повторные обновления, если они не нужны
-    if (isCheckingSessionRef.current) return;
-    
-    // Маркируем, что мы выполняем проверку сессии
-    isCheckingSessionRef.current = true;
-    
-    // Однократная функция установки вкладки laboratory
-    const setLaboratoryTab = () => {
-      if (!hasSetLaboratoryTabRef.current) {
-        hasSetLaboratoryTabRef.current = true;
-        
-        // Проверка на активную вкладку внутри функции для избежания зависимости
-        if (gameState.activeTab !== "laboratory") {
-          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-        }
+        performAuthCheck();
       }
     };
     
-    try {
-      if (farcasterUser && isFarcasterAuth) {
-        // Проверяем, не выполнили ли мы уже логин
-        if (!hasDispatchedLoginRef.current) {
-          // Устанавливаем данные пользователя
-          dispatch({ type: "SET_USER", payload: {
-            id: farcasterUser.id,
-            farcaster_fid: farcasterUser.fid,
-            username: farcasterUser.username,
-            displayName: farcasterUser.displayName
-          }});
-          
-          // Обновляем состояние авторизации перед любыми другими обновлениями UI
-          // Используем ref и отложенное обновление состояния
-          if (!authStateRef.current) {
-            authStateRef.current = true;
-            // Избегаем вызова setState здесь, чтобы предотвратить циклы обновлений
-            // Используем аккуратно setTimeout с достаточной задержкой
-            setTimeout(() => {
-              if (document.body) { // Убедимся, что компонент все еще монтирован
-                setIsAuthenticated(true);
-              }
-            }, 50);
-          }
-          
-          // Устанавливаем флаг загрузки данных ПЕРЕД обновлением интерфейса
-          // чтобы избежать мерцания
-          setIsUserDataLoading(true);
-          
-          // Показываем интерфейс и обновляем состояние игры
-          dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-          
-          // Отмечаем, что уже выполнили логин - перемещаем сюда, чтобы избежать race condition
-          hasDispatchedLoginRef.current = true;
-          
-          // Используем setTimeout для предотвращения зацикливания обновлений
-          setTimeout(() => {
-            dispatch({ type: "LOGIN" });
-            
-            // Устанавливаем laboratory как активную вкладку в отдельном таймере
-            setTimeout(setLaboratoryTab, 100);
-          }, 100);
-          
-          // Устанавливаем таймер для завершения загрузки данных
-          const timer = setTimeout(() => {
-            // Снимаем состояние загрузки данных
-            setIsUserDataLoading(false);
-          }, 1000); // Сокращаем время для лучшего пользовательского опыта
-          
-          return () => clearTimeout(timer);
-        }
-      } else if (authStateRef.current && !isFarcasterAuth) {
-        // Если пользователь был аутентифицирован, но потерял авторизацию Farcaster
-        authStateRef.current = false;
-        setTimeout(() => {
-          if (document.body) { // Убедимся, что компонент все еще монтирован
-            setIsAuthenticated(false);
-          }
-        }, 50);
-        dispatch({ type: "SET_USER", payload: null });
-        hasDispatchedLoginRef.current = false;
-        // Сбрасываем флаг установки вкладки laboratory
-        hasSetLaboratoryTabRef.current = false;
-      }
-    } finally {
-      // Сбрасываем флаг проверки сессии с небольшой задержкой
-      // чтобы избежать быстрых повторных вызовов
-      setTimeout(() => {
-        isCheckingSessionRef.current = false;
-      }, 50);
-    }
-  }, [farcasterUser, isFarcasterAuth, dispatch]);
+    const handleLogout = () => {
+      performAuthCheck();
+    };
+    
+    // Обработчик для истекшего токена
+    const handleTokenExpired = () => {
+      console.log("[HomeContent] Получено событие истечения токена, переаутентификация...");
+      localDispatch({ type: 'SET_AUTHENTICATED', payload: false });
+      authStore.clearAuthData(); // Очищаем устаревшие данные аутентификации
+      performAuthCheck();
+    };
+    
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("logout", handleLogout);
+    window.addEventListener("auth-token-expired", handleTokenExpired);
+    
+    // Проверка каждые 5 секунд
+    const intervalId = setInterval(performAuthCheck, 5000);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("logout", handleLogout);
+      window.removeEventListener("auth-token-expired", handleTokenExpired);
+    };
+  }, [checkAuthentication, updateAuthState]);
 
-  // Отдельный эффект для обработки изменения состояния интерфейса
+  // Эффект для обработки авторизации через Farcaster
   useEffect(() => {
-    // Предотвращаем обработку, если уже в процессе обновления
-    if (isCheckingSessionRef.current) return;
-    
-    // Используем локальную переменную для отслеживания внесённых изменений
-    let changesApplied = false;
-
-    // Используем ссылку на состояние авторизации вместо проверки isAuthenticated
-    const isUserAuthenticated = authStateRef.current;
-    
-    if (gameState.hideInterface && isUserAuthenticated && !hasProcessedHideInterfaceRef.current) {
-      // Устанавливаем флаг, что обработали скрытие интерфейса
-      hasProcessedHideInterfaceRef.current = true;
-      changesApplied = true;
-      
-      // Если интерфейс скрыт, показываем его
-      dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-      
-      // Если вкладка не laboratory, устанавливаем ее
-      if (gameState.activeTab !== "laboratory") {
-        setTimeout(() => {
-          dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
-        }, 50);
-      }
-    } else if (!gameState.hideInterface) {
-      // Сбрасываем флаг, если интерфейс не скрыт
-      if (hasProcessedHideInterfaceRef.current) {
-        hasProcessedHideInterfaceRef.current = false;
-        changesApplied = true;
-      }
+    if (!farcasterUser || !isFarcasterAuth || localState.hasDispatchedLogin) {
+      return;
     }
     
-    // Если были внесены изменения, добавляем небольшую задержку
-    // перед следующим возможным обновлением для предотвращения циклов
-    if (changesApplied) {
-      isCheckingSessionRef.current = true;
-      setTimeout(() => {
-        isCheckingSessionRef.current = false;
-      }, 50);
-    }
-  }, [gameState.hideInterface, gameState.activeTab, dispatch]);
+    // Устанавливаем данные пользователя
+    dispatch({ 
+      type: "SET_USER", 
+      payload: {
+        id: farcasterUser.id,
+        farcaster_fid: farcasterUser.fid,
+        username: farcasterUser.username,
+        displayName: farcasterUser.displayName
+      }
+    });
+    
+    // Обновляем локальное состояние используя общую функцию updateAuthState
+    updateAuthState(true);
+    localDispatch({ type: 'SET_USER_DATA_LOADING', payload: true });
+    localDispatch({ type: 'SET_DISPATCHED_LOGIN', payload: true });
+    
+    // Показываем интерфейс
+    dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+  }, [farcasterUser, isFarcasterAuth, dispatch, updateAuthState]);
 
   // Фиксим мобильный viewport
   useEffect(() => {
     const fixViewportHeight = () => {
-      const vh = window.innerHeight * 0.01
-      document.documentElement.style.setProperty("--vh", `${vh}px`)
-      setViewportHeight(`${window.innerHeight}px`)
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      setViewportHeight(`${window.innerHeight}px`);
+    };
+
+    fixViewportHeight();
+    window.addEventListener("resize", fixViewportHeight);
+    return () => window.removeEventListener("resize", fixViewportHeight);
+  }, []);
+
+  // Эффект для обработки параметров Farcaster фрейма
+  useEffect(() => {
+    if (localState.hasProcessedFarcasterFrame) {
+      return;
     }
-
-    fixViewportHeight()
-    window.addEventListener("resize", fixViewportHeight)
-    return () => window.removeEventListener("resize", fixViewportHeight)
-  }, [])
-
-  const renderActiveTab = () => {
-    // Используем актуальное значение из authStateRef для большей надежности
-    const isUserAuthenticated = authStateRef.current;
     
-    if (isUserDataLoading || !isUserAuthenticated) {
+    if (typeof window !== 'undefined') {
+      const isFarcasterFrame = window.location.href.includes('?fc=1') || 
+                            window.location.href.includes('&fc=1') || 
+                            (window.parent !== window);
+      
+      if (isFarcasterFrame) {
+        localDispatch({ type: 'SET_PROCESSED_FARCASTER_FRAME', payload: true });
+        
+        // Для фреймов автоматически показываем интерфейс с лабораторией
+        dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+        dispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" });
+      }
+    }
+  }, [dispatch]);
+
+  // Эффект для обработки параметров URL
+  useEffect(() => {
+    if (localState.hasProcessedFrameParams) {
+      return;
+    }
+    
+    try {
+      const url = window.location.href;
+      if (url.includes('fid=') && (url.includes('trusted=') || url.includes('buttonIndex='))) {
+        localDispatch({ type: 'SET_PROCESSED_FRAME_PARAMS', payload: true });
+        
+        // Устанавливаем нужные значения
+        dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
+        dispatch({ type: "SET_ACTIVE_TAB", payload: "profile" });
+      }
+    } catch (error) {
+      console.error("Error handling frame parameters:", error);
+    }
+  }, [dispatch]);
+
+  // Функция рендеринга активной вкладки
+  const renderActiveTab = () => {
+    if (localState.isUserDataLoading || !localState.isAuthenticated) {
       return (
         <LoadingScreen
-          progress={isUserDataLoading ? 75 : 0}
-          statusMessage={isUserDataLoading ? "Загрузка данных..." : "Инициализация..."}
+          progress={localState.isUserDataLoading ? 75 : 0}
+          statusMessage={localState.isUserDataLoading ? "Загрузка данных..." : "Инициализация..."}
         />
-      )
+      );
     }
 
     switch (gameState.activeTab) {
       case "laboratory":
-        return <Laboratory />
+        return <Laboratory />;
       case "storage":
-        return <Storage />
+        return <Storage />;
       case "profile":
-        return <ProfilePage />
+        return <ProfilePage />;
       case "quests":
-        return <Quests />
+        return <Quests />;
       default:
-        return <Laboratory />
+        return <Laboratory />;
     }
-  }
+  };
 
   // Функция для обработки аутентификации
-  const handleAuthentication = (userData: any) => {
-    // Обработка успешной аутентификации
+  const handleAuthentication = () => {
+    // Просто триггерим проверку авторизации
+    checkAuthentication();
   };
 
   // Функция рендеринга содержимого при аутентификации
@@ -343,7 +356,7 @@ const HomeContent: React.FC = () => {
           <header className="flex justify-between items-center p-2 bg-gray-800 shadow-md z-10">
             <Resources 
               isVisible={true} 
-              activeTab={gameState.activeTab} 
+              activeTab={gameState.activeTab || "laboratory"} 
               snot={gameState.inventory?.snot || 0} 
               snotCoins={gameState.inventory?.snotCoins || 0}
               containerCapacity={gameState.inventory?.containerCapacity}
@@ -364,7 +377,7 @@ const HomeContent: React.FC = () => {
         {!gameState.hideInterface && <TabBar />}
       </>
     );
-  }
+  };
 
   return (
     <div
@@ -372,7 +385,7 @@ const HomeContent: React.FC = () => {
       style={{ height: viewportHeight }}
     >
       <AnimatePresence mode="wait">
-        {!authStateRef.current ? (
+        {!localState.isAuthenticated ? (
           <AuthenticationWindow key="auth" onAuthenticate={handleAuthentication} />
         ) : (
           <MotionDiv
@@ -388,17 +401,18 @@ const HomeContent: React.FC = () => {
         )}
       </AnimatePresence>
     </div>
-  )
-}
+  );
+};
 
 export default function HomeContentWrapper() {
-  // Wrap the component in error boundary
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Не удалось загрузить игру. Пожалуйста, перезагрузите страницу." />}>
       <Suspense fallback={<LoadingScreen progress={10} statusMessage="Загрузка игры..." />}>
         <HomeContent />
+        {/* Добавляем компонент DevTools в режиме разработки */}
+        {process.env.NODE_ENV !== 'production' && <DevTools />}
       </Suspense>
     </ErrorBoundary>
-  )
+  );
 }
 

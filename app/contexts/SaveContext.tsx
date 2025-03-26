@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { SaveSystem, SaveSystemOptions, SaveResult, SaveInfo } from '../services/saveSystem';
 import { ExtendedGameState } from '../types/gameTypes';
-import { useGameContext } from '../contexts/GameContext';
+import { useGameContext } from './game/hooks';
 
 /**
  * Интерфейс контекста сохранения

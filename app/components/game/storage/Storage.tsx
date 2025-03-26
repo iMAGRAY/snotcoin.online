@@ -3,13 +3,15 @@
 import React, { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../../contexts"
 import type { Chest } from "../../../types/storage"
 import ChestCarousel from "./ChestCarousel"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 import FallingRewards from "../../effects/FallingRewards"
 import ExplosionEffect from "../../effects/ExplosionEffect"
 import { ICONS } from "../../../constants/uiConstants"
+import { MotionDiv } from "../../motion/MotionWrapper"
+import { OpenButton } from "./OpenButton"
 
 const chests: Chest[] = [
   {
@@ -121,7 +123,7 @@ const RewardDisplay: React.FC<{
 RewardDisplay.displayName = "RewardDisplay"
 
 // Open Chest Button - отдельный компонент, не вложенный в другие div
-const OpenChestButton: React.FC<{onClick: () => void, text: string}> = ({onClick, text}) => {
+const OpenChestButton: React.FC<{onClick: () => void, text: string}> = React.memo(({onClick, text}) => {
   return (
     <motion.button
       onClick={onClick}
@@ -135,7 +137,9 @@ const OpenChestButton: React.FC<{onClick: () => void, text: string}> = ({onClick
       <span>{text}</span>
     </motion.button>
   );
-}
+});
+
+OpenChestButton.displayName = "OpenChestButton";
 
 const Storage: React.FC = () => {
   const gameState = useGameState()

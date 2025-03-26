@@ -34,7 +34,7 @@ export const ICONS = {
   },
   PROFILE: {
     MAIN: '/images/profile/Profile.webp',
-    BACKGROUND: '/images/profile/background/profile-background.jpg',
+    BACKGROUND: '',
     AVATAR: {
       DEFAULT: '/images/profile/avatar/default.webp',
     }

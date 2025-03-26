@@ -1,317 +1,268 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
+import { ExtendedGameState } from '../../../types/gameTypes'
 import { verifyJWT } from '../../../utils/jwt'
+import { redisService } from '../../../services/redisService'
+import { createDelta, isDeltaEfficient } from '../../../utils/deltaCompression'
 
 export const dynamic = 'force-dynamic'
 
 const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
-  console.log('[API] Получен запрос на сохранение прогресса');
+  console.log('[API/save-progress] Получен запрос на сохранение прогресса');
   
   try {
-    // Получаем данные из тела запроса
-    let body;
-    try {
-      // Проверяем пустое тело запроса
-      const text = await request.text();
-      if (!text || text.trim() === '') {
-        console.error('[API] Получено пустое тело запроса');
-        return NextResponse.json({ error: 'Пустое тело запроса' }, { status: 400 });
-      }
-      
-      // Парсим JSON с обработкой ошибок
-      body = JSON.parse(text);
-    } catch (parseError) {
-      console.error('[API] Ошибка при парсинге JSON:', parseError);
-      return NextResponse.json({ 
-        error: 'Невозможно распарсить JSON из запроса', 
-        details: parseError instanceof Error ? parseError.message : 'Unknown error' 
-      }, { status: 400 });
-    }
-    
-    // Проверяем валидность данных
-    if (!body || !body.gameState) {
-      console.error('[API] Некорректные данные в запросе:', body ? 'отсутствует gameState' : 'отсутствует тело запроса');
-      return NextResponse.json({ error: 'Некорректные данные' }, { status: 400 });
-    }
-    
-    // Важно: убедиться, что gameState не содержит некорректных значений для числовых полей
-    // Проверка на целостность данных перед сохранением
-    try {
-      if (body.gameState._userId) {
-        body.gameState._userId = String(body.gameState._userId);
-      }
-
-      // Вложенные объекты могут требовать проверки
-      if (body.gameState.user && body.gameState.user.fid) {
-        body.gameState.user.fid = String(body.gameState.user.fid);
-      }
-    } catch (validationError) {
-      console.error('[API] Ошибка валидации данных:', validationError);
-      // Продолжаем выполнение, так как это не критическая ошибка
-    }
-    
-    // Проверяем токен через URL-параметр (для Beacon API)
+    // Извлекаем токен из заголовка Authorization или URL параметров
+    const authHeader = request.headers.get('Authorization');
     const tokenFromUrl = request.nextUrl.searchParams.get('token');
     
-    // Извлекаем токен из заголовка Authorization
-    const authHeader = request.headers.get('Authorization');
+    // Приоритет имеет токен из заголовка, затем из URL параметров
     let token;
     
-    // Приоритет имеет токен из заголовка, затем из URL-параметра
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
-      console.log('[API] Токен получен из заголовка');
+      console.log('[API/save-progress] Токен получен из заголовка');
     } else if (tokenFromUrl) {
       token = tokenFromUrl;
-      console.log('[API] Токен получен из URL-параметра (Beacon API)');
+      console.log('[API/save-progress] Токен получен из URL параметров');
     } else {
-      console.error('[API] Отсутствует токен авторизации (ни в заголовке, ни в URL)');
+      console.error('[API/save-progress] Отсутствует токен авторизации (ни в заголовке, ни в URL)');
       return NextResponse.json({ error: 'Отсутствует токен авторизации' }, { status: 401 });
     }
     
-    console.log('[API] Верифицируем JWT токен');
     // Проверяем валидность токена
     const { valid, userId, error: tokenError } = await verifyJWT(token);
     
     if (!valid || !userId) {
-      console.error('[API] Невалидный токен авторизации:', tokenError);
+      console.error('[API/save-progress] Невалидный токен авторизации:', tokenError);
       return NextResponse.json({
         error: 'Невалидный токен авторизации',
         details: tokenError
       }, { status: 401 });
     }
     
-    console.log(`[API] Токен верифицирован, userId: ${userId}`);
+    console.log(`[API/save-progress] Токен верифицирован, userId: ${userId}`);
     
-    // Проверяем, что сохраняется состояние для текущего пользователя
-    if (body.userId !== userId) {
-      console.error(`[API] Конфликт ID пользователя: ${body.userId} (в запросе) !== ${userId} (в токене)`);
-      return NextResponse.json({
-        error: 'Запрещено сохранять состояние для другого пользователя'
+    // Получаем данные из запроса
+    const body = await request.json();
+    
+    // Проверяем наличие игровых данных
+    if (!body.gameState) {
+      console.error('[API/save-progress] В запросе отсутствуют игровые данные');
+      return NextResponse.json({ 
+        error: 'Отсутствуют игровые данные'
+      }, { status: 400 });
+    }
+    
+    // Проверяем, что игровые данные содержат правильный userId или устанавливаем его
+    const gameState = body.gameState as ExtendedGameState;
+    
+    if (!gameState._userId) {
+      gameState._userId = userId;
+    } else if (gameState._userId !== userId) {
+      console.error(`[API/save-progress] Несоответствие ID пользователя: ${gameState._userId} (в данных) != ${userId} (в токене)`);
+      return NextResponse.json({ 
+        error: 'Несоответствие ID пользователя'
       }, { status: 403 });
     }
     
-    // Находим пользователя по ID
-    const user = await prisma.user.findUnique({
+    // Проверяем наличие критических изменений для определения приоритета
+    const isCriticalSave = Boolean(gameState._isCriticalSave || body.isCriticalSave);
+    const saveReason = gameState._saveReason || body.saveReason || 'manual';
+    const hasMeaningfulChanges = gameState._hasMeaningfulChanges !== undefined 
+      ? gameState._hasMeaningfulChanges 
+      : body.hasMeaningfulChanges !== undefined
+        ? body.hasMeaningfulChanges
+        : true;
+    
+    console.log(`[API/save-progress] Тип сохранения: ${isCriticalSave ? 'критическое' : 'обычное'}, причина: ${saveReason}`);
+    
+    // Проверяем валидность данных игры
+    if (!validateGameData(gameState)) {
+      console.error('[API/save-progress] Невалидные игровые данные');
+      return NextResponse.json({
+        error: 'Невалидные игровые данные'
+      }, { status: 400 });
+    }
+    
+    // Находим пользователя
+    let user = await prisma.user.findUnique({
       where: { id: userId }
     });
     
     if (!user) {
-      console.log(`[API] Пользователь не найден в базе данных: ${userId}`);
-      
-      try {
-        // Проверяем, существует ли уже пользователь с таким ID
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { id: userId },
-              { farcaster_fid: userId }
-            ]
-          }
-        });
-        
-        if (existingUser) {
-          console.log(`[API] Найден существующий пользователь с ID: ${existingUser.id} или farcaster_fid: ${existingUser.farcaster_fid}`);
-          return await handleProgressSave(existingUser, body, token);
-        }
-        
-        // Выполняем дополнительную проверку перед созданием
-        const checkUserAgain = await prisma.user.findUnique({
-          where: { id: userId }
-        });
-        
-        if (checkUserAgain) {
-          console.log(`[API] Найден пользователь при дополнительной проверке: ${checkUserAgain.id}`);
-          return await handleProgressSave(checkUserAgain, body, token);
-        }
-        
-        // Извлекаем числовую часть ID для использования в username
-        const userIdParts = userId.split('_');
-        const numericPart = userIdParts.length > 1 ? userIdParts[1] : '0';
-        
-        // Попытка создать пользователя на лету, если токен уже верифицирован
-        try {
-          const newUser = await prisma.user.create({
-            data: {
-              id: userId, // Используем существующий ID из токена
-              farcaster_fid: userId, // В схеме farcaster_fid теперь String
-              farcaster_username: `user_${numericPart}`, // Формируем имя пользователя
-              farcaster_displayname: '', // Пустое отображаемое имя
-              jwt_token: token // Сохраняем токен
-            }
-          });
-          
-          console.log(`[API] Создан временный пользователь на лету: ${newUser.id}`);
-          
-          // Продолжаем с новым пользователем
-          return await handleProgressSave(newUser, body, token);
-        } catch (createUserError) {
-          console.error(`[API] Ошибка при создании пользователя:`, createUserError);
-          
-          // Ошибка P2002 указывает на нарушение уникального ограничения
-          if ((createUserError as any).code === 'P2002') {
-            // Пробуем еще раз найти пользователя
-            const finalCheckUser = await prisma.user.findUnique({
-              where: { id: userId }
-            });
-            
-            if (finalCheckUser) {
-              console.log(`[API] Пользователь найден при финальной проверке после ошибки: ${finalCheckUser.id}`);
-              return await handleProgressSave(finalCheckUser, body, token);
-            }
-          }
-          
-          throw createUserError; // Пробрасываем ошибку дальше, если не можем обработать ситуацию
-        }
-      } catch (createError) {
-        console.error(`[API] Ошибка при создании пользователя на лету:`, createError);
-        
-        // Если ошибка связана с уникальностью ID, попробуем найти пользователя
-        if (createError && (createError as any).code === 'P2002') {
-          try {
-            // Пытаемся найти пользователя повторно
-            const existingUser = await prisma.user.findFirst({
-              where: {
-                OR: [
-                  { id: userId },
-                  { farcaster_fid: userId }
-                ]
-              }
-            });
-            
-            if (existingUser) {
-              console.log(`[API] После ошибки найден пользователь с ID: ${existingUser.id}`);
-              return await handleProgressSave(existingUser, body, token);
-            }
-          } catch (findError) {
-            console.error('[API] Ошибка при повторном поиске пользователя:', findError);
-          }
-        }
-        
-        return NextResponse.json({ 
-          error: 'Пользователь не найден. Необходима авторизация через Farcaster.',
-          code: 'USER_NOT_FOUND'
-        }, { status: 401 });
-      }
+      console.error(`[API/save-progress] Пользователь не найден: ${userId}`);
+      return NextResponse.json({ 
+        error: 'Пользователь не найден'
+      }, { status: 404 });
     }
     
-    console.log(`[API] Пользователь найден: ${user.id}, farcaster_fid: ${user.farcaster_fid}`);
+    // Обновляем токен пользователя, если он изменился
+    if (user.jwt_token !== token) {
+      console.log(`[API/save-progress] Обновляем токен пользователя: ${userId}`);
+      
+      await prisma.user.update({
+        where: { id: userId },
+        data: { jwt_token: token }
+      });
+    }
     
-    return await handleProgressSave(user, body, token);
+    // Ищем существующий прогресс
+    let existingProgress = await prisma.progress.findUnique({
+      where: { user_id: userId }
+    });
+
+    try {
+      // Сначала сохраняем данные в Redis для быстрого доступа
+      const redisResult = await redisService.saveGameState(userId, gameState, isCriticalSave);
+      
+      if (!redisResult.success) {
+        console.warn(`[API/save-progress] Не удалось сохранить в Redis: ${redisResult.error}`);
+      } else {
+        console.log(`[API/save-progress] Данные успешно сохранены в Redis, источник: ${redisResult.source}`);
+      }
+      
+      // Если нет значимых изменений и это не критическое сохранение, пропускаем сохранение в БД
+      if (!hasMeaningfulChanges && !isCriticalSave) {
+        console.log(`[API/save-progress] Пропуск сохранения в БД (нет значимых изменений)`);
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Данные сохранены только в кэше',
+          progress: existingProgress,
+          cachedOnly: true
+        });
+      }
+      
+      // Если прогресс существует, обновляем его
+      if (existingProgress) {
+        // Получаем текущую версию
+        const currentVersion = existingProgress.version || 1;
+        
+        // Проверяем конфликт версий
+        if (gameState._saveVersion && gameState._saveVersion < currentVersion) {
+          console.warn(`[API/save-progress] Конфликт версий: ${gameState._saveVersion} (клиент) < ${currentVersion} (сервер)`);
+          
+          // Если это не критическое сохранение, отклоняем с ошибкой
+          if (!isCriticalSave) {
+            return NextResponse.json({
+              success: false,
+              message: 'Конфликт версий',
+              versionConflict: true,
+              serverVersion: currentVersion
+            }, { status: 409 });
+          }
+          
+          // Для критических сохранений продолжаем, несмотря на конфликт
+          console.log(`[API/save-progress] Игнорируем конфликт версий для критического сохранения`);
+        }
+        
+        // Определяем, нужно ли сжимать данные
+        const shouldCompress = JSON.stringify(gameState).length > 50 * 1024; // > 50KB
+        
+        // Преобразовать gameState в JSON для Prisma
+        const gameStateJson = JSON.stringify(gameState);
+        
+        // Обновляем прогресс
+        existingProgress = await prisma.progress.update({
+          where: { user_id: userId },
+          data: {
+            game_state: gameStateJson,
+            version: currentVersion + 1,
+            is_compressed: shouldCompress,
+            updated_at: new Date()
+          }
+        });
+        
+        console.log(`[API/save-progress] Обновлен прогресс для пользователя: ${userId}, версия: ${existingProgress.version}`);
+      } else {
+        // Если прогресса нет, создаем новый
+        const gameStateJson = JSON.stringify(gameState);
+        
+        // Определяем, нужно ли сжимать данные для нового прогресса
+        const shouldCompress = gameStateJson.length > 50 * 1024; // > 50KB
+        
+        existingProgress = await prisma.progress.create({
+          data: {
+            user_id: userId,
+            game_state: gameStateJson,
+            version: 1,
+            is_compressed: shouldCompress,
+            created_at: new Date(),
+            updated_at: new Date()
+          }
+        });
+        
+        console.log(`[API/save-progress] Создан новый прогресс для пользователя: ${userId}`);
+      }
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Прогресс сохранен успешно',
+        progress: {
+          id: existingProgress.id,
+          version: existingProgress.version,
+          user_id: existingProgress.user_id,
+          updated_at: existingProgress.updated_at
+        }
+      });
+    } catch (error) {
+      console.error('[API/save-progress] Ошибка сохранения прогресса:', error);
+      
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка сохранения прогресса',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, { status: 500 });
+    }
   } catch (error) {
-    console.error('[API] Ошибка при сохранении прогресса:', error);
+    console.error('[API/save-progress] Необработанная ошибка:', error);
     
     return NextResponse.json({
-      error: 'Ошибка при сохранении прогресса',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      success: false,
+      message: 'Внутренняя ошибка сервера',
+      error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
 
-// Выделяем обработку сохранения прогресса в отдельную функцию
-async function handleProgressSave(user: any, body: any, token: string) {
+/**
+ * Проверяет целостность игровых данных перед сохранением
+ */
+function validateGameData(gameState: any): boolean {
   try {
-    // Получаем данные игрового состояния и информацию о сжатии
-    const gameState = body.gameState;
-    const isCompressed = body.isCompressed || false;
-    
-    console.log(`[API] Проверяем существование прогресса для пользователя ${user.id}`);
-    // Определяем, нужно ли обновлять существующую запись или создавать новую
-    const existingProgress = await prisma.progress.findUnique({
-      where: { user_id: user.id }
-    });
-    
-    const currentTime = new Date();
-    const newVersion = body.version || (existingProgress ? existingProgress.version + 1 : 1);
-    
-    let updatedProgress;
-    
-    if (existingProgress) {
-      console.log(`[API] Обновляем существующий прогресс для пользователя ${user.id}, текущая версия: ${existingProgress.version}, новая версия: ${newVersion}`);
-      // Обновляем существующую запись без поля is_compressed, которое отсутствует в схеме
-      updatedProgress = await prisma.progress.update({
-        where: { user_id: user.id },
-        data: {
-          game_state: gameState,
-          version: newVersion,
-          updated_at: currentTime
-        }
-      });
-    } else {
-      try {
-        console.log(`[API] Пытаемся создать новую запись прогресса для пользователя ${user.id}, версия: ${newVersion}`);
-        // Создаем новую запись без поля is_compressed
-        updatedProgress = await prisma.progress.create({
-          data: {
-            user_id: user.id,
-            game_state: gameState,
-            version: newVersion,
-            created_at: currentTime,
-            updated_at: currentTime
-          }
-        });
-      } catch (createError) {
-        // Обрабатываем ошибку уникального ограничения
-        if ((createError as any).code === 'P2002' && (createError as any).meta?.target?.includes('user_id')) {
-          console.log(`[API] Ошибка уникальности при создании прогресса. Повторная проверка существования прогресса...`);
-          
-          // Проверяем еще раз, возможно запись была создана между проверкой и созданием
-          const retryProgress = await prisma.progress.findUnique({
-            where: { user_id: user.id }
-          });
-          
-          if (retryProgress) {
-            console.log(`[API] Найден существующий прогресс при повторной проверке для пользователя ${user.id}, обновляем`);
-            // Если запись найдена при повторной проверке, обновляем ее
-            updatedProgress = await prisma.progress.update({
-              where: { user_id: user.id },
-              data: {
-                game_state: gameState,
-                version: newVersion,
-                updated_at: currentTime
-              }
-            });
-          } else {
-            // Если запись все еще не найдена, это критическая ошибка
-            throw new Error(`Не удалось создать или найти прогресс для пользователя ${user.id}`);
-          }
-        } else {
-          // Если ошибка другого типа, пробрасываем ее дальше
-          throw createError;
-        }
-      }
+    // Обработка сжатых данных
+    if (gameState._isCompressed) {
+      // Проверяем наличие обязательных полей для сжатых данных
+      return (
+        gameState.critical &&
+        gameState.critical.inventory &&
+        gameState.critical.container &&
+        gameState.critical.upgrades &&
+        gameState.integrity
+      );
     }
     
-    // Обновляем токен пользователя, если он не совпадает с текущим
-    if (user.jwt_token !== token) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { jwt_token: token }
-      });
-      console.log(`[API] Обновлен токен пользователя ${user.id}`);
+    // Проверка структурированных данных
+    if (gameState.critical) {
+      return (
+        gameState.critical.inventory &&
+        gameState.critical.container &&
+        gameState.critical.upgrades
+      );
     }
     
-    console.log(`[API] Сохранение прогресса успешно для пользователя ${user.id}, версия: ${updatedProgress.version}`);
-    
-    // Формируем ответ (сохраняем поле isCompressed в ответе для совместимости с клиентом)
-    return NextResponse.json({
-      success: true,
-      message: "Прогресс успешно сохранен",
-      progress: {
-        userId: updatedProgress.user_id,
-        version: updatedProgress.version,
-        lastUpdated: updatedProgress.updated_at,
-        isCompressed: isCompressed // Оставляем в ответе для API
-      }
-    });
-  } catch (saveError) {
-    console.error('[API] Ошибка при обработке сохранения прогресса:', saveError);
-    
-    return NextResponse.json({
-      error: 'Ошибка при сохранении прогресса',
-      details: saveError instanceof Error ? saveError.message : 'Unknown error'
-    }, { status: 500 });
+    // Для обычных данных проверяем обязательные поля
+    return (
+      gameState.inventory &&
+      typeof gameState.inventory.snot === 'number' &&
+      typeof gameState.inventory.snotCoins === 'number' &&
+      gameState.container &&
+      gameState.upgrades
+    );
+  } catch (error) {
+    console.error(`[API] Ошибка валидации данных:`, error);
+    return false;
   }
 } 

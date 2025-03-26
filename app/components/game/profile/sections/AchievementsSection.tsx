@@ -1,9 +1,9 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { motion } from "framer-motion"
 import { Trophy } from "lucide-react"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import { useTranslation } from "../../../../i18n"
 import type { AchievementCategory } from "../../../../types/profile-types"
 
 const achievements: AchievementCategory[] = [

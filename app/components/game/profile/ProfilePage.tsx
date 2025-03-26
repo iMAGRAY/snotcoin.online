@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Image from "next/image"
-import { useTranslation } from "../../../contexts/TranslationContext"
-import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { useTranslation } from "../../../i18n"
+import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import { X, Star, BarChart2, Package, Award, Cog, Calendar } from "lucide-react"
 import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation"
 import Settings from "../settings/Settings"
 import { authStore } from '../../auth/AuthenticationWindow'
 import { ICONS } from "../../../constants/uiConstants"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs"
+import { FaChartLine, FaStore, FaTrophy } from "react-icons/fa"
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -79,14 +81,6 @@ const ProfilePage: React.FC = () => {
   return (
     <div className="relative flex flex-col h-full w-full overflow-hidden">
       {/* Background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center z-0"
-        style={{
-          backgroundImage:
-            `url('${ICONS.PROFILE.BACKGROUND}')`,
-          filter: "blur(5px)",
-        }}
-      />
       <div className="absolute inset-0 bg-gradient-to-br from-[#1a2b3d] via-[#2a3b4d] to-[#3a4c62] opacity-90 z-10" />
 
       <LayoutGroup>
@@ -108,22 +102,25 @@ const ProfilePage: React.FC = () => {
             {/* Profile Header */}
             <motion.div className="flex items-center mb-6" layout>
               <motion.div
-                className="w-20 h-20 rounded-full overflow-hidden mr-4 border-4 border-emerald-500 shadow-lg flex-shrink-0"
+                className="w-20 h-20 rounded-full overflow-hidden mr-4 border-4 border-emerald-500 shadow-lg flex-shrink-0 bg-gray-700 flex items-center justify-center"
                 whileHover={{ scale: 1.05, rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
                 layout
               >
-                <Image
-                  src={
-                    gameState.user?.pfp || gameState.user?.farcaster_pfp ||
-                    ICONS.PROFILE.AVATAR.DEFAULT
-                  }
-                  alt="Profile"
-                  width={80}
-                  height={80}
-                  style={{ objectFit: "cover" }}
-                  className="w-full h-full"
-                />
+                {gameState.user?.pfp || gameState.user?.farcaster_pfp ? (
+                  <Image
+                    src={gameState.user.pfp || gameState.user.farcaster_pfp || ""}
+                    alt="Profile"
+                    width={80}
+                    height={80}
+                    style={{ objectFit: "cover" }}
+                    className="w-full h-full"
+                  />
+                ) : (
+                  <div className="text-4xl font-bold text-white">
+                    {getUserDisplayName().charAt(0).toUpperCase()}
+                  </div>
+                )}
               </motion.div>
               <motion.div className="flex-grow" layout>
                 <motion.h2

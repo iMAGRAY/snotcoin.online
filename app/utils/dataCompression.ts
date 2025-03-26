@@ -1,280 +1,364 @@
 /**
- * Утилиты для сжатия и декомпрессии данных сохранения
- * Оптимизировано для минимизации объема передаваемых данных
+ * Модуль для сжатия и декомпрессии игровых данных
+ * Оптимизирует хранение состояний для большого количества пользователей
  */
 
-import { CompressedGameState } from "../types/saveTypes";
-import { ExtendedGameState } from "../types/gameTypes";
-import * as LZString from "lz-string";
+import * as LZString from 'lz-string';
+import { ExtendedGameState, Inventory, Upgrades } from '../types/gameTypes';
+import { CompressedGameState, StructuredGameSave, CompressionAlgorithm, DeltaGameState, DeltaOperation } from '../types/saveTypes';
 
 /**
- * Алгоритмы сжатия, поддерживаемые системой
- */
-export enum CompressionAlgorithm {
-  LZ_UTF16 = "lz-string-utf16",
-  LZ_BASE64 = "lz-string-base64",
-  LZ_URI = "lz-string-uri"
-}
-
-/**
- * Расширенное игровое состояние с метаданными о декомпрессии
- */
-interface EnhancedGameState extends ExtendedGameState {
-  _decompressedAt?: string;
-  _integrityWarning?: boolean;
-}
-
-/**
- * Опции для сжатия данных
+ * Опции сжатия
  */
 interface CompressionOptions {
   algorithm?: CompressionAlgorithm;
-  includeIntegrityInfo?: boolean;
   removeTempData?: boolean;
-  removeLogs?: boolean;
+  includeIntegrityInfo?: boolean;
 }
 
 /**
- * Сжимает объект игрового состояния
- * @param state Объект состояния для сжатия
- * @param userId ID пользователя для интегрити-проверки
+ * Значения по умолчанию для опций сжатия
+ */
+const DEFAULT_OPTIONS: CompressionOptions = {
+  algorithm: CompressionAlgorithm.LZ_UTF16,
+  removeTempData: true,
+  includeIntegrityInfo: true
+};
+
+/**
+ * Синхронно сжимает данные
+ * @param data Строка для сжатия
+ * @param algorithm Алгоритм сжатия
+ * @returns Сжатая строка
+ */
+export function compressData(
+  data: string,
+  algorithm: CompressionAlgorithm = CompressionAlgorithm.LZ_UTF16
+): string {
+  if (!data) return '';
+  
+  try {
+    switch (algorithm) {
+      case CompressionAlgorithm.LZ_UTF16:
+        return LZString.compressToUTF16(data);
+      case CompressionAlgorithm.LZ_BASE64:
+        return LZString.compressToBase64(data);
+      case CompressionAlgorithm.LZ_URI:
+        return LZString.compressToEncodedURIComponent(data);
+      case CompressionAlgorithm.NONE:
+        return data;
+      default:
+        return LZString.compressToUTF16(data);
+    }
+  } catch (error) {
+    console.error('[dataCompression] Error compressing data:', error);
+    return data; // При ошибке возвращаем исходные данные
+  }
+}
+
+/**
+ * Синхронно декомпрессирует данные
+ * @param compressedData Сжатая строка
+ * @param algorithm Алгоритм сжатия
+ * @returns Декомпрессированная строка
+ */
+export function decompressData(
+  compressedData: string,
+  algorithm: CompressionAlgorithm = CompressionAlgorithm.LZ_UTF16
+): string {
+  if (!compressedData) return '';
+  
+  try {
+    switch (algorithm) {
+      case CompressionAlgorithm.LZ_UTF16:
+        return LZString.decompressFromUTF16(compressedData) || '';
+      case CompressionAlgorithm.LZ_BASE64:
+        return LZString.decompressFromBase64(compressedData) || '';
+      case CompressionAlgorithm.LZ_URI:
+        return LZString.decompressFromEncodedURIComponent(compressedData) || '';
+      case CompressionAlgorithm.NONE:
+        return compressedData;
+      default:
+        return LZString.decompressFromUTF16(compressedData) || '';
+    }
+  } catch (error) {
+    console.error('[dataCompression] Error decompressing data:', error);
+    return ''; // При ошибке возвращаем пустую строку
+  }
+}
+
+/**
+ * Сжимает состояние игры для хранения
+ * @param state Состояние игры
+ * @param userId ID пользователя
  * @param options Опции сжатия
- * @returns Сжатое представление данных
+ * @returns Сжатое состояние или null при ошибке
  */
 export function compressGameState(
   state: ExtendedGameState,
   userId: string,
-  options: CompressionOptions = {}
-): CompressedGameState {
-  // Устанавливаем алгоритм сжатия по умолчанию
-  const algorithm = options.algorithm || CompressionAlgorithm.LZ_UTF16;
-  
-  // Создаем копию данных для очистки перед сжатием
-  const stateForCompression = { ...state };
-  
-  // Удаляем временные данные, если указано
-  if (options.removeTempData) {
-    delete (stateForCompression as any)._tempData;
-    delete (stateForCompression as any)._renderData;
-    delete (stateForCompression as any)._frameData;
-    delete (stateForCompression as any)._physicsObjects;
-    delete (stateForCompression as any)._sceneObjects;
+  options: CompressionOptions = DEFAULT_OPTIONS
+): CompressedGameState | null {
+  if (!state || !userId) {
+    console.error('[dataCompression] Invalid arguments for compressGameState');
+    return null;
   }
   
-  // Удаляем логи, если указано
-  if (options.removeLogs) {
-    delete (stateForCompression as any).logs;
-    delete (stateForCompression as any).history;
-    delete (stateForCompression as any).analytics;
-  }
-  
-  // Сериализуем данные
-  const serialized = JSON.stringify(stateForCompression);
-  const originalSize = serialized.length;
-  
-  // Сжимаем данные выбранным алгоритмом
-  let compressedData: string = "";
-  
-  switch (algorithm) {
-    case CompressionAlgorithm.LZ_UTF16:
-      compressedData = LZString.compressToUTF16(serialized);
-      break;
-    case CompressionAlgorithm.LZ_BASE64:
-      compressedData = LZString.compressToBase64(serialized);
-      break;
-    case CompressionAlgorithm.LZ_URI:
-      compressedData = LZString.compressToEncodedURIComponent(serialized);
-      break;
-    default:
-      compressedData = LZString.compressToUTF16(serialized);
-  }
-  
-  // Создаем объект сжатого состояния
-  const compressedSize = compressedData.length;
-  const compressionRatio = originalSize > 0 ? (compressedSize / originalSize) * 100 : 0;
-  
-  // Информация для проверки целостности
-  const integrityInfo = options.includeIntegrityInfo ? {
-    userId,
-    saveVersion: state._saveVersion || 0,
-    criticalDataHash: generateCriticalDataHash(state),
-    timestamp: Date.now()
-  } : {
-    userId,
-    saveVersion: state._saveVersion || 0,
-    criticalDataHash: "",
-    timestamp: Date.now()
-  };
-  
-  // Возвращаем сжатое представление
-  return {
-    userId: userId,
-    compressedData: compressedData,
-    algorithm: algorithm,
-    originalSize: originalSize,
-    compressedSize: compressedSize,
-    checksums: {
-      criticalData: integrityInfo.criticalDataHash,
-      fullData: ""
-    },
-    version: state._saveVersion || 1,
-    timestamp: Date.now(),
-    isCompressed: true,
-    _isCompressed: true,
-    _algorithm: algorithm,
-    _compressedData: compressedData,
-    _originalSize: originalSize,
-    _compressedSize: compressedSize,
-    _compressedAt: new Date().toISOString(),
-    _integrityInfo: integrityInfo
-  };
-}
-
-/**
- * Распаковывает сжатое состояние
- * @param compressed Сжатое состояние
- * @returns Распакованное состояние или null при ошибке
- */
-export function decompressGameState(
-  compressed: CompressedGameState
-): EnhancedGameState | null {
   try {
-    // Проверяем, что это действительно сжатое состояние
-    if (!compressed._isCompressed || !compressed._compressedData) {
-      console.error('Объект не является сжатым состоянием');
-      return null;
+    // Объединяем опции по умолчанию с переданными
+    const finalOptions = { ...DEFAULT_OPTIONS, ...options };
+    
+    // Создаем копию состояния для безопасности
+    const stateCopy = JSON.parse(JSON.stringify(state));
+    
+    // Удаляем временные данные, если нужно
+    if (finalOptions.removeTempData) {
+      delete stateCopy._tempData;
+      delete stateCopy.logs;
+      delete stateCopy.analytics;
     }
     
-    // Выбираем алгоритм декомпрессии
-    const algorithm = compressed._algorithm || CompressionAlgorithm.LZ_UTF16;
-    let decompressed: string | null = null;
+    // Преобразуем в структурированное сохранение
+    const structuredSave: StructuredGameSave = createStructuredSave(stateCopy, userId);
     
-    switch (algorithm) {
-      case CompressionAlgorithm.LZ_UTF16:
-        decompressed = LZString.decompressFromUTF16(compressed._compressedData);
-        break;
-      case CompressionAlgorithm.LZ_BASE64:
-        decompressed = LZString.decompressFromBase64(compressed._compressedData);
-        break;
-      case CompressionAlgorithm.LZ_URI:
-        decompressed = LZString.decompressFromEncodedURIComponent(compressed._compressedData);
-        break;
-      default:
-        decompressed = LZString.decompressFromUTF16(compressed._compressedData);
+    // Преобразуем в строку JSON
+    const originalJson = JSON.stringify(structuredSave);
+    const originalSize = originalJson.length;
+    
+    // Выделяем критические данные
+    const criticalData = structuredSave.critical;
+    const integrityData = structuredSave.integrity;
+    
+    // Сжимаем все данные кроме критических
+    const dataToCompress = {
+      regular: structuredSave.regular,
+      extended: structuredSave.extended
+    };
+    
+    // Сжимаем данные
+    const jsonToCompress = JSON.stringify(dataToCompress);
+    const compressedData = compressData(jsonToCompress, finalOptions.algorithm);
+    const compressedSize = criticalData ? JSON.stringify(criticalData).length + compressedData.length : 0;
+    
+    // Создаем объект сжатого состояния
+    const compressedState: CompressedGameState = {
+      critical: criticalData,
+      integrity: integrityData,
+      _isCompressed: true,
+      _compressedData: compressedData,
+      _originalSize: originalSize,
+      _compressedSize: compressedSize,
+      _compression: finalOptions.algorithm || CompressionAlgorithm.LZ_UTF16,
+      _compressedAt: new Date().toISOString()
+    };
+    
+    // Добавляем информацию о целостности, если нужно
+    if (finalOptions.includeIntegrityInfo) {
+      compressedState._integrityInfo = {
+        userId: userId,
+        saveVersion: state._saveVersion || 1,
+        criticalDataHash: generateSimpleChecksum(JSON.stringify(criticalData)),
+        timestamp: Date.now()
+      };
     }
     
-    // Проверяем успешность декомпрессии
-    if (!decompressed) {
-      console.error('Ошибка декомпрессии данных');
-      return null;
-    }
-    
-    // Парсим JSON
-    try {
-      const state = JSON.parse(decompressed) as EnhancedGameState;
-      
-      // Добавляем метаданные о декомпрессии
-      state._decompressedAt = new Date().toISOString();
-      
-      // Проверяем целостность данных, если есть информация
-      if (compressed._integrityInfo && compressed._integrityInfo.criticalDataHash) {
-        const currentHash = generateCriticalDataHash(state);
-        const expectedHash = compressed._integrityInfo.criticalDataHash;
-        
-        if (currentHash !== expectedHash) {
-          console.warn('Предупреждение: хеш критических данных не совпадает');
-          state._integrityWarning = true;
-        }
-      }
-      
-      return state;
-    } catch (parseError) {
-      console.error('Ошибка при парсинге декомпрессированных данных:', parseError);
-      return null;
-    }
+    return compressedState;
   } catch (error) {
-    console.error('Ошибка при декомпрессии данных:', error);
+    console.error('[dataCompression] Error compressing game state:', error);
     return null;
   }
 }
 
 /**
- * Генерирует хеш критической информации для проверки целостности
- * @param state Состояние игры
- * @returns Хеш критических данных
+ * Распаковывает сжатое состояние игры
+ * @param compressedState Сжатое состояние
+ * @returns Распакованное структурированное сохранение или null при ошибке
  */
-function generateCriticalDataHash(state: ExtendedGameState): string {
-  // Для простоты используем строковое представление
-  const criticalDataStr = JSON.stringify({
-    inventory: {
-      snot: state.inventory?.snot,
-      snotCoins: state.inventory?.snotCoins,
-      containerCapacity: state.inventory?.containerCapacity,
-      containerCapacityLevel: state.inventory?.containerCapacityLevel,
-      fillingSpeed: state.inventory?.fillingSpeed,
-      fillingSpeedLevel: state.inventory?.fillingSpeedLevel
-    },
-    upgrades: state.upgrades,
-    container: {
-      level: state.container?.level
-    },
-    version: state._saveVersion
-  });
-  
-  // Генерируем хеш (простая реализация)
-  let hash = 0;
-  
-  for (let i = 0; i < criticalDataStr.length; i++) {
-    const char = criticalDataStr.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+export function decompressGameState(compressedState: CompressedGameState): StructuredGameSave | null {
+  if (!compressedState || 
+      !compressedState._isCompressed || 
+      !compressedState._compressedData ||
+      !compressedState.integrity) {
+    console.error('[dataCompression] Invalid compressed state');
+    return null;
   }
   
-  return Math.abs(hash).toString(36);
+  try {
+    const now = new Date().toISOString();
+    
+    // Распаковываем данные
+    const decompressedDataStr = decompressData(
+      compressedState._compressedData, 
+      compressedState._compression as CompressionAlgorithm
+    );
+    
+    if (!decompressedDataStr) {
+      console.error('[dataCompression] Failed to decompress data');
+      return null;
+    }
+    
+    // Преобразовываем данные из JSON
+    const decompressedData = JSON.parse(decompressedDataStr);
+    
+    // Преобразовываем saveVersion в числовой тип
+    const saveVersion = typeof compressedState.integrity.saveVersion === 'string'
+      ? parseInt(compressedState.integrity.saveVersion, 10)
+      : compressedState.integrity.saveVersion || 1;
+    
+    // Создаем полное состояние
+    const fullState: StructuredGameSave = {
+      critical: compressedState.critical,
+      regular: decompressedData.regular,
+      extended: decompressedData.extended,
+      integrity: compressedState.integrity,
+      _decompressedAt: now,
+      _hasFullData: true,
+      _metadata: {
+        version: saveVersion, // Используем преобразованную версию
+        userId: compressedState.integrity.userId,
+        isCompressed: false,
+        savedAt: compressedState._compressedAt,
+        loadedAt: now
+      }
+    };
+    
+    return fullState;
+  } catch (error) {
+    console.error('[dataCompression] Error decompressing game state:', error);
+    return null;
+  }
 }
 
 /**
- * Оценивает эффективность сжатия для текущего состояния
+ * Создает структурированное сохранение из состояния игры
  * @param state Состояние игры
- * @returns Информация о потенциальном сжатии
+ * @param userId ID пользователя
+ * @returns Структурированное сохранение
  */
-export function estimateCompression(
-  state: ExtendedGameState
-): { originalSize: number; compressedSizes: Record<CompressionAlgorithm, number>; bestAlgorithm: CompressionAlgorithm } {
-  // Сериализуем состояние
-  const serialized = JSON.stringify(state);
-  const originalSize = serialized.length;
+function createStructuredSave(state: ExtendedGameState, userId: string): StructuredGameSave {
+  const currentTime = new Date().toISOString();
   
-  // Сжимаем различными алгоритмами
-  const compressedSizes: Record<CompressionAlgorithm, number> = {} as Record<CompressionAlgorithm, number>;
+  // Извлекаем ID пользователя из состояния или используем переданный
+  const finalUserId = state._userId || userId;
   
-  // LZ-String UTF16
-  const utf16Compressed = LZString.compressToUTF16(serialized);
-  compressedSizes[CompressionAlgorithm.LZ_UTF16] = utf16Compressed.length;
+  // Проверяем обязательные поля и используем значения по умолчанию при необходимости
+  const inventory: Inventory = state.inventory || { 
+    snot: 0, 
+    snotCoins: 0, 
+    containerSnot: 0,
+    containerCapacity: 100, 
+    containerCapacityLevel: 1,
+    fillingSpeed: 1,
+    fillingSpeedLevel: 1,
+    collectionEfficiency: 1,
+    Cap: 0
+  };
   
-  // LZ-String Base64
-  const base64Compressed = LZString.compressToBase64(serialized);
-  compressedSizes[CompressionAlgorithm.LZ_BASE64] = base64Compressed.length;
+  const container = state.container || { level: 1, capacity: 100, currentAmount: 0, fillRate: 1 };
   
-  // LZ-String URI
-  const uriCompressed = LZString.compressToEncodedURIComponent(serialized);
-  compressedSizes[CompressionAlgorithm.LZ_URI] = uriCompressed.length;
-  
-  // Находим лучший алгоритм
-  let bestAlgorithm = CompressionAlgorithm.LZ_UTF16;
-  let minSize = compressedSizes[CompressionAlgorithm.LZ_UTF16];
-  
-  for (const algorithm in compressedSizes) {
-    const typedAlgorithm = algorithm as CompressionAlgorithm;
-    if (compressedSizes[typedAlgorithm] < minSize) {
-      minSize = compressedSizes[typedAlgorithm];
-      bestAlgorithm = typedAlgorithm;
-    }
-  }
+  const upgrades: Upgrades = state.upgrades || { 
+    containerLevel: 1,
+    fillingSpeedLevel: 1,
+    collectionEfficiencyLevel: 1,
+    clickPower: { level: 1, value: 1 },
+    passiveIncome: { level: 1, value: 0.1 }
+  };
   
   return {
-    originalSize,
-    compressedSizes,
-    bestAlgorithm
+    // Критические данные
+    critical: {
+      inventory,
+      upgrades,
+      container,
+      metadata: {
+        version: state._saveVersion || 1,
+        lastModified: state._lastModified || Date.now(),
+        userId: finalUserId,
+        saveCount: 0,
+        lastSaved: currentTime
+      }
+    },
+    
+    // Регулярные данные
+    regular: {
+      items: state.items || [],
+      achievements: state.achievements || { unlockedAchievements: [] },
+      stats: {
+        highestLevel: state.highestLevel || 1,
+        clickCount: state.stats?.clickCount || 0,
+        totalSnot: inventory.snot || 0,
+        totalSnotCoins: inventory.snotCoins || 0,
+        playTime: state.stats?.playTime || 0,
+        startDate: typeof state.stats?.startDate === 'string' 
+          ? state.stats.startDate 
+          : currentTime,
+        consecutiveLoginDays: state.consecutiveLoginDays || 0
+      }
+    },
+    
+    // Расширенные данные
+    extended: {
+      settings: state.settings || {
+        language: 'en',
+        theme: 'light',
+        notifications: true,
+        tutorialCompleted: false,
+        musicEnabled: true,
+        soundEnabled: true,
+        notificationsEnabled: true
+      },
+      soundSettings: state.soundSettings || {
+        musicVolume: 0.5,
+        soundVolume: 0.5, 
+        notificationVolume: 0.5,
+        clickVolume: 0.5,
+        effectsVolume: 0.5,
+        backgroundMusicVolume: 0.3,
+        isMuted: false,
+        isEffectsMuted: false,
+        isBackgroundMusicMuted: false
+      }
+    },
+    
+    // Данные целостности
+    integrity: {
+      userId: finalUserId,
+      saveVersion: (state._saveVersion || 1).toString(),
+      timestamp: currentTime,
+      checksum: generateSimpleChecksum(JSON.stringify(inventory) + JSON.stringify(upgrades))
+    },
+    
+    // Метаданные
+    _isCompressed: false,
+    _metadata: {
+      version: state._saveVersion || 1,
+      userId: finalUserId,
+      isCompressed: false,
+      savedAt: currentTime,
+      loadedAt: currentTime
+    }
   };
+}
+
+/**
+ * Генерирует простую контрольную сумму для строки
+ * @param data Строка данных для генерации контрольной суммы
+ * @returns Строковое представление контрольной суммы
+ */
+function generateSimpleChecksum(data: string): string {
+  try {
+    // Простая хеш-функция
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+      const char = data.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Преобразуем в 32-битное целое
+    }
+    
+    // Возвращаем хеш в виде шестнадцатеричной строки
+    return hash.toString(16);
+  } catch (error) {
+    console.error('[dataCompression] Error generating checksum:', error);
+    return '0';
+  }
 } 

@@ -263,57 +263,146 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       });
 
     case "SET_CLICK_SOUND_VOLUME":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           clickVolume: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          effectsVolume: state.soundSettings?.effectsVolume || 0.5,
+          backgroundMusicVolume: state.soundSettings?.backgroundMusicVolume || 0.3,
+          isMuted: state.soundSettings?.isMuted || false,
+          isEffectsMuted: state.soundSettings?.isEffectsMuted || false,
+          isBackgroundMusicMuted: state.soundSettings?.isBackgroundMusicMuted || false
         },
-      });
+      };
 
     case "SET_BACKGROUND_MUSIC_VOLUME":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           backgroundMusicVolume: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          clickVolume: state.soundSettings?.clickVolume || 0.5,
+          effectsVolume: state.soundSettings?.effectsVolume || 0.5,
+          isMuted: state.soundSettings?.isMuted || false,
+          isEffectsMuted: state.soundSettings?.isEffectsMuted || false,
+          isBackgroundMusicMuted: state.soundSettings?.isBackgroundMusicMuted || false
         },
-      });
+      };
 
     case "SET_EFFECTS_SOUND_VOLUME":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           effectsVolume: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          clickVolume: state.soundSettings?.clickVolume || 0.5,
+          backgroundMusicVolume: state.soundSettings?.backgroundMusicVolume || 0.3,
+          isMuted: state.soundSettings?.isMuted || false,
+          isEffectsMuted: state.soundSettings?.isEffectsMuted || false,
+          isBackgroundMusicMuted: state.soundSettings?.isBackgroundMusicMuted || false
         },
-      });
+      };
 
     case "SET_MUTE":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           isMuted: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          clickVolume: state.soundSettings?.clickVolume || 0.5,
+          effectsVolume: state.soundSettings?.effectsVolume || 0.5,
+          backgroundMusicVolume: state.soundSettings?.backgroundMusicVolume || 0.3,
+          isEffectsMuted: state.soundSettings?.isEffectsMuted || false,
+          isBackgroundMusicMuted: state.soundSettings?.isBackgroundMusicMuted || false
         },
-      });
+      };
 
     case "SET_EFFECTS_MUTE":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           isEffectsMuted: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          clickVolume: state.soundSettings?.clickVolume || 0.5,
+          effectsVolume: state.soundSettings?.effectsVolume || 0.5,
+          backgroundMusicVolume: state.soundSettings?.backgroundMusicVolume || 0.3,
+          isMuted: state.soundSettings?.isMuted || false,
+          isBackgroundMusicMuted: state.soundSettings?.isBackgroundMusicMuted || false
         },
-      });
+      };
 
     case "SET_BACKGROUND_MUSIC_MUTE":
-      return withMetadata({
+      return {
+        ...state,
         soundSettings: {
-          ...state.soundSettings,
+          ...(state.soundSettings || {}),
           isBackgroundMusicMuted: action.payload,
+          musicVolume: state.soundSettings?.musicVolume || 0.5,
+          soundVolume: state.soundSettings?.soundVolume || 0.5,
+          notificationVolume: state.soundSettings?.notificationVolume || 0.5,
+          clickVolume: state.soundSettings?.clickVolume || 0.5,
+          effectsVolume: state.soundSettings?.effectsVolume || 0.5,
+          backgroundMusicVolume: state.soundSettings?.backgroundMusicVolume || 0.3,
+          isMuted: state.soundSettings?.isMuted || false,
+          isEffectsMuted: state.soundSettings?.isEffectsMuted || false
         },
-      });
+      };
 
     case "SET_HIDE_INTERFACE":
       return withMetadata({
-        hideInterface: action.payload,
+        hideInterface: action.payload
       });
+
+    case "SET_SOUND_SETTINGS":
+      return withMetadata({
+        soundSettings: {
+          ...state.soundSettings,
+          ...action.payload
+        }
+      });
+
+    case "UPDATE_INVENTORY":
+      return {
+        ...state,
+        inventory: {
+          ...state.inventory,
+          ...action.payload
+        }
+      };
+      
+    case "UPDATE_CONTAINER":
+      return {
+        ...state,
+        container: {
+          ...state.container,
+          ...action.payload
+        }
+      };
+      
+    case "UPDATE_UPGRADES":
+      return {
+        ...state,
+        upgrades: {
+          ...state.upgrades,
+          ...action.payload
+        }
+      };
 
     default:
       return state;

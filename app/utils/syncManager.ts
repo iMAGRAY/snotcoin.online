@@ -10,7 +10,8 @@ import {
   DeltaGameState,
   CompressedGameState,
   gameStateToStructured,
-  structuredToGameState
+  structuredToGameState,
+  CompressionAlgorithm
 } from "../types/saveTypes";
 
 import { compressGameState, decompressGameState } from "./dataCompression";
@@ -300,7 +301,7 @@ export class SyncManager {
       // Проверяем, нужна ли синхронизация
       if (!forceSync && 
           serverSaveInfo.lastModified <= this.lastSyncTimestamp &&
-          !hasSignificantChanges(this.localState, this.remoteState)) {
+          (!this.remoteState || !hasSignificantChanges(this.localState, this.remoteState))) {
         // Синхронизация не требуется, данные на сервере не изменились
         result.success = true;
         result.syncedData = gameStateToStructured(this.localState);
@@ -456,13 +457,14 @@ export class SyncManager {
       
       // Преобразуем в формат DeltaGameState для совместимости с API
       const apiDelta: DeltaGameState = {
-        _id: generateUniqueId(),
+        _id: generateUniqueId(this.userId),
         _baseVersion: this.remoteState?._saveVersion || 0,
         _newVersion: this.localState?._saveVersion || 1,
         _createdAt: Date.now(),
         _clientId: 'client-' + Date.now().toString(36),
         _isFullState: false,
-        changes: delta.delta
+        changes: delta.delta,
+        delta: delta.delta
       };
       
       await this._pushDeltaState(apiDelta);
@@ -485,25 +487,26 @@ export class SyncManager {
         throw new Error('Отсутствует токен авторизации');
       }
       
-      // Сжимаем данные, если включено сжатие
-      let compressedData: CompressedGameState | null = null;
+      // Сжимаем данные перед отправкой
+      let compressedData = null;
       let isCompressed = false;
       
       if (this.options.compressData && this.localState) {
         compressedData = compressGameState(
           this.localState, 
-          this.userId,
-          { 
-            includeIntegrityInfo: true,
+          this.userId, 
+          {
+            algorithm: CompressionAlgorithm.LZ_UTF16,
             removeTempData: true,
-            removeLogs: true
+            includeIntegrityInfo: true
           }
         );
-        isCompressed = true;
         
-        if (this.options.enableLogging) {
-          const compressionRatio = compressedData._compressedSize / compressedData._originalSize * 100;
-          console.log(`[SyncManager] Данные сжаты до ${compressionRatio.toFixed(2)}% от исходного размера`);
+        isCompressed = !!compressedData;
+        
+        if (compressedData && this.options.enableLogging) {
+          const compressionRatio = compressedData._compressedSize / compressedData._originalSize * 100; 
+          console.log(`[SyncManager] Данные сжаты (${compressionRatio.toFixed(2)}%): ${compressedData._compressedSize}/${compressedData._originalSize} байт`);
         }
       }
       

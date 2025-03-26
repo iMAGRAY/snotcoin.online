@@ -181,9 +181,11 @@ export class AsyncStorage {
         metadata.compressed = true;
         metadata.storageKey = StorageKeys.COMPRESSED_STATE;
         
-        if (this.options.enableLogging) {
+        if (compressed) {
           const compressionRatio = compressed._compressedSize / compressed._originalSize * 100;
           console.log(`[AsyncStorage] Данные сжаты (${compressionRatio.toFixed(2)}%): ${compressed._compressedSize}/${compressed._originalSize} байт`);
+        } else {
+          console.log(`[AsyncStorage] Не удалось сжать данные`);
         }
       } else {
         // Сохраняем несжатые данные
@@ -256,15 +258,18 @@ export class AsyncStorage {
         }
         
         const compressedData = JSON.parse(compressedDataStr) as CompressedGameState;
-        gameState = decompressGameState(compressedData);
+        const decompressedData = decompressGameState(compressedData);
         
-        if (!gameState) {
+        if (!decompressedData) {
           return {
             success: false,
             error: "Ошибка декомпрессии данных",
             timestamp: Date.now()
           };
         }
+        
+        // Конвертируем структурированное сохранение в игровое состояние
+        gameState = structuredToGameState(decompressedData);
       } else {
         // Загружаем несжатые данные
         const gameStateStr = await this.getItem(StorageKeys.GAME_STATE);

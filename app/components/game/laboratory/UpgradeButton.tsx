@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useCallback } from "react"
+import React, { useCallback, useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import type { UpgradeButtonProps } from "../../../types/laboratory-types"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 import { ICONS } from "../../../constants/uiConstants"
 import { useRouter, usePathname } from "next/navigation"
-import { useEffect } from "react"
 
 /**
  * Компонент кнопки перехода к улучшениям

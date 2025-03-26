@@ -2,8 +2,10 @@
 
 import React from "react"
 import { motion } from "framer-motion"
+import { Plus } from "lucide-react"
 import type { Chest } from "../../../types/storage"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
+import type { TranslationKeys } from "../../../i18n/types/translationTypes"
 
 interface OpenButtonProps {
   chest: Chest
@@ -29,7 +31,7 @@ export const OpenButton: React.FC<OpenButtonProps> = React.memo(({ chest, curren
       <span className="relative z-10 flex flex-col items-center justify-center tracking-wide">
         <span className="text-gray-200">{t("open")}</span>
         <span className="text-xs font-normal mt-1 text-gray-300">
-          {`${chest.requiredSnot} SNOT - ${t(chest.description)}`}
+          {`${chest.requiredSnot} SNOT - ${t(chest.description as keyof TranslationKeys)}`}
         </span>
       </span>
       <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />

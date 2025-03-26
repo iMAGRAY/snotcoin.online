@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
-import { useGameState, useGameDispatch } from "../../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import CollectButton from "./CollectButton"
 import Resources from "../../common/Resources"
 import BackgroundImage from "./BackgroundImage"

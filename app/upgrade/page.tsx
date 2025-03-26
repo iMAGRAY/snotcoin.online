@@ -4,8 +4,8 @@ import React, { useCallback, useMemo, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, Zap, Database, ChevronUp, Coins } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useTranslation } from "../contexts/TranslationContext"
-import { useGameState, useGameDispatch } from "../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../contexts"
+import { useTranslation } from "../i18n"
 import { formatSnotValue } from "../utils/formatters"
 import { calculateContainerUpgradeCost, calculateFillingSpeedUpgradeCost } from "../utils/formatters"
 import Image from "next/image"
@@ -132,7 +132,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
   const [showUpgradeEffect, setShowUpgradeEffect] = React.useState(false)
 
   const capacityCost = useMemo(() => calculateContainerUpgradeCost(gameState.inventory.Cap), [gameState.inventory.Cap])
-  const speedCost = useMemo(() => calculateFillingSpeedUpgradeCost(gameState.fillingSpeed), [gameState.fillingSpeed])
+  const speedCost = useMemo(() => calculateFillingSpeedUpgradeCost(gameState.fillingSpeed || 1), [gameState.fillingSpeed])
 
   const handleBack = useCallback(() => {
     gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
@@ -196,14 +196,14 @@ const UpgradePageContent: React.FC = React.memo(() => {
         <div className="max-w-md mx-auto space-y-6 pb-16">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <UpgradeButton
-              title={t("containerCapacityUpgrade")}
-              description={t("containerCapacityDescription")}
+              title={t("containerCapacity")}
+              description={t("increaseContainerCapacity")}
+              currentLevel={gameState.containerLevel || 1}
+              currentEffect={`${gameState.container?.capacity || 100}`}
+              nextEffect={(gameState.containerLevel || 1) + 1}
               cost={capacityCost}
-              currentLevel={gameState.containerLevel}
-              currentEffect={gameState.inventory.Cap}
-              nextEffect={gameState.containerLevel + 1}
               onUpgrade={handleCapacityUpgrade}
-              canAfford={(gameState.inventory?.snotCoins ?? 0) >= capacityCost}
+              canAfford={gameState.inventory?.snotCoins >= capacityCost}
               icon={<Database className="w-8 h-8" />}
             />
           </motion.div>
@@ -213,7 +213,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
               description={t("fillingSpeedDescription")}
               cost={speedCost}
               currentLevel={gameState.inventory.fillingSpeedLevel || 1}
-              currentEffect={(24 * 60 * 60 * gameState.fillingSpeed).toFixed(2)}
+              currentEffect={(24 * 60 * 60 * (gameState.fillingSpeed || 1)).toFixed(2)}
               nextEffect={((gameState.inventory.fillingSpeedLevel || 1) + 1).toFixed(2)}
               onUpgrade={handleSpeedUpgrade}
               canAfford={(gameState.inventory?.snotCoins ?? 0) >= speedCost}

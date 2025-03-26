@@ -1,9 +1,10 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { useTranslation } from "../../../../contexts/TranslationContext"
+import { Package } from "lucide-react"
+import { useTranslation } from "../../../../i18n"
 
 const InventorySection: React.FC = () => {
   const { t } = useTranslation()

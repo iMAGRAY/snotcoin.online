@@ -13,18 +13,12 @@ export interface FarcasterUser {
 
 // Пользователь
 export interface User {
-  id: string
-  farcaster_fid?: number
-  fid?: number  // Алиас для farcaster_fid
-  farcaster_username?: string
-  username?: string  // Алиас для farcaster_username
-  farcaster_displayname?: string
-  displayName?: string  // Алиас для farcaster_displayname
-  farcaster_pfp?: string
-  pfp?: string  // Алиас для farcaster_pfp
-  email?: string
-  created_at?: string
-  updated_at?: string
+  id: string;
+  username?: string;
+  displayName?: string;
+  farcaster_fid?: string;
+  pfp?: string;
+  [key: string]: any;
 }
 
 // Настройки
@@ -33,36 +27,37 @@ export interface Settings {
   theme: string
   notifications: boolean
   tutorialCompleted: boolean
+  musicEnabled: boolean
+  soundEnabled: boolean
+  notificationsEnabled: boolean
 }
 
 // Настройки звука
 export interface SoundSettings {
-  clickVolume: number
-  effectsVolume: number
-  backgroundMusicVolume: number
-  isMuted: boolean
-  isEffectsMuted: boolean
-  isBackgroundMusicMuted: boolean
+  musicVolume: number;
+  soundVolume: number;
+  notificationVolume: number;
+  clickVolume: number;
+  effectsVolume: number;
+  backgroundMusicVolume: number;
+  isMuted: boolean;
+  isEffectsMuted: boolean;
+  isBackgroundMusicMuted: boolean;
 }
 
 /**
  * Состояние инвентаря
  */
 export interface Inventory {
-  // Валюта и ресурсы
   snot: number;
   snotCoins: number;
-  
-  // Атрибуты контейнера
   containerCapacity: number;
-  containerCapacityLevel: number;
-  fillingSpeed: number;
-  fillingSpeedLevel: number;
-  
-  // Дополнительные атрибуты для основной игры
-  collectionEfficiency: number;
   containerSnot: number;
+  fillingSpeed: number;
+  collectionEfficiency: number;
   Cap: number;
+  containerCapacityLevel: number;
+  fillingSpeedLevel: number;
   lastUpdateTimestamp?: number;
 }
 
@@ -81,11 +76,17 @@ export interface Container {
  * Улучшения
  */
 export interface Upgrades {
+  clickPower: {
+    level: number;
+    value: number;
+  };
+  passiveIncome: {
+    level: number;
+    value: number;
+  };
+  collectionEfficiencyLevel: number;
   containerLevel: number;
   fillingSpeedLevel: number;
-  collectionEfficiencyLevel: number;
-  clickPower?: { level: number, value: number };
-  passiveIncome?: { level: number, value: number };
 }
 
 /**
@@ -124,143 +125,116 @@ export interface Achievements {
  * Основное состояние игры
  */
 export interface GameState {
-  // Основные игровые элементы
+  user: User | null;
   inventory: Inventory;
   container: Container;
   upgrades: Upgrades;
-  
-  // Дополнительные элементы
-  items?: Item[];
-  achievements?: Achievements;
-  stats?: Record<string, number>;
-  
-  // Настройки
-  settings: Settings;
-  soundSettings: SoundSettings;
-  
-  // Состояние UI
-  activeTab: string;
-  hideInterface: boolean;
-  isPlaying: boolean;
-  isLoading: boolean;
-  
-  // Прогресс
-  containerLevel: number;
-  fillingSpeed: number;
-  containerSnot: number;
-  gameStarted: boolean;
-  highestLevel: number;
-  consecutiveLoginDays: number;
-  
-  // Пользователь
-  user: User | null;
-  validationStatus: "pending" | "valid" | "invalid";
-  lastValidation?: number;
-  
-  // Кошелек
-  wallet?: {
-    snotCoins: number
-  };
-}
-
-/**
- * Расширенное состояние игры с метаданными сохранения
- */
-export interface ExtendedGameState extends GameState {
-  // Версия сохранения
   _saveVersion?: number;
-  
-  // Время последнего изменения
-  _lastModified?: number;
   _lastSaved?: string;
-  
-  // ID пользователя
   _userId?: string;
-  
-  // Флаги состояния
-  _isRetry?: boolean;
-  _isInitialState?: boolean;
-  _isError?: boolean;
-  _lastActionTime?: string;
-  _lastAction?: string;
-  _skippedLoad?: boolean;
-  _isForceSave?: boolean;
-  _isBeforeUnloadSave?: boolean;
-  _isMerged?: boolean;
-  _clientSentAt?: string;
-  _isRestoredFromBackup?: boolean;
-  _skipSave?: boolean;
-  _isSavingInProgress?: boolean;
-  _unmountSave?: boolean;
-  _lastSaveError?: string;
-  
-  // Информация о восстановлении данных
+  _lastModified?: number;
   _wasRepaired?: boolean;
   _repairedAt?: number;
   _repairedFields?: string[];
-  
-  // Дополнительные данные для save system
   _tempData?: any;
-  logs?: Array<any>;
-  analytics?: Record<string, any>;
-  
-  // Дата декомпрессии (для сжатых данных)
-  _decompressedAt?: string;
-  
-  // Предупреждение о целостности данных
-  _integrityWarning?: boolean;
-  
-  // Данные для дельта-компрессии
-  _saveId?: string;
-  _appliedDelta?: boolean;
-  _deltaAppliedAt?: number;
-  _deltaClientId?: string;
+  _isSavingInProgress?: boolean;
+  _skipSave?: boolean;
+  _lastSaveError?: string;
+  _isBeforeUnloadSave?: boolean;
+  _isRestoredFromBackup?: boolean;
+  _isInitialState?: boolean;
+  _lastActionTime?: string;
+  _lastAction?: string;
+  logs?: any[];
+  analytics?: any;
+  items?: any[];
+  achievements?: {
+    unlockedAchievements: string[];
+  };
+  highestLevel?: number;
+  stats?: {
+    clickCount: number;
+    playTime: number;
+    startDate: string;
+    highestLevel?: number;
+    totalSnot?: number;
+    totalSnotCoins?: number;
+    consecutiveLoginDays?: number;
+  };
+  consecutiveLoginDays?: number;
+  settings?: Settings;
+  soundSettings?: SoundSettings;
+  hideInterface?: boolean;
+  activeTab?: string;
+  fillingSpeed?: number;
+  containerLevel?: number;
+  isPlaying?: boolean;
+  validationStatus?: string;
+  lastValidation?: string;
+  gameStarted?: boolean;
+  isLoading?: boolean;
 }
 
-export type Action =
-  | { type: "LOGIN" }
-  | { type: "SET_ACTIVE_TAB"; payload: string }
-  | { type: "SET_USER"; payload: any }
-  | { type: "UPDATE_CONTAINER_LEVEL"; payload: number }
-  | { type: "UPDATE_CONTAINER_SNOT"; payload: number }
-  | { type: "UPDATE_FILLING_SPEED"; payload: number }
-  | { type: "UPDATE_RESOURCES" }
-  | { type: "SET_RESOURCE"; payload: { resource: string; value: number } }
-  | { type: "ADD_SNOT"; payload: number }
-  | { type: "COLLECT_CONTAINER_SNOT"; payload: { amount: number } }
-  | { type: "UPGRADE_FILLING_SPEED" }
-  | { type: "UPGRADE_CONTAINER_CAPACITY" }
-  | { type: "INCREMENT_CONTAINER_CAPACITY" }
-  | { type: "INITIALIZE_NEW_USER"; payload?: ExtendedGameState }
-  | { type: "SET_HIDE_INTERFACE"; payload: boolean }
-  | { type: "SET_INVENTORY"; payload: Inventory }
-  | { type: "SET_CONTAINER"; payload: Container }
-  | { type: "SET_UPGRADES"; payload: Upgrades }
-  | { type: "FORCE_SAVE_GAME_STATE" }
-  | { type: "RESET_GAME_STATE" }
-  | { type: "ADD_ACHIEVEMENT"; payload: string }
-  | { type: "CONVERT_SNOT_TO_COINS"; payload: number }
-  | { type: "SET_ITEM"; payload: Item }
-  | { type: "ADD_ITEM"; payload: Item }
-  | { type: "REMOVE_ITEM"; payload: string }
-  | { type: "SET_SETTINGS"; payload: Settings }
-  | { type: "SET_SOUND_SETTINGS"; payload: SoundSettings }
-  | { type: "TOGGLE_MUSIC_MUTE" }
-  | { type: "TOGGLE_EFFECTS_MUTE" }
-  | { type: "SET_MUSIC_VOLUME"; payload: number }
-  | { type: "SET_EFFECTS_VOLUME"; payload: number }
-  | { type: "LOAD_GAME_STATE"; payload: ExtendedGameState }
-  | { type: "LOAD_USER_DATA"; payload: Partial<ExtendedGameState> }
-  | { type: "SET_IS_PLAYING"; payload: boolean }
-  | { type: "SET_GAME_STARTED"; payload: boolean }
-  | { type: "SET_CLICK_SOUND_VOLUME"; payload: number }
-  | { type: "SET_BACKGROUND_MUSIC_VOLUME"; payload: number }
-  | { type: "SET_EFFECTS_SOUND_VOLUME"; payload: number }
-  | { type: "SET_MUTE"; payload: boolean }
-  | { type: "SET_EFFECTS_MUTE"; payload: boolean }
-  | { type: "SET_BACKGROUND_MUSIC_MUTE"; payload: boolean }
-  | { type: "ADD_TO_INVENTORY"; payload: Item }
-  | { type: "REMOVE_FROM_INVENTORY"; payload: string };
+export interface ExtendedGameState extends GameState {
+  [key: string]: any;
+}
+
+export type ActionType =
+  | "SET_USER"
+  | "SET_INVENTORY"
+  | "SET_CONTAINER"
+  | "SET_UPGRADES"
+  | "SET_SAVE_VERSION"
+  | "SET_LAST_SAVED"
+  | "SET_USER_ID"
+  | "SET_LAST_MODIFIED"
+  | "SET_WAS_REPAIRED"
+  | "SET_REPAIRED_AT"
+  | "SET_REPAIRED_FIELDS"
+  | "SET_TEMP_DATA"
+  | "SET_LOGS"
+  | "SET_ANALYTICS"
+  | "SET_ITEMS"
+  | "SET_ACHIEVEMENTS"
+  | "SET_HIGHEST_LEVEL"
+  | "SET_STATS"
+  | "SET_CONSECUTIVE_LOGIN_DAYS"
+  | "SET_SETTINGS"
+  | "SET_SOUND_SETTINGS"
+  | "SET_HIDE_INTERFACE"
+  | "SET_ACTIVE_TAB"
+  | "UPGRADE_CONTAINER_CAPACITY"
+  | "UPGRADE_FILLING_SPEED"
+  | "LOAD_GAME_STATE"
+  | "RESET_GAME_STATE"
+  | "FORCE_SAVE_GAME_STATE"
+  | "LOGIN"
+  | "UPDATE_CONTAINER_LEVEL"
+  | "UPDATE_CONTAINER_SNOT"
+  | "UPDATE_FILLING_SPEED"
+  | "UPDATE_RESOURCES"
+  | "SET_RESOURCE"
+  | "ADD_SNOT"
+  | "COLLECT_CONTAINER_SNOT"
+  | "INCREMENT_CONTAINER_CAPACITY"
+  | "INITIALIZE_NEW_USER"
+  | "LOAD_USER_DATA"
+  | "SET_IS_PLAYING"
+  | "SET_GAME_STARTED"
+  | "SET_CLICK_SOUND_VOLUME"
+  | "SET_BACKGROUND_MUSIC_VOLUME"
+  | "SET_EFFECTS_SOUND_VOLUME"
+  | "SET_MUTE"
+  | "SET_EFFECTS_MUTE"
+  | "SET_BACKGROUND_MUSIC_MUTE"
+  | "UPDATE_INVENTORY"
+  | "UPDATE_CONTAINER"
+  | "UPDATE_UPGRADES";
+
+export interface Action {
+  type: ActionType;
+  payload?: any;
+}
 
 // Константы для улучшений
 export const CONTAINER_UPGRADES = [
@@ -341,57 +315,74 @@ export interface GameStateUpdate {
  */
 export function createDefaultGameState(): GameState {
   return {
-    activeTab: 'main',
     user: null,
-    validationStatus: "pending",
     inventory: {
       snot: 0,
       snotCoins: 0,
-      collectionEfficiency: 1,
       containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
-      fillingSpeed: 1,
       containerCapacity: 100,
+      fillingSpeed: 1,
       containerSnot: 0,
-      Cap: 0
+      collectionEfficiency: 1,
+      Cap: 100,
+      lastUpdateTimestamp: Date.now()
     },
     container: {
       level: 1,
       capacity: 100,
       currentAmount: 0,
-      fillRate: 1,
-      currentFill: 0
+      fillRate: 1
     },
     upgrades: {
       containerLevel: 1,
       fillingSpeedLevel: 1,
-      collectionEfficiencyLevel: 1,
       clickPower: { level: 1, value: 1 },
-      passiveIncome: { level: 1, value: 0.1 }
+      passiveIncome: { level: 1, value: 0.1 },
+      collectionEfficiencyLevel: 1
     },
-    settings: {
-      language: 'en',
-      theme: 'light',
+    _saveVersion: 1,
+    _lastSaved: new Date().toISOString(),
+    _isSavingInProgress: false,
+    _skipSave: false,
+    _lastSaveError: undefined,
+    _isBeforeUnloadSave: false,
+    _lastModified: Date.now(),
+    _wasRepaired: false,
+    _repairedAt: undefined,
+    _repairedFields: [],
+    _tempData: undefined,
+    logs: [],
+    analytics: undefined,
+    items: [],
+    achievements: { unlockedAchievements: [] },
+    highestLevel: 1,
+    stats: { clickCount: 0, playTime: 0, startDate: new Date().toISOString() },
+    consecutiveLoginDays: 0,
+    settings: { 
+      musicEnabled: true, 
+      soundEnabled: true, 
+      notificationsEnabled: true, 
+      theme: "default", 
+      language: "en",
       notifications: true,
       tutorialCompleted: false
     },
-    soundSettings: {
+    soundSettings: { 
+      musicVolume: 0.5, 
+      soundVolume: 0.5, 
+      notificationVolume: 0.5,
+      backgroundMusicVolume: 0.5,
+      isBackgroundMusicMuted: false,
       clickVolume: 0.5,
       effectsVolume: 0.5,
-      backgroundMusicVolume: 0.3,
       isMuted: false,
-      isEffectsMuted: false,
-      isBackgroundMusicMuted: false
+      isEffectsMuted: false
     },
     hideInterface: false,
-    isPlaying: false,
-    isLoading: false,
-    containerLevel: 1,
+    activeTab: "laboratory",
     fillingSpeed: 1,
-    containerSnot: 0,
-    gameStarted: false,
-    highestLevel: 1,
-    consecutiveLoginDays: 0
+    containerLevel: 1
   };
 }
 
@@ -401,8 +392,81 @@ export function createDefaultGameState(): GameState {
 export function createDefaultExtendedGameState(userId: string): ExtendedGameState {
   return {
     ...createDefaultGameState(),
-    _saveVersion: 1,
-    _lastModified: Date.now(),
     _userId: userId,
+  };
+}
+
+export function createInitialGameState(userId?: string): GameState {
+  return {
+    user: null,
+    inventory: {
+      snot: 0,
+      snotCoins: 0,
+      containerCapacityLevel: 1,
+      fillingSpeedLevel: 1,
+      containerCapacity: 100,
+      fillingSpeed: 1,
+      containerSnot: 0,
+      collectionEfficiency: 1,
+      Cap: 100,
+      lastUpdateTimestamp: Date.now()
+    },
+    container: {
+      level: 1,
+      capacity: 100,
+      currentAmount: 0,
+      fillRate: 1
+    },
+    upgrades: {
+      containerLevel: 1,
+      fillingSpeedLevel: 1,
+      clickPower: { level: 1, value: 1 },
+      passiveIncome: { level: 1, value: 0.1 },
+      collectionEfficiencyLevel: 1
+    },
+    _saveVersion: 1,
+    _userId: userId,
+    _isSavingInProgress: false,
+    _skipSave: false,
+    _lastSaveError: undefined,
+    _isBeforeUnloadSave: false,
+    _lastModified: Date.now(),
+    _wasRepaired: false,
+    _repairedAt: undefined,
+    _repairedFields: [],
+    _tempData: undefined,
+    logs: [],
+    analytics: undefined,
+    items: [],
+    achievements: { unlockedAchievements: [] },
+    highestLevel: 1,
+    stats: { clickCount: 0, playTime: 0, startDate: new Date().toISOString() },
+    consecutiveLoginDays: 0,
+    settings: { 
+      musicEnabled: true, 
+      soundEnabled: true, 
+      notificationsEnabled: true, 
+      theme: "default", 
+      language: "en",
+      notifications: true,
+      tutorialCompleted: false
+    },
+    soundSettings: { 
+      musicVolume: 0.5, 
+      soundVolume: 0.5, 
+      notificationVolume: 0.5,
+      backgroundMusicVolume: 0.5,
+      isBackgroundMusicMuted: false,
+      clickVolume: 0.5,
+      effectsVolume: 0.5,
+      isMuted: false,
+      isEffectsMuted: false
+    },
+    hideInterface: false,
+    activeTab: "laboratory",
+    fillingSpeed: 1,
+    containerLevel: 1,
+    isPlaying: false,
+    validationStatus: "pending"
   };
 } 

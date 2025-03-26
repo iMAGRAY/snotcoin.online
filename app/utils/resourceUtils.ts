@@ -16,7 +16,7 @@ export function getSafeInventory(inventory: Inventory | undefined): Inventory;
 export function getSafeInventory(input: ExtendedGameState | Inventory | undefined): Inventory {
   // Если передан ExtendedGameState
   if (input && 'inventory' in input) {
-    const inventory = input.inventory || {};
+    const inventory = (input.inventory as any) || {};
     
     return {
       snot: inventory.snot ?? 0,
@@ -156,4 +156,50 @@ export const calculateFillingPercentage = (inventory?: Inventory): number => {
   // Ограничиваем значение от 0 до 100
   const percentage = (containerSnot / containerCapacity) * 100;
   return Math.min(Math.max(percentage, 0), 100);
-}; 
+};
+
+/**
+ * Вычисляет процент заполнения контейнера
+ */
+export const calculateFillPercentage = (current: number, max: number): number => {
+  if (max <= 0) return 0;
+  if (current >= max) return 100;
+  
+  const percentage = (current / max) * 100;
+  return Math.min(Math.max(percentage, 0), 100);
+};
+
+/**
+ * Обрабатывает ресурсы и инвентарь для отображения в интерфейсе
+ */
+export function processResources(gameState: any): any {
+  // Проверяем наличие объекта gameState
+  if (!gameState || typeof gameState !== 'object') {
+    return {
+      inventory: {
+        snot: 0,
+        snotCoins: 0,
+        containerSnot: 0,
+        containerCapacity: RESOURCES.DEFAULTS.MIN_CAPACITY,
+        Cap: RESOURCES.DEFAULTS.MIN_CAPACITY,
+        containerCapacityLevel: RESOURCES.DEFAULTS.MIN_LEVEL,
+        fillingSpeed: RESOURCES.DEFAULTS.MIN_FILLING_SPEED,
+        fillingSpeedLevel: RESOURCES.DEFAULTS.MIN_LEVEL,
+        collectionEfficiency: 1,
+        lastUpdateTimestamp: Date.now()
+      },
+      container: { capacity: RESOURCES.DEFAULTS.MIN_CAPACITY }
+    };
+  }
+
+  // Используем существующую getSafeInventory для безопасного получения инвентаря
+  const inventory = getSafeInventory(gameState);
+
+  // Для совместимости с разными форматами состояния
+  const containerObj = gameState.container || {};
+  const containerCapacity = typeof containerObj.capacity === 'number' 
+    ? containerObj.capacity 
+    : inventory.containerCapacity;
+
+  return { inventory, container: { capacity: containerCapacity } };
+} 

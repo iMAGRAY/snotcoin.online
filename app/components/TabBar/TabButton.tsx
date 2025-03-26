@@ -3,8 +3,9 @@
 import React from "react"
 import { motion } from "framer-motion"
 import { cn } from "../../lib/utils"
-import { useTranslation } from "../../contexts/TranslationContext"
-import type { TabButtonProps } from "./types"
+import { useTranslation } from "../../i18n"
+import { TabButtonProps } from "./types"
+import type { TranslationKeys } from "../../i18n/types/translationTypes"
 
 const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClick }) => {
   const { t } = useTranslation()
@@ -20,7 +21,7 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
     >
       <motion.button
         onClick={onClick}
-        aria-label={t(label)}
+        aria-label={t(label as keyof TranslationKeys)}
         aria-selected={isActive}
         role="tab"
         className="relative z-30 isolate select-none w-full h-full flex flex-col items-center justify-center"
@@ -45,7 +46,7 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
         >
           <img 
             src={icon} 
-            alt={t(label)}
+            alt={t(label as keyof TranslationKeys)}
             className="max-w-full max-h-full object-contain"
             style={{ width: '100%', height: '100%' }}
           />
@@ -61,7 +62,7 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
               "-1px -1px 0 rgba(0,0,0,0.7), 1px -1px 0 rgba(0,0,0,0.7), -1px 1px 0 rgba(0,0,0,0.7), 1px 1px 0 rgba(0,0,0,0.7), 0 2px 4px rgba(0,0,0,0.5)",
           }}
         >
-          {t(label)}
+          {t(label as keyof TranslationKeys)}
         </motion.span>
       </motion.button>
     </div>

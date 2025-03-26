@@ -1,23 +1,20 @@
-import type React from "react"
-import "./globals.css"
+import React from 'react';
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { GameProvider } from "./contexts/GameContext"
-import { TranslationProvider } from "./contexts/TranslationContext"
+import "./globals.css"
+import { GameProvider } from "./contexts"
+import { TranslationProvider } from "./i18n"
 import { FarcasterProvider } from "./contexts/FarcasterContext"
 
-const inter = Inter({ 
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-inter',
-})
+const inter = Inter({ subsets: ["latin"] })
 
 // Базовый URL приложения (из переменных окружения или хардкод для продакшена)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: 'SnotCoin',
-  description: 'A Farcaster-based crypto mining game',
+  title: "Snot Coin | Ultimate Snot Farming Game",
+  description: "Collect snot, upgrade your equipment, and become the ultimate snot farmer!",
   generator: 'v0.dev',
   metadataBase: new URL(siteUrl),
   openGraph: {
@@ -55,9 +52,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
     <html lang="en">
       <head>
@@ -65,11 +62,11 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <FarcasterProvider>
-          <GameProvider>
-            <TranslationProvider>
+          <TranslationProvider>
+            <GameProvider>
               {children}
-            </TranslationProvider>
-          </GameProvider>
+            </GameProvider>
+          </TranslationProvider>
         </FarcasterProvider>
       </body>
     </html>

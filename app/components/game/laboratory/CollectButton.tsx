@@ -3,10 +3,12 @@
 import React, { useMemo, useCallback } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 import type { CollectButtonProps } from "../../../types/laboratory-types"
 import { formatSnotValue } from "../../../utils/formatters"
 import { ICONS } from "../../../constants/uiConstants"
+import { BsHandIndexThumb } from "react-icons/bs"
+import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 
 /**
  * Компонент кнопки сбора ресурсов

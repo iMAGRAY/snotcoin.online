@@ -1,10 +1,10 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
-import { useTranslation } from "../../../../contexts/TranslationContext"
-import { useGameState } from "../../../../contexts/GameContext"
+import { useTranslation } from "../../../../i18n"
+import { useGameState } from "../../../../contexts/game/hooks"
 
 interface Achievement {
   id: string
@@ -38,7 +38,7 @@ const ACHIEVEMENTS: Achievement[] = [
     description: "Upgrade your storage container",
     icon: "/achievements/storage_upgrade.png",
     category: "storage",
-    condition: (gameState) => gameState.containerLevel > 1,
+    condition: (gameState) => (gameState.containerLevel || 0) > 1,
   },
   {
     id: "coin_collector",

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { verifyJWT } from '../../../utils/jwt'
 import type { StructuredGameSave } from '../../../types/saveTypes'
-import { initialState } from '../../../constants/gameConstants'
+import { createInitialGameState } from '../../../constants/gameConstants'
+import { redisService } from '../../../services/redisService'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,41 @@ export async function GET(request: NextRequest) {
         error: 'Нельзя загружать прогресс другого пользователя' 
       }, { status: 403 });
     }
+    
+    // Пытаемся загрузить данные из Redis (кэш)
+    console.log(`[API/load-progress] Пытаемся загрузить данные из Redis для ${userId}`);
+    const redisResult = await redisService.loadGameState(userId);
+    
+    // Если данные найдены в Redis, возвращаем их
+    if (redisResult.success && redisResult.data) {
+      console.log(`[API/load-progress] Данные успешно загружены из Redis, источник: ${redisResult.source}`);
+      
+      const gameState = redisResult.data;
+      const metadata = {
+        version: gameState._saveVersion || 1,
+        userId: userId,
+        isCompressed: false,
+        savedAt: new Date(gameState._lastModified || Date.now()).toISOString(),
+        loadedAt: new Date().toISOString(),
+        source: redisResult.source
+      };
+      
+      return NextResponse.json({
+        success: true,
+        data: {
+          gameState: {
+            ...JSON.parse(JSON.stringify(gameState)),
+            _metadata: metadata,
+            _hasFullData: true
+          },
+          metadata,
+          fromCache: true
+        }
+      });
+    }
+    
+    // Если данных в Redis нет, продолжаем загрузку из базы данных
+    console.log(`[API/load-progress] Данные не найдены в Redis, загружаем из базы данных`);
     
     // Находим пользователя по ID
     let user = await prisma.user.findUnique({
@@ -120,210 +156,124 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Получаем прогресс для пользователя
-    let progress = await prisma.progress.findUnique({
-      where: {
-        user_id: userId,
-      },
-    });
-
-    // Если прогресс не найден, создаем начальный прогресс для нового пользователя
-    if (!progress) {
-      console.log(`[API/load-progress] Прогресс не найден для пользователя: ${userId}, создаем начальный прогресс`);
+    // Запрос на получение прогресса по ID пользователя
+    let progress;
+    try {
+      progress = await prisma.progress.findUnique({
+        where: { user_id: userId }
+      });
       
-      try {
-        // Подготавливаем начальное состояние игры
-        const currentTime = new Date();
-        const initialGameState = {
-          ...initialState,
-          user: {
-            id: userId,
-          },
-          _saveVersion: 1,
-          _lastSaved: currentTime.toISOString()
-        };
+      console.log(`[API/load-progress] ${progress ? 'Найден' : 'Не найден'} прогресс для пользователя: ${userId}`);
+    } catch (dbError) {
+      console.error('[API/load-progress] Ошибка при запросе прогресса из БД:', dbError);
+      
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка доступа к базе данных',
+        error: dbError instanceof Error ? dbError.message : 'Unknown database error'
+      }, { status: 500 });
+    }
+    
+    // Если прогресс найден, возвращаем его и кэшируем в Redis
+    if (progress) {
+      // Проверяем, является ли это сжатым состоянием
+      const isCompressed = progress.is_compressed || 
+        (progress.game_state && (progress.game_state as any)._isCompressed);
+      
+      // Добавляем метаданные, которые помогут клиенту правильно обработать данные
+      const metadata = {
+        version: progress.version,
+        userId: userId,
+        isCompressed: isCompressed,
+        savedAt: progress.updated_at,
+        loadedAt: new Date().toISOString()
+      };
+      
+      // Сохраняем данные в Redis для ускорения последующих загрузок
+      if (progress.game_state) {
+        console.log(`[API/load-progress] Кэшируем данные в Redis для пользователя: ${userId}`);
         
-        // Используем транзакцию и более безопасный подход для создания записи прогресса
-        progress = await prisma.$transaction(
-          async (tx) => {
-            // Проверяем существование записи внутри транзакции
-            const existingProgress = await tx.progress.findUnique({
-              where: { user_id: userId }
-            });
-            
-            if (existingProgress) {
-              // Запись уже существует, просто возвращаем её
-              console.log(`[API/load-progress] Прогресс уже существует для пользователя ${userId}, найден внутри транзакции`);
-              return existingProgress;
-            }
-            
-            // Пытаемся создать новую запись
-            try {
-              const newProgress = await tx.progress.create({
-                data: {
-                  user_id: userId,
-                  game_state: initialGameState as any,
-                  version: 1,
-                  created_at: currentTime,
-                  updated_at: currentTime
-                }
-              });
-              console.log(`[API/load-progress] Создан прогресс для пользователя: ${userId}`);
-              return newProgress;
-            } catch (createError) {
-              // Если возникла ошибка создания, ещё раз проверяем наличие записи
-              // Это может произойти если транзакция не предотвратила состояние гонки
-              console.error(`[API/load-progress] Ошибка при создании прогресса, проверяем существование записи:`, createError);
-              const finalCheck = await tx.progress.findUnique({
-                where: { user_id: userId }
-              });
-              
-              if (finalCheck) {
-                console.log(`[API/load-progress] Прогресс найден после ошибки создания для ${userId}`);
-                return finalCheck;
-              }
-              
-              // Если запись так и не найдена, пробрасываем ошибку
-              throw createError;
-            }
-          }, 
-          {
-            maxWait: 5000, // Максимальное время ожидания начала транзакции (5 секунд)
-            timeout: 10000  // Максимальное время выполнения транзакции (10 секунд)
-          }
-        );
+        try {
+          // Сохраняем в кэш с критическим маркером, если данные сжаты
+          await redisService.saveGameState(userId, progress.game_state as any, isCompressed);
+        } catch (cacheError) {
+          console.warn(`[API/load-progress] Ошибка кэширования данных:`, cacheError);
+          // Продолжаем выполнение даже при ошибке кэширования
+        }
+      }
+      
+      // Если данные сжаты, возвращаем только критические части для быстрой загрузки
+      if (isCompressed && (progress.game_state as any).critical) {
+        console.log(`[API/load-progress] Возвращаем сжатые данные для пользователя: ${userId}`);
         
-        // Пытаемся определить, создали ли мы новую запись или получили существующую
-        const isNewlyCreated = (progress.version === 1 && new Date(progress.updated_at).getTime() >= currentTime.getTime() - 5000);
+        const compressedData = progress.game_state as any;
         
-        // Если это новая запись, используем начальное состояние
-        // Иначе получаем фактические данные из БД
-        const responseGameState = isNewlyCreated ? initialGameState : progress.game_state;
-        
-        console.log(`[API/load-progress] ${isNewlyCreated ? 'Создан' : 'Получен существующий'} прогресс для пользователя: ${userId}`);
-        
-        // Обновляем токен пользователя
-        await prisma.user.update({
-          where: { id: userId },
-          data: { jwt_token: token }
-        });
-        
+        // Быстрая загрузка критических данных
         return NextResponse.json({
           success: true,
           data: {
-            gameState: responseGameState,
-            isCompressed: false,
-            lastModified: new Date(progress.updated_at).getTime(),
-            version: progress.version,
-            isNewUser: isNewlyCreated
+            gameState: {
+              critical: compressedData.critical,
+              integrity: compressedData.integrity,
+              _isCompressed: true,
+              _metadata: metadata,
+              _hasFullData: false // Флаг для клиента, что нужно загрузить полные данные позже
+            },
+            metadata
           }
         });
-      } catch (error) {
-        console.error(`[API/load-progress] Ошибка при создании/получении прогресса:`, error);
-        
-        // Повторная проверка, был ли создан прогресс, несмотря на ошибку
-        try {
-          const existingProgress = await prisma.progress.findUnique({
-            where: { user_id: userId }
-          });
-          
-          if (existingProgress) {
-            console.log(`[API/load-progress] Найден существующий прогресс после ошибки`);
-            
-            // Получаем данные игрового состояния
-            const gameState = existingProgress.game_state as any;
-            
-            return NextResponse.json({
-              success: true,
-              data: {
-                gameState: gameState,
-                isCompressed: false,
-                lastModified: new Date(existingProgress.updated_at).getTime(),
-                version: existingProgress.version
-              }
-            });
-          }
-        } catch (findError) {
-          console.error(`[API/load-progress] Ошибка при повторной проверке прогресса:`, findError);
-        }
-        
-        // Если все попытки не удались, возвращаем ошибку
-        return NextResponse.json({ 
-          error: 'Ошибка создания/получения прогресса', 
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        }, { status: 500 });
       }
-    }
-
-    // Обновляем токен пользователя, если он не совпадает с текущим
-    if (user.jwt_token !== token) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { jwt_token: token }
-      });
-      console.log(`[API/load-progress] Обновлен токен пользователя ${user.id}`);
-    }
-
-    // Проверяем, сжаты ли данные
-    if (progress.is_compressed) {
-      console.log(`[API/load-progress] Данные сжаты для пользователя: ${userId}`);
+      
+      console.log(`[API/load-progress] Возвращаем полные данные для пользователя: ${userId}`);
+      const gameStateData = progress.game_state ? {
+        ...JSON.parse(JSON.stringify(progress.game_state)),
+        _metadata: metadata,
+        _hasFullData: true
+      } : {};
+      
       return NextResponse.json({
         success: true,
         data: {
-          gameState: progress.game_state,
-          isCompressed: true,
-          lastSaved: progress.updated_at,
-        },
+          gameState: gameStateData,
+          metadata
+        }
+      });
+    } else {
+      console.log(`[API/load-progress] Прогресс не найден для пользователя: ${userId}, будет создано новое состояние игры`);
+      
+      // Создаем начальное состояние игры для нового пользователя
+      const initialState = createInitialGameState(userId);
+      
+      // Кэшируем начальное состояние в Redis
+      try {
+        await redisService.saveGameState(userId, initialState, true);
+      } catch (cacheError) {
+        console.warn(`[API/load-progress] Ошибка кэширования начального состояния:`, cacheError);
+        // Продолжаем выполнение даже при ошибке кэширования
+      }
+      
+      return NextResponse.json({
+        success: true,
+        data: {
+          gameState: initialState,
+          metadata: {
+            version: 1,
+            userId: userId,
+            isCompressed: false,
+            savedAt: new Date().toISOString(),
+            loadedAt: new Date().toISOString(),
+            isNewUser: true
+          }
+        }
       });
     }
-
-    // Получаем данные игрового состояния
-    const gameState = progress.game_state as any;
-    
-    // Проверка формата данных - поддерживаем как новый структурированный формат, так и старый
-    if (!gameState) {
-      console.error(`[API/load-progress] Пустое состояние игры для пользователя: ${userId}`);
-      return NextResponse.json({ 
-        error: "Пустое состояние игры" 
-      }, { status: 400 });
-    }
-    
-    // Проверяем структуру без строгой типизации
-    let isValidGameState = false;
-    
-    // Проверка для структурированного формата
-    if (typeof gameState === 'object' && gameState.critical && gameState.critical.inventory) {
-      isValidGameState = true;
-    } 
-    // Проверка для обычного формата
-    else if (typeof gameState === 'object' && gameState.inventory) {
-      isValidGameState = true;
-    }
-    
-    if (!isValidGameState) {
-      console.error(`[API/load-progress] Некорректный формат данных сохранения для пользователя: ${userId}`);
-      return NextResponse.json({ 
-        error: "Некорректный формат данных сохранения" 
-      }, { status: 400 });
-    }
-    
-    console.log(`[API/load-progress] Успешно загружен прогресс для пользователя: ${userId}`);
-    
-    return NextResponse.json({
-      success: true,
-      data: {
-        gameState: gameState,
-        isCompressed: false,
-        lastModified: new Date(progress.updated_at).getTime(),
-        version: progress.version
-      }
-    });
   } catch (error) {
     console.error('[API/load-progress] Ошибка при загрузке прогресса:', error);
     
     return NextResponse.json({
-      error: 'Ошибка при загрузке прогресса',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      success: false,
+      message: 'Ошибка при загрузке прогресса',
+      error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 } 

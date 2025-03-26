@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useMemo, useCallback, useEffect } from "react"
-import { useGameState, useGameDispatch } from "../../contexts/GameContext"
+import { useGameState, useGameDispatch } from "../../contexts"
 import type { TabId } from "./types"
 import { tabs } from "./constants"
 import TabButton from "./TabButton"
-import { useTranslation } from "../../contexts/TranslationContext"
+import { useTranslation } from "../../i18n"
 import { useRouter } from "next/navigation"
 
 type TabBarProps = {}

@@ -1,4 +1,4 @@
-import type React from "react"
+import React from "react"
 import { Button } from "./button"
 import { RefreshCw, Home } from "lucide-react"
 

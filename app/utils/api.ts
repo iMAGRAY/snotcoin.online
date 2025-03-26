@@ -172,16 +172,30 @@ export class ApiClient {
         // Поля из обычных данных
         items: structuredSave.regular?.items || [],
         achievements: structuredSave.regular?.achievements || { unlockedAchievements: [] },
-        stats: structuredSave.regular?.stats || {},
+        stats: structuredSave.regular?.stats || {
+          clickCount: 0,
+          playTime: 0,
+          startDate: new Date().toISOString(),
+          highestLevel: 1,
+          totalSnot: 0,
+          totalSnotCoins: 0,
+          consecutiveLoginDays: 0
+        },
         
         // Поля из расширенных данных
         settings: structuredSave.extended?.settings || {
           language: 'en',
           theme: 'light',
           notifications: true,
-          tutorialCompleted: false
+          tutorialCompleted: false,
+          musicEnabled: true,
+          soundEnabled: true,
+          notificationsEnabled: true
         },
         soundSettings: structuredSave.extended?.soundSettings || {
+          musicVolume: 0.5,
+          soundVolume: 0.5,
+          notificationVolume: 0.5,
           clickVolume: 0.5,
           effectsVolume: 0.5,
           backgroundMusicVolume: 0.3,

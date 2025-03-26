@@ -2,8 +2,8 @@
 
 import React, { useMemo } from "react"
 import { motion } from "framer-motion"
-import { useGameState } from "../../contexts/GameContext"
-import { useTranslation } from "../../contexts/TranslationContext"
+import { useGameState } from "../../contexts/game/hooks"
+import { useTranslation } from "../../i18n"
 import { ErrorBoundary } from "../ErrorBoundary"
 import Image from "next/image"
 import { formatSnotValue } from "../../utils/formatters"

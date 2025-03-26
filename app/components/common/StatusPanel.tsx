@@ -2,7 +2,8 @@
 
 import React from "react"
 import { motion } from "framer-motion"
-import { useTranslation } from "../../contexts/TranslationContext"
+import styles from "./statusPanel.module.css"
+import { useTranslation } from "../../i18n"
 import { formatTime, formatSnotValue } from "../../utils/formatters"
 import { calculateFillingTime } from "../../utils/gameUtils"
 import { Database, Zap, Clock, ArrowUp } from "lucide-react"

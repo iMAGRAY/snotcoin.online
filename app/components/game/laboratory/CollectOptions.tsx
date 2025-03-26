@@ -1,8 +1,8 @@
 "use client"
 
-import React from "react"
+import React, { useState, useMemo } from "react"
 import { motion } from "framer-motion"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 
 interface CollectOptionsProps {
   containerSnot: number

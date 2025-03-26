@@ -1,4 +1,5 @@
 import type React from "react"
+import type { NavigationTranslations, LaboratoryTranslations } from "../../i18n/types/translationTypes"
 
 export type TabId = "laboratory" | "storage" | "quests" | "profile"
 
@@ -21,9 +22,12 @@ export interface TabButtonProps {
   onClick: () => void
 }
 
-declare module "../../contexts/TranslationContext" {
-  interface Translations {
-    mainNavigation: string
+// Обратная совместимость для старых ключей переводов
+declare module "../../i18n" {
+  interface TranslationKeys {
+    storage: string;
+    quests: string;
+    profile: string;
   }
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import { ICONS } from "../constants/uiConstants"

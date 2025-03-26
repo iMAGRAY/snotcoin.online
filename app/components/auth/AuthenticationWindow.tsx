@@ -2,9 +2,9 @@
 
 import React, { useCallback, useEffect } from "react"
 import Image from "next/image"
-import { useTranslation } from "../../contexts/TranslationContext"
+import { useTranslation } from "../../i18n"
+import { useGameDispatch } from "../../contexts/game/hooks"
 import { MotionDiv } from "../motion/MotionWrapper"
-import { useGameDispatch } from "../../contexts/GameContext"
 import { ICONS } from "../../constants/uiConstants"
 import { AuthLogType, AuthStep, logAuth, logAuthInfo, setUserId } from "../../utils/auth-logger"
 import WarpcastAuth from "./WarpcastAuth"

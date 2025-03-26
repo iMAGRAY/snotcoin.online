@@ -1,10 +1,10 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { motion } from "framer-motion"
-import { Trophy, Award, Zap, Clock } from "lucide-react"
-import { useTranslation } from "../../../../contexts/TranslationContext"
-import { useGameState } from "../../../../contexts/GameContext"
+import { BarChart2, Trophy, Eye, Award, Zap, Clock } from "lucide-react"
+import { useTranslation } from "../../../../i18n"
+import { useGameState } from "../../../../contexts/game/hooks"
 import { formatSnotValue } from "../../../../utils/formatters"
 
 type StatsSectionProps = {}

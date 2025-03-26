@@ -2,8 +2,8 @@
 
 import React, { useMemo } from "react"
 import { motion } from "framer-motion"
-import { useTranslation } from "../../contexts/TranslationContext"
-import { useGameState } from "../../contexts/GameContext"
+import { useTranslation } from "../../i18n"
+import { useGameState } from "../../contexts/game/hooks"
 import { formatTime, formatSnotValue } from "../../utils/formatters"
 import { calculateFillingTime } from "../../utils/gameUtils"
 import { Database, Zap, Clock, ArrowUp, Trophy, Coins } from "lucide-react"

@@ -8,13 +8,18 @@ import { SyncManager } from "../utils/syncManager";
 import { validateAndRepairGameState } from "../utils/dataIntegrity";
 import { 
   compressGameState, 
-  decompressGameState, 
-  estimateCompression,
-  CompressionAlgorithm
+  decompressGameState
 } from "../utils/dataCompression";
 import { createDelta, applyDelta } from "../utils/deltaCompression";
 import { ExtendedGameState } from "../types/gameTypes";
-import { StructuredGameSave, DeltaGameState, SyncInfo } from "../types/saveTypes";
+import { 
+  StructuredGameSave, 
+  DeltaGameState, 
+  SyncInfo, 
+  CompressionAlgorithm,
+  structuredToGameState 
+} from "../types/saveTypes";
+import * as LZString from 'lz-string';
 
 /**
  * Настройки системы сохранения
@@ -306,10 +311,16 @@ export class SaveSystem {
         language: 'en',
         theme: 'light',
         notifications: true,
-        tutorialCompleted: false
+        tutorialCompleted: false,
+        musicEnabled: true,
+        soundEnabled: true,
+        notificationsEnabled: true
       },
       
       soundSettings: {
+        musicVolume: 0.5,
+        soundVolume: 0.5,
+        notificationVolume: 0.5,
         clickVolume: 0.5,
         effectsVolume: 0.5,
         backgroundMusicVolume: 0.3,
@@ -685,17 +696,30 @@ export class SaveSystem {
       // Обычные данные
       items: structuredSave.regular?.items || [],
       achievements: structuredSave.regular?.achievements || { unlockedAchievements: [] },
-      stats: structuredSave.regular?.stats || {},
+      stats: structuredSave.regular?.stats || {
+        clickCount: 0,
+        playTime: 0,
+        startDate: new Date().toISOString(),
+        highestLevel: 1,
+        totalSnot: 0,
+        totalSnotCoins: 0
+      },
       
       // Настройки
       settings: structuredSave.extended?.settings || {
         language: 'en',
         theme: 'light',
         notifications: true,
-        tutorialCompleted: false
+        tutorialCompleted: false,
+        musicEnabled: true,
+        soundEnabled: true,
+        notificationsEnabled: true
       },
       
       soundSettings: structuredSave.extended?.soundSettings || {
+        musicVolume: 0.5,
+        soundVolume: 0.5,
+        notificationVolume: 0.5,
         clickVolume: 0.5,
         effectsVolume: 0.5,
         backgroundMusicVolume: 0.3,
@@ -830,10 +854,9 @@ export class SaveSystem {
         this.currentState,
         this.userId,
         {
-          algorithm: CompressionAlgorithm.LZ_BASE64,
-          includeIntegrityInfo: true,
+          algorithm: CompressionAlgorithm.LZ_UTF16,
           removeTempData: true,
-          removeLogs: true
+          includeIntegrityInfo: true
         }
       );
       
@@ -871,15 +894,20 @@ export class SaveSystem {
         throw new Error("Ошибка декомпрессии данных");
       }
       
+      // Преобразуем структурированное сохранение в игровое состояние
+      const gameState = structuredToGameState(decompressed);
+      
       // Проверяем целостность данных
       if (this.options.validateOnLoad) {
-        this.currentState = validateAndRepairGameState(decompressed);
+        this.currentState = validateAndRepairGameState(gameState);
       } else {
-        this.currentState = decompressed;
+        this.currentState = gameState;
       }
       
       // Сохраняем импортированное состояние
-      await this.save(this.currentState, true);
+      if (this.currentState) {
+        await this.save(this.currentState, true);
+      }
       
       return {
         success: true,
@@ -928,5 +956,34 @@ export class SaveSystem {
     if (this.options.debugMode) {
       console.log(`[SaveSystem] Система сохранения уничтожена`);
     }
+  }
+}
+
+/**
+ * Оценивает эффективность сжатия для состояния игры
+ * @param state Состояние игры
+ * @returns Оценка сжатия в процентах
+ */
+function estimateCompression(state: ExtendedGameState): number {
+  try {
+    // Создаем копию состояния без временных данных
+    const stateCopy = { ...state };
+    delete stateCopy._tempData;
+    delete stateCopy.logs;
+    delete stateCopy.analytics;
+    
+    // Получаем размер данных до сжатия
+    const originalJson = JSON.stringify(stateCopy);
+    const originalSize = originalJson.length;
+    
+    // Сжимаем данные с помощью LZString
+    const compressed = LZString.compressToUTF16(originalJson);
+    const compressedSize = compressed.length * 2; // UTF-16 использует 2 байта на символ
+    
+    // Вычисляем процент сжатия
+    return Math.round((compressedSize / originalSize) * 100);
+  } catch (error) {
+    console.error('[SaveSystem] Ошибка при оценке сжатия:', error);
+    return 100; // Возвращаем 100%, если произошла ошибка
   }
 } 

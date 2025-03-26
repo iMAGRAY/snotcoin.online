@@ -1,9 +1,9 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { motion } from "framer-motion"
 import { ChevronLeft } from "lucide-react"
-import { useTranslation } from "../../../contexts/TranslationContext"
+import { useTranslation } from "../../../i18n"
 
 interface RoadmapPageProps {
   onBack: () => void

@@ -63,7 +63,7 @@ const nextConfig = {
     NEXT_PUBLIC_NEYNAR_CLIENT_ID: process.env.NEYNAR_CLIENT_ID,
     NEXT_PUBLIC_IMAGE_HOST: process.env.NEXT_PUBLIC_IMAGE_HOST,
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@components': path.join(__dirname, 'app/components'),
@@ -72,6 +72,35 @@ const nextConfig = {
       '@types': path.join(__dirname, 'app/types'),
       '@hooks': path.join(__dirname, 'app/hooks'),
     };
+    
+    // Решение проблемы с серверными модулями
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      net: false,
+      tls: false,
+      fs: false,
+      dns: false,
+      dgram: false,
+      http: false,
+      https: false,
+      stream: false,
+      crypto: false,
+      zlib: false,
+      path: false,
+      os: false,
+      'dns/promises': false,
+    };
+    
+    // Исключаем модуль 'ioredis' из клиентской сборки
+    if (!isServer) {
+      config.externals = [
+        ...(config.externals || []),
+        'ioredis',
+        'native-dns',
+        'native-dns-cache',
+      ];
+    }
+    
     return config;
   },
 }
