@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useGameState } from '../contexts/game/hooks/useGameState'
 import { useGameDispatch } from '../contexts/game/hooks/useGameDispatch'
 import { createBackup } from '../services/gameDataService'
@@ -19,6 +19,16 @@ export default function DevTools() {
   const [storageInfo, setStorageInfo] = useState<Record<string, string>>({})
   const [backupInfo, setBackupInfo] = useState<{exists: boolean, count: number, latestTimestamp?: string}>({exists: false, count: 0})
   const [localStorageSize, setLocalStorageSize] = useState<string>("0 КБ")
+  
+  // Состояния для управления позицией и размером окна
+  const [position, setPosition] = useState({ x: 10, y: 10 })
+  const [size, setSize] = useState({ width: 300, height: 400 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  
+  const containerRef = useRef<HTMLDivElement>(null)
   
   // Функция для проверки размера localStorage
   const getLocalStorageSize = () => {
@@ -182,6 +192,73 @@ export default function DevTools() {
     }
   }, [gameState._userId])
   
+  // Обработчики для перемещения окна
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(true)
+    setDragOffset({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    })
+  }
+  
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizing(true)
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height
+    })
+  }
+  
+  // Эффект для обработки движения мыши и отпускания при перетаскивании
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const newX = e.clientX - dragOffset.x
+        const newY = e.clientY - dragOffset.y
+        
+        // Проверяем границы экрана, чтобы не выходить за них
+        const maxX = window.innerWidth - (containerRef.current?.offsetWidth || 0)
+        const maxY = window.innerHeight - (containerRef.current?.offsetHeight || 0)
+        
+        setPosition({
+          x: Math.max(0, Math.min(newX, maxX)),
+          y: Math.max(0, Math.min(newY, maxY))
+        })
+      } else if (isResizing) {
+        const deltaX = e.clientX - resizeStart.x
+        const deltaY = e.clientY - resizeStart.y
+        
+        const newWidth = Math.max(200, resizeStart.width + deltaX)
+        const newHeight = Math.max(200, resizeStart.height + deltaY)
+        
+        setSize({
+          width: newWidth,
+          height: newHeight
+        })
+      }
+    }
+    
+    const handleMouseUp = () => {
+      setIsDragging(false)
+      setIsResizing(false)
+    }
+    
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, isResizing, dragOffset, resizeStart])
+  
   // Обработчик для тестового сохранения
   const handleTestSave = () => {
     // Небольшое изменение в игровом состоянии, чтобы вызвать сохранение
@@ -231,15 +308,32 @@ export default function DevTools() {
   const styles = {
     container: {
       position: 'fixed',
-      bottom: '10px',
-      right: '10px',
+      top: `${position.y}px`,
+      left: `${position.x}px`,
+      width: `${size.width}px`,
+      height: `${size.height}px`,
       backgroundColor: 'rgba(0, 0, 0, 0.8)',
       color: 'white',
       padding: '10px',
       borderRadius: '5px',
       zIndex: 9999,
       fontSize: '12px',
-      maxWidth: '300px'
+      overflow: 'auto',
+      resize: 'none',
+      boxShadow: '0 0 10px rgba(0, 0, 0, 0.5)'
+    } as React.CSSProperties,
+    titleBar: {
+      fontSize: '14px',
+      fontWeight: 'bold',
+      marginBottom: '8px',
+      padding: '5px',
+      backgroundColor: 'rgba(60, 60, 60, 0.8)',
+      borderRadius: '3px',
+      cursor: 'move',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      userSelect: 'none'
     } as React.CSSProperties,
     title: {
       fontSize: '14px',
@@ -275,6 +369,16 @@ export default function DevTools() {
     warningText: {
       color: '#ffcc00',
       fontWeight: 'bold'
+    } as React.CSSProperties,
+    resizeHandle: {
+      position: 'absolute',
+      bottom: '0',
+      right: '0',
+      width: '15px',
+      height: '15px',
+      cursor: 'nwse-resize',
+      background: 'linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.5) 50%)',
+      borderRadius: '0 0 5px 0'
     } as React.CSSProperties
   }
   
@@ -282,8 +386,11 @@ export default function DevTools() {
   const isStorageSizeWarning = parseFloat(localStorageSize) > 4000; // 4 МБ из 5 МБ лимита
   
   return (
-    <div style={styles.container}>
-      <div style={styles.title}>Отладка сохранения</div>
+    <div style={styles.container} ref={containerRef}>
+      <div style={styles.titleBar} onMouseDown={handleMouseDown}>
+        <div>Отладка сохранения</div>
+        <div style={{ fontSize: '10px' }}>{size.width}x{size.height}</div>
+      </div>
       
       <div style={styles.section}>
         <div style={{...styles.title, fontSize: '12px'}}>Идентификаторы:</div>
@@ -347,6 +454,8 @@ export default function DevTools() {
       >
         Очистить localStorage
       </button>
+      
+      <div style={styles.resizeHandle} onMouseDown={handleResizeStart}></div>
     </div>
   )
 } 
