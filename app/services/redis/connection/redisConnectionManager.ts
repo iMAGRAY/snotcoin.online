@@ -30,6 +30,8 @@ export class RedisConnectionManager {
   private onErrorHandlers: Array<(error: Error) => void> = [];
   /** Настройки соединения */
   private settings: RedisSettings;
+  /** Флаг инициализации в процессе */
+  private initializationInProgress: boolean = false;
   
   /**
    * Создает менеджер соединения с Redis
@@ -81,10 +83,34 @@ export class RedisConnectionManager {
   /**
    * Возвращает клиент Redis
    */
-  public getClient(): Redis | null {
+  public async getClient(): Promise<Redis | null> {
+    // Если клиент не инициализирован или соединение не установлено
     if (!this.client || !this.connected) {
-      console.warn('[Redis] Попытка получить клиент до инициализации соединения');
+      console.log('[Redis] Автоматическая инициализация соединения при запросе клиента');
+      
+      // Блокировка для предотвращения множественных одновременных инициализаций
+      if (!this.initializationInProgress) {
+        try {
+          this.initializationInProgress = true;
+          await this.initialize();
+        } catch (error) {
+          console.error('[Redis] Ошибка автоматической инициализации:', error);
+        } finally {
+          this.initializationInProgress = false;
+        }
+      } else {
+        // Если инициализация уже выполняется, ждем небольшое время
+        console.log('[Redis] Инициализация уже выполняется, ожидание...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Если после инициализации клиент все равно не доступен
+      if (!this.client || !this.connected) {
+        console.warn('[Redis] Не удалось получить клиент после попытки инициализации');
+        return null;
+      }
     }
+    
     return this.client;
   }
   

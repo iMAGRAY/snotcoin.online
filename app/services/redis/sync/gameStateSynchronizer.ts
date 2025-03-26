@@ -150,7 +150,7 @@ export class GameStateSynchronizer {
       // Если нашли в Redis, парсим и возвращаем
       if (serializedState) {
         try {
-          gameState = JSON.parse(serializedState) as ExtendedGameState;
+          gameState = JSON.parse(serializedState as string) as ExtendedGameState;
           
           // Сохраняем в память для быстрого доступа
           memoryCacheManager.set(primaryKey, gameState, DEFAULT_TTL);
@@ -162,7 +162,7 @@ export class GameStateSynchronizer {
             metrics: {
               duration: Date.now() - startTime,
               cacheHit: true,
-              size: serializedState.length
+              size: (serializedState as string).length
             }
           };
         } catch (parseError) {

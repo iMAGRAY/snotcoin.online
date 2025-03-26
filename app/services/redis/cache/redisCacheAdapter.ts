@@ -2,9 +2,10 @@
  * Адаптер для работы с Redis-кэшем
  */
 
+import { Redis } from 'ioredis';
 import { RedisCache } from '../types/redisTypes';
 import { redisConnectionManager } from '../connection/redisConnectionManager';
-import { TIMEOUTS } from '../utils/constants';
+import { TIMEOUTS, DEFAULT_TTL } from '../utils/constants';
 
 /**
  * Реализует интерфейс RedisCache для взаимодействия с Redis
@@ -14,25 +15,16 @@ export class RedisCacheAdapter implements RedisCache {
    * Проверяет доступность Redis
    */
   public async ping(): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
-      // Добавляем таймаут для ping операции
-      const pingPromise = client.ping();
-      const result = await Promise.race([
-        pingPromise,
-        new Promise<string>((_, reject) => 
-          setTimeout(() => reject(new Error('Redis ping timeout')), TIMEOUTS.PING)
-        )
-      ]);
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        return false;
+      }
       
-      return result === 'PONG';
+      const pong = await client.ping();
+      return pong === 'PONG';
     } catch (error) {
-      console.warn('[RedisCache] Ошибка при выполнении ping:', error);
+      console.error('[RedisCache] Ошибка при проверке соединения:', error);
       return false;
     }
   }
@@ -43,23 +35,20 @@ export class RedisCacheAdapter implements RedisCache {
    * @param value Значение
    * @param ttl Время жизни в секундах (опционально)
    */
-  public async set(key: string, value: string, ttl?: number): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
+  public async set<T>(key: string, value: T, ttl: number = DEFAULT_TTL): Promise<boolean> {
     try {
-      if (ttl) {
-        await client.set(key, value, 'EX', ttl);
-      } else {
-        await client.set(key, value);
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
       }
+      
+      const serializedValue = JSON.stringify(value);
+      await client.set(key, serializedValue, 'EX', ttl);
       
       return true;
     } catch (error) {
-      console.error('[RedisCache] Ошибка при установке значения:', error);
+      console.error('[RedisCache] Ошибка при сохранении данных:', error);
       return false;
     }
   }
@@ -68,29 +57,27 @@ export class RedisCacheAdapter implements RedisCache {
    * Получает значение из Redis
    * @param key Ключ
    */
-  public async get<T = any>(key: string): Promise<T | null> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return null;
-    }
-    
+  public async get<T>(key: string): Promise<T | null> {
     try {
-      const value = await client.get(key);
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return null;
+      }
       
-      if (value === null) {
+      const data = await client.get(key);
+      if (!data) {
         return null;
       }
       
       try {
-        // Пытаемся распарсить JSON
-        return JSON.parse(value) as T;
-      } catch {
-        // Если не получается распарсить, возвращаем как строку
-        return value as unknown as T;
+        return JSON.parse(data) as T;
+      } catch (parseError) {
+        console.error('[RedisCache] Ошибка при парсинге данных:', parseError);
+        return null;
       }
     } catch (error) {
-      console.error('[RedisCache] Ошибка при получении значения:', error);
+      console.error('[RedisCache] Ошибка при получении данных:', error);
       return null;
     }
   }
@@ -100,17 +87,17 @@ export class RedisCacheAdapter implements RedisCache {
    * @param key Ключ
    */
   public async del(key: string): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
       await client.del(key);
       return true;
     } catch (error) {
-      console.error('[RedisCache] Ошибка при удалении значения:', error);
+      console.error('[RedisCache] Ошибка при удалении данных:', error);
       return false;
     }
   }
@@ -120,15 +107,15 @@ export class RedisCacheAdapter implements RedisCache {
    * @param key Ключ
    */
   public async exists(key: string): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
-      const result = await client.exists(key);
-      return result === 1;
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
+      const exists = await client.exists(key);
+      return exists > 0;
     } catch (error) {
       console.error('[RedisCache] Ошибка при проверке существования ключа:', error);
       return false;
@@ -140,15 +127,14 @@ export class RedisCacheAdapter implements RedisCache {
    * @param key Ключ
    */
   public async ttl(key: string): Promise<number> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return -2; // -2 означает, что ключ не существует
-    }
-    
     try {
-      const result = await client.ttl(key);
-      return result;
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return -2;
+      }
+      
+      return await client.ttl(key);
     } catch (error) {
       console.error('[RedisCache] Ошибка при получении TTL:', error);
       return -2;
@@ -156,40 +142,39 @@ export class RedisCacheAdapter implements RedisCache {
   }
   
   /**
-   * Устанавливает время жизни ключа в Redis
+   * Устанавливает время жизни для ключа
    * @param key Ключ
-   * @param ttl Время жизни в секундах
+   * @param seconds Время жизни в секундах
    */
-  public async expire(key: string, ttl: number): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
+  public async expire(key: string, seconds: number): Promise<boolean> {
     try {
-      const result = await client.expire(key, ttl);
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
+      const result = await client.expire(key, seconds);
       return result === 1;
     } catch (error) {
-      console.error('[RedisCache] Ошибка при установке TTL:', error);
+      console.error('[RedisCache] Ошибка при установке времени жизни:', error);
       return false;
     }
   }
   
   /**
-   * Получает список ключей по шаблону
-   * @param pattern Шаблон
+   * Получает все ключи по шаблону
+   * @param pattern Шаблон ключей
    */
   public async keys(pattern: string): Promise<string[]> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return [];
-    }
-    
     try {
-      const keys = await client.keys(pattern);
-      return keys;
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return [];
+      }
+      
+      return await client.keys(pattern);
     } catch (error) {
       console.error('[RedisCache] Ошибка при получении ключей:', error);
       return [];
@@ -200,17 +185,17 @@ export class RedisCacheAdapter implements RedisCache {
    * Очищает все данные в Redis
    */
   public async flushall(): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
       await client.flushall();
       return true;
     } catch (error) {
-      console.error('[RedisCache] Ошибка при очистке данных:', error);
+      console.error('[RedisCache] Ошибка при очистке Redis:', error);
       return false;
     }
   }
@@ -222,13 +207,13 @@ export class RedisCacheAdapter implements RedisCache {
    * @param ttl Время жизни блокировки в секундах
    */
   public async acquireLock(lockKey: string, value: string, ttl: number = 5): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
       // Используем Lua-скрипт для сохранения блокировки с проверкой существования
       const luaScript = `
         if redis.call('exists', KEYS[1]) == 0 then
@@ -261,13 +246,13 @@ export class RedisCacheAdapter implements RedisCache {
    * @param value Значение (должно совпадать с тем, что было установлено при блокировке)
    */
   public async releaseLock(lockKey: string, value: string): Promise<boolean> {
-    const client = redisConnectionManager.getClient();
-    
-    if (!client) {
-      return false;
-    }
-    
     try {
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return false;
+      }
+      
       // Получаем текущее значение
       const currentValue = await client.get(lockKey);
       
@@ -281,6 +266,27 @@ export class RedisCacheAdapter implements RedisCache {
     } catch (error) {
       console.error('[RedisCache] Ошибка при освобождении блокировки:', error);
       return false;
+    }
+  }
+
+  /**
+   * Выполняет произвольный сценарий Lua
+   * @param script Сценарий Lua
+   * @param keys Ключи
+   * @param args Аргументы
+   */
+  public async eval(script: string, keys: string[], args: string[]): Promise<any> {
+    try {
+      const client = await redisConnectionManager.getClient();
+      if (!client) {
+        console.error('[RedisCache] Не удалось получить клиент Redis');
+        return null;
+      }
+      
+      return await client.eval(script, keys.length, ...keys, ...args);
+    } catch (error) {
+      console.error('[RedisCache] Ошибка при выполнении сценария Lua:', error);
+      return null;
     }
   }
 }
