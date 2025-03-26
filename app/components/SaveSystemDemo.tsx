@@ -295,14 +295,10 @@ const SaveSystemDemo: React.FC = () => {
             <h4 className="font-medium mb-2">Информация о сохранении:</h4>
             {saveInfo ? (
               <div className="text-sm">
-                <p>Последнее сохранение: {saveInfo.lastSaved.toLocaleString()}</p>
-                <p>Версия: {saveInfo.version}</p>
-                <p>Количество сохранений: {saveInfo.saveCount}</p>
-                <p>Локальная резервная копия: {saveInfo.hasLocalBackup ? 'Да' : 'Нет'}</p>
-                <p>Синхронизировано: {saveInfo.hasSyncedBackup ? 'Да' : 'Нет'}</p>
-                {saveInfo.lastSync && (
-                  <p>Последняя синхронизация: {saveInfo.lastSync.toLocaleString()}</p>
-                )}
+                <p>Последнее сохранение: {saveInfo.local?.timestamp ? new Date(saveInfo.local.timestamp).toLocaleString() : 'Нет'}</p>
+                <p>Размер данных: {saveInfo.local?.size || 0} байт</p>
+                <p>Серверное сохранение: {saveInfo.server?.timestamp ? new Date(saveInfo.server.timestamp).toLocaleString() : 'Нет'}</p>
+                <p>Размер серверных данных: {saveInfo.server?.size || 0} байт</p>
               </div>
             ) : (
               <p className="text-sm italic">Нет данных о сохранении</p>

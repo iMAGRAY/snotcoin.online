@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
+import { saveToken, saveUserId } from '@/app/services/auth/authenticationService';
 
 interface FarcasterLoginProps {
   onSuccess?: () => void;
@@ -29,6 +30,30 @@ export default function FarcasterLogin({
     return typeof window !== 'undefined' && window.farcaster !== undefined;
   };
 
+  // Функция для обработки успешной аутентификации
+  const handleSuccessfulAuth = (data: any) => {
+    if (data.token) {
+      try {
+        // Сохраняем токен с использованием authenticationService
+        saveToken(data.token);
+        console.log('[FarcasterLogin] Токен сохранен через authenticationService');
+        
+        // Сохраняем ID пользователя, если доступен
+        if (data.user && data.user.id) {
+          saveUserId(data.user.id);
+          console.log(`[FarcasterLogin] ID пользователя ${data.user.id} сохранен через authenticationService`);
+        }
+      } catch (storageError) {
+        console.error('[FarcasterLogin] Ошибка при сохранении данных авторизации:', storageError);
+        throw new Error('Ошибка при сохранении данных авторизации');
+      }
+    } else {
+      console.error('[FarcasterLogin] Сервер не вернул токен авторизации');
+      throw new Error('Авторизация не удалась: токен не получен от сервера');
+    }
+  };
+
+  // Обновленная функция handleLogin для использования централизованного механизма работы с токенами
   const handleLogin = async () => {
     setIsLoading(true);
     setError(null);
@@ -65,27 +90,20 @@ export default function FarcasterLogin({
         }),
       });
 
+      // Обработка неуспешных HTTP-статусов
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Ошибка HTTP: ${response.status}`);
+      }
+
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.message || 'Ошибка при авторизации');
       }
 
-      // Сохраняем токен в localStorage для совместимости с dataService
-      if (data.token) {
-        try {
-          localStorage.setItem('auth_token', data.token);
-          console.log('[FarcasterLogin] Токен сохранен в localStorage для совместимости с dataService');
-          
-          // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
-          if (data.user && data.user.id) {
-            localStorage.setItem('user_id', data.user.id);
-            console.log(`[FarcasterLogin] ID пользователя ${data.user.id} сохранен в localStorage`);
-          }
-        } catch (storageError) {
-          console.warn('[FarcasterLogin] Не удалось сохранить токен в localStorage:', storageError);
-        }
-      }
+      // Обработка успешной авторизации
+      handleSuccessfulAuth(data);
 
       // Обновляем данные в контексте
       await refreshUserData();

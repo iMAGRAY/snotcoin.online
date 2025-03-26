@@ -248,20 +248,57 @@ const HomeContent: React.FC = () => {
       type: "SET_USER", 
       payload: {
         id: farcasterUser.id,
-        farcaster_fid: farcasterUser.fid,
-        username: farcasterUser.username,
-        displayName: farcasterUser.displayName
+        name: farcasterUser.displayName || farcasterUser.username || 'Unknown',
+        avatar: farcasterUser.pfp || '',
+        fid: farcasterUser.fid,
+        username: farcasterUser.username || '',
+        email: '',
+        auth_provider: 'farcaster',
+        auth_id: farcasterUser.fid?.toString() || '',
+        verified: true,
+        // Добавляем время создания для отслеживания сессии
+        created_at: new Date().toISOString(),
+        // Дополнительная информация для логирования
+        device_info: navigator?.userAgent || '',
+        login_source: 'frame',
       }
     });
     
-    // Обновляем локальное состояние используя общую функцию updateAuthState
-    updateAuthState(true);
-    localDispatch({ type: 'SET_USER_DATA_LOADING', payload: true });
+    // Отмечаем, что авторизация произведена
     localDispatch({ type: 'SET_DISPATCHED_LOGIN', payload: true });
+    localDispatch({ type: 'SET_AUTHENTICATED', payload: true });
     
-    // Показываем интерфейс
-    dispatch({ type: "SET_HIDE_INTERFACE", payload: false });
-  }, [farcasterUser, isFarcasterAuth, dispatch, updateAuthState]);
+    // Сохраняем информацию о пользователе в localStorage, чтобы при обновлении страницы не терялась сессия
+    if (typeof localStorage !== 'undefined') {
+      try {
+        // Создаем безопасный объект с данными пользователя для хранения
+        const safeUserData = {
+          id: farcasterUser.id,
+          name: farcasterUser.displayName || farcasterUser.username || 'Unknown',
+          avatar: farcasterUser.pfp || '',
+          fid: farcasterUser.fid,
+          username: farcasterUser.username || '',
+          auth_provider: 'farcaster',
+          created_at: new Date().toISOString(),
+        };
+        
+        // Сохраняем данные
+        localStorage.setItem('farcaster_user', JSON.stringify(safeUserData));
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('authToken', JSON.stringify(safeUserData));
+        
+        // Уведомляем другие вкладки об изменении статуса авторизации
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'isAuthenticated',
+          newValue: 'true'
+        }));
+      } catch (error) {
+        console.error('Ошибка сохранения данных пользователя Farcaster:', error);
+      }
+    }
+    
+    console.log('[HomeContent] Farcaster авторизация успешна');
+  }, [farcasterUser, isFarcasterAuth, dispatch, localState.hasDispatchedLogin]);
 
   // Фиксим мобильный viewport
   useEffect(() => {

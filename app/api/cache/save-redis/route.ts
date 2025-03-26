@@ -2,7 +2,7 @@
  * API для сохранения в Redis с клиентской стороны
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { redisService } from '../../../services/redisService';
+import { redisService } from '../../../services/redis';
 import { verifyJWT } from '../../../utils/auth';
 import { ErrorCodes } from '../../../types/apiTypes';
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     
     // Проверяем валидность токена
     const authResult = await verifyJWT(token);
-    if (!authResult.success) {
+    if (!authResult.valid) {
       console.warn('[API] Недействительный токен:', authResult.error);
       return NextResponse.json(
         { error: 'Токен недействителен', errorCode: ErrorCodes.INVALID_TOKEN },

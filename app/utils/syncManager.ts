@@ -491,8 +491,10 @@ export class SyncManager {
       let compressedData = null;
       let isCompressed = false;
       
+      // Функция compressGameState асинхронная, поэтому важно использовать await,
+      // чтобы дождаться завершения сжатия данных перед продолжением выполнения
       if (this.options.compressData && this.localState) {
-        compressedData = compressGameState(
+        compressedData = await compressGameState(
           this.localState, 
           this.userId, 
           {

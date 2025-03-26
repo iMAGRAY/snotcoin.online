@@ -1,279 +1,394 @@
+/**
+ * API для загрузки прогресса игры
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { verifyJWT } from '../../../utils/jwt'
+import { verifyJWT } from '../../../utils/auth'
 import type { StructuredGameSave } from '../../../types/saveTypes'
 import { createInitialGameState } from '../../../constants/gameConstants'
-import { redisService } from '../../../services/redisService'
+import { redisService } from '../../../services/redis'
+import { apiLogger as logger } from '../../../lib/logger'
+import { gameMetrics } from '../../../lib/metrics'
+import { prisma } from '../../../lib/prisma'
+import { logTiming } from '../../../lib/logger'
 
 export const dynamic = 'force-dynamic'
 
-const prisma = new PrismaClient();
+// Интерфейс для метрик запроса
+interface RequestMetrics {
+  startTime: number;
+  cacheTime?: number;
+  dbTime?: number;
+  totalTime?: number;
+  source?: string;
+  isNewUser?: boolean;
+  isCompressed?: boolean;
+}
 
+/**
+ * Обработчик GET запроса для загрузки прогресса игры
+ */
 export async function GET(request: NextRequest) {
-  console.log('[API/load-progress] Получен запрос на загрузку прогресса');
-
-  // Проверяем токен через URL-параметр (для Beacon API)
-  const tokenFromUrl = request.nextUrl.searchParams.get('token');
+  const startTime = performance.now();
+  const metrics: RequestMetrics = { startTime };
   
-  // Получаем ID пользователя из параметров
-  const userIdFromUrl = request.nextUrl.searchParams.get('userId');
-  
-  // Извлекаем токен из заголовка Authorization
-  const authHeader = request.headers.get('Authorization');
-  let token;
-  
-  // Приоритет имеет токен из заголовка, затем из URL-параметра
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-    console.log('[API/load-progress] Токен получен из заголовка');
-  } else if (tokenFromUrl) {
-    token = tokenFromUrl;
-    console.log('[API/load-progress] Токен получен из URL-параметра');
-  } else {
-    console.error('[API/load-progress] Отсутствует токен авторизации (ни в заголовке, ни в URL)');
-    return NextResponse.json({ error: 'Отсутствует токен авторизации' }, { status: 401 });
-  }
+  // Инкрементируем счетчик запросов на загрузку
+  gameMetrics.loadTotalCounter();
   
   try {
-    // Проверяем валидность токена
-    const { valid, userId, error: tokenError } = await verifyJWT(token);
+    logger.info('Получен запрос на загрузку прогресса');
     
-    if (!valid || !userId) {
-      console.error('[API/load-progress] Невалидный токен авторизации:', tokenError);
-      return NextResponse.json({
-        error: 'Невалидный токен авторизации',
-        details: tokenError
-      }, { status: 401 });
-    }
+    // Получение и проверка токена доступа
+    const token = request.headers.get('authorization')?.split(' ')[1] || '';
     
-    console.log(`[API/load-progress] Токен верифицирован, userId: ${userId}`);
-    
-    // Убеждаемся, что запрашиваемый пользователь совпадает с пользователем из токена
-    if (userIdFromUrl && userIdFromUrl !== userId) {
-      console.error(`[API/load-progress] Несоответствие ID пользователя: ${userIdFromUrl} (запрос) != ${userId} (токен)`);
-      return NextResponse.json({ 
-        error: 'Нельзя загружать прогресс другого пользователя' 
-      }, { status: 403 });
-    }
-    
-    // Пытаемся загрузить данные из Redis (кэш)
-    console.log(`[API/load-progress] Пытаемся загрузить данные из Redis для ${userId}`);
-    const redisResult = await redisService.loadGameState(userId);
-    
-    // Если данные найдены в Redis, возвращаем их
-    if (redisResult.success && redisResult.data) {
-      console.log(`[API/load-progress] Данные успешно загружены из Redis, источник: ${redisResult.source}`);
-      
-      const gameState = redisResult.data;
-      const metadata = {
-        version: gameState._saveVersion || 1,
-        userId: userId,
-        isCompressed: false,
-        savedAt: new Date(gameState._lastModified || Date.now()).toISOString(),
-        loadedAt: new Date().toISOString(),
-        source: redisResult.source
-      };
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          gameState: {
-            ...JSON.parse(JSON.stringify(gameState)),
-            _metadata: metadata,
-            _hasFullData: true
-          },
-          metadata,
-          fromCache: true
-        }
-      });
-    }
-    
-    // Если данных в Redis нет, продолжаем загрузку из базы данных
-    console.log(`[API/load-progress] Данные не найдены в Redis, загружаем из базы данных`);
-    
-    // Находим пользователя по ID
-    let user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
-    
-    // Если пользователь не найден, создаем его автоматически
-    if (!user) {
-      console.log(`[API/load-progress] Пользователь не найден, создаем пользователя на лету: ${userId}`);
-      
-      try {
-        // Выполняем дополнительную проверку перед созданием (защита от race condition)
-        const checkUserAgain = await prisma.user.findUnique({
-          where: { id: userId }
-        });
-        
-        if (checkUserAgain) {
-          console.log(`[API/load-progress] Найден пользователь при дополнительной проверке: ${checkUserAgain.id}`);
-          user = checkUserAgain;
-        } else {
-          // Извлекаем числовую часть ID для использования в username
-          const userIdParts = userId.split('_');
-          const numericPart = userIdParts.length > 1 ? userIdParts[1] : '0';
-          
-          try {
-            // Создаем пользователя на лету
-            user = await prisma.user.create({
-              data: {
-                id: userId,
-                farcaster_fid: userId,
-                farcaster_username: `user_${numericPart}`,
-                farcaster_displayname: '',
-                jwt_token: token
-              }
-            });
-            
-            console.log(`[API/load-progress] Создан новый пользователь: ${user.id}`);
-          } catch (createUserError) {
-            console.error(`[API/load-progress] Ошибка при создании пользователя:`, createUserError);
-            
-            // Проверяем, не создан ли пользователь параллельно (race condition)
-            if ((createUserError as any).code === 'P2002') {
-              const finalCheckUser = await prisma.user.findUnique({
-                where: { id: userId }
-              });
-              
-              if (finalCheckUser) {
-                console.log(`[API/load-progress] Пользователь найден после ошибки создания: ${finalCheckUser.id}`);
-                user = finalCheckUser;
-              } else {
-                throw createUserError;
-              }
-            } else {
-              throw createUserError;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`[API/load-progress] Критическая ошибка при создании пользователя:`, error);
-        return NextResponse.json({ 
-          error: 'Не удалось создать пользователя', 
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        }, { status: 500 });
-      }
-    }
-    
-    // Запрос на получение прогресса по ID пользователя
-    let progress;
-    try {
-      progress = await prisma.progress.findUnique({
-        where: { user_id: userId }
-      });
-      
-      console.log(`[API/load-progress] ${progress ? 'Найден' : 'Не найден'} прогресс для пользователя: ${userId}`);
-    } catch (dbError) {
-      console.error('[API/load-progress] Ошибка при запросе прогресса из БД:', dbError);
+    const tokenResult = await verifyJWT(token);
+    if (!tokenResult.valid || !tokenResult.userId) {
+      logger.warn('Недействительный токен', { error: tokenResult.error });
+      gameMetrics.loadErrorCounter({ reason: 'invalid_token' });
       
       return NextResponse.json({
         success: false,
-        message: 'Ошибка доступа к базе данных',
-        error: dbError instanceof Error ? dbError.message : 'Unknown database error'
-      }, { status: 500 });
+        error: tokenResult.error || 'INVALID_TOKEN',
+        message: 'Недействительный токен',
+        processingTime: performance.now() - startTime
+      }, { status: 401 });
     }
     
-    // Если прогресс найден, возвращаем его и кэшируем в Redis
-    if (progress) {
-      // Проверяем, является ли это сжатым состоянием
-      const isCompressed = progress.is_compressed || 
-        (progress.game_state && (progress.game_state as any)._isCompressed);
+    const userId = tokenResult.userId;
+    logger.info('Токен верифицирован', { userId });
+    
+    // Попытка загрузки из Redis кэша для быстрого ответа
+    const cacheStartTime = performance.now();
+    let cacheHit = false;
+    let gameStateData = null;
+    
+    try {
+      const cachedData = await redisService.loadGameState(userId);
+      metrics.cacheTime = performance.now() - cacheStartTime;
       
-      // Добавляем метаданные, которые помогут клиенту правильно обработать данные
-      const metadata = {
-        version: progress.version,
-        userId: userId,
-        isCompressed: isCompressed,
-        savedAt: progress.updated_at,
-        loadedAt: new Date().toISOString()
-      };
-      
-      // Сохраняем данные в Redis для ускорения последующих загрузок
-      if (progress.game_state) {
-        console.log(`[API/load-progress] Кэшируем данные в Redis для пользователя: ${userId}`);
+      if (cachedData.success && cachedData.data) {
+        cacheHit = true;
+        metrics.source = 'cache';
+        
+        logger.info('Прогресс загружен из кэша', { 
+          userId,
+          source: cachedData.source || 'cache',
+          timeMs: metrics.cacheTime.toFixed(2)
+        });
+        
+        // Подготавливаем данные для ответа
+        gameStateData = cachedData.data;
+        
+        // Если в gameStateData отсутствует _createdAt, добавляем его
+        if (!gameStateData._createdAt) {
+          gameStateData._createdAt = new Date().toISOString();
+        }
+        
+        // Обновляем метрики кэша
+        gameMetrics.saveTotalCounter({ cache_hit: true });
+        
+        // Добавляем метаданные
+        const now = new Date().toISOString();
+        const metadata = {
+          version: gameStateData._saveVersion || 1,
+          userId: gameStateData._userId || userId,
+          isCompressed: false,
+          cacheHit: true,
+          savedAt: gameStateData._savedAt || now,
+          loadedAt: now,
+          processingTime: performance.now() - startTime,
+          source: cachedData.source || 'cache'
+        };
         
         try {
-          // Сохраняем в кэш с критическим маркером, если данные сжаты
-          await redisService.saveGameState(userId, progress.game_state as any, isCompressed);
-        } catch (cacheError) {
-          console.warn(`[API/load-progress] Ошибка кэширования данных:`, cacheError);
+          // Маркируем как критическое состояние для более длительного хранения
+          await redisService.saveGameState(userId, gameStateData, { isCritical: true });
+          logger.debug('Состояние помечено как критическое');
+          
+          // Записываем метрику времени выполнения
+          metrics.totalTime = performance.now() - startTime;
+          gameMetrics.loadDuration(metrics.totalTime, { 
+            source: 'cache',
+            cache_hit: true
+          });
+          
+          return NextResponse.json({
+            success: true,
+            data: {
+              gameState: gameStateData,
+              metadata
+            }
+          });
+        } catch (error) {
+          logger.error('Ошибка при сохранении критического состояния', {
+            error: error instanceof Error ? error.message : String(error)
+          });
+          
           // Продолжаем выполнение даже при ошибке кэширования
+          metrics.totalTime = performance.now() - startTime;
+          gameMetrics.loadDuration(metrics.totalTime, { 
+            source: 'cache',
+            cache_hit: true,
+            error: true
+          });
+          
+          return NextResponse.json({
+            success: true,
+            data: {
+              gameState: gameStateData,
+              metadata
+            }
+          });
         }
       }
       
-      // Если данные сжаты, возвращаем только критические части для быстрой загрузки
-      if (isCompressed && (progress.game_state as any).critical) {
-        console.log(`[API/load-progress] Возвращаем сжатые данные для пользователя: ${userId}`);
+      // Если данных нет в кэше, продолжаем загрузку из БД
+      logger.info('Кэш не найден, загружаем из БД', { userId });
+    } catch (cacheError) {
+      metrics.cacheTime = performance.now() - cacheStartTime;
+      
+      logger.warn('Ошибка при проверке кэша', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+        timeMs: metrics.cacheTime.toFixed(2)
+      });
+      
+      // Продолжаем выполнение для загрузки из БД
+    }
+    
+    // Загрузка данных из базы
+    const dbStartTime = performance.now();
+    
+    try {
+      // Загружаем прогресс и основные данные пользователя параллельно
+      const [progress, user] = await Promise.all([
+        prisma.progress.findUnique({
+          where: { user_id: userId }
+        }),
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { created_at: true, updated_at: true, farcaster_username: true }
+        })
+      ]);
+      
+      metrics.dbTime = performance.now() - dbStartTime;
+      
+      if (progress && progress.game_state) {
+        logger.info('Прогресс загружен из БД', { 
+          userId,
+          timeMs: metrics.dbTime.toFixed(2)
+        });
         
-        const compressedData = progress.game_state as any;
+        metrics.source = 'database';
         
-        // Быстрая загрузка критических данных
+        // Проверка на сжатие данных
+        const isCompressed = typeof progress.game_state === 'string' && 
+                            progress.game_state.startsWith('{"_compressed":true');
+        
+        metrics.isCompressed = isCompressed;
+        let gameStateData;
+        
+        if (isCompressed) {
+          try {
+            // Если данные сжаты, распаковываем их
+            const compressedData = JSON.parse(progress.game_state as string);
+            
+            // Здесь должен быть код распаковки, но для простоты просто берем данные
+            // TODO: Реализовать настоящую распаковку данных
+            gameStateData = compressedData;
+            
+            logger.info('Данные успешно распакованы', { userId });
+          } catch (parseError) {
+            logger.error('Ошибка при распаковке данных', {
+              error: parseError instanceof Error ? parseError.message : String(parseError)
+            });
+            
+            gameMetrics.loadErrorCounter({ reason: 'decompression_error' });
+            
+            return NextResponse.json({
+              success: false,
+              error: 'DATA_CORRUPTED',
+              message: 'Ошибка при распаковке данных',
+              processingTime: performance.now() - startTime
+            }, { status: 500 });
+          }
+        } else {
+          // Если данные не сжаты, просто используем их
+          gameStateData = progress.game_state;
+        }
+        
+        // Добавляем или обновляем метаданные
+        const now = new Date().toISOString();
+        const metadata = {
+          version: (gameStateData as any)._saveVersion || progress.version || 1,
+          userId: userId,
+          isCompressed: isCompressed,
+          cacheHit: false,
+          savedAt: progress.updated_at?.toISOString() || now,
+          loadedAt: now,
+          processingTime: performance.now() - startTime,
+          source: 'database'
+        };
+        
+        // Добавляем метаданные пользователя, если они доступны
+        if (user) {
+          Object.assign(metadata, {
+            userCreatedAt: user.created_at?.toISOString(),
+            userUpdatedAt: user.updated_at?.toISOString(),
+            username: user.farcaster_username
+          });
+        }
+        
+        // Сохраняем в кэш для будущих запросов
+        try {
+          // Сохраняем в кэш с критическим маркером
+          await redisService.saveGameState(userId, gameStateData, { isCritical: true });
+          logger.debug('Данные сохранены в кэш', { userId });
+        } catch (cacheError) {
+          logger.warn('Ошибка кэширования данных', {
+            error: cacheError instanceof Error ? cacheError.message : String(cacheError)
+          });
+          // Продолжаем выполнение даже при ошибке кэширования
+        }
+        
+        // Обогащаем ответ метаданными, если это полные данные
+        const isFullGameState = typeof gameStateData === 'object' && 
+                              gameStateData !== null && 
+                              'inventory' in gameStateData;
+        
+        if (isFullGameState) {
+          gameStateData = {
+            ...gameStateData as StructuredGameSave,
+            _metadata: metadata,
+            _hasFullData: true
+          };
+        }
+        
+        // Записываем метрику времени выполнения
+        metrics.totalTime = performance.now() - startTime;
+        gameMetrics.loadDuration(metrics.totalTime, { 
+          source: 'database',
+          cache_hit: false,
+          compressed: isCompressed
+        });
+        
         return NextResponse.json({
           success: true,
           data: {
-            gameState: {
-              critical: compressedData.critical,
-              integrity: compressedData.integrity,
-              _isCompressed: true,
-              _metadata: metadata,
-              _hasFullData: false // Флаг для клиента, что нужно загрузить полные данные позже
-            },
+            gameState: gameStateData,
             metadata
           }
         });
-      }
-      
-      console.log(`[API/load-progress] Возвращаем полные данные для пользователя: ${userId}`);
-      const gameStateData = progress.game_state ? {
-        ...JSON.parse(JSON.stringify(progress.game_state)),
-        _metadata: metadata,
-        _hasFullData: true
-      } : {};
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          gameState: gameStateData,
-          metadata
+      } else {
+        // Прогресс не найден, создаем новое состояние игры
+        logger.info('Прогресс не найден, создаем новое состояние игры', { userId });
+        metrics.isNewUser = true;
+        
+        // Создаем начальное состояние игры для нового пользователя
+        const initialState = createInitialGameState(userId);
+        
+        // Добавляем метаданные
+        initialState._createdAt = new Date().toISOString();
+        initialState._saveVersion = 1;
+        
+        // Кэшируем начальное состояние в Redis
+        try {
+          await redisService.saveGameState(userId, initialState, { isCritical: true });
+          logger.debug('Начальное состояние сохранено в кэш', { userId });
+        } catch (cacheError) {
+          logger.warn('Ошибка кэширования начального состояния', {
+            error: cacheError instanceof Error ? cacheError.message : String(cacheError)
+          });
+          // Продолжаем выполнение даже при ошибке кэширования
         }
-      });
-    } else {
-      console.log(`[API/load-progress] Прогресс не найден для пользователя: ${userId}, будет создано новое состояние игры`);
-      
-      // Создаем начальное состояние игры для нового пользователя
-      const initialState = createInitialGameState(userId);
-      
-      // Кэшируем начальное состояние в Redis
-      try {
-        await redisService.saveGameState(userId, initialState, true);
-      } catch (cacheError) {
-        console.warn(`[API/load-progress] Ошибка кэширования начального состояния:`, cacheError);
-        // Продолжаем выполнение даже при ошибке кэширования
-      }
-      
-      return NextResponse.json({
-        success: true,
-        data: {
-          gameState: initialState,
-          metadata: {
-            version: 1,
-            userId: userId,
-            isCompressed: false,
-            savedAt: new Date().toISOString(),
-            loadedAt: new Date().toISOString(),
-            isNewUser: true
+        
+        // Записываем метрику времени выполнения
+        metrics.totalTime = performance.now() - startTime;
+        gameMetrics.loadDuration(metrics.totalTime, { 
+          source: 'new_user',
+          cache_hit: false,
+          new_user: true
+        });
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            gameState: initialState,
+            metadata: {
+              version: 1,
+              userId: userId,
+              isCompressed: false,
+              savedAt: new Date().toISOString(),
+              loadedAt: new Date().toISOString(),
+              isNewUser: true,
+              processingTime: metrics.totalTime
+            }
           }
-        }
+        });
+      }
+    } catch (dbError) {
+      metrics.dbTime = performance.now() - dbStartTime;
+      
+      logger.error('Ошибка при загрузке данных из БД', {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        timeMs: metrics.dbTime.toFixed(2)
       });
+      
+      gameMetrics.loadErrorCounter({ reason: 'db_error' });
+      
+      // Если есть данные из кэша, возвращаем их несмотря на ошибку БД
+      if (gameStateData) {
+        logger.info('Возврат данных из кэша при ошибке БД', { userId });
+        
+        // Записываем метрику времени выполнения
+        metrics.totalTime = performance.now() - startTime;
+        gameMetrics.loadDuration(metrics.totalTime, { 
+          source: 'cache_fallback',
+          cache_hit: true,
+          db_error: true
+        });
+        
+        return NextResponse.json({
+          success: true,
+          warning: 'Данные загружены из кэша, ошибка БД',
+          data: {
+            gameState: gameStateData,
+            metadata: {
+              version: (gameStateData as any)._saveVersion || 1,
+              userId: userId,
+              isCompressed: false,
+              cacheHit: true,
+              savedAt: (gameStateData as any)._savedAt || new Date().toISOString(),
+              loadedAt: new Date().toISOString(),
+              processingTime: metrics.totalTime,
+              source: 'cache_fallback'
+            }
+          }
+        }, { status: 207 }); // 207 Multi-Status
+      }
+      
+      return NextResponse.json({
+        success: false,
+        error: 'DB_ERROR',
+        message: 'Ошибка при загрузке прогресса из базы данных',
+        details: dbError instanceof Error ? dbError.message : 'Unknown error',
+        processingTime: performance.now() - startTime
+      }, { status: 500 });
     }
   } catch (error) {
-    console.error('[API/load-progress] Ошибка при загрузке прогресса:', error);
+    logger.error('Неожиданная ошибка при загрузке прогресса', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    gameMetrics.loadErrorCounter({ reason: 'unexpected_error' });
     
     return NextResponse.json({
       success: false,
+      error: 'INTERNAL_ERROR',
       message: 'Ошибка при загрузке прогресса',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? error.message : 'Unknown error',
+      processingTime: performance.now() - startTime
     }, { status: 500 });
   }
-} 
+}

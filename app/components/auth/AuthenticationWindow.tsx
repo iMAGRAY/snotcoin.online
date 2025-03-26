@@ -20,6 +20,11 @@ export const authStore = {
   
   // Методы для работы с данными аутентификации
   setAuthData(token: any, isAuth: boolean) {
+    // Проверяем, изменилось ли что-то
+    if (this.authToken === token && this.isAuthenticated === isAuth) {
+      return; // Ничего не изменилось, выходим
+    }
+    
     this.authToken = token;
     this.isAuthenticated = isAuth;
     
@@ -38,13 +43,22 @@ export const authStore = {
   },
   
   clearAuthData() {
+    if (!this.authToken && !this.isAuthenticated) {
+      return; // Уже очищено
+    }
+    
     logAuthInfo(AuthStep.USER_INTERACTION, 'Очистка данных авторизации в хранилище');
     this.authToken = null;
     this.isAuthenticated = false;
   },
   
   getAuthToken() {
-    return this.authToken;
+    try {
+      return this.authToken;
+    } catch (error) {
+      console.error('[AuthStore] Ошибка при получении токена:', error);
+      return null;
+    }
   },
   
   getIsAuthenticated() {
@@ -67,56 +81,57 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
 
   const handleAuthentication = useCallback(
     (userData: any) => {
-      if (userData) {
+      if (!userData) {
+        logAuth(
+          AuthStep.AUTH_COMPLETE,
+          AuthLogType.ERROR,
+          'Авторизация не удалась: получены пустые данные пользователя'
+        );
+        return;
+      }
+      
+      logAuth(
+        AuthStep.AUTH_COMPLETE, 
+        AuthLogType.INFO, 
+        'Авторизация успешна, обновление состояния игры', 
+        { userId: userData?.user?.id, farcasterId: userData?.user?.fid }
+      );
+      
+      // Проверяем, не был ли пользователь уже аутентифицирован
+      if (authStore.getIsAuthenticated()) {
         logAuth(
           AuthStep.AUTH_COMPLETE, 
-          AuthLogType.INFO, 
-          'Авторизация успешна, обновление состояния игры', 
-          { userId: userData?.user?.id, farcasterId: userData?.user?.fid }
+          AuthLogType.WARNING, 
+          'Повторная попытка аутентификации игнорирована, пользователь уже аутентифицирован'
         );
-        
-        // Проверяем, не был ли пользователь уже аутентифицирован
-        if (authStore.getIsAuthenticated()) {
+        return;
+      }
+      
+      // Save user data
+      authStore.setAuthData(userData, true)
+
+      // Update game state
+      gameDispatch({ type: "SET_USER", payload: userData })
+      
+      // Явно устанавливаем laboratory как активную вкладку перед вызовом onAuthenticate
+      // для гарантии правильного начального состояния
+      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+      
+      if (onAuthenticate) {
+        try {
+          onAuthenticate(userData)
+        } catch (error) {
+          console.error('[AuthenticationWindow] Ошибка в обработчике onAuthenticate:', error);
           logAuth(
-            AuthStep.AUTH_COMPLETE, 
-            AuthLogType.WARNING, 
-            'Повторная попытка аутентификации игнорирована, пользователь уже аутентифицирован'
+            AuthStep.AUTH_COMPLETE,
+            AuthLogType.ERROR,
+            'Ошибка при вызове обработчика onAuthenticate',
+            { error: error instanceof Error ? error.message : String(error) }
           );
-          return;
         }
-        
-        // Save user data
-        authStore.setAuthData(userData, true)
-
-        // Update game state
-        gameDispatch({ type: "SET_USER", payload: userData })
-        
-        // Явно устанавливаем laboratory как активную вкладку перед вызовом onAuthenticate
-        // для гарантии правильного начального состояния
-        gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
-
-        // Логируем обновление игрового состояния
-        logAuth(
-          AuthStep.AUTH_COMPLETE, 
-          AuthLogType.INFO, 
-          'Игровое состояние обновлено, вызов колбэка завершения авторизации'
-        );
-        
-        // Call the onAuthenticate callback после короткой задержки, чтобы убедиться,
-        // что gameState успел обновиться
-        setTimeout(() => {
-          onAuthenticate(userData);
-          logAuth(AuthStep.AUTH_COMPLETE, AuthLogType.INFO, 'Колбэк авторизации успешно выполнен');
-        }, 10);
-      } else {
-        logAuth(
-          AuthStep.AUTH_ERROR, 
-          AuthLogType.ERROR, 
-          'Попытка авторизации с пустыми данными пользователя'
-        );
       }
     },
-    [gameDispatch, onAuthenticate],
+    [gameDispatch, onAuthenticate]
   )
 
   const handleAuthError = (error: string) => {

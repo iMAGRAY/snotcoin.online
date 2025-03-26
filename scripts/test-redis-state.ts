@@ -1,6 +1,7 @@
-import { RedisCache } from '../app/utils/redisClient';
+import { RedisCache } from '../app/services/redis/types/redisTypes';
 import { ExtendedGameState } from '../app/types/gameTypes';
 import { StructuredGameSave, gameStateToStructured, structuredToGameState } from '../app/types/saveTypes';
+import { redisService } from '../app/services/redis';
 
 const testState: ExtendedGameState = {
   inventory: {
@@ -82,23 +83,24 @@ const testState: ExtendedGameState = {
 async function testRedisState() {
   console.log('Тестирование сохранения и загрузки состояния в Redis...');
   
-  const cache = new RedisCache();
-  
-  // Ждем инициализацию
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Инициализируем сервис
+  await redisService.initialize();
   
   try {
     // Преобразуем состояние в структурированный формат
     const structuredState = gameStateToStructured(testState);
     console.log('Структурированное состояние создано');
     
-    // Сохраняем состояние
+    // Сохраняем состояние с максимальным приоритетом
     console.log('Сохраняем тестовое состояние...');
-    const saveResult = await cache.saveGameState('test_user_123', testState);
+    const saveResult = await redisService.saveGameState('test_user_123', testState, {
+      isCritical: true,
+      compress: true
+    });
     
     if (saveResult.success) {
       console.log('✅ Состояние успешно сохранено');
-      console.log('Метаданные:', saveResult.metadata);
+      console.log('Метрики:', saveResult.metrics);
     } else {
       console.log('❌ Ошибка при сохранении состояния:', saveResult.error);
       return;
@@ -106,43 +108,34 @@ async function testRedisState() {
     
     // Загружаем состояние
     console.log('\nЗагружаем состояние...');
-    const loadResult = await cache.loadGameState('test_user_123');
+    const loadResult = await redisService.loadGameState('test_user_123');
     
     if (loadResult.success && loadResult.data) {
       console.log('✅ Состояние успешно загружено');
-      console.log('Метаданные:', loadResult.metadata);
+      console.log('Метрики:', loadResult.metrics);
       
-      // Выводим загруженное состояние
-      console.log('Загруженное состояние:', JSON.stringify(loadResult.data, null, 2));
+      // Проверяем соответствие данных
+      const loadedState = loadResult.data as ExtendedGameState;
+      const matches = 
+        loadedState.inventory.snot === testState.inventory.snot &&
+        loadedState.container.capacity === testState.container.capacity &&
+        loadedState.upgrades.containerLevel === testState.upgrades.containerLevel;
       
-      // Проверяем тип загруженного состояния
-      const structuredSave = loadResult.data as unknown as StructuredGameSave;
-      if ('critical' in structuredSave && 'integrity' in structuredSave) {
-        // Преобразуем структурированное состояние в ExtendedGameState
-        const loadedState = structuredToGameState(structuredSave);
-        
-        // Проверяем соответствие данных
-        const matches = 
-          loadedState.inventory.snot === testState.inventory.snot &&
-          loadedState.container.capacity === testState.container.capacity &&
-          loadedState.upgrades.containerLevel === testState.upgrades.containerLevel;
-        
-        if (matches) {
-          console.log('✅ Загруженные данные соответствуют сохраненным');
-        } else {
-          console.log('❌ Загруженные данные отличаются от сохраненных');
-        }
+      if (matches) {
+        console.log('✅ Загруженные данные соответствуют сохраненным');
       } else {
-        console.log('❌ Загруженное состояние имеет неверный формат');
+        console.log('❌ Загруженные данные отличаются от сохраненных');
       }
     } else {
       console.log('❌ Ошибка при загрузке состояния:', loadResult.error);
     }
+    
+    // Получаем статистику
+    const stats = await redisService.getCacheStats();
+    console.log('\nСтатистика Redis:', stats);
+    
   } catch (error) {
     console.error('❌ Ошибка при тестировании:', error);
-  } finally {
-    // Очищаем ресурсы
-    cache.destroy();
   }
 }
 

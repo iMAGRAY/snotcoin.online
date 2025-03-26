@@ -383,7 +383,7 @@ export function GameProvider({
   
   // Обработчик события закрытия страницы
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!userId || !enableAutoSave || state._skipSave || beforeUnloadSaveSentRef.current) {
         return;
       }
@@ -397,29 +397,83 @@ export function GameProvider({
       const stateToSave = {
         ...state,
         _lastSaved: new Date().toISOString(),
-        _userId: userId
+        _userId: userId,
+        _isCriticalSave: true, // Пометка критичности для API
+        _closeType: 'beforeunload', // Причина сохранения
+        _saveVersion: (state._saveVersion || 0) + 1 // Увеличиваем версию
       };
       
-      // Использование navigator.sendBeacon для отправки данных даже после закрытия страницы
+      // Выполняем сохранение, используя несколько методов для надежности
+      let saveAttempted = false;
+      
+      // Метод 1: Использование navigator.sendBeacon для отправки данных даже после закрытия страницы
       if (navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify({
-          userId,
-          gameState: stateToSave,
-          version: stateToSave._saveVersion || 1,
-          timestamp: Date.now()
-        })], { type: 'application/json' });
-        
-        const beaconSent = navigator.sendBeacon(API_ROUTES.SAVE, blob);
-        
-        if (!beaconSent) {
-          // Если sendBeacon не сработал, создаем резервную копию в localStorage
-          createBackup(userId, stateToSave, stateToSave._saveVersion || 1);
-          console.log('[GameProvider] sendBeacon не сработал, создана резервная копия данных');
+        try {
+          const payload = {
+            userId,
+            gameState: stateToSave,
+            isCriticalSave: true,
+            version: stateToSave._saveVersion,
+            timestamp: Date.now()
+          };
+          
+          // Создаем Blob с данными для отправки
+          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+          
+          // Отправляем данные через Beacon API
+          const beaconSent = navigator.sendBeacon(API_ROUTES.SAVE, blob);
+          
+          // Записываем результат
+          saveAttempted = beaconSent;
+          
+          if (!beaconSent) {
+            console.warn('[GameProvider] sendBeacon не отправлен, используем запасные методы');
+          } else {
+            console.log('[GameProvider] sendBeacon успешно отправлен');
+          }
+        } catch (beaconError) {
+          console.error('[GameProvider] Ошибка при использовании sendBeacon:', beaconError);
         }
-      } else {
-        // Браузер не поддерживает sendBeacon, создаем резервную копию
+      }
+      
+      // Метод 2: Создаем резервную копию в localStorage для восстановления при следующем запуске
+      try {
         createBackup(userId, stateToSave, stateToSave._saveVersion || 1);
-        console.log('[GameProvider] Браузер не поддерживает sendBeacon, создана резервная копия данных');
+        console.log('[GameProvider] Создана резервная копия данных при закрытии страницы');
+      } catch (backupError) {
+        console.error('[GameProvider] Ошибка создания резервной копии:', backupError);
+      }
+      
+      // Метод 3: Попытка синхронного запроса, если браузер дает такую возможность
+      if (!saveAttempted) {
+        try {
+          // Создаем синхронный XMLHttpRequest для последней попытки сохранения
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', API_ROUTES.SAVE, false); // false = синхронный запрос
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.send(JSON.stringify({
+            userId,
+            gameState: stateToSave,
+            isCriticalSave: true
+          }));
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('[GameProvider] Синхронный запрос успешно выполнен');
+          } else {
+            console.warn(`[GameProvider] Синхронный запрос вернул статус ${xhr.status}`);
+          }
+        } catch (syncError) {
+          console.error('[GameProvider] Ошибка синхронного запроса:', syncError);
+        }
+      }
+      
+      // Можно добавить задержку для лучшего сохранения данных
+      // Это не блокирует закрытие страницы полностью, но дает немного времени
+      if (!saveAttempted) {
+        // Для выделения времени на асинхронные операции, заставляем браузер отобразить
+        // диалоговое окно подтверждения (в современных браузерах это стандартное сообщение)
+        event.preventDefault();
+        event.returnValue = ''; // Для старых браузеров
       }
     };
     

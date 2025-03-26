@@ -47,17 +47,20 @@ const Laboratory: React.FC = () => {
   
   // Обновление ресурсов по таймеру
   useEffect(() => {
+    // Убеждаемся, что константа задана
+    const updateInterval = ANIMATION_DURATIONS.RESOURCE_UPDATE_INTERVAL || 1000;
+    
     // Сохраняем ссылку на интервал в переменной
     const resourceUpdateInterval = setInterval(() => {
       // Обновление состояния контейнера и ресурсов
       dispatch({ type: 'UPDATE_RESOURCES' });
-    }, ANIMATION_DURATIONS.RESOURCE_UPDATE_INTERVAL);
+    }, updateInterval);
 
     // Очищаем интервал при размонтировании компонента или изменении интервала
     return () => {
       clearInterval(resourceUpdateInterval);
     };
-  }, [dispatch, ANIMATION_DURATIONS.RESOURCE_UPDATE_INTERVAL]); // Добавляем зависимость от интервала обновления
+  }, [dispatch]); // Упрощаем зависимости, не включаем интервал
 
   /**
    * Обработчик сбора ресурсов

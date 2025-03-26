@@ -1,57 +1,44 @@
-import React from 'react';
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { GameProvider } from "./contexts"
 import { TranslationProvider } from "./i18n"
 import { FarcasterProvider } from "./contexts/FarcasterContext"
+import { GameProvider } from "./contexts/game/providers/GameProvider"
+import AuthStoreInitializer from "./utils/AuthStoreInitializer"
 
 const inter = Inter({ subsets: ["latin"] })
 
-// Базовый URL приложения (из переменных окружения или хардкод для продакшена)
+// Open Graph данные
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "Snot Coin | Ultimate Snot Farming Game",
-  description: "Collect snot, upgrade your equipment, and become the ultimate snot farmer!",
-  generator: 'v0.dev',
-  metadataBase: new URL(siteUrl),
+  title: "Snotcoin",
+  description: "PLAY 2 SNOT",
   openGraph: {
-    title: 'SnotCoin Mining Game',
-    description: 'A Telegram-based crypto mining game',
+    type: 'website',
+    url: siteUrl,
+    title: 'Snotcoin - Фарми, зарабатывай, выводи!',
+    description: 'Присоединяйся к экосистеме Snotcoin в Farcaster прямо сейчас!',
     images: [
       {
         url: imageUrl,
         width: 1200,
-        height: 628,
+        height: 630,
+        alt: 'Snotcoin Logo',
       }
     ],
   },
-  // Farcaster Frames metadata
-  other: {
-    // Основные метатеги для Frames v2
-    'fc:frame': 'vNext',
-    'fc:frame:image': imageUrl,
-    'fc:frame:image:aspect_ratio': '1.91:1',
-    'fc:frame:post_url': siteUrl,
-    
-    // Кнопки действий
-    'fc:frame:button:1': 'Play SnotCoin Game',
-    'fc:frame:button:1:target': siteUrl,
-    'fc:frame:button:2': 'Learn More',
-    'fc:frame:button:2:target': `${siteUrl}/about`,
-    
-    // Дополнительные метатеги
-    'fc:frame:state': '',
-    'fc:frame:support:content': 'rich',
-    'fc:frame:support:refresh': 'auto',
-    'fc:frame:support:resend': 'conditional'
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Snotcoin - Фарми, зарабатывай, выводи!',
+    description: 'Присоединяйся к экосистеме Snotcoin в Farcaster прямо сейчас!',
+    images: [imageUrl],
   }
 }
 
 export default function RootLayout({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode
 }>) {
@@ -59,11 +46,13 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* CSP frame-ancestors директива перенесена в HTTP заголовки */}
+        <meta httpEquiv="Content-Security-Policy" content="frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;" />
       </head>
       <body className={inter.className}>
         <FarcasterProvider>
           <TranslationProvider>
             <GameProvider>
+              <AuthStoreInitializer />
               {children}
             </GameProvider>
           </TranslationProvider>

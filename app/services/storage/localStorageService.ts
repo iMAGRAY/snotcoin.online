@@ -111,6 +111,16 @@ export const saveGameStateBackup = (userId: string, gameState: ExtendedGameState
   if (!isLocalStorageAvailable()) return false;
   
   try {
+    if (!userId) {
+      console.error('[LocalStorage] Ошибка: попытка сохранить резервную копию без ID пользователя');
+      return false;
+    }
+    
+    if (!gameState) {
+      console.error('[LocalStorage] Ошибка: попытка сохранить резервную копию с пустым состоянием');
+      return false;
+    }
+    
     // Удаляем проблемные поля перед сохранением
     const cleanedState = { ...gameState };
     
@@ -134,50 +144,61 @@ export const saveGameStateBackup = (userId: string, gameState: ExtendedGameState
       }
     });
     
+    // Проверяем и исправляем userId в состоянии
+    if (!cleanedState._userId || cleanedState._userId !== userId) {
+      console.log(`[LocalStorage] Исправление несоответствия userId в состоянии: ${cleanedState._userId} -> ${userId}`);
+      cleanedState._userId = userId;
+    }
+    
+    // Обновляем версию сохранения при создании резервной копии
+    cleanedState._saveVersion = (cleanedState._saveVersion || 0) + 1;
+    
+    // Добавляем метку времени последнего изменения
+    cleanedState._lastModified = Date.now();
+    
     const backup = {
       userId,
       gameState: cleanedState,
       timestamp: Date.now(),
-      version: gameState._saveVersion || 1
+      version: cleanedState._saveVersion || 1
     };
     
     const success = setItem(KEYS.GAME_STATE_BACKUP, backup);
     
     if (success) {
-      console.log(`[LocalStorage] Резервная копия состояния игры для ${userId} сохранена`);
+      console.log(`[LocalStorage] Резервная копия состояния игры для ${userId} сохранена (v${backup.version})`);
     } else {
       console.warn(`[LocalStorage] Не удалось сохранить резервную копию для ${userId}`);
     }
     
     return success;
   } catch (error) {
-    console.error(`[LocalStorage] Ошибка при сохранении резервной копии для ${userId}:`, error);
+    console.error(`[LocalStorage] Критическая ошибка при сохранении резервной копии:`, error);
     
-    // Попробуем более агрессивно очистить данные
+    // Пытаемся сохранить критически важные данные в отдельное хранилище
     try {
-      // Сохраним только критические данные для восстановления
-      const criticalData = {
-        userId,
-        timestamp: Date.now(),
-        version: gameState._saveVersion || 1,
-        criticalState: {
-          // Получаем базовые значения из инвентаря и статистики, используя безопасный доступ
-          containerSnot: gameState.containerSnot || 0,
-          highestLevel: gameState.highestLevel || 1,
-          inventory: gameState.inventory || { snot: 0, snotCoins: 0 },
-          achievements: gameState.achievements || { unlockedAchievements: [] },
-          stats: gameState.stats || {},
-          lastSave: Date.now()
-        }
-      };
-      
-      const success = setItem(`${KEYS.GAME_STATE_BACKUP}_critical`, criticalData);
-      console.log(`[LocalStorage] Сохранены критические данные вместо полной резервной копии для ${userId}`);
-      return success;
+      if (userId && gameState) {
+        const criticalData = {
+          userId: userId,
+          timestamp: Date.now(),
+          version: gameState._saveVersion || 1,
+          criticalState: {
+            inventory: gameState.inventory,
+            upgrades: gameState.upgrades,
+            container: gameState.container,
+            _userId: userId,
+            _saveVersion: gameState._saveVersion
+          }
+        };
+        
+        setItem(`${KEYS.GAME_STATE_BACKUP}_critical`, criticalData);
+        console.log(`[LocalStorage] Сохранены критические данные для ${userId}`);
+      }
     } catch (criticalError) {
-      console.error(`[LocalStorage] Не удалось сохранить даже критические данные:`, criticalError);
-      return false;
+      console.error(`[LocalStorage] Не удалось сохранить критические данные:`, criticalError);
     }
+    
+    return false;
   }
 };
 

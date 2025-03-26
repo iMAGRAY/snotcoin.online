@@ -269,69 +269,152 @@ function checkBackupSize(data: any): boolean {
 }
 
 /**
- * Создает резервную копию состояния игры в localStorage
+ * Создает резервную копию состояния игры в localStorage с обработкой ошибок
  * @param userId ID пользователя
- * @param state Состояние игры
+ * @param state Состояние для сохранения
  * @param version Версия сохранения
- * @returns boolean Успешно ли создана резервная копия
+ * @returns Успешность операции
  */
 export function createBackup(userId: string, state: GameState, version: number = 1): boolean {
-  if (!userId || typeof window === 'undefined' || !window.localStorage) {
-    return false;
-  }
+  if (!userId || !state) return false;
   
   try {
-    // Проверяем размер данных перед сохранением
-    const backupData: BackupData = {
-      gameState: state,
-      timestamp: Date.now(),
-      version
-    };
-    
-    if (!checkBackupSize(backupData)) {
-      console.error('[gameDataService] Резервная копия не создана из-за превышения размера');
+    // Проверяем доступность localStorage
+    if (typeof window === 'undefined' || !window.localStorage) {
+      console.warn('[GameDataService] localStorage недоступен для создания резервной копии');
       return false;
     }
     
-    // Управляем резервными копиями (удаляем старые если нужно)
-    manageBackups(userId);
-    
-    const timestamp = Date.now();
-    const backupKey = `backup_gamestate_${userId}_${timestamp}`;
-    
-    // Сохраняем резервную копию
-    localStorage.setItem(backupKey, JSON.stringify(backupData));
-    
-    // Обновляем метаданные
-    let metadata: Record<string, BackupMetadata> = {};
-    const metadataJson = localStorage.getItem(BACKUP_METADATA_KEY);
-    
-    if (metadataJson) {
+    // Проверяем оставшееся место в localStorage
+    let remainingSpace;
+    try {
+      // Проверка оставшегося места в localStorage
+      let testKey = '_storage_test_' + Date.now();
+      localStorage.setItem(testKey, '0');
+      let i = 0;
       try {
-        metadata = JSON.parse(metadataJson);
+        // Увеличиваем размер тестовых данных, пока не получим ошибку
+        for (i = 0; i < 10000; i++) {
+          localStorage.setItem(testKey, '0'.repeat(i * 1024)); // Добавляем по 1KB за раз
+        }
       } catch (e) {
-        metadata = {};
+        // Место в localStorage закончилось
+      }
+      localStorage.removeItem(testKey);
+      remainingSpace = i * 1024;
+    } catch (e) {
+      // В случае ошибки при проверке места
+      remainingSpace = 0;
+    }
+    
+    // Проверяем, достаточно ли места
+    const stateJson = JSON.stringify({
+      state,
+      version,
+      timestamp: Date.now()
+    });
+    
+    if (stateJson.length > remainingSpace) {
+      console.warn(`[GameDataService] Недостаточно места в localStorage: нужно ${stateJson.length}, доступно ${remainingSpace}`);
+      
+      // Если места недостаточно, очищаем старые данные
+      try {
+        // Находим и удаляем старые резервные копии
+        const keysToDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('backup_')) {
+            keysToDelete.push(key);
+          }
+        }
+        
+        // Сортируем ключи по времени создания (старые первыми)
+        keysToDelete.sort((a, b) => {
+          const timeA = parseInt(a.split('_')[2] || '0', 10);
+          const timeB = parseInt(b.split('_')[2] || '0', 10);
+          return timeA - timeB;
+        });
+        
+        // Удаляем старые резервные копии до тех пор, пока не освободится достаточно места
+        while (keysToDelete.length > 0 && stateJson.length > remainingSpace) {
+          const keyToDelete = keysToDelete.shift();
+          if (keyToDelete) {
+            const oldItem = localStorage.getItem(keyToDelete) || '';
+            remainingSpace += oldItem.length;
+            localStorage.removeItem(keyToDelete);
+            console.log(`[GameDataService] Удалена старая резервная копия: ${keyToDelete}`);
+          }
+        }
+      } catch (cleanupError) {
+        console.error('[GameDataService] Ошибка при очистке localStorage:', cleanupError);
       }
     }
     
-    if (!metadata[userId]) {
-      metadata[userId] = { backups: [] };
+    // Создаем резервную копию с обновленной версией
+    const backupKey = `backup_${userId}_${Date.now()}`;
+    
+    // Используем try-catch для обнаружения ошибок квоты
+    try {
+      localStorage.setItem(backupKey, stateJson);
+      
+      // Ограничиваем количество резервных копий
+      const MAX_BACKUPS = 3;
+      
+      const backupKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`backup_${userId}_`)) {
+          backupKeys.push(key);
+        }
+      }
+      
+      // Если количество резервных копий превышает лимит, удаляем самые старые
+      if (backupKeys.length > MAX_BACKUPS) {
+        backupKeys.sort((a, b) => {
+          const timeA = parseInt(a.split('_')[2] || '0', 10);
+          const timeB = parseInt(b.split('_')[2] || '0', 10);
+          return timeA - timeB;
+        });
+        
+        // Удаляем старые копии
+        for (let i = 0; i < backupKeys.length - MAX_BACKUPS; i++) {
+          localStorage.removeItem(backupKeys[i]);
+          console.log(`[GameDataService] Удалена устаревшая резервная копия: ${backupKeys[i]}`);
+        }
+      }
+      
+      console.log(`[GameDataService] Создана резервная копия данных: ${backupKey}`);
+      return true;
+    } catch (storageError) {
+      console.error('[GameDataService] Ошибка при сохранении в localStorage:', storageError);
+      
+      // В случае ошибки квоты используем сокращенные данные
+      try {
+        // Создаем минимальную версию состояния с только критичными данными
+        const minimalState = {
+          _userId: state._userId,
+          _saveVersion: state._saveVersion,
+          inventory: state.inventory,
+          _lastSaved: state._lastSaved || new Date().toISOString(),
+          _timestamp: Date.now()
+        };
+        
+        const minimalJson = JSON.stringify({
+          state: minimalState,
+          version,
+          timestamp: Date.now()
+        });
+        
+        localStorage.setItem(backupKey, minimalJson);
+        console.log(`[GameDataService] Создана минимальная резервная копия данных: ${backupKey}`);
+        return true;
+      } catch (minimalError) {
+        console.error('[GameDataService] Ошибка при создании минимальной резервной копии:', minimalError);
+        return false;
+      }
     }
-    
-    // Добавляем информацию о новой резервной копии
-    metadata[userId].backups.push({
-      key: backupKey,
-      timestamp,
-      version
-    });
-    
-    // Сохраняем обновленные метаданные
-    localStorage.setItem(BACKUP_METADATA_KEY, JSON.stringify(metadata));
-    
-    console.log(`[gameDataService] Создана резервная копия состояния игры для пользователя ${userId}`);
-    return true;
   } catch (error) {
-    console.error('[gameDataService] Ошибка при создании резервной копии:', error);
+    console.error('[GameDataService] Критическая ошибка при работе с localStorage:', error);
     return false;
   }
 }

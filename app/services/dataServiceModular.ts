@@ -21,7 +21,7 @@ import * as api from './api/apiService';
 import * as saveQueue from './queue/saveQueueService';
 
 // Импорт сервиса Redis
-import { redisService } from './redisService';
+import { redisService } from './redis';
 
 // Импорт сервиса аутентификации
 import { getToken } from './authenticationService';
@@ -169,85 +169,41 @@ export async function saveGameState(
   isCritical = false
 ): Promise<void> {
   try {
-    console.log(`[DataService] Сохранение игрового состояния для пользователя ${userId}`);
+    // Импортируем и используем stateManager
+    const { stateManager } = await import('./core/stateManager');
+    await stateManager.saveGameState(userId, gameState, isCritical);
+  } catch (error) {
+    console.error(`[DataService] Ошибка при использовании stateManager:`, error);
     
-    // Проверяем минимальный интервал между сохранениями
-    const now = Date.now();
-    const lastSaveTime = memoryStorage.getLastSaveTime(userId);
-    const MIN_SAVE_INTERVAL = isCritical ? 2000 : 5000; // 2 или 5 секунд между сохранениями
+    // Создаем резервную копию в localStorage при ошибке
+    const { saveGameStateBackup } = await import('./storage/localStorageService');
+    saveGameStateBackup(userId, gameState);
+  }
+}
+
+/**
+ * Резервная функция сохранения состояния игры
+ * Используется только если не удалось загрузить stateManager
+ */
+async function fallbackSaveGameState(
+  userId: string, 
+  gameState: ExtendedGameState, 
+  isCritical = false
+): Promise<void> {
+  try {
+    console.log(`[DataService] Резервное сохранение игрового состояния для пользователя ${userId}`);
     
-    if (now - lastSaveTime < MIN_SAVE_INTERVAL) {
-      console.log(`[DataService] Слишком частые сохранения для пользователя ${userId}, ожидаем ${MIN_SAVE_INTERVAL - (now - lastSaveTime)}мс`);
-      
-      // Если это не критическое сохранение, добавляем в очередь с низким приоритетом
-      if (!isCritical) {
-        saveQueue.addSaveToQueue(userId, gameState, 0, false);
-      }
-      
-      return;
-    }
-    
-    // Обновляем время последнего сохранения
-    memoryStorage.updateLastSaveTime(userId);
-    
-    // Проверяем целостность данных перед сохранением
-    if (!dataIntegrity.checkDataIntegrity(gameState)) {
-      console.warn(`[DataService] Обнаружено повреждение данных перед сохранением, выполняем восстановление`);
-      gameState = dataIntegrity.repairGameState(gameState);
-    }
+    // Минимально необходимая логика для сохранения прогресса
+    const memoryStorage = await import('./storage/memoryStorageService');
+    const localStorage = await import('./storage/localStorageService');
     
     // Сохраняем в кэш
     memoryStorage.saveToCache(userId, gameState, true);
     
-    // Сохраняем в Redis через API, если мы в браузере
-    if (typeof window !== 'undefined') {
-      try {
-        // Обеспечиваем отсутствие циклических ссылок в объекте state
-        const safeState = prepareStateForSaving(gameState);
-        
-        // Сжимаем данные перед отправкой, если включена компрессия
-        const processedData = compressionEnabled 
-          ? await compression.compressGameState(safeState)
-          : safeState;
-        
-        // Сохраняем в Redis через API
-        await api.saveGameStateToRedisViaAPI(userId, processedData, isCritical);
-      } catch (redisError) {
-        console.error(`[DataService] Ошибка при сохранении в Redis:`, redisError);
-        
-        // Создаем резервную копию в localStorage при ошибке
-        localStorage.saveGameStateBackup(userId, gameState);
-      }
-    }
-    
-    // Если это критическое сохранение или принудительное сохранение, сохраняем на сервер напрямую
-    if (isCritical) {
-      try {
-        // Обеспечиваем отсутствие циклических ссылок в объекте state
-        const safeState = prepareStateForSaving(gameState);
-        
-        // Сжимаем данные перед отправкой, если включена компрессия
-        const processedData = compressionEnabled 
-          ? await compression.compressGameState(safeState)
-          : safeState;
-        
-        // Сохраняем на сервер через API
-        await api.saveGameStateViaAPI(userId, processedData, compressionEnabled);
-      } catch (serverError) {
-        console.error(`[DataService] Ошибка при сохранении на сервер:`, serverError);
-        
-        // Создаем резервную копию в localStorage при ошибке
-        localStorage.saveGameStateBackup(userId, gameState);
-      }
-    } else {
-      // Добавляем задачу сохранения в очередь
-      saveQueue.addSaveToQueue(userId, gameState, 0, false);
-    }
-  } catch (error) {
-    console.error(`[DataService] Критическая ошибка при сохранении данных:`, error);
-    
-    // Создаем резервную копию в localStorage при ошибке
+    // Создаем резервную копию
     localStorage.saveGameStateBackup(userId, gameState);
+  } catch (fallbackError) {
+    console.error(`[DataService] Критическая ошибка при резервном сохранении:`, fallbackError);
   }
 }
 

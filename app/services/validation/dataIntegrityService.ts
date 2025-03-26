@@ -7,67 +7,6 @@ import { createInitialGameState } from "../../constants/gameConstants";
  */
 
 /**
- * Проверяет целостность данных
- * @param data Данные для проверки
- * @returns true, если данные целостны, иначе false
- */
-export const checkDataIntegrity = (data: any): boolean => {
-  if (!data) return false;
-  
-  try {
-    // Проверяем наличие критически важных полей
-    if (!data.inventory || !data.container || !data.upgrades) {
-      console.warn('[DataIntegrity] Отсутствуют критически важные поля');
-      return false;
-    }
-    
-    // Проверяем критичные поля в инвентаре
-    const requiredInventoryFields = ['snot', 'snotCoins', 'containerCapacity', 'fillingSpeed'];
-    for (const field of requiredInventoryFields) {
-      if (typeof data.inventory[field] !== 'number') {
-        console.warn(`[DataIntegrity] Некорректное поле в inventory: ${field}`);
-        return false;
-      }
-    }
-    
-    // Проверяем критичные поля в контейнере
-    const requiredContainerFields = ['level', 'capacity'];
-    for (const field of requiredContainerFields) {
-      if (typeof data.container[field] !== 'number') {
-        console.warn(`[DataIntegrity] Некорректное поле в container: ${field}`);
-        return false;
-      }
-    }
-    
-    // Проверяем критичные поля в улучшениях
-    const requiredUpgradesFields = ['containerLevel', 'fillingSpeedLevel'];
-    for (const field of requiredUpgradesFields) {
-      if (typeof data.upgrades[field] !== 'number') {
-        console.warn(`[DataIntegrity] Некорректное поле в upgrades: ${field}`);
-        return false;
-      }
-    }
-    
-    // Проверяем версию сохранения
-    if (data._saveVersion !== undefined && typeof data._saveVersion !== 'number') {
-      console.warn('[DataIntegrity] Некорректная версия сохранения');
-      return false;
-    }
-    
-    // Проверяем ID пользователя
-    if (data._userId !== undefined && typeof data._userId !== 'string') {
-      console.warn('[DataIntegrity] Некорректный ID пользователя');
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('[DataIntegrity] Ошибка при проверке целостности данных:', error);
-    return false;
-  }
-};
-
-/**
  * Восстанавливает структуру игрового состояния, заполняя отсутствующие или поврежденные поля
  * @param gameState Состояние игры, которое нужно проверить и исправить
  * @returns Исправленное состояние игры
@@ -548,5 +487,50 @@ export function restoreFromCache(
   } catch (error) {
     console.error(`[DataIntegrityService] Ошибка при восстановлении из кэша:`, error);
     return gameState;
+  }
+}
+
+/**
+ * Проверяет целостность данных игрового состояния
+ * @param state Состояние игры
+ * @returns true если данные целостны, иначе false
+ */
+export function checkDataIntegrity(state: ExtendedGameState): boolean {
+  try {
+    // Проверяем наличие основных полей
+    if (!state || typeof state !== 'object') {
+      console.error('[DataIntegrity] Некорректное состояние игры');
+      return false;
+    }
+    
+    // Проверяем наличие userId
+    if (!state._userId) {
+      console.error('[DataIntegrity] Отсутствует userId в состоянии игры');
+      return false;
+    }
+    
+    // Проверяем наличие обязательных полей
+    if (!state.inventory || !state.upgrades) {
+      console.error('[DataIntegrity] Отсутствуют обязательные поля в состоянии игры');
+      return false;
+    }
+    
+    // Проверяем значения в инвентаре
+    if (typeof state.inventory.snot !== 'number' || 
+        typeof state.inventory.snotCoins !== 'number') {
+      console.error('[DataIntegrity] Некорректные данные инвентаря');
+      return false;
+    }
+    
+    // Проверка версии сохранения
+    if (typeof state._saveVersion !== 'number') {
+      console.error('[DataIntegrity] Отсутствует или некорректная версия сохранения');
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[DataIntegrity] Ошибка при проверке целостности данных:', error);
+    return false;
   }
 } 

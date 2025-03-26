@@ -258,7 +258,7 @@ export const SaveProvider: React.FC<SaveProviderProps> = ({
     
     try {
       // Очищаем все данные
-      const result = await saveSystem.clearAll();
+      const result = await saveSystem.resetAll();
       
       // Обновляем информацию о сохранениях
       const info = await saveSystem.getSaveInfo();
@@ -291,7 +291,7 @@ export const SaveProvider: React.FC<SaveProviderProps> = ({
       return null;
     }
     
-    return await saveSystem.exportState();
+    return await saveSystem.exportToString();
   };
   
   /**
@@ -313,7 +313,7 @@ export const SaveProvider: React.FC<SaveProviderProps> = ({
     
     try {
       // Импортируем состояние
-      const result = await saveSystem.importState(exportedState);
+      const result = await saveSystem.importFromString(exportedState);
       setLastLoadResult(result);
       
       // Обновляем информацию о сохранениях
@@ -340,7 +340,7 @@ export const SaveProvider: React.FC<SaveProviderProps> = ({
    */
   const setAutoSave = (enabled: boolean): void => {
     if (saveSystem && isInitialized) {
-      saveSystem.setOptions?.({ autoSave: enabled });
+      saveSystem.setAutoSave(enabled);
     }
   };
   
@@ -350,7 +350,7 @@ export const SaveProvider: React.FC<SaveProviderProps> = ({
    */
   const setSyncWithServer = (enabled: boolean): void => {
     if (saveSystem && isInitialized) {
-      saveSystem.setOptions?.({ syncWithServer: enabled });
+      saveSystem.setSyncWithServer(enabled);
     }
   };
   

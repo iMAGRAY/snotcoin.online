@@ -1,133 +1,153 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { generateJWT, generateRefreshToken, verifyJWT } from '@/app/utils/jwt';
+import { sign } from 'jsonwebtoken';
+import { verifyJWT } from '@/app/utils/jwt';
 
-// Секрет для подписи JWT, должен быть в переменных окружения
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Константы для JWT и refresh токена
+const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-do-not-use-in-production';
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your-refresh-secret-do-not-use-in-production';
+
+// Срок действия JWT токена: 1 час
+const TOKEN_EXPIRY = '1h';
+// Срок действия Refresh токена: 30 дней
+const REFRESH_EXPIRY = '30d';
 
 const BASE_URL = process.env.NEXT_PUBLIC_DOMAIN || 'https://snotcoin.online';
+
+/**
+ * Генерирует JWT токен для пользователя
+ * @param userId ID пользователя
+ * @param fid Farcaster ID
+ * @param username Имя пользователя
+ * @param displayName Отображаемое имя
+ * @returns Токен JWT
+ */
+function generateJWT(userId: string, fid: number, username: string, displayName?: string) {
+  try {
+    // Создаем токен с информацией о пользователе
+    const token = sign(
+      {
+        fid: String(fid),
+        username,
+        displayName: displayName || username,
+        userId,
+      },
+      JWT_SECRET,
+      { expiresIn: TOKEN_EXPIRY }
+    );
+    
+    return token;
+  } catch (error) {
+    console.error('[API][Auth] Ошибка при генерации JWT:', error);
+    throw error;
+  }
+}
+
+/**
+ * Генерирует refresh токен для пользователя
+ * @param userId ID пользователя
+ * @param fid Farcaster ID
+ * @returns Refresh токен
+ */
+function generateRefreshToken(userId: string, fid: number) {
+  try {
+    // Создаем refresh токен
+    const token = sign(
+      {
+        fid: String(fid),
+        userId,
+      },
+      REFRESH_SECRET,
+      { expiresIn: REFRESH_EXPIRY }
+    );
+    
+    return token;
+  } catch (error) {
+    console.error('[API][Auth] Ошибка при генерации refresh токена:', error);
+    throw error;
+  }
+}
 
 /**
  * Обработчик запросов на авторизацию через Farcaster
  */
 export async function POST(request: NextRequest) {
   try {
-    // Логируем начало процесса авторизации
-    console.log('Starting Farcaster authentication process');
-    
-    // Проверяем, что запрос содержит тело
-    let body;
-    try {
-      body = await request.json();
-      console.log('Received request body:', JSON.stringify(body));
-    } catch (parseError) {
-      console.error('Failed to parse request body:', parseError);
-      return NextResponse.json({
-        success: false,
-        message: 'Неверный формат запроса'
-      }, { status: 400 });
-    }
-    
-    // Извлекаем данные пользователя
+    // Получаем данные из запроса
+    const body = await request.json();
     const { fid, username, displayName, pfp } = body;
-    
-    console.log('Extracted auth data:', { 
-      fid: fid || 'missing', 
-      username: username || 'missing', 
-      displayName: displayName || 'missing',
-      hasPfp: pfp ? 'yes' : 'no'
-    });
-    
-    // Проверяем обязательные параметры
+
+    // Проверяем наличие обязательного поля fid
     if (!fid) {
-      console.error('Missing required parameter: fid');
+      console.error('[API][Auth] Отсутствует обязательное поле fid');
       return NextResponse.json({
         success: false,
-        message: 'Отсутствует обязательный параметр fid'
+        message: 'Отсутствует обязательное поле fid'
       }, { status: 400 });
     }
-    
+
     // Проверяем типы данных
     if (typeof fid !== 'number') {
-      console.error('Invalid fid type:', typeof fid);
+      console.error('[API][Auth] Неверный тип fid:', typeof fid);
       return NextResponse.json({
         success: false,
         message: 'Параметр fid должен быть числом'
       }, { status: 400 });
     }
-    
+
     // Создаем стабильный ID пользователя на основе FID
     const mockUserId = `user_${fid}`;
-    console.log('Using stable user ID:', mockUserId);
-    
-    // Создаем JWT токен
-    const { token: accessToken, expiresAt } = await generateJWT(mockUserId);
-    
-    // Создаем refresh токен
-    const { token: refreshToken } = await generateRefreshToken(mockUserId);
-    
-    console.log('Generated tokens for user', {
-      userId: mockUserId,
-      accessTokenLength: accessToken.length,
-      refreshTokenLength: refreshToken.length,
-      expiresAt
-    });
-    
+    console.log('[API][Auth] Используется стабильный ID пользователя:', mockUserId);
+
     try {
-      // Устанавливаем основной токен в куки
-      cookies().set({
-        name: 'session',
-        value: accessToken,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60, // 30 дней
-        path: '/'
+      // Генерируем JWT токен
+      const accessToken = generateJWT(mockUserId, fid, username || `user${fid}`, displayName);
+      
+      // Генерируем refresh токен
+      const refreshToken = generateRefreshToken(mockUserId, fid);
+      
+      console.log('[API][Auth] Токены созданы для пользователя', {
+        userId: mockUserId,
+        accessTokenLength: accessToken.length,
+        refreshTokenLength: refreshToken.length
       });
       
-      // Устанавливаем refresh токен в куки
-      cookies().set({
+      // Устанавливаем куки для refresh токена
+      const cookieStore = cookies();
+      cookieStore.set({
         name: 'refresh_token',
         value: refreshToken,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 90 * 24 * 60 * 60, // 90 дней
-        path: '/'
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60, // 30 дней в секундах
       });
       
-      console.log('Cookies set successfully');
-    } catch (cookieError) {
-      console.error('Error setting cookies:', cookieError);
-      // Продолжаем выполнение, так как токены все равно будут возвращены в ответе
+      // Возвращаем успешный ответ с токенами и данными пользователя
+      return NextResponse.json({
+        success: true,
+        token: accessToken,
+        user: {
+          id: mockUserId,
+          fid: fid,
+          username: username || `user${fid}`,
+          displayName: displayName || `User ${fid}`,
+          pfp: pfp || 'https://snotcoin.online/images/profile/avatar/default.webp'
+        }
+      });
+    } catch (tokenError) {
+      console.error('[API][Auth] Ошибка при создании токенов:', tokenError);
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка при создании токенов'
+      }, { status: 500 });
     }
-    
-    // Формируем ответ с данными пользователя
-    const responseData = {
-      success: true,
-      user: {
-        id: mockUserId,
-        fid: fid,
-        username: username || `user${fid}`,
-        displayName: displayName || username || `User ${fid}`,
-        pfp: pfp || 'https://snotcoin.online/images/default-avatar.png'
-      },
-      tokens: {
-        accessToken,
-        refreshToken,
-        expiresAt
-      }
-    };
-    
-    console.log('Authentication successful for fid:', fid);
-    
-    // Возвращаем успешный ответ
-    return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Authentication error:', error);
-    
+    console.error('[API][Auth] Общая ошибка:', error);
     return NextResponse.json({
       success: false,
-      message: 'Ошибка аутентификации',
-      error: String(error)
+      message: 'Ошибка сервера при обработке запроса'
     }, { status: 500 });
   }
 }

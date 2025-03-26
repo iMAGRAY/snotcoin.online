@@ -133,6 +133,7 @@ export interface GameState {
   _lastSaved?: string;
   _userId?: string;
   _lastModified?: number;
+  _createdAt?: string;
   _wasRepaired?: boolean;
   _repairedAt?: number;
   _repairedFields?: string[];

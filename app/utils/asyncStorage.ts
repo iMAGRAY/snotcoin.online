@@ -167,7 +167,7 @@ export class AsyncStorage {
       
       // Сжимаем данные, если размер превышает порог
       if (this.options.autoCompress && dataSize > this.options.compressionThreshold) {
-        const compressed = compressGameState(validatedState, this.userId, {
+        const compressed = await compressGameState(validatedState, this.userId, {
           includeIntegrityInfo: true
         });
         
@@ -258,7 +258,7 @@ export class AsyncStorage {
         }
         
         const compressedData = JSON.parse(compressedDataStr) as CompressedGameState;
-        const decompressedData = decompressGameState(compressedData);
+        const decompressedData = await decompressGameState(compressedData);
         
         if (!decompressedData) {
           return {

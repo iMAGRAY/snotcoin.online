@@ -66,7 +66,10 @@ const startServers = () => {
         httpsServer.on('error', (err) => handleStartupFailure(err, true));
         
         httpsServer.listen(httpsPort, (err) => {
-          if (err) throw err;
+          if (err) {
+            handleStartupFailure(err, true);
+            return;
+          }
           console.log(`> HTTPS Server ready on https://snotcoin.online:${httpsPort}`);
         });
 
@@ -89,7 +92,10 @@ const startServers = () => {
         httpServer.on('error', (err) => handleStartupFailure(err, false));
         
         httpServer.listen(httpPort, (err) => {
-          if (err) throw err;
+          if (err) {
+            handleStartupFailure(err, false);
+            return;
+          }
           console.log(`> HTTP Redirect ready on http://snotcoin.online:${httpPort}`);
         });
         

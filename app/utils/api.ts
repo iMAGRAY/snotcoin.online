@@ -3,9 +3,8 @@
  */
 
 import { ExtendedGameState } from "../types/gameTypes";
-import { StructuredGameSave, CompressedGameState } from "../types/saveTypes";
+import { StructuredGameSave, CompressedGameState, gameStateToStructured, structuredToGameState } from "../types/saveTypes";
 import { compressGameState } from "./dataCompression";
-import { gameStateToStructured } from "../types/saveTypes"; 
 
 // Базовый URL для API запросов
 const API_BASE_URL = '/api';
@@ -64,7 +63,7 @@ export class ApiClient {
       
       // Сжимаем данные, если необходимо
       if (options.compress) {
-        compressedData = compressGameState(
+        compressedData = await compressGameState(
           gameState,
           userId,
           {
@@ -72,7 +71,7 @@ export class ApiClient {
             removeTempData: true
           }
         );
-        isCompressed = true;
+        isCompressed = !!compressedData;
       }
       
       // Выполняем запрос
@@ -157,72 +156,10 @@ export class ApiClient {
       const structuredSave = result.progress as StructuredGameSave;
       
       // Преобразуем в ExtendedGameState
-      const gameState: ExtendedGameState = {
-        // Базовые поля из критических данных
-        inventory: structuredSave.critical.inventory,
-        upgrades: structuredSave.critical.upgrades,
-        container: structuredSave.critical.container || {
-          level: 1,
-          capacity: 100,
-          currentAmount: 0,
-          fillRate: 1,
-          currentFill: 0
-        },
-        
-        // Поля из обычных данных
-        items: structuredSave.regular?.items || [],
-        achievements: structuredSave.regular?.achievements || { unlockedAchievements: [] },
-        stats: structuredSave.regular?.stats || {
-          clickCount: 0,
-          playTime: 0,
-          startDate: new Date().toISOString(),
-          highestLevel: 1,
-          totalSnot: 0,
-          totalSnotCoins: 0,
-          consecutiveLoginDays: 0
-        },
-        
-        // Поля из расширенных данных
-        settings: structuredSave.extended?.settings || {
-          language: 'en',
-          theme: 'light',
-          notifications: true,
-          tutorialCompleted: false,
-          musicEnabled: true,
-          soundEnabled: true,
-          notificationsEnabled: true
-        },
-        soundSettings: structuredSave.extended?.soundSettings || {
-          musicVolume: 0.5,
-          soundVolume: 0.5,
-          notificationVolume: 0.5,
-          clickVolume: 0.5,
-          effectsVolume: 0.5,
-          backgroundMusicVolume: 0.3,
-          isMuted: false,
-          isEffectsMuted: false,
-          isBackgroundMusicMuted: false
-        },
-        
-        // Базовые поля состояния UI
-        activeTab: 'main',
-        hideInterface: false,
-        isPlaying: false,
-        isLoading: false,
-        containerLevel: structuredSave.critical.upgrades.containerLevel || 1,
-        fillingSpeed: structuredSave.critical.inventory.fillingSpeed || 1,
-        containerSnot: structuredSave.critical.inventory.containerSnot || 0,
-        gameStarted: true,
-        highestLevel: structuredSave.regular?.stats?.highestLevel || 1,
-        consecutiveLoginDays: structuredSave.regular?.stats?.consecutiveLoginDays || 0,
-        user: null,
-        validationStatus: "pending",
-        
-        // Метаданные
-        _saveVersion: structuredSave.critical.metadata.version,
-        _lastModified: structuredSave.critical.metadata.lastModified,
-        _userId: userId
-      };
+      const gameState: ExtendedGameState = structuredToGameState(structuredSave);
+      
+      // Устанавливаем userId из параметра
+      gameState._userId = userId;
       
       return {
         success: true,
@@ -238,4 +175,4 @@ export class ApiClient {
       };
     }
   }
-} 
+}

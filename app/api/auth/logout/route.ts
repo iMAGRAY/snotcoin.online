@@ -1,26 +1,41 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 /**
- * Обработчик для выхода из системы
+ * Обработчик для выхода пользователя
+ * Очищает refresh_token и другие связанные куки
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    // Удаляем оба куки: session и refresh_token
-    cookies().delete('session');
-    cookies().delete('refresh_token');
-    
+    const cookieStore = cookies();
+
+    // Список всех куки, связанных с аутентификацией
+    const authCookies = [
+      'refresh_token',
+      'session',
+      'auth_session',
+      'auth_token'
+    ];
+
+    // Удаляем все куки, связанные с аутентификацией
+    for (const cookieName of authCookies) {
+      if (cookieStore.has(cookieName)) {
+        cookieStore.delete(cookieName);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Выход выполнен успешно'
+      message: 'Выход успешно выполнен'
     });
   } catch (error) {
-    console.error('Logout error:', error);
-    
+    console.error('[API][Logout] Ошибка при выходе пользователя:', error);
     return NextResponse.json({
       success: false,
-      message: 'Ошибка при выходе из системы',
-      error: String(error)
-    }, { status: 500 });
+      message: 'Произошла ошибка при выходе',
+      error: error instanceof Error ? error.message : String(error)
+    }, { 
+      status: 500 
+    });
   }
 } 

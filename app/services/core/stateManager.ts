@@ -236,7 +236,7 @@ class StateManager {
             : safeState;
           
           // Сохраняем на сервер через API
-          await api.saveGameStateViaAPI(userId, processedData, this.compressionEnabled);
+          await api.saveGameStateViaAPI(processedData as ExtendedGameState, true);
         } catch (serverError) {
           console.error(`[StateManager] Ошибка при сохранении на сервер:`, serverError);
           

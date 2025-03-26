@@ -4,7 +4,7 @@
  */
 import type { ExtendedGameState } from "../../types/gameTypes";
 import type { SaveProgressResponse, LoadProgressResponse } from "../../types/saveTypes";
-import { getToken } from '../auth/authenticationService';
+import { getToken, getUserId, refreshToken } from '../auth/authenticationService';
 
 /**
  * Базовый URL для API
@@ -15,145 +15,262 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const activeRequests: AbortController[] = [];
 
 /**
- * Получает актуальный заголовок авторизации
- * @returns Заголовок авторизации или null, если токен недоступен
+ * Получает заголовок авторизации с JWT токеном
+ * @returns Заголовок авторизации или пустой объект
  */
-const getAuthHeader = async (): Promise<HeadersInit | null> => {
+export async function getAuthHeader(): Promise<Record<string, string>> {
   try {
+    // Получаем токен из сервиса аутентификации
     const token = getToken();
+    
+    // Если токен отсутствует, пробуем обновить его
     if (!token) {
-      console.warn('[API Service] Отсутствует JWT токен для авторизации');
-      return null;
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        const newToken = getToken();
+        if (newToken) {
+          return { 'Authorization': `Bearer ${newToken}` };
+        }
+      }
+      console.warn('[API] Токен авторизации не найден');
+      return {};
     }
     
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
+    return { 'Authorization': `Bearer ${token}` };
   } catch (error) {
-    console.error('[API Service] Ошибка получения JWT токена:', error);
-    return null;
+    console.error('[API] Ошибка при получении заголовка авторизации', error);
+    return {};
   }
-};
+}
 
 /**
- * Сохраняет состояние игры через API
- * @param userId ID пользователя
- * @param gameState Состояние игры
- * @param isCompressed Флаг сжатия данных
- * @returns Результат операции сохранения
+ * Сохраняет состояние игры для пользователя через API
+ * @param gameState Состояние игры для сохранения (может быть сжатым в строку)
+ * @param forceSave Принудительное сохранение даже без изменений
+ * @returns Promise с результатом сохранения
  */
-export async function saveGameStateViaAPI(
-  userId: string, 
-  gameState: ExtendedGameState, 
-  isCompressed = false
-): Promise<SaveProgressResponse> {
+export async function saveGameStateViaAPI(gameState: ExtendedGameState | string, forceSave = false): Promise<SaveProgressResponse> {
   try {
-    console.log(`[ApiService] Отправляем запрос на сохранение для пользователя ${userId}`);
+    const headers = await getAuthHeader();
+    // Получаем userId из разных источников для обеспечения надежности
+    let userId: string | null = getUserId();
     
-    // Получаем JWT-токен
-    const token = getToken();
+    // Если gameState это строка (сжатые данные), используем userId только из внешних источников
+    const isCompressedString = typeof gameState === 'string';
     
-    // Проверяем наличие токена
-    if (!token) {
-      console.error(`[ApiService] JWT-токен отсутствует для пользователя ${userId}`);
-      throw new Error('Отсутствует JWT токен для аутентификации');
+    // Если gameState это объект, пробуем получить userId из него
+    if (!userId && !isCompressedString) {
+      const state = gameState as ExtendedGameState;
+      if (state && state._userId) {
+        userId = state._userId;
+        console.log('[API] Используется userId из игрового состояния:', userId);
+      }
     }
     
-    // Подготавливаем данные запроса
-    const requestData = {
-      userId: userId,
-      gameState: gameState,
-      version: gameState._saveVersion || 1,
-      isCompressed: isCompressed
-    };
+    if (!userId) {
+      console.error('[API] Не удалось сохранить прогресс: ID пользователя не найден');
+      throw new Error('User ID not found');
+    }
     
-    // Отправляем запрос на API
-    const apiUrl = `${API_BASE_URL}/api/game/save-progress`;
+    if (Object.keys(headers).length === 0) {
+      console.error('[API] Не удалось сохранить прогресс: отсутствует токен авторизации');
+      throw new Error('Unauthorized');
+    }
     
-    const response = await fetch(apiUrl, {
+    // Обновляем userId в игровом состоянии, если это объект и userId отличается или отсутствует
+    if (!isCompressedString) {
+      const state = gameState as ExtendedGameState;
+      if (!state._userId || state._userId !== userId) {
+        state._userId = userId;
+      }
+    }
+    
+    const response = await fetch('/api/game/save-progress', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        ...headers
       },
-      body: JSON.stringify(requestData)
+      body: JSON.stringify({
+        userId,
+        gameState,
+        forceSave,
+        isCompressed: isCompressedString
+      })
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[ApiService] Ошибка HTTP при сохранении: ${response.status} ${response.statusText}, ${errorText}`);
-      throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
+    // Если токен истек (401), пробуем обновить и повторить запрос
+    if (response.status === 401) {
+      console.warn('[API] Токен истек, пробуем обновить и повторить сохранение');
+      const refreshed = await refreshToken();
+      
+      if (refreshed) {
+        const newHeaders = await getAuthHeader();
+        if (Object.keys(newHeaders).length > 0) {
+          const retryResponse = await fetch('/api/game/save-progress', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...newHeaders
+            },
+            body: JSON.stringify({
+              userId,
+              gameState,
+              forceSave,
+              isCompressed: isCompressedString
+            })
+          });
+          
+          const retryData = await retryResponse.json();
+          return retryData;
+        }
+      }
+      
+      throw new Error('Token refresh failed');
     }
     
-    const result = await response.json();
-    
-    if (!result.success) {
-      console.error(`[ApiService] Сервер вернул ошибку при сохранении: ${result.error || 'Неизвестная ошибка'}`);
-      throw new Error(result.error || 'Ошибка сервера при сохранении');
-    }
-    
-    console.log(`[ApiService] Данные успешно сохранены на сервере для ${userId}`);
-    return result;
+    const data = await response.json();
+    return data;
   } catch (error) {
-    console.error(`[ApiService] Ошибка при сохранении через API:`, error);
+    console.error('[API] Ошибка при сохранении состояния игры:', error);
     throw error;
   }
 }
 
 /**
- * Загружает состояние игры через API
- * @param userId ID пользователя
- * @returns Состояние игры или null при ошибке
+ * Загружает состояние игры для пользователя через API
+ * @param userIdOrGameState ID пользователя или текущее состояние игры
+ * @returns Promise с состоянием игры
  */
-export async function loadGameStateViaAPI(userId: string): Promise<ExtendedGameState | null> {
+export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGameState): Promise<ExtendedGameState | null> {
   try {
-    console.log(`[ApiService] Загрузка данных для пользователя ${userId}`);
+    const headers = await getAuthHeader();
+    // Получаем userId из разных источников для обеспечения надежности
+    let userId: string | null = getUserId();
+    let gameState: ExtendedGameState | undefined;
     
-    // Получаем JWT-токен
-    const token = getToken();
-    
-    // Проверяем наличие токена
-    if (!token) {
-      console.error(`[ApiService] JWT-токен отсутствует для пользователя ${userId}`);
-      throw new Error('Отсутствует JWT токен для аутентификации');
-    }
-    
-    // Отправляем запрос на API
-    const apiUrl = `${API_BASE_URL}/api/game/load-progress?userId=${encodeURIComponent(userId)}`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`
+    // Проверяем, что передали: userId или gameState
+    if (typeof userIdOrGameState === 'string') {
+      // Если передана строка, считаем ее userId
+      userId = userIdOrGameState;
+    } else {
+      // Если передан объект, считаем его gameState
+      gameState = userIdOrGameState;
+      // Если нет userId из auth, пробуем получить из текущего состояния игры
+      if (!userId && gameState && gameState._userId) {
+        userId = gameState._userId;
+        console.log('[API] Используется userId из игрового состояния:', userId);
       }
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[ApiService] Ошибка HTTP при загрузке: ${response.status} ${response.statusText}, ${errorText}`);
-      throw new Error(`HTTP ошибка: ${response.status} ${response.statusText}`);
     }
     
-    const result: LoadProgressResponse = await response.json();
+    if (!userId) {
+      console.error('[API] Не удалось загрузить прогресс: ID пользователя не найден');
+      throw new Error('User ID not found');
+    }
     
-    if (!result.success) {
-      // Если пользователь новый, это не ошибка
-      if (result.isNewUser) {
-        console.log(`[ApiService] Новый пользователь ${userId}, возвращаем null`);
-        return null;
+    if (Object.keys(headers).length === 0) {
+      console.error('[API] Не удалось загрузить прогресс: отсутствует токен авторизации');
+      throw new Error('Unauthorized');
+    }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+    
+    try {
+      const response = await fetch(`/api/game/load-progress?userId=${encodeURIComponent(userId)}`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Если токен истек (401), пробуем обновить и повторить запрос
+      if (response.status === 401) {
+        console.warn('[API] Токен истек, пробуем обновить и повторить загрузку');
+        const refreshed = await refreshToken();
+        
+        if (refreshed) {
+          const newHeaders = await getAuthHeader();
+          if (Object.keys(newHeaders).length > 0) {
+            const retryResponse = await fetch(`/api/game/load-progress?userId=${encodeURIComponent(userId)}`, {
+              method: 'GET',
+              headers: newHeaders
+            });
+            
+            if (!retryResponse.ok) {
+              console.error('[API] Повторный запрос неуспешен:', retryResponse.status);
+              throw new Error(`HTTP Error: ${retryResponse.status}`);
+            }
+            
+            const retryData = await retryResponse.json();
+            
+            // Проверяем структуру ответа
+            if (!retryData || !retryData.gameState) {
+              console.error('[API] Некорректная структура данных в ответе');
+              throw new Error('Invalid response data structure');
+            }
+            
+            const loadedState = retryData.gameState as ExtendedGameState;
+            
+            // Проверяем целостность загруженных данных
+            if (!loadedState.inventory || !loadedState.upgrades) {
+              console.error('[API] Неполные данные в загруженном состоянии');
+              throw new Error('Incomplete game state data');
+            }
+            
+            // Обновляем userId в загруженном состоянии для согласованности
+            if (loadedState && (!loadedState._userId || loadedState._userId !== userId)) {
+              loadedState._userId = userId;
+            }
+            
+            return loadedState;
+          }
+        }
+        
+        throw new Error('Token refresh failed');
       }
       
-      console.error(`[ApiService] Сервер вернул ошибку при загрузке: ${result.error || 'Неизвестная ошибка'}`);
-      throw new Error(result.error || 'Ошибка сервера при загрузке');
+      if (!response.ok) {
+        console.error('[API] Загрузка не удалась:', response.status);
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Проверяем структуру ответа
+      if (!data || !data.gameState) {
+        console.error('[API] Некорректная структура данных в ответе');
+        throw new Error('Invalid response data structure');
+      }
+      
+      const loadedState = data.gameState as ExtendedGameState;
+      
+      // Проверяем целостность загруженных данных
+      if (!loadedState.inventory || !loadedState.upgrades) {
+        console.error('[API] Неполные данные в загруженном состоянии');
+        throw new Error('Incomplete game state data');
+      }
+      
+      // Обновляем userId в загруженном состоянии для согласованности
+      if (loadedState && (!loadedState._userId || loadedState._userId !== userId)) {
+        loadedState._userId = userId;
+      }
+      
+      return loadedState;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('[API] Запрос прерван по таймауту');
+        throw new Error('Request timeout');
+      }
+      
+      throw fetchError;
     }
-    
-    console.log(`[ApiService] Данные успешно загружены с сервера для ${userId}`);
-    return result.gameState as ExtendedGameState;
   } catch (error) {
-    console.error(`[ApiService] Ошибка при загрузке через API:`, error);
-    throw error;
+    console.error('[API] Ошибка при загрузке состояния игры:', error);
+    return null;
   }
 }
 

@@ -1,23 +1,23 @@
-import { RedisCache } from '../app/utils/redisClient';
+import { redisService } from '../app/services/redis';
 
 async function testRedisConnection() {
   console.log('Тестирование подключения к Redis...');
   
-  const cache = new RedisCache();
+  // Инициализируем сервис
+  await redisService.initialize();
   
-  // Ждем инициализацию
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Проверяем соединение
+  const isAvailable = await redisService.isAvailable();
   
-  const isConnected = await cache.testConnection();
-  
-  if (isConnected) {
+  if (isAvailable) {
     console.log('✅ Подключение к Redis успешно установлено');
   } else {
     console.log('❌ Не удалось подключиться к Redis');
   }
   
-  // Очищаем ресурсы
-  cache.destroy();
+  // Получаем статистику
+  const stats = await redisService.getCacheStats();
+  console.log('Статистика Redis:', stats);
 }
 
 testRedisConnection().catch(console.error); 
