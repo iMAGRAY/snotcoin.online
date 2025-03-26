@@ -81,7 +81,7 @@ const MAX_BACKUP_SIZE = 500 * 1024;
 const BACKUP_METADATA_KEY = 'backup_metadata';
 
 // API роуты для сохранения и загрузки
-const API_ROUTES = {
+export const API_ROUTES = {
   SAVE: '/api/game/save-progress',
   LOAD: '/api/game/load-progress',
 };
@@ -390,6 +390,12 @@ export function getLatestBackup(userId: string): {gameState: GameState, version:
   }
 }
 
+/**
+ * Сохраняет состояние игры с проверкой целостности данных
+ * @param userId ID пользователя
+ * @param state Состояние игры
+ * @returns Promise<SaveResponse> Результат сохранения
+ */
 export async function saveGameStateWithIntegrity(userId: string, state: GameState): Promise<SaveResponse> {
   try {
     // Проверка наличия userId
@@ -466,6 +472,10 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
           window.dispatchEvent(authEvent);
         }
         
+        // Создаем резервную копию при любой ошибке HTTP
+        createBackup(userId, state, state._saveVersion || 1);
+        console.log('[gameDataService] Создана резервная копия из-за HTTP ошибки');
+        
         throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
       }
 
@@ -487,10 +497,20 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       // Если не удалось сохранить из-за проблем с сетью, создаем резервную копию
       createBackup(userId, state, state._saveVersion || 1);
       
-      throw networkError;
+      return {
+        success: false,
+        error: networkError instanceof Error ? networkError.message : 'Сетевая ошибка при сохранении'
+      };
     }
   } catch (error) {
     console.error('[gameDataService] Ошибка при сохранении состояния:', error);
+    
+    // В случае любой другой ошибки также пытаемся создать резервную копию
+    if (userId && state && typeof window !== 'undefined' && window.localStorage) {
+      createBackup(userId, state, state._saveVersion || 1);
+      console.log('[gameDataService] Создана резервная копия из-за ошибки при сохранении');
+    }
+    
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
@@ -498,6 +518,11 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
   }
 }
 
+/**
+ * Загружает состояние игры с проверкой целостности данных
+ * @param userId ID пользователя
+ * @returns Promise<LoadResponse> Результат загрузки
+ */
 export async function loadGameStateWithIntegrity(userId: string): Promise<LoadResponse> {
   try {
     // Проверка наличия userId
@@ -534,6 +559,16 @@ export async function loadGameStateWithIntegrity(userId: string): Promise<LoadRe
           // Отправляем событие для обновления токена
           const authEvent = new CustomEvent('auth-token-expired');
           window.dispatchEvent(authEvent);
+        }
+        
+        // Если есть резервная копия, используем её
+        if (backupData && backupData.gameState) {
+          console.log('[gameDataService] Используем локальную резервную копию из-за HTTP ошибки');
+          return {
+            success: true,
+            data: backupData.gameState,
+            version: backupData.version
+          };
         }
         
         throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
@@ -605,7 +640,10 @@ export async function loadGameStateWithIntegrity(userId: string): Promise<LoadRe
         };
       }
       
-      throw networkError;
+      return {
+        success: false,
+        error: networkError instanceof Error ? networkError.message : 'Сетевая ошибка при загрузке'
+      };
     }
   } catch (error) {
     console.error('[gameDataService] Ошибка при загрузке состояния:', error);

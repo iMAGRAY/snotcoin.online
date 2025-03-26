@@ -4,9 +4,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GameStateContext, GameDispatchContext, IsSavingContext } from '../contexts'
 import { gameReducer } from '../../../reducers/gameReducer'
 import { createInitialGameState, Action, GameState } from '../../../types/gameTypes'
-import { saveGameStateWithIntegrity as saveGameState, loadGameStateWithIntegrity as loadGameState } from '../../../services/gameDataService'
-// Добавляем импорт lodash для более безопасной работы с объектами
-import { get, set } from 'lodash'
+import { 
+  saveGameStateWithIntegrity as saveGameState, 
+  loadGameStateWithIntegrity as loadGameState,
+  createBackup,
+  API_ROUTES 
+} from '../../../services/gameDataService'
 
 interface GameProviderProps {
   children: React.ReactNode
@@ -20,6 +23,8 @@ interface GameProviderProps {
 const MAX_UNMOUNT_RECORDS = 100;
 // Объект для отслеживания компонентов в процессе размонтирования
 const unmountInProgress: Record<string, boolean> = {};
+// Для отслеживания времени размонтирования компонентов
+const unmountTimestamps: Record<string, number> = {};
 // Счетчик для отслеживания общего количества записей
 let unmountRecordsCount = 0;
 
@@ -29,15 +34,45 @@ let unmountRecordsCount = 0;
 const cleanupUnmountRecords = () => {
   if (unmountRecordsCount <= MAX_UNMOUNT_RECORDS) return;
   
-  // Когда достигнут лимит, очищаем все записи
+  // Удаляем только записи старше определенного времени (5 минут)
+  const now = Date.now();
+  const timeLimit = 5 * 60 * 1000; // 5 минут
+  let cleanedCount = 0;
+  
   for (const key in unmountInProgress) {
-    delete unmountInProgress[key];
+    if (unmountTimestamps[key] && now - unmountTimestamps[key] > timeLimit) {
+      delete unmountInProgress[key];
+      delete unmountTimestamps[key];
+      unmountRecordsCount--;
+      cleanedCount++;
+    }
   }
-  unmountRecordsCount = 0;
-  console.log('[GameProvider] Очищены записи о размонтировании');
+  
+  // Если по времени ничего не удалилось, а счетчик всё еще высокий, 
+  // удаляем 20% самых старых записей для предотвращения переполнения
+  if (cleanedCount === 0 && unmountRecordsCount > MAX_UNMOUNT_RECORDS) {
+    const entries = Object.entries(unmountTimestamps);
+    entries.sort(([, a], [, b]) => a - b);
+    
+    const keysToRemove = entries.slice(0, Math.ceil(entries.length * 0.2)).map(([key]) => key);
+    
+    keysToRemove.forEach(key => {
+      delete unmountInProgress[key];
+      delete unmountTimestamps[key];
+      unmountRecordsCount--;
+      cleanedCount++;
+    });
+  }
+  
+  if (cleanedCount > 0) {
+    console.log(`[GameProvider] Очищено ${cleanedCount} устаревших записей о размонтировании`);
+  }
 };
 
-// Функция для получения userId из localStorage
+/**
+ * Функция для получения userId из localStorage
+ * @returns {string | null} userId из localStorage или null
+ */
 const getUserIdFromStorage = (): string | null => {
   if (typeof window === 'undefined') return null;
   try {
@@ -87,6 +122,9 @@ export function GameProvider({
   
   // Ref для отслеживания, отправлено ли сохранение перед размонтированием
   const finalSaveSentRef = useRef<boolean>(false)
+  
+  // Ref для отслеживания, было ли сохранение при закрытии страницы
+  const beforeUnloadSaveSentRef = useRef<boolean>(false)
 
   // Эффект для получения userId из localStorage при монтировании
   useEffect(() => {
@@ -101,6 +139,7 @@ export function GameProvider({
     
     // При монтировании, очищаем флаг отправки финального сохранения
     finalSaveSentRef.current = false;
+    beforeUnloadSaveSentRef.current = false;
     
     // Очистка старых записей при монтировании
     cleanupUnmountRecords();
@@ -120,7 +159,7 @@ export function GameProvider({
       const loadedState = await loadGameState(userId);
       
       // Проверяем, что компонент не был размонтирован во время загрузки
-      if (unmountInProgress[userId]) {
+      if (userId && unmountInProgress[userId]) {
         console.log(`[GameProvider] Отмена обработки загруженного состояния - компонент размонтирован`);
         return false;
       }
@@ -230,7 +269,8 @@ export function GameProvider({
         
         // Пытаемся сделать резервную копию, если основное сохранение не удалось
         if (typeof window !== 'undefined' && window.localStorage) {
-          // ... existing code ...
+          createBackup(userId, stateToSave, stateToSave._saveVersion || 1);
+          console.log('[GameProvider] Создана резервная копия из-за ошибки API');
         }
         
         // Событие ошибки сохранения
@@ -245,6 +285,12 @@ export function GameProvider({
       }
     } catch (error) {
       console.error('[GameProvider] Ошибка при сохранении состояния:', error);
+      
+      // Создаем резервную копию в случае ошибки
+      if (typeof window !== 'undefined' && window.localStorage && userId) {
+        createBackup(userId, state, state._saveVersion || 1);
+        console.log('[GameProvider] Создана резервная копия из-за ошибки при сохранении');
+      }
       
       // Событие ошибки сохранения
       if (typeof window !== 'undefined') {
@@ -334,6 +380,60 @@ export function GameProvider({
       }
     }
   }, [userId, loadSavedState]);
+  
+  // Обработчик события закрытия страницы
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!userId || !enableAutoSave || state._skipSave || beforeUnloadSaveSentRef.current) {
+        return;
+      }
+      
+      // Помечаем, что сохранение при закрытии страницы отправлено
+      beforeUnloadSaveSentRef.current = true;
+      
+      console.log(`[GameProvider] Закрытие страницы, выполняем финальное сохранение для ${userId}`);
+      
+      // Подготавливаем данные для сохранения
+      const stateToSave = {
+        ...state,
+        _lastSaved: new Date().toISOString(),
+        _userId: userId
+      };
+      
+      // Использование navigator.sendBeacon для отправки данных даже после закрытия страницы
+      if (navigator.sendBeacon) {
+        const blob = new Blob([JSON.stringify({
+          userId,
+          gameState: stateToSave,
+          version: stateToSave._saveVersion || 1,
+          timestamp: Date.now()
+        })], { type: 'application/json' });
+        
+        const beaconSent = navigator.sendBeacon(API_ROUTES.SAVE, blob);
+        
+        if (!beaconSent) {
+          // Если sendBeacon не сработал, создаем резервную копию в localStorage
+          createBackup(userId, stateToSave, stateToSave._saveVersion || 1);
+          console.log('[GameProvider] sendBeacon не сработал, создана резервная копия данных');
+        }
+      } else {
+        // Браузер не поддерживает sendBeacon, создаем резервную копию
+        createBackup(userId, stateToSave, stateToSave._saveVersion || 1);
+        console.log('[GameProvider] Браузер не поддерживает sendBeacon, создана резервная копия данных');
+      }
+    };
+    
+    // Добавляем обработчик закрытия страницы
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      }
+    };
+  }, [userId, state, enableAutoSave]);
 
   // Обработка размонтирования компонента
   useEffect(() => {
@@ -350,6 +450,7 @@ export function GameProvider({
       
       // Устанавливаем флаг размонтирования
       unmountInProgress[userId] = true;
+      unmountTimestamps[userId] = Date.now();
       unmountRecordsCount++;
       
       // Проверяем необходимость очистки старых записей
@@ -376,10 +477,15 @@ export function GameProvider({
               console.log(`[GameProvider] Приоритетное сохранение при размонтировании успешно выполнено для userId: ${userId}`);
             } catch (error) {
               console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${userId}:`, error);
+              
+              // Создаем резервную копию в случае ошибки при финальном сохранении
+              createBackup(userId, state, state._saveVersion || 1);
+              console.log('[GameProvider] Создана резервная копия из-за ошибки при финальном сохранении');
             } finally {
               // Сбрасываем флаг размонтирования после завершения сохранения
               if (userId) {
                 delete unmountInProgress[userId];
+                delete unmountTimestamps[userId];
                 unmountRecordsCount--;
                 console.log(`[GameProvider] Флаг размонтирования сброшен для userId: ${userId}`);
               }
@@ -390,6 +496,7 @@ export function GameProvider({
             // Сбрасываем флаг размонтирования, если компонент не в процессе размонтирования
             if (userId) {
               delete unmountInProgress[userId];
+              delete unmountTimestamps[userId];
               unmountRecordsCount--;
             }
           }
@@ -399,10 +506,11 @@ export function GameProvider({
         
         // Сбрасываем флаг размонтирования
         delete unmountInProgress[userId];
+        delete unmountTimestamps[userId];
         unmountRecordsCount--;
       }
     };
-  }, [state._userId, state._skipSave, enableAutoSave, saveState]);
+  }, [state._userId, state._skipSave, enableAutoSave, saveState, state]);
 
   // Предоставляем состояние и диспетчер через контексты
   return (

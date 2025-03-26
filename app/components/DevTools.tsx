@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useGameState } from '../contexts/game/hooks/useGameState'
 import { useGameDispatch } from '../contexts/game/hooks/useGameDispatch'
+import { createBackup } from '../services/gameDataService'
 
 // Константы, должны совпадать с теми, что используются в gameDataService.ts
 const BACKUP_METADATA_KEY = 'backup_metadata';
@@ -36,6 +37,62 @@ export default function DevTools() {
     } catch (e) {
       console.error('[DevTools] Ошибка при расчете размера localStorage:', e);
       return "Ошибка расчета";
+    }
+  };
+  
+  // Обновляем информацию о хранилище и резервных копиях
+  const updateStorageInfo = () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      // Получаем размер localStorage
+      const storageSize = getLocalStorageSize();
+      setLocalStorageSize(storageSize);
+      
+      // Проверяем наличие резервных копий через метаданные
+      let backupCount = 0;
+      let latestTimestamp: string | undefined;
+      
+      if (userId) {
+        const metadataJson = localStorage.getItem(BACKUP_METADATA_KEY);
+        if (metadataJson) {
+          try {
+            const metadata = JSON.parse(metadataJson);
+            if (metadata[userId] && metadata[userId].backups) {
+              backupCount = metadata[userId].backups.length;
+              
+              if (backupCount > 0) {
+                // Сортируем по времени (от новых к старым)
+                const backups = [...metadata[userId].backups];
+                backups.sort((a, b) => b.timestamp - a.timestamp);
+                
+                // Получаем время последней резервной копии
+                if (backups[0] && backups[0].timestamp) {
+                  latestTimestamp = new Date(backups[0].timestamp).toLocaleString();
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[DevTools] Ошибка при разборе метаданных резервных копий:', error);
+          }
+        }
+      }
+      
+      // Обновляем информацию о резервных копиях
+      setBackupInfo({
+        exists: backupCount > 0,
+        count: backupCount,
+        latestTimestamp
+      });
+      
+      // Собираем всю информацию о сохранении
+      setStorageInfo({
+        ...storageInfo,
+        'backups': backupCount.toString(),
+        'localStorage.size': storageSize
+      });
+    } catch (error) {
+      console.error('[DevTools] Ошибка при обновлении информации о хранилище:', error);
     }
   };
   
@@ -103,15 +160,23 @@ export default function DevTools() {
         'localStorage.length': localStorage.length.toString()
       })
       
-      // Выводим все ключи из localStorage
-      const keys = []
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key) keys.push(key)
-      }
+      // Добавляем обработчики событий сохранения
+      const handleSaveSuccess = () => {
+        console.log('[DevTools] Получено событие успешного сохранения');
+        updateStorageInfo();
+      };
       
-      console.log('[DevTools] Ключи в localStorage:', keys)
-      console.log('[DevTools] gameState:', gameState)
+      const handleSaveError = (event: any) => {
+        console.error('[DevTools] Получено событие ошибки сохранения:', event.detail?.error);
+      };
+      
+      window.addEventListener('game-save-success', handleSaveSuccess);
+      window.addEventListener('game-save-error', handleSaveError);
+      
+      return () => {
+        window.removeEventListener('game-save-success', handleSaveSuccess);
+        window.removeEventListener('game-save-error', handleSaveError);
+      };
     } catch (error) {
       console.error('[DevTools] Ошибка при получении информации из localStorage:', error)
     }
@@ -145,74 +210,17 @@ export default function DevTools() {
         return;
       }
       
-      const timestamp = Date.now();
-      const backupKey = `backup_gamestate_${userId}_${timestamp}`;
-      
-      // Подготавливаем данные в правильном формате
-      const backupData = {
-        gameState: gameState,
-        timestamp,
-        version: gameState._saveVersion || 1
-      };
-      
-      // Проверяем размер перед сохранением
-      const jsonString = JSON.stringify(backupData);
-      const size = new Blob([jsonString]).size;
-      
-      if (size > MAX_BACKUP_SIZE) {
-        alert(`Слишком большой размер резервной копии: ${(size / 1024).toFixed(2)} КБ (макс ${MAX_BACKUP_SIZE / 1024} КБ)`);
-        return;
+      // Используем импортированную функцию для создания резервной копии
+      if (createBackup(userId, gameState, gameState._saveVersion || 1)) {
+        console.log('[DevTools] Создана резервная копия состояния игры');
+        
+        // Обновляем информацию о размере localStorage и резервных копиях
+        updateStorageInfo();
+        
+        alert('Резервная копия успешно создана');
+      } else {
+        alert('Не удалось создать резервную копию. Проверьте консоль для получения дополнительной информации.');
       }
-      
-      // Сохраняем резервную копию
-      localStorage.setItem(backupKey, jsonString);
-      
-      // Обновляем метаданные
-      let metadata: Record<string, any> = {};
-      const metadataJson = localStorage.getItem(BACKUP_METADATA_KEY);
-      
-      if (metadataJson) {
-        try {
-          metadata = JSON.parse(metadataJson);
-        } catch (e) {
-          metadata = {};
-        }
-      }
-      
-      if (!metadata[userId]) {
-        metadata[userId] = { backups: [] };
-      }
-      
-      // Добавляем информацию о новой резервной копии
-      metadata[userId].backups.push({
-        key: backupKey,
-        timestamp,
-        version: gameState._saveVersion || 1
-      });
-      
-      // Сохраняем обновленные метаданные
-      localStorage.setItem(BACKUP_METADATA_KEY, JSON.stringify(metadata));
-      
-      console.log('[DevTools] Создана резервная копия состояния игры');
-      
-      // Обновляем информацию о размере localStorage
-      const storageSize = getLocalStorageSize();
-      setLocalStorageSize(storageSize);
-      
-      // Обновляем информацию о резервных копиях
-      setBackupInfo({
-        exists: true,
-        count: backupInfo.count + 1,
-        latestTimestamp: new Date().toLocaleString()
-      });
-      
-      setStorageInfo({
-        ...storageInfo,
-        'backups': (backupInfo.count + 1).toString(),
-        'localStorage.size': storageSize
-      });
-      
-      alert('Резервная копия успешно создана');
     } catch (error) {
       console.error('[DevTools] Ошибка при создании резервной копии:', error);
       alert(`Ошибка при создании резервной копии: ${error}`);
