@@ -1,7 +1,7 @@
 /**
  * Утилиты для аутентификации
  */
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { AuthResult } from '../types/apiTypes';
 import { jwtVerify } from 'jose';
 
