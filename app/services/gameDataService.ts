@@ -1,10 +1,4 @@
-import type { GameState, ExtendedGameState } from '../types/gameTypes';
-import { localStorageService } from './storage/localStorageService';
-import { isValidGameState } from '../utils/dataIntegrity';
-import { signGameState, verifyDataSignature } from '../utils/dataIntegrity';
-import { saveGameStateViaAPI } from './api/apiService';
-import { getToken } from './auth/authenticationService';
-import { saveGameStateBackup } from './storage/localStorageService';
+import type { GameState } from '../types/gameTypes';
 
 interface SaveResponse {
   success: boolean;
@@ -35,9 +29,6 @@ interface BackupData {
   timestamp: number;
   version: number;
 }
-
-// Экспортировать интерфейс SaveResponse
-export type { SaveResponse };
 
 /**
  * Проверяет наличие полей в объекте и их типы
@@ -96,139 +87,9 @@ export const API_ROUTES = {
 };
 
 /**
- * Очищает состояние игры от циклических ссылок и больших объектов
- * @param state Состояние игры для очистки
- * @returns Очищенное состояние
- */
-export function sanitizeGameState(state: GameState): GameState {
-  if (!state) return state;
-  
-  try {
-    // Создаем копию для безопасного изменения
-    const cleanState = JSON.parse(JSON.stringify(state));
-    
-    // Список полей для удаления
-    const fieldsToRemove = [
-      '_thrownBalls', 
-      '_worldRef', 
-      '_bodiesMap', 
-      '_tempData',
-      '_physicsObjects',
-      '_sceneObjects',
-      '_renderData',
-      '_debugInfo',
-      '_frameData',
-      '_callbacks',
-      '_handlers',
-      '_listeners',
-      '_events',
-      '_subscriptions',
-      '_reactInternals',
-      '_internalRoot',
-      'logs',
-      'analytics'
-    ];
-    
-    // Удаляем проблемные поля
-    fieldsToRemove.forEach(field => {
-      if (cleanState[field] !== undefined) {
-        delete cleanState[field];
-      }
-    });
-    
-    // Проверяем размер массивов и при необходимости ограничиваем
-    if (cleanState.achievements?.unlockedAchievements && 
-        Array.isArray(cleanState.achievements.unlockedAchievements) && 
-        cleanState.achievements.unlockedAchievements.length > 1000) {
-      console.warn(`[gameDataService] Слишком много достижений (${cleanState.achievements.unlockedAchievements.length}), обрезаем до 1000`);
-      cleanState.achievements.unlockedAchievements = cleanState.achievements.unlockedAchievements.slice(0, 1000);
-    }
-    
-    if (cleanState.items && Array.isArray(cleanState.items) && cleanState.items.length > 1000) {
-      console.warn(`[gameDataService] Слишком много предметов (${cleanState.items.length}), обрезаем до 1000`);
-      cleanState.items = cleanState.items.slice(0, 1000);
-    }
-    
-    // Проверка на корректность числовых значений в инвентаре
-    if (cleanState.inventory) {
-      const numericFields = [
-        'snot', 'snotCoins', 'containerCapacity', 'containerSnot',
-        'fillingSpeed', 'collectionEfficiency', 'Cap',
-        'containerCapacityLevel', 'fillingSpeedLevel'
-      ];
-      
-      numericFields.forEach(field => {
-        if (cleanState.inventory[field] !== undefined) {
-          // Если значение не является числом или бесконечность, сбрасываем к безопасному значению
-          if (
-            typeof cleanState.inventory[field] !== 'number' || 
-            !isFinite(cleanState.inventory[field]) ||
-            cleanState.inventory[field] < 0 || 
-            cleanState.inventory[field] > Number.MAX_SAFE_INTEGER
-          ) {
-            console.warn(`[gameDataService] Некорректное значение поля ${field} в инвентаре: ${cleanState.inventory[field]}, сбрасываем`);
-            
-            // Устанавливаем безопасные значения по умолчанию
-            switch (field) {
-              case 'snot':
-              case 'snotCoins':
-              case 'containerSnot':
-                cleanState.inventory[field] = 0;
-                break;
-              case 'containerCapacity':
-              case 'Cap':
-                cleanState.inventory[field] = 100;
-                break;
-              case 'fillingSpeed':
-              case 'collectionEfficiency':
-                cleanState.inventory[field] = 1;
-                break;
-              case 'containerCapacityLevel':
-              case 'fillingSpeedLevel':
-                cleanState.inventory[field] = 1;
-                break;
-              default:
-                cleanState.inventory[field] = 0;
-            }
-          }
-        }
-      });
-    }
-    
-    // Ограничиваем размер вложенных объектов
-    const pruneDeepObjects = (obj: any, maxDepth: number = 10, currentDepth: number = 0) => {
-      if (currentDepth >= maxDepth) return null;
-      if (!obj || typeof obj !== 'object') return obj;
-      
-      const result: any = Array.isArray(obj) ? [] : {};
-      
-      for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-          const value = obj[key];
-          if (value && typeof value === 'object') {
-            result[key] = pruneDeepObjects(value, maxDepth, currentDepth + 1);
-          } else {
-            result[key] = value;
-          }
-        }
-      }
-      
-      return result;
-    };
-    
-    // Применяем ограничение глубины для предотвращения больших вложенных структур
-    return pruneDeepObjects(cleanState, 15);
-    
-  } catch (error) {
-    console.error('[gameDataService] Ошибка при очистке состояния игры:', error);
-    return state; // Возвращаем исходное состояние, если не удалось очистить
-  }
-}
-
-/**
- * Проверяет и исправляет состояние игры
- * @param state Состояние игры
- * @returns Исправленное состояние игры
+ * Проверяет структуру объекта GameState и исправляет/устанавливает поля с некорректными значениями
+ * @param state Состояние игры для проверки
+ * @returns Проверенное и исправленное состояние игры
  */
 export function validateGameState(state: any): GameState {
   if (!state) {
@@ -257,28 +118,7 @@ export function validateGameState(state: any): GameState {
       state.inventory.snot = Number(state.inventory.snot || 0);
       state.inventory.snotCoins = Number(state.inventory.snotCoins || 0);
       state.inventory.containerCapacity = Number(state.inventory.containerCapacity || 100);
-      state.inventory.containerSnot = Number(state.inventory.containerSnot || 0);
       state.inventory.fillingSpeed = Number(state.inventory.fillingSpeed || 1);
-      state.inventory.collectionEfficiency = Number(state.inventory.collectionEfficiency || 1);
-      state.inventory.Cap = Number(state.inventory.Cap || 100);
-      state.inventory.containerCapacityLevel = Number(state.inventory.containerCapacityLevel || 1);
-      state.inventory.fillingSpeedLevel = Number(state.inventory.fillingSpeedLevel || 1);
-      
-      // Проверка на отрицательные значения
-      if (state.inventory.snot < 0) state.inventory.snot = 0;
-      if (state.inventory.snotCoins < 0) state.inventory.snotCoins = 0;
-      if (state.inventory.containerCapacity < 1) state.inventory.containerCapacity = 100;
-      if (state.inventory.containerSnot < 0) state.inventory.containerSnot = 0;
-      if (state.inventory.fillingSpeed < 0.1) state.inventory.fillingSpeed = 1;
-      if (state.inventory.collectionEfficiency < 0.1) state.inventory.collectionEfficiency = 1;
-      if (state.inventory.Cap < 1) state.inventory.Cap = 100;
-      if (state.inventory.containerCapacityLevel < 1) state.inventory.containerCapacityLevel = 1;
-      if (state.inventory.fillingSpeedLevel < 1) state.inventory.fillingSpeedLevel = 1;
-      
-      // Добавляем timestamp, если отсутствует
-      if (!state.inventory.lastUpdateTimestamp) {
-        state.inventory.lastUpdateTimestamp = Date.now();
-      }
     }
     
     if (!state.container) {
@@ -289,116 +129,22 @@ export function validateGameState(state: any): GameState {
         currentAmount: 0,
         fillRate: 1
       };
-    } else {
-      // Проверяем типы полей контейнера
-      state.container.level = Number(state.container.level || 1);
-      state.container.capacity = Number(state.container.capacity || 100);
-      state.container.currentAmount = Number(state.container.currentAmount || 0);
-      state.container.fillRate = Number(state.container.fillRate || 1);
-      
-      // Проверка на отрицательные значения
-      if (state.container.level < 1) state.container.level = 1;
-      if (state.container.capacity < 1) state.container.capacity = 100;
-      if (state.container.currentAmount < 0) state.container.currentAmount = 0;
-      if (state.container.fillRate < 0.1) state.container.fillRate = 1;
-      
-      // Проверка на превышение ёмкости
-      if (state.container.currentAmount > state.container.capacity) {
-        state.container.currentAmount = state.container.capacity;
-      }
     }
     
     if (!state.upgrades) {
-      console.warn('[gameDataService] validateGameState: Отсутствуют upgrades, будут созданы');
+      console.warn('[gameDataService] validateGameState: Отсутствует upgrades, будет создан');
       state.upgrades = {
         containerLevel: 1,
         fillingSpeedLevel: 1,
-        collectionEfficiencyLevel: 1,
         clickPower: { level: 1, value: 1 },
-        passiveIncome: { level: 1, value: 0.1 }
+        passiveIncome: { level: 1, value: 0.1 },
+        collectionEfficiencyLevel: 1
       };
-    } else {
-      // Проверяем типы полей улучшений
-      state.upgrades.containerLevel = Number(state.upgrades.containerLevel || 1);
-      state.upgrades.fillingSpeedLevel = Number(state.upgrades.fillingSpeedLevel || 1);
-      state.upgrades.collectionEfficiencyLevel = Number(state.upgrades.collectionEfficiencyLevel || 1);
-      
-      // Проверка на отрицательные значения
-      if (state.upgrades.containerLevel < 1) state.upgrades.containerLevel = 1;
-      if (state.upgrades.fillingSpeedLevel < 1) state.upgrades.fillingSpeedLevel = 1;
-      if (state.upgrades.collectionEfficiencyLevel < 1) state.upgrades.collectionEfficiencyLevel = 1;
-      
-      // Проверяем clickPower
-      if (!state.upgrades.clickPower) {
-        state.upgrades.clickPower = { level: 1, value: 1 };
-      } else {
-        state.upgrades.clickPower.level = Number(state.upgrades.clickPower.level || 1);
-        state.upgrades.clickPower.value = Number(state.upgrades.clickPower.value || 1);
-        
-        if (state.upgrades.clickPower.level < 1) state.upgrades.clickPower.level = 1;
-        if (state.upgrades.clickPower.value < 0.1) state.upgrades.clickPower.value = 1;
-      }
-      
-      // Проверяем passiveIncome
-      if (!state.upgrades.passiveIncome) {
-        state.upgrades.passiveIncome = { level: 1, value: 0.1 };
-      } else {
-        state.upgrades.passiveIncome.level = Number(state.upgrades.passiveIncome.level || 1);
-        state.upgrades.passiveIncome.value = Number(state.upgrades.passiveIncome.value || 0.1);
-        
-        if (state.upgrades.passiveIncome.level < 1) state.upgrades.passiveIncome.level = 1;
-        if (state.upgrades.passiveIncome.value < 0) state.upgrades.passiveIncome.value = 0.1;
-      }
     }
     
-    // Проверяем наличие поля achievements и создаем его при необходимости
-    if (!state.achievements) {
-      state.achievements = { unlockedAchievements: [] };
-    } else if (!state.achievements.unlockedAchievements) {
-      state.achievements.unlockedAchievements = [];
-    }
-    
-    // Проверяем наличие поля stats и создаем его при необходимости
-    if (!state.stats) {
-      state.stats = {
-        highestLevel: 1,
-        clickCount: 0,
-        totalSnot: 0,
-        totalSnotCoins: 0,
-        playTime: 0,
-        startDate: new Date().toISOString(),
-        consecutiveLoginDays: 0
-      };
-    } else {
-      // Проверяем типы полей статистики
-      state.stats.highestLevel = Number(state.stats.highestLevel || 1);
-      state.stats.clickCount = Number(state.stats.clickCount || 0);
-      state.stats.totalSnot = Number(state.stats.totalSnot || 0);
-      state.stats.totalSnotCoins = Number(state.stats.totalSnotCoins || 0);
-      state.stats.playTime = Number(state.stats.playTime || 0);
-      state.stats.consecutiveLoginDays = Number(state.stats.consecutiveLoginDays || 0);
-      
-      // Проверка на отрицательные значения
-      if (state.stats.highestLevel < 1) state.stats.highestLevel = 1;
-      if (state.stats.clickCount < 0) state.stats.clickCount = 0;
-      if (state.stats.totalSnot < 0) state.stats.totalSnot = 0;
-      if (state.stats.totalSnotCoins < 0) state.stats.totalSnotCoins = 0;
-      if (state.stats.playTime < 0) state.stats.playTime = 0;
-      if (state.stats.consecutiveLoginDays < 0) state.stats.consecutiveLoginDays = 0;
-      
-      // Проверяем формат даты
-      if (!state.stats.startDate || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(state.stats.startDate)) {
-        state.stats.startDate = new Date().toISOString();
-      }
-    }
-    
-    // Проверяем наличие служебных полей
-    if (!state._saveVersion) state._saveVersion = 1;
-    if (!state._savedAt) state._savedAt = new Date().toISOString();
-    
-    return state;
+    return state as GameState;
   } catch (error) {
-    console.error('[gameDataService] Ошибка при валидации состояния игры:', error);
+    console.error('[gameDataService] Ошибка при валидации состояния:', error);
     return createDefaultGameState();
   }
 }
@@ -727,9 +473,6 @@ export function getLatestBackup(userId: string): {gameState: GameState, version:
   }
 }
 
-// Создаем карту последних сохранений для предотвращения дублирования
-const lastSaveMap = new Map<string, {timestamp: number, version: number, inProgress: boolean}>();
-
 /**
  * Сохраняет состояние игры с проверкой целостности данных
  * @param userId ID пользователя
@@ -756,170 +499,104 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       };
     }
     
-    // Проверка соответствия userId в состоянии игры, если оно там есть
-    if ((state as ExtendedGameState)._userId && (state as ExtendedGameState)._userId !== userId) {
-      console.error('[gameDataService] Несоответствие userId в состоянии игры', {
-        requestUserId: userId,
-        stateUserId: (state as ExtendedGameState)._userId
-      });
-      return {
-        success: false,
-        error: 'Несоответствие userId в состоянии игры'
-      };
-    }
+    // Проверка целостности состояния игры
+    const inventoryCheck = validateObjectFields(
+      state.inventory,
+      ['snot', 'snotCoins', 'containerCapacity', 'fillingSpeed'],
+      { snot: 'number', snotCoins: 'number', containerCapacity: 'number', fillingSpeed: 'number' }
+    );
     
-    // Очищаем состояние от проблемных данных
-    const cleanedState = sanitizeGameState(state);
-    
-    // Проверяем целостность базовой структуры состояния
-    if (!isValidGameState(cleanedState)) {
-      console.error('[gameDataService] Некорректная структура состояния игры');
+    if (!inventoryCheck.isValid) {
+      console.error('[gameDataService] Невалидные данные инвентаря:', 
+        inventoryCheck.missingFields.length > 0 ? `Отсутствуют поля: ${inventoryCheck.missingFields.join(', ')}` : '',
+        inventoryCheck.wrongTypeFields.length > 0 ? `Неверные типы: ${inventoryCheck.wrongTypeFields.join(', ')}` : ''
+      );
       
-      // Пытаемся восстановить структуру
-      const validatedState = validateGameState(cleanedState);
-      
-      // Проверяем еще раз после восстановления
-      if (!isValidGameState(validatedState)) {
-        return {
-          success: false,
-          error: 'Невозможно восстановить структуру состояния игры'
-        };
-      }
-      
-      // Используем восстановленное состояние
-      cleanedState._wasRepaired = true;
-      Object.assign(cleanedState, validatedState);
+      // Исправляем данные перед сохранением через validateGameState
+      state = validateGameState(state);
     }
     
-    // Проверяем и исправляем версию сохранения
-    if (!(cleanedState as ExtendedGameState)._saveVersion) {
-      (cleanedState as ExtendedGameState)._saveVersion = 1;
+    // Проверяем правильность userId в состоянии
+    if (state._userId && state._userId !== userId) {
+      console.warn(`[gameDataService] Несоответствие userId: ${state._userId} в состоянии не совпадает с ${userId}`);
+      // Исправляем userId в состоянии
+      state._userId = userId;
     }
     
-    // Устанавливаем метку времени последнего изменения
-    (cleanedState as ExtendedGameState)._lastModified = Date.now();
-    (cleanedState as ExtendedGameState)._savedAt = new Date().toISOString();
-    
-    // Если данные имеют подпись, проверяем ее
-    if ((cleanedState as ExtendedGameState)._dataSignature) {
-      const isValid = verifyDataSignature(userId, cleanedState as ExtendedGameState, (cleanedState as ExtendedGameState)._dataSignature as string);
-      if (!isValid) {
-        console.error('[gameDataService] Нарушение целостности данных (неверная подпись)');
-        
-        // Удаляем неверную подпись
-        delete (cleanedState as ExtendedGameState)._dataSignature;
-      }
-    }
-    
-    // Проверяем, не выполняется ли уже сохранение для этого userId
-    const now = Date.now();
-    const currentSaveVersion = (cleanedState as ExtendedGameState)._saveVersion || 1;
-    
-    const lastSaveInfo = lastSaveMap.get(userId);
-    if (lastSaveInfo) {
-      // Если сохранение в процессе, возвращаем успех чтобы избежать дублирования
-      if (lastSaveInfo.inProgress) {
-        console.log(`[gameDataService] Сохранение уже выполняется для ${userId}, пропускаем дублирующий запрос`);
-        return {
-          success: true,
-          version: lastSaveInfo.version
-        };
-      }
-      
-      // Проверяем по времени и версии
-      // Увеличен интервал с 500мс до 2000мс (2 секунды) для предотвращения частых сохранений
-      if (now - lastSaveInfo.timestamp < 2000 && lastSaveInfo.version === currentSaveVersion) {
-        console.log(`[gameDataService] Дублирующий запрос на сохранение для ${userId}, пропускаем (${now - lastSaveInfo.timestamp}мс)`);
-        return {
-          success: true,
-          version: lastSaveInfo.version
-        };
-      }
-    }
-    
-    // Отмечаем, что сохранение началось
-    lastSaveMap.set(userId, {
-      timestamp: now,
-      version: currentSaveVersion,
-      inProgress: true
-    });
+    // Получаем токен из localStorage или иного хранилища
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    console.log(`[gameDataService] Токен ${token ? 'найден' : 'не найден'} при сохранении для ${userId}`);
     
     try {
-      // Создаем резервную копию перед отправкой на сервер
-      const backupCreated = createBackup(userId, cleanedState, currentSaveVersion);
-      if (!backupCreated) {
-        console.warn('[gameDataService] Не удалось создать резервную копию перед сохранением');
-      }
-      
-      // Устанавливаем userId в состоянии
-      (cleanedState as ExtendedGameState)._userId = userId;
-      
-      // Подписываем данные перед отправкой
-      const stateWithSignature = signGameState(userId, cleanedState as ExtendedGameState);
-      
-      // Вызываем API для сохранения
-      const apiResult = await saveGameStateViaAPI(stateWithSignature, false);
-      
-      // Обновляем статус сохранения - завершено успешно
-      const resultVersion = apiResult.progress?.version || currentSaveVersion;
-      lastSaveMap.set(userId, {
-        timestamp: Date.now(), // Обновляем timestamp после завершения запроса
-        version: resultVersion,
-        inProgress: false
+      // Используем константы для API путей
+      const response = await fetch(API_ROUTES.SAVE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId,
+          gameState: state,
+          version: state._saveVersion || 1,
+          timestamp: Date.now()
+        })
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[gameDataService] HTTP ошибка при сохранении! Статус: ${response.status}, Ответ: ${errorText}`);
+        
+        // В случае 401 ошибки (Неавторизован), попробуем обновить токен
+        if (response.status === 401 && typeof window !== 'undefined') {
+          console.log('[gameDataService] Ошибка авторизации при сохранении, возможно истек токен');
+          // Отправляем событие для обновления токена
+          const authEvent = new CustomEvent('auth-token-expired');
+          window.dispatchEvent(authEvent);
+        }
+        
+        // Создаем резервную копию при любой ошибке HTTP
+        createBackup(userId, state, state._saveVersion || 1);
+        console.log('[gameDataService] Создана резервная копия из-за HTTP ошибки');
+        
+        throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log(`[gameDataService] Успешно сохранено состояние для ${userId}`, result);
+      
+      // Создаем периодическую резервную копию (каждые N успешных сохранений)
+      if ((state._saveVersion || 0) % 5 === 0) { // Создаем резервную копию каждые 5 версий
+        createBackup(userId, state, result.version || state._saveVersion || 1);
+      }
       
       return {
         success: true,
-        version: resultVersion
+        version: result.progress?.version || result.version || 1
       };
-    } catch (error) {
-      console.error('[gameDataService] Ошибка при сохранении состояния:', error);
+    } catch (networkError) {
+      console.error('[gameDataService] Сетевая ошибка при сохранении:', networkError);
       
-      // Обновляем статус сохранения - завершено с ошибкой
-      lastSaveMap.set(userId, {
-        timestamp: now,
-        version: currentSaveVersion,
-        inProgress: false
-      });
-      
-      // Создаем резервную копию локально при ошибке API
-      const backupCreated = saveGameStateBackup(userId, cleanedState as ExtendedGameState);
-      if (backupCreated) {
-        console.log('[gameDataService] Создана локальная резервная копия из-за ошибки API');
-      } else {
-        console.error('[gameDataService] Не удалось создать локальную резервную копию при ошибке API');
-      }
+      // Если не удалось сохранить из-за проблем с сетью, создаем резервную копию
+      createBackup(userId, state, state._saveVersion || 1);
       
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Неизвестная ошибка'
+        error: networkError instanceof Error ? networkError.message : 'Сетевая ошибка при сохранении'
       };
     }
   } catch (error) {
-    console.error('[gameDataService] Критическая ошибка при сохранении:', error);
-    // Пытаемся сохранить критические данные локально
-    try {
-      if (state && userId) {
-        const simplifiedState: Partial<ExtendedGameState> = {
-          inventory: state.inventory,
-          upgrades: state.upgrades,
-          container: state.container,
-          _userId: userId,
-          _saveVersion: (state as ExtendedGameState)._saveVersion || 1,
-          _savedAt: new Date().toISOString(),
-          _isCriticalBackup: true,
-          user: undefined // Для соответствия типу, хотя поле необязательное
-        };
-        saveGameStateBackup(userId, simplifiedState as ExtendedGameState);
-        console.log('[gameDataService] Создана упрощенная резервная копия при критической ошибке');
-      }
-    } catch (backupError) {
-      console.error('[gameDataService] Ошибка при создании упрощенной резервной копии:', backupError);
+    console.error('[gameDataService] Ошибка при сохранении состояния:', error);
+    
+    // В случае любой другой ошибки также пытаемся создать резервную копию
+    if (userId && state && typeof window !== 'undefined' && window.localStorage) {
+      createBackup(userId, state, state._saveVersion || 1);
+      console.log('[gameDataService] Создана резервная копия из-за ошибки при сохранении');
     }
     
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Критическая ошибка'
+      error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     };
   }
 }

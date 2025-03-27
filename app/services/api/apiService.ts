@@ -1,21 +1,10 @@
 /**
- * Сервис API
+ * API сервис для работы с игровыми данными
  * Обрабатывает запросы к серверу для загрузки и сохранения состояния игры
  */
+import type { ExtendedGameState } from "../../types/gameTypes";
+import type { SaveProgressResponse, LoadProgressResponse } from "../../types/saveTypes";
 import { getToken, getUserId, refreshToken } from '../auth/authenticationService';
-import { ExtendedGameState } from '../../types/gameTypes';
-import { SaveProgressResponse } from '../../types/saveTypes';
-import { signGameState, verifyDataSignature, generateDataSignature } from '../../utils/dataIntegrity';
-import { sanitizeGameState } from '../../services/gameDataService';
-import { generateClientId, getBrowserInfo, getDeviceInfo, getClientVersion } from '../../utils/clientUtils';
-
-// API маршруты
-const API_ROUTES = {
-  SAVE: '/api/game/save-progress',
-  LOAD: '/api/game/load-progress',
-  BACKUP: '/api/game/backup',
-  REDIS: '/api/game/redis'
-};
 
 /**
  * Базовый URL для API
@@ -94,16 +83,12 @@ export async function saveGameStateViaAPI(gameState: ExtendedGameState | string,
       if (!state._userId || state._userId !== userId) {
         state._userId = userId;
       }
-      
-      // Добавляем подпись для проверки целостности данных
-      gameState = signGameState(userId, state);
     }
     
     const response = await fetch('/api/game/save-progress', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Client-Id': generateClientId(), // Добавляем идентификатор клиента
         ...headers
       },
       body: JSON.stringify({
@@ -159,9 +144,7 @@ export async function saveGameStateViaAPI(gameState: ExtendedGameState | string,
  */
 export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGameState): Promise<ExtendedGameState | null> {
   try {
-    // Получаем данные для авторизации запроса
     const headers = await getAuthHeader();
-    
     // Получаем userId из разных источников для обеспечения надежности
     let userId: string | null = getUserId();
     let gameState: ExtendedGameState | undefined;
@@ -180,48 +163,29 @@ export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGa
       }
     }
     
-    // Проверка наличия userId
     if (!userId) {
       console.error('[API] Не удалось загрузить прогресс: ID пользователя не найден');
-      logSecurityEvent('load_failed', 'missing_user_id', null);
       throw new Error('User ID not found');
     }
     
-    // Проверка наличия авторизационных данных
     if (Object.keys(headers).length === 0) {
       console.error('[API] Не удалось загрузить прогресс: отсутствует токен авторизации');
-      logSecurityEvent('load_failed', 'missing_auth_token', userId);
       throw new Error('Unauthorized');
     }
     
-    // Добавляем параметры запроса для идентификации клиента и защиты от кэширования
-    const clientId = generateClientId();
-    const queryParams = new URLSearchParams({
-      userId,
-      timestamp: Date.now().toString(),
-      clientId
-    });
-    
-    // Устанавливаем таймаут для запроса
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
     
     try {
-      const response = await fetch(`/api/game/load-progress?${queryParams.toString()}`, {
+      const response = await fetch(`/api/game/load-progress?userId=${encodeURIComponent(userId)}`, {
         method: 'GET',
-        headers: {
-          ...headers,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Client-Id': clientId,
-          'X-Request-ID': generateRandomId()
-        },
+        headers,
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
-      // Обрабатываем истекший токен (401)
+      // Если токен истек (401), пробуем обновить и повторить запрос
       if (response.status === 401) {
         console.warn('[API] Токен истек, пробуем обновить и повторить загрузку');
         const refreshed = await refreshToken();
@@ -229,201 +193,85 @@ export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGa
         if (refreshed) {
           const newHeaders = await getAuthHeader();
           if (Object.keys(newHeaders).length > 0) {
-            // Повторяем запрос с обновленным токеном
-            const newController = new AbortController();
-            const newTimeoutId = setTimeout(() => newController.abort(), 10000);
+            const retryResponse = await fetch(`/api/game/load-progress?userId=${encodeURIComponent(userId)}`, {
+              method: 'GET',
+              headers: newHeaders
+            });
             
-            try {
-              const retryResponse = await fetch(`/api/game/load-progress?${queryParams.toString()}`, {
-                method: 'GET',
-                headers: {
-                  ...newHeaders,
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',
-                  'Pragma': 'no-cache',
-                  'X-Client-Id': clientId,
-                  'X-Request-ID': generateRandomId()
-                },
-                signal: newController.signal
-              });
-              
-              clearTimeout(newTimeoutId);
-              
-              if (!retryResponse.ok) {
-                console.error('[API] Повторный запрос неуспешен:', retryResponse.status);
-                logSecurityEvent('load_failed', `http_error_${retryResponse.status}`, userId);
-                throw new Error(`HTTP Error: ${retryResponse.status}`);
-              }
-              
-              return await processLoadResponse(retryResponse, userId);
-            } catch (error) {
-              clearTimeout(newTimeoutId);
-              throw error;
+            if (!retryResponse.ok) {
+              console.error('[API] Повторный запрос неуспешен:', retryResponse.status);
+              throw new Error(`HTTP Error: ${retryResponse.status}`);
             }
+            
+            const retryData = await retryResponse.json();
+            
+            // Проверяем структуру ответа
+            if (!retryData || !retryData.gameState) {
+              console.error('[API] Некорректная структура данных в ответе');
+              throw new Error('Invalid response data structure');
+            }
+            
+            const loadedState = retryData.gameState as ExtendedGameState;
+            
+            // Проверяем целостность загруженных данных
+            if (!loadedState.inventory || !loadedState.upgrades) {
+              console.error('[API] Неполные данные в загруженном состоянии');
+              throw new Error('Incomplete game state data');
+            }
+            
+            // Обновляем userId в загруженном состоянии для согласованности
+            if (loadedState && (!loadedState._userId || loadedState._userId !== userId)) {
+              loadedState._userId = userId;
+            }
+            
+            return loadedState;
           }
         }
         
-        logSecurityEvent('load_failed', 'token_refresh_failed', userId);
         throw new Error('Token refresh failed');
       }
       
       if (!response.ok) {
         console.error('[API] Загрузка не удалась:', response.status);
-        logSecurityEvent('load_failed', `http_error_${response.status}`, userId);
         throw new Error(`HTTP Error: ${response.status}`);
       }
       
-      return await processLoadResponse(response, userId);
+      const data = await response.json();
       
-    } catch (error: any) {
+      // Проверяем структуру ответа
+      if (!data || !data.gameState) {
+        console.error('[API] Некорректная структура данных в ответе');
+        throw new Error('Invalid response data structure');
+      }
+      
+      const loadedState = data.gameState as ExtendedGameState;
+      
+      // Проверяем целостность загруженных данных
+      if (!loadedState.inventory || !loadedState.upgrades) {
+        console.error('[API] Неполные данные в загруженном состоянии');
+        throw new Error('Incomplete game state data');
+      }
+      
+      // Обновляем userId в загруженном состоянии для согласованности
+      if (loadedState && (!loadedState._userId || loadedState._userId !== userId)) {
+        loadedState._userId = userId;
+      }
+      
+      return loadedState;
+    } catch (fetchError: any) {
       clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
+      
+      if (fetchError.name === 'AbortError') {
         console.error('[API] Запрос прерван по таймауту');
-        logSecurityEvent('load_failed', 'request_timeout', userId);
         throw new Error('Request timeout');
       }
-      throw error;
+      
+      throw fetchError;
     }
   } catch (error) {
     console.error('[API] Ошибка при загрузке состояния игры:', error);
     return null;
   }
-}
-
-/**
- * Обрабатывает ответ API при загрузке состояния
- * @param response Ответ от API
- * @param userId ID пользователя
- * @returns Обработанное состояние игры
- */
-async function processLoadResponse(response: Response, userId: string): Promise<ExtendedGameState | null> {
-  try {
-    const data = await response.json();
-    
-    // Проверяем структуру ответа
-    if (!data || !data.gameState) {
-      console.error('[API] Некорректная структура данных в ответе');
-      logSecurityEvent('load_failed', 'invalid_response', userId);
-      throw new Error('Invalid response data structure');
-    }
-    
-    let loadedState = data.gameState as ExtendedGameState;
-    
-    // Проверяем базовую целостность загруженных данных
-    if (!loadedState.inventory || !loadedState.upgrades) {
-      console.error('[API] Неполные данные в загруженном состоянии');
-      logSecurityEvent('load_failed', 'incomplete_state', userId);
-      throw new Error('Incomplete game state data');
-    }
-    
-    // Проверка версии сохранения
-    if (!loadedState._saveVersion) {
-      console.warn('[API] Отсутствует версия сохранения в загруженном состоянии');
-      loadedState._saveVersion = 1;
-    }
-    
-    // Проверяем владельца данных
-    if (loadedState._userId && loadedState._userId !== userId) {
-      console.error('[API] Несоответствие ID пользователя в загруженных данных');
-      logSecurityEvent('load_failed', 'user_id_mismatch', userId, {
-        expected: userId,
-        received: loadedState._userId
-      });
-      throw new Error('User ID mismatch in loaded data');
-    }
-    
-    // Обновляем userId в загруженном состоянии для согласованности
-    loadedState._userId = userId;
-    
-    // Проверяем наличие подписи данных
-    if (loadedState._dataSignature) {
-      // Проверяем целостность данных
-      const isValid = verifyDataSignature(userId, loadedState, loadedState._dataSignature);
-      if (!isValid) {
-        console.error('[API] Нарушение целостности загруженных данных');
-        logSecurityEvent('load_failed', 'signature_mismatch', userId);
-        
-        // Проверяем, можно ли исправить подпись
-        const newSignature = generateDataSignature(userId, loadedState);
-        if (newSignature) {
-          console.warn('[API] Обновление подписи данных');
-          loadedState._dataSignature = newSignature;
-        } else {
-          throw new Error('Data integrity violation');
-        }
-      }
-    } else {
-      // Добавляем подпись, если она отсутствует
-      console.log('[API] Добавление подписи к загруженным данным');
-      const signedState = signGameState(userId, loadedState);
-      loadedState._dataSignature = signedState._dataSignature;
-    }
-    
-    // Добавляем временную метку загрузки
-    loadedState._loadedAt = new Date().toISOString();
-    
-    // Дополнительная проверка непротиворечивости загруженных данных
-    if (typeof loadedState.inventory.snot !== 'number' || 
-        typeof loadedState.inventory.snotCoins !== 'number' ||
-        typeof loadedState.container?.capacity !== 'number') {
-      console.error('[API] Некорректные типы данных в загруженном состоянии');
-      loadedState = sanitizeGameState(loadedState) as ExtendedGameState;
-    }
-    
-    // Добавляем информацию о клиенте
-    loadedState._client = {
-      version: getClientVersion(),
-      platform: getBrowserInfo(),
-      device: getDeviceInfo()
-    };
-    
-    return loadedState;
-  } catch (error: any) {
-    console.error('[API] Ошибка при обработке ответа:', error);
-    return null;
-  }
-}
-
-/**
- * Логирует события безопасности
- * @param event Тип события
- * @param reason Причина события
- * @param userId ID пользователя
- * @param details Дополнительные детали
- */
-function logSecurityEvent(event: string, reason: string, userId: string | null, details?: Record<string, any>): void {
-  try {
-    console.warn(`[Security] ${event}: ${reason}${userId ? ` (userId: ${userId})` : ''}`);
-    
-    // Здесь можно добавить отправку события в системы аналитики или мониторинга
-    if (typeof window !== 'undefined') {
-      const securityLog = JSON.parse(localStorage.getItem('security_log') || '[]');
-      securityLog.push({
-        timestamp: Date.now(),
-        event,
-        reason,
-        userId,
-        details,
-        userAgent: navigator.userAgent
-      });
-      
-      // Ограничиваем размер журнала
-      if (securityLog.length > 100) {
-        securityLog.shift();
-      }
-      
-      localStorage.setItem('security_log', JSON.stringify(securityLog));
-    }
-  } catch (error: any) {
-    console.error('[Security] Ошибка при логировании события:', error);
-  }
-}
-
-/**
- * Генерирует случайный идентификатор для запросов
- */
-function generateRandomId(): string {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
 }
 
 /**

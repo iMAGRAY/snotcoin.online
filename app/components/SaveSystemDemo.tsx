@@ -64,8 +64,8 @@ const SaveSystemDemo: React.FC = () => {
     
     const result = await loadState();
     
-    if (result.success && result.data) {
-      setGameState(result.data);
+    if (result.success && result.data?.state) {
+      setGameState(result.data.state);
       setStatusMessage(`Загружено успешно (${result.metrics?.duration}мс)`);
     } else {
       setStatusMessage(`Ошибка загрузки: ${result.error}`);
@@ -82,8 +82,8 @@ const SaveSystemDemo: React.FC = () => {
       if (result.success) {
         // Загружаем новое состояние (будет создано по умолчанию)
         const loadResult = await loadState();
-        if (loadResult.success && loadResult.data) {
-          setGameState(loadResult.data);
+        if (loadResult.success && loadResult.data?.state) {
+          setGameState(loadResult.data.state);
         }
         
         setStatusMessage('Данные сброшены успешно');
@@ -119,8 +119,8 @@ const SaveSystemDemo: React.FC = () => {
     try {
       const result = await importStateFromString(exportedState);
       
-      if (result.success && result.data) {
-        setGameState(result.data);
+      if (result.success && result.data?.state) {
+        setGameState(result.data.state);
         setStatusMessage('Состояние импортировано успешно');
       } else {
         setStatusMessage(`Ошибка импорта: ${result.error}`);
@@ -442,7 +442,7 @@ const SaveSystemDemo: React.FC = () => {
                   <p>Статус: {lastLoadResult.success ? 'Успешно' : 'Ошибка'}</p>
                   <p>Сообщение: {lastLoadResult.message}</p>
                   {lastLoadResult.error && <p className="text-red-500">Ошибка: {lastLoadResult.error}</p>}
-                  {lastLoadResult.data?._client?.platform && <p>Источник: {lastLoadResult.data._client.platform}</p>}
+                  {lastLoadResult.data?.source && <p>Источник: {lastLoadResult.data.source}</p>}
                   {lastLoadResult.metrics && (
                     <>
                       <p>Длительность: {lastLoadResult.metrics.duration}мс</p>

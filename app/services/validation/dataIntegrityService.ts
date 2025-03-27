@@ -27,8 +27,7 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
         fillingSpeedLevel: 1,
         collectionEfficiency: 1,
         containerSnot: 0,
-        Cap: 100,
-        lastUpdateTimestamp: Date.now()
+        Cap: 0
       };
       repairedFields.push('inventory');
     } else {
@@ -42,7 +41,7 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
         { field: 'fillingSpeedLevel', defaultValue: 1 },
         { field: 'collectionEfficiency', defaultValue: 1 },
         { field: 'containerSnot', defaultValue: 0 },
-        { field: 'lastUpdateTimestamp', defaultValue: Date.now() }
+        { field: 'Cap', defaultValue: 0 }
       ];
       
       for (const { field, defaultValue } of inventoryFields) {
@@ -51,12 +50,6 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
           (repairedState.inventory as any)[field] = defaultValue;
           repairedFields.push(`inventory.${field}`);
         }
-      }
-      
-      // Особая обработка для Cap
-      if (repairedState.inventory.Cap === undefined) {
-        repairedState.inventory.Cap = repairedState.inventory.containerCapacity || 100;
-        repairedFields.push('inventory.Cap');
       }
     }
     

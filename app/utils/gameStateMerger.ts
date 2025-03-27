@@ -173,9 +173,9 @@ export function mergeGameStates(
   }
   
   // Слияние квестов
-  if ((oldState as any).quests && (newState as any).quests) {
-    const [mergedQuests, questConflicts] = mergeQuests((oldState as any).quests, (newState as any).quests, options);
-    (result.state as any).quests = mergedQuests;
+  if (oldState.quests && newState.quests) {
+    const [mergedQuests, questConflicts] = mergeQuests(oldState.quests, newState.quests, options);
+    result.state.quests = mergedQuests;
     result.conflicts.total += questConflicts;
     result.conflicts.resolved += questConflicts;
     result.conflicts.fields.push('quests');
@@ -227,7 +227,7 @@ export function mergeGameStates(
     newState._saveVersion || 1
   ) + 1;
   
-  result.state._mergedAt = new Date().toISOString();
+  result.state._lastMerged = new Date().toISOString();
   result.state._mergeInfo = {
     duration: performance.now() - startTime,
     conflicts: result.conflicts.total,

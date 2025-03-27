@@ -6,10 +6,6 @@
 import { ExtendedGameState, GameState, Inventory, Container, Upgrades } from "../types/gameTypes";
 import { StructuredGameSave, IntegrityData } from "../types/saveTypes";
 import { createInitialGameState } from "../constants/gameConstants";
-import * as crypto from 'crypto';
-
-// Секретный ключ для подписи данных (хранится только на сервере)
-const SERVER_SECRET = process.env.DATA_INTEGRITY_SECRET || 'default-integrity-key-change-in-production';
 
 /**
  * Результат проверки целостности данных
@@ -32,8 +28,7 @@ const criticalInventoryFields = [
   "containerCapacity",
   "containerCapacityLevel",
   "fillingSpeed",
-  "fillingSpeedLevel",
-  "collectionEfficiency"
+  "fillingSpeedLevel"
 ];
 
 /**
@@ -505,18 +500,7 @@ export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGa
  */
 function repairInventory(inventory: any): any {
   if (!inventory || typeof inventory !== 'object') {
-    return { 
-      snot: 0, 
-      snotCoins: 0, 
-      containerCapacity: 100,
-      containerCapacityLevel: 1,
-      fillingSpeed: 1,
-      fillingSpeedLevel: 1,
-      collectionEfficiency: 1,
-      containerSnot: 0,
-      Cap: 100,
-      lastUpdateTimestamp: Date.now()
-    };
+    return { snot: 0, snotCoins: 0, containerSnot: 0 };
   }
   
   const fixedInventory = { ...inventory };
@@ -524,10 +508,7 @@ function repairInventory(inventory: any): any {
   // Проверяем основные значения
   fixedInventory.snot = !isNaN(fixedInventory.snot) ? fixedInventory.snot : 0;
   fixedInventory.snotCoins = !isNaN(fixedInventory.snotCoins) ? fixedInventory.snotCoins : 0;
-  // Удаляем containerSnot для избежания ошибок типизации
-  if ('containerSnot' in fixedInventory) {
-    fixedInventory.containerSnot = !isNaN(fixedInventory.containerSnot) ? fixedInventory.containerSnot : 0;
-  }
+  fixedInventory.containerSnot = !isNaN(fixedInventory.containerSnot) ? fixedInventory.containerSnot : 0;
   
   return fixedInventory;
 }
@@ -667,7 +648,8 @@ function createEmptyGameState(): ExtendedGameState {
     
     // Добавляем недостающие поля
     containerLevel: 1,
-    fillingSpeed: 1
+    fillingSpeed: 1,
+    containerSnot: 0
   };
   
   return result;
@@ -883,166 +865,4 @@ export function createStructuredSave(state: ExtendedGameState, userId: string): 
   };
   
   return structuredSave;
-}
-
-/**
- * Создает подпись для данных на основе userId и критических данных игры
- * @param userId ID пользователя
- * @param state Состояние игры
- * @returns Подпись для данных
- */
-export function generateDataSignature(userId: string, state: ExtendedGameState): string {
-  try {
-    if (!userId || !state) {
-      console.error('[dataIntegrity] Отсутствует userId или state для генерации подписи');
-      return '';
-    }
-
-    // Собираем критические данные, которые хотим защитить
-    const criticalData = {
-      // Информация о пользователе
-      userId,
-      
-      // Основные ресурсы игрока
-      inventory: {
-        snot: typeof state.inventory?.snot === 'number' ? state.inventory.snot : 0,
-        snotCoins: typeof state.inventory?.snotCoins === 'number' ? state.inventory.snotCoins : 0,
-        containerCapacity: typeof state.inventory?.containerCapacity === 'number' ? state.inventory.containerCapacity : 100,
-        containerSnot: typeof state.inventory?.containerSnot === 'number' ? state.inventory.containerSnot : 0,
-        fillingSpeed: typeof state.inventory?.fillingSpeed === 'number' ? state.inventory.fillingSpeed : 1,
-        collectionEfficiency: typeof state.inventory?.collectionEfficiency === 'number' ? state.inventory.collectionEfficiency : 1,
-        containerCapacityLevel: typeof state.inventory?.containerCapacityLevel === 'number' ? state.inventory.containerCapacityLevel : 1,
-        fillingSpeedLevel: typeof state.inventory?.fillingSpeedLevel === 'number' ? state.inventory.fillingSpeedLevel : 1,
-        Cap: typeof state.inventory?.Cap === 'number' ? state.inventory.Cap : 100,
-        lastUpdateTimestamp: state.inventory?.lastUpdateTimestamp || Date.now()
-      },
-      
-      // Состояние улучшений
-      upgrades: {
-        containerLevel: typeof state.upgrades?.containerLevel === 'number' ? state.upgrades.containerLevel : 1,
-        fillingSpeedLevel: typeof state.upgrades?.fillingSpeedLevel === 'number' ? state.upgrades.fillingSpeedLevel : 1,
-        collectionEfficiencyLevel: typeof state.upgrades?.collectionEfficiencyLevel === 'number' ? state.upgrades.collectionEfficiencyLevel : 1,
-        clickPower: {
-          level: typeof state.upgrades?.clickPower?.level === 'number' ? state.upgrades.clickPower.level : 1,
-          value: typeof state.upgrades?.clickPower?.value === 'number' ? state.upgrades.clickPower.value : 1
-        },
-        passiveIncome: {
-          level: typeof state.upgrades?.passiveIncome?.level === 'number' ? state.upgrades.passiveIncome.level : 1,
-          value: typeof state.upgrades?.passiveIncome?.value === 'number' ? state.upgrades.passiveIncome.value : 0.1
-        }
-      },
-      
-      // Состояние контейнера
-      container: {
-        level: typeof state.container?.level === 'number' ? state.container.level : 1,
-        capacity: typeof state.container?.capacity === 'number' ? state.container.capacity : 100,
-        currentAmount: typeof state.container?.currentAmount === 'number' ? state.container.currentAmount : 0,
-        fillRate: typeof state.container?.fillRate === 'number' ? state.container.fillRate : 1
-      },
-      
-      // Статистика игрока
-      stats: {
-        highestLevel: typeof state.stats?.highestLevel === 'number' ? state.stats.highestLevel : 1,
-        totalSnot: typeof state.stats?.totalSnot === 'number' ? state.stats.totalSnot : 0,
-        totalSnotCoins: typeof state.stats?.totalSnotCoins === 'number' ? state.stats.totalSnotCoins : 0,
-        clickCount: typeof state.stats?.clickCount === 'number' ? state.stats.clickCount : 0,
-        playTime: typeof state.stats?.playTime === 'number' ? state.stats.playTime : 0,
-        consecutiveLoginDays: typeof state.stats?.consecutiveLoginDays === 'number' ? state.stats.consecutiveLoginDays : 0
-      },
-      
-      // Достижения
-      achievements: {
-        count: state.achievements?.unlockedAchievements?.length || 0,
-        // Добавляем хеш списка достижений для предотвращения подделки
-        hash: state.achievements?.unlockedAchievements?.length 
-          ? generateSimpleChecksum(JSON.stringify(state.achievements.unlockedAchievements))
-          : '0'
-      },
-      
-      // Метаданные сохранения
-      version: state._saveVersion || 1,
-      lastModified: state._lastModified || Date.now(),
-      createdAt: state._createdAt || state._savedAt || new Date().toISOString(),
-      
-      // Метка времени для защиты от повторов (атаки воспроизведения)
-      timestamp: Date.now() 
-    };
-
-    // Получаем серверный секрет из окружения или используем запасной вариант
-    const serverSecret = process.env.DATA_INTEGRITY_SECRET;
-    if (!serverSecret || serverSecret === 'default-integrity-key-change-in-production') {
-      console.warn('[dataIntegrity] Используется небезопасный ключ подписи. Установите DATA_INTEGRITY_SECRET в переменных окружения.');
-    }
-    
-    // Используем userId для создания пользовательского ключа
-    const userSpecificSecret = `${serverSecret}-${userId.slice(0, 8)}`;
-    
-    // Создаем соль, уникальную для этого сохранения
-    // Включаем информацию о текущей дате и версии сохранения
-    const dayInYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-    const salt = `${userId}-${dayInYear}-${state._saveVersion || 1}-${Math.floor(Date.now() / 3600000)}`;
-    
-    // Создаем ключевой материал для подписи с использованием PBKDF2
-    const keyMaterial = crypto.createHmac('sha256', userSpecificSecret)
-      .update(salt)
-      .digest('hex');
-
-    // Формируем сообщение для подписи, включая критические данные и метаданные
-    const messageToSign = JSON.stringify({
-      criticalData,
-      salt,
-      clientTime: Date.now(),
-      // Добавляем дополнительный идентификатор сессии, если доступен
-      clientId: state._client?.version || 'unknown'
-    });
-
-    // Создаем подпись с использованием HMAC-SHA256
-    const hmac = crypto.createHmac('sha256', keyMaterial);
-    hmac.update(messageToSign);
-    
-    // Возвращаем шестнадцатеричное представление подписи
-    return hmac.digest('hex');
-  } catch (error) {
-    console.error('[dataIntegrity] Ошибка при генерации подписи данных:', error);
-    return '';
-  }
-}
-
-/**
- * Проверяет подпись данных
- * @param userId ID пользователя
- * @param state Состояние игры
- * @param signature Подпись для проверки
- * @returns true если подпись верна, иначе false
- */
-export function verifyDataSignature(userId: string, state: ExtendedGameState, signature: string): boolean {
-  try {
-    if (!userId || !state || !signature) {
-      return false;
-    }
-
-    // Генерируем подпись для текущих данных
-    const expectedSignature = generateDataSignature(userId, state);
-    
-    // Проверяем совпадение подписей
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature, 'hex'),
-      Buffer.from(signature, 'hex')
-    );
-  } catch (error) {
-    console.error('[dataIntegrity] Error verifying data signature:', error);
-    return false;
-  }
-}
-
-/**
- * Добавляет подпись к состоянию игры
- * @param userId ID пользователя
- * @param state Состояние игры
- * @returns Состояние с добавленной подписью
- */
-export function signGameState(userId: string, state: ExtendedGameState): ExtendedGameState {
-  const stateWithSignature = { ...state };
-  stateWithSignature._dataSignature = generateDataSignature(userId, state);
-  return stateWithSignature;
 } 

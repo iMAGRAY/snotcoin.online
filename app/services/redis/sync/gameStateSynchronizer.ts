@@ -8,25 +8,6 @@ import { PrismaClient } from '@prisma/client';
 import { redisCacheAdapter } from '../cache/redisCacheAdapter';
 import { memoryCacheManager } from '../cache/memoryCacheManager';
 import { REDIS_KEY_PREFIXES, DEFAULT_TTL, CRITICAL_TTL } from '../utils/constants';
-import { redisService } from '../core/redisService';
-import { localStorageService } from '../../storage/localStorageService';
-
-// Константы для ключей Redis
-export const REDIS_KEYS = {
-  GAME_DATA: 'game:data',
-  USER_SAVE_INFO: 'user:save:info',
-  SECURITY_LOG: 'security:log'
-};
-
-/**
- * Результат операции синхронизации
- */
-export interface SyncResult<T = any> {
-  status: 'success' | 'error' | 'not_found';
-  message: string;
-  data: T | null;
-  error?: string;
-}
 
 // Создаем экземпляр Prisma
 const prisma = new PrismaClient();
@@ -169,12 +150,7 @@ export class GameStateSynchronizer {
       // Если нашли в Redis, парсим и возвращаем
       if (serializedState) {
         try {
-          gameState = JSON.parse(serializedState as string) as unknown as ExtendedGameState;
-          
-          // Проверка валидности объекта после парсинга
-          if (!gameState || typeof gameState !== 'object' || !gameState.inventory) {
-            throw new Error('Полученные данные из Redis не соответствуют структуре ExtendedGameState');
-          }
+          gameState = JSON.parse(serializedState as string) as ExtendedGameState;
           
           // Сохраняем в память для быстрого доступа
           memoryCacheManager.set(primaryKey, gameState, DEFAULT_TTL);
@@ -191,16 +167,6 @@ export class GameStateSynchronizer {
           };
         } catch (parseError) {
           console.error('[GameSync] Ошибка при парсинге JSON из Redis:', parseError);
-          
-          // Удаляем поврежденные данные из Redis
-          try {
-            await redisCacheAdapter.del(source === 'redis' ? primaryKey : criticalKey);
-            console.log(`[GameSync] Удалены поврежденные данные из Redis для ${userId}`);
-          } catch (deleteError) {
-            console.error('[GameSync] Ошибка при удалении поврежденных данных:', deleteError);
-          }
-          
-          // Продолжаем выполнение и попробуем загрузить из БД
         }
       }
       
@@ -222,7 +188,7 @@ export class GameStateSynchronizer {
           // Обрабатываем разные типы представления данных
           if (typeof gameStateData === 'object' && gameStateData !== null) {
             // Если это уже объект (Prisma может вернуть данные в виде объекта)
-            dbGameState = gameStateData as unknown as ExtendedGameState;
+            dbGameState = gameStateData as ExtendedGameState;
             console.log(`[GameSync] Данные из БД уже в формате объекта`);
           } else if (typeof gameStateData === 'string') {
             // Проверяем, не является ли строка "[object Object]"
@@ -238,15 +204,15 @@ export class GameStateSynchronizer {
               };
             }
             
-            // Пытаемся сначала распарсить из строки JSON
+            // Пытаемся распарсить как JSON
             try {
-              dbGameState = JSON.parse(gameStateData) as unknown as ExtendedGameState;
-              console.log(`[GameSync] Данные из БД успешно распарсены из строки JSON`);
+              dbGameState = JSON.parse(gameStateData) as ExtendedGameState;
+              console.log(`[GameSync] Данные из БД успешно распарсены из JSON-строки`);
             } catch (parseError) {
-              console.error(`[GameSync] Ошибка парсинга строки JSON из БД:`, parseError);
-              return { 
-                success: false, 
-                error: 'Error parsing game state JSON',
+              console.error(`[GameSync] Ошибка при парсинге данных из БД:`, parseError);
+              return {
+                success: false,
+                error: `Ошибка при парсинге данных: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
                 metrics: {
                   duration: Date.now() - startTime,
                   cacheHit: false
@@ -254,9 +220,15 @@ export class GameStateSynchronizer {
               };
             }
           } else {
-            // Если уже в виде объекта, приводим к нужному типу через unknown
-            dbGameState = gameStateData as unknown as ExtendedGameState;
-            console.log(`[GameSync] Данные из БД успешно получены как объект`);
+            console.error(`[GameSync] Неизвестный тип данных в БД: ${typeof gameStateData}`);
+            return {
+              success: false,
+              error: `Неизвестный тип данных в БД: ${typeof gameStateData}`,
+              metrics: {
+                duration: Date.now() - startTime,
+                cacheHit: false
+              }
+            };
           }
           
           // Проверяем валидность полученных данных
@@ -278,7 +250,7 @@ export class GameStateSynchronizer {
           }
           
           // Сохраняем в Redis и память для следующих запросов
-          this.saveGameState(userId, dbGameState as unknown as ExtendedGameState, true).catch(err => {
+          this.saveGameState(userId, dbGameState, true).catch(err => {
             console.error('[GameSync] Ошибка кэширования загруженных данных:', err);
           });
           
@@ -465,220 +437,6 @@ export class GameStateSynchronizer {
     } catch (error) {
       console.error('[GameSync] Ошибка создания задачи DB синхронизации:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Проверяет и при необходимости мигрирует структуру состояния игры
-   * @param state Текущее состояние игры
-   * @param userId ID пользователя
-   * @returns Мигрированное состояние
-   */
-  private migrateGameStateIfNeeded(state: ExtendedGameState, userId: string): ExtendedGameState {
-    try {
-      // Если состояние уже верной версии, проверим только критические поля
-      if (state._saveVersion && state._saveVersion >= 2) {
-        // Дополнительно проверяем критические поля даже для новых версий
-        const migratedState = { ...state };
-        let needsRepair = false;
-
-        // Проверяем поле Cap в инвентаре
-        if (migratedState.inventory && migratedState.inventory.Cap === undefined) {
-          console.log(`[GameSync] Отсутствует поле Cap в инвентаре для ${userId}, исправляем`);
-          migratedState.inventory.Cap = migratedState.inventory.containerCapacity || 100;
-          needsRepair = true;
-        }
-
-        // Если обновления не требуются, возвращаем исходное состояние
-        if (!needsRepair) {
-          return state;
-        }
-
-        // Обновляем метаданные о ремонте, но не меняем версию
-        if (!migratedState._repairedFields) migratedState._repairedFields = [];
-        migratedState._repairedFields.push('critical_fields_repair');
-        migratedState._wasRepaired = true;
-        migratedState._repairedAt = Date.now();
-
-        return migratedState;
-      }
-      
-      console.log(`[GameSync] Обнаружена устаревшая версия данных для ${userId}, выполняем миграцию`);
-      
-      // Копируем состояние для безопасного изменения
-      const migratedState = { ...state };
-      
-      // Заполняем отсутствующие поля
-      migratedState._saveVersion = 2;
-      migratedState._lastModified = Date.now();
-      
-      // Проверка наличия базовых структур
-      if (!migratedState.inventory) {
-        console.log(`[GameSync] Отсутствует инвентарь, создаем базовую структуру`);
-        migratedState.inventory = {
-          snot: 0,
-          snotCoins: 0,
-          containerCapacity: 100,
-          containerSnot: 0,
-          fillingSpeed: 1,
-          collectionEfficiency: 1,
-          Cap: 100,
-          containerCapacityLevel: 1,
-          fillingSpeedLevel: 1,
-          lastUpdateTimestamp: Date.now()
-        };
-      } else {
-        // Проверяем наличие поля Cap в инвентаре
-        if (migratedState.inventory.Cap === undefined) {
-          console.log(`[GameSync] Отсутствует поле Cap в инвентаре, создаем на основе containerCapacity`);
-          migratedState.inventory.Cap = migratedState.inventory.containerCapacity || 100;
-        }
-      }
-      
-      if (!migratedState.container) {
-        console.log(`[GameSync] Отсутствует контейнер, создаем базовую структуру`);
-        migratedState.container = {
-          level: 1,
-          capacity: 100,
-          currentAmount: 0,
-          fillRate: 1
-        };
-      }
-      
-      if (!migratedState.upgrades) {
-        console.log(`[GameSync] Отсутствуют улучшения, создаем базовую структуру`);
-        migratedState.upgrades = {
-          clickPower: { level: 1, value: 1 },
-          passiveIncome: { level: 1, value: 0.1 },
-          collectionEfficiencyLevel: 1,
-          containerLevel: 1,
-          fillingSpeedLevel: 1
-        };
-      }
-      
-      // Проверка на наличие stats
-      if (!migratedState.stats) {
-        console.log(`[GameSync] Отсутствуют статистики, создаем базовую структуру`);
-        migratedState.stats = {
-          clickCount: 0,
-          playTime: 0,
-          startDate: new Date().toISOString(),
-          totalSnot: 0,
-          totalSnotCoins: 0,
-          highestLevel: 1,
-          consecutiveLoginDays: 0
-        };
-      }
-      
-      // Добавляем метаданные
-      if (!migratedState._userId) {
-        migratedState._userId = userId;
-      }
-      
-      // Отметка о миграции
-      migratedState._wasRepaired = true;
-      migratedState._repairedAt = Date.now();
-      migratedState._repairedFields = migratedState._repairedFields || [];
-      migratedState._repairedFields.push('structure_migration_v2');
-      
-      console.log(`[GameSync] Миграция данных для ${userId} успешно выполнена`);
-      
-      return migratedState;
-    } catch (error) {
-      console.error(`[GameSync] Ошибка при миграции данных:`, error);
-      // В случае ошибки возвращаем исходное состояние
-      return state;
-    }
-  }
-
-  public async syncGameState(userId: string, mode?: 'pull' | 'push'): Promise<SyncResult<ExtendedGameState>> {
-    console.log(`[GameSync] Синхронизация игрового состояния для пользователя ${userId}, режим: ${mode || 'auto'}`);
-    
-    if (!userId) {
-      return {
-        status: 'error',
-        message: 'ID пользователя не указан',
-        data: null
-      };
-    }
-
-    try {
-      // Получаем данные из Redis
-      const redisClient = await redisService.getClient();
-      const redisGameState = redisClient ? await redisClient.get(`gameState_${userId}`) : null;
-      
-      // Получаем текущее состояние из локального хранилища
-      const localGameState = localStorageService.getItem(`gameState_${userId}`) as string | null;
-      
-      let gameStateData: ExtendedGameState;
-      
-      // Если данные найдены в Redis и режим не push, используем их и обновляем локальное хранилище
-      if (redisGameState && mode !== 'push') {
-        try {
-          gameStateData = JSON.parse(redisGameState) as ExtendedGameState;
-          
-          // Применяем миграцию данных если необходимо
-          gameStateData = this.migrateGameStateIfNeeded(gameStateData, userId);
-          
-          console.log(`[GameSync] Получены данные из Redis для ${userId}`, gameStateData);
-          
-          // Сохраняем в локальное хранилище
-          localStorageService.setItem(`gameState_${userId}`, JSON.stringify(gameStateData));
-        } catch (error) {
-          console.error(`[GameSync] Ошибка при обработке данных из Redis:`, error);
-          return {
-            status: 'error',
-            message: 'Ошибка при обработке данных из Redis',
-            data: null
-          };
-        }
-      }
-      // Если в Redis нет данных или режим push, используем локальные данные
-      else if (localGameState && (mode === 'push' || !redisGameState)) {
-        try {
-          gameStateData = JSON.parse(localGameState) as ExtendedGameState;
-          
-          // Применяем миграцию данных если необходимо
-          gameStateData = this.migrateGameStateIfNeeded(gameStateData, userId);
-          
-          console.log(`[GameSync] Используем локальные данные для ${userId}`, gameStateData);
-          
-          // Обновляем данные в Redis
-          if (redisClient) {
-            await redisClient.set(`gameState_${userId}`, JSON.stringify(gameStateData));
-            await redisClient.expire(`gameState_${userId}`, DEFAULT_TTL);
-          }
-        } catch (error) {
-          console.error(`[GameSync] Ошибка при использовании локальных данных:`, error);
-          return {
-            status: 'error',
-            message: 'Ошибка при использовании локальных данных',
-            data: null
-          };
-        }
-      }
-      // Если ни в Redis ни локально нет данных, возвращаем ошибку
-      else {
-        console.log(`[GameSync] Данные не найдены для ${userId}`);
-        return {
-          status: 'not_found',
-          message: 'Данные не найдены',
-          data: null
-        };
-      }
-
-      return {
-        status: 'success',
-        message: `Данные ${mode === 'push' ? 'отправлены' : mode === 'pull' ? 'получены' : 'синхронизированы'}`,
-        data: gameStateData
-      };
-    } catch (error) {
-      console.error(`[GameSync] Ошибка при синхронизации данных:`, error);
-      return {
-        status: 'error',
-        message: `Ошибка при синхронизации: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
-        data: null
-      };
     }
   }
 }
