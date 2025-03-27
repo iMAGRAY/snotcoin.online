@@ -15,6 +15,7 @@ export interface TokenVerificationResult {
   valid: boolean;
   userId?: string;
   error?: string;
+  provider?: string;  // Провайдер аутентификации (e.g., 'farcaster', 'local', 'google', etc.)
 }
 
 /**
@@ -24,6 +25,7 @@ export interface TokenPayload {
   userId: string;
   exp?: number;
   iat?: number;
+  provider?: string;  // Провайдер аутентификации
 }
 
 /**
@@ -58,7 +60,22 @@ export async function verifyJWT(token: string): Promise<TokenVerificationResult>
       return { valid: false, error: 'TOKEN_EXPIRED' };
     }
 
-    return { valid: true, userId: payload.userId };
+    // Определяем провайдер на основе информации в токене
+    let provider = payload.provider || 'unknown';
+    
+    // Если провайдер не указан явно, пытаемся определить его из userId
+    if (provider === 'unknown' && payload.userId) {
+      if (payload.userId.startsWith('farcaster_')) {
+        provider = 'farcaster';
+      } else if (payload.userId.startsWith('google_')) {
+        provider = 'google';
+      } else if (payload.userId.startsWith('local_')) {
+        provider = 'local';
+      }
+      // Можно добавить другие провайдеры по мере необходимости
+    }
+
+    return { valid: true, userId: payload.userId, provider };
   } catch (error) {
     // Обрабатываем различные ошибки JWT
     if (error instanceof jwt.JsonWebTokenError) {

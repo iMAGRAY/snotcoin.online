@@ -2,9 +2,10 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { authService } from '../services/auth/authService';
 import { FarcasterContext as FarcasterUserContext, FarcasterSDK } from '@/app/types/farcaster';
 import { SafeUser } from '@/app/types/utils';
+import { useAuth } from '@/app/hooks/useAuth';
+import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
 
 interface FarcasterContextType {
   user: SafeUser | null;
@@ -13,7 +14,6 @@ interface FarcasterContextType {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUserData: () => Promise<boolean>;
-  refreshTokens: () => Promise<boolean>;
   getUserByFid: (fid: string) => Promise<any>;
 }
 
@@ -35,67 +35,46 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  
+  // Используем наш новый хук авторизации
+  const { 
+    user: authUser, 
+    isLoading: authLoading, 
+    isAuthenticated, 
+    refreshAuthState, 
+    logout: authLogout 
+  } = useAuth();
 
-  // Обновление данных пользователя с сервера
+  // Обновление данных пользователя
   const refreshUserData = async () => {
     try {
       setIsLoading(true);
       
-      // Сначала пробуем получить пользователя из токена
-      const userFromToken = authService.getUserFromToken();
-      if (userFromToken) {
-        setUser(userFromToken);
-        return true;
-      }
+      // Используем функцию из AuthProvider
+      const success = await refreshAuthState();
       
-      // Если не удалось получить из токена, делаем запрос к API
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${baseUrl}/api/farcaster/auth`);
-      const data = await response.json();
-      
-      if (data.authenticated && data.user) {
-        setUser(data.user);
+      if (success && authUser) {
+        setUser(authUser as SafeUser);
         return true;
-      } else if (data.refreshable) {
-        // Если токен истек, но может быть обновлен
-        const refreshSuccess = await refreshTokens();
-        if (refreshSuccess) {
-          return await refreshUserData();
-        }
-        
-        setUser(null);
-        return false;
       } else {
         setUser(null);
         return false;
       }
     } catch (error) {
       console.error('[FarcasterContext] Error fetching user data:', error);
+      
+      logAuth(
+        AuthStep.AUTH_ERROR,
+        AuthLogType.ERROR,
+        'Ошибка при обновлении данных пользователя',
+        {},
+        error
+      );
+      
       setUser(null);
       return false;
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Обновление токенов через refresh token
-  const refreshTokens = async () => {
-    try {
-      const success = await authService.refreshToken();
-      
-      if (success) {
-        // Обновляем пользователя в контексте
-        const userFromToken = authService.getUserFromToken();
-        if (userFromToken) {
-          setUser(userFromToken);
-        }
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('[FarcasterContext] Error refreshing tokens:', error);
-      return false;
     }
   };
 
@@ -115,10 +94,16 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
     }
   };
 
-  // Проверяем наличие авторизации при инициализации
+  // Синхронизируем состояние с AuthProvider
   useEffect(() => {
-    refreshUserData();
-  }, []);
+    if (authUser && !authLoading) {
+      setUser(authUser as SafeUser);
+      setIsLoading(false);
+    } else if (!authLoading) {
+      setUser(null);
+      setIsLoading(false);
+    }
+  }, [authUser, authLoading]);
 
   // Функция для входа в систему
   const login = async () => {
@@ -127,35 +112,48 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       router.push('/auth');
     } catch (error) {
       console.error('[FarcasterContext] Login error:', error);
+      
+      logAuth(
+        AuthStep.AUTH_ERROR,
+        AuthLogType.ERROR,
+        'Ошибка при попытке входа',
+        {},
+        error
+      );
     }
   };
 
   // Функция для выхода из системы
   const logout = async () => {
     try {
-      const success = await authService.logout();
+      // Используем функцию из AuthProvider
+      await authLogout();
+      setUser(null);
       
-      if (success) {
-        setUser(null);
-        
-        // Обновляем страницу или делаем что-то еще после выхода
-        if (typeof window !== 'undefined') {
-          window.location.reload();
-        }
+      // Обновляем страницу или делаем что-то еще после выхода
+      if (typeof window !== 'undefined') {
+        window.location.reload();
       }
     } catch (error) {
       console.error('[FarcasterContext] Logout error:', error);
+      
+      logAuth(
+        AuthStep.LOGOUT_ERROR,
+        AuthLogType.ERROR,
+        'Ошибка при выходе из системы',
+        {},
+        error
+      );
     }
   };
 
   const value: FarcasterContextType = {
     user,
-    isLoading,
+    isLoading: isLoading || authLoading,
     isAuthenticated: !!user,
     login,
     logout,
     refreshUserData,
-    refreshTokens,
     getUserByFid: fetchUserByFid,
   };
 

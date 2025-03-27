@@ -10,77 +10,63 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model GameState {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  state     Json
-  version   Int      @default(1)
-  checksum  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@map("game_states")
-}
-
 model User {
-  id            String    @id @default(cuid())
-  fid           Int?      @unique // Farcaster ID
-  username      String?
-  displayName   String?
-  pfpUrl        String?
-  verified      Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  jwtToken      String?
-  refreshToken  String?
-  tokenExpiresAt DateTime?
-  progress      Progress?
+  id                  String    @id @default(cuid())
+  farcaster_fid       String?   @unique // Farcaster ID как строка
+  farcaster_username  String    // Обязательное поле
+  farcaster_displayname String?
+  farcaster_pfp       String?
+  jwt_token           String?
+  refresh_token       String?
+  token_expires_at    DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  progress            Progress?
 
-  @@index([fid])
+  @@index([farcaster_fid])
   @@map("users")
 }
 
 model Progress {
-  id           String             @id @default(cuid())
-  userId       String             @unique
-  gameState    Json
-  encryptedState String?          @db.Text
-  version      Int                @default(1)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  isCompressed Boolean            @default(false)
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  histories    ProgressHistory[]
+  id              String             @id @default(cuid())
+  user_id         String             @unique
+  game_state      Json               @map("gameState")
+  encrypted_state String?            @db.Text @map("encryptedState")
+  version         Int                @default(1)
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @updatedAt
+  is_compressed   Boolean            @default(false) @map("isCompressed")
+  user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  histories       ProgressHistory[]
 
   @@map("user_progress")
 }
 
 model SyncQueue {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  operation String
-  data      Json
-  status    String   @default("pending")
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @db.Timestamp(6)
-  attempts  Int      @default(0)
+  id         Int      @id @default(autoincrement())
+  user_id    String   @map("userId")
+  operation  String
+  data       Json
+  status     String   @default("pending")
+  created_at DateTime @default(now()) @db.Timestamp(6) @map("createdAt")
+  updated_at DateTime @updatedAt @db.Timestamp(6) @map("updatedAt")
+  attempts   Int      @default(0)
 
   @@index([status], map: "idx_sync_queue_status")
-  @@index([userId], map: "idx_sync_queue_user_id")
+  @@index([user_id], map: "idx_sync_queue_user_id")
   @@map("sync_queue")
 }
 
 model ProgressHistory {
-  id         Int      @id @default(autoincrement())
-  userId     String
-  clientId   String
-  saveType   String
-  saveReason String
-  createdAt  DateTime @default(now()) @db.Timestamp(6)
-  progress   Progress @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  user_id     String   @map("userId")
+  client_id   String   @map("clientId")
+  save_type   String   @map("saveType")
+  save_reason String   @map("saveReason")
+  created_at  DateTime @default(now()) @db.Timestamp(6) @map("createdAt")
+  progress    Progress @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
-  @@index([createdAt], map: "idx_progress_history_created_at")
-  @@index([userId], map: "idx_progress_history_user_id")
+  @@index([created_at], map: "idx_progress_history_created_at")
+  @@index([user_id], map: "idx_progress_history_user_id")
   @@map("progress_history")
-}
+} 

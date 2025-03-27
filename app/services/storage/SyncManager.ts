@@ -107,21 +107,19 @@ export class SyncManager {
           );
 
           // Синхронизация с PostgreSQL
-          await prisma.gameState.upsert({
-            where: { userId: job.userId },
+          await prisma.progress.upsert({
+            where: { user_id: job.userId },
             update: {
-              state: JSON.stringify(data.gameState),
+              gameState: data.gameState as any,
               version: data.version,
-              checksum: data.checksum,
-              updatedAt: new Date(data.timestamp)
+              updated_at: new Date(data.timestamp)
             },
             create: {
-              userId: job.userId,
-              state: JSON.stringify(data.gameState),
+              user_id: job.userId,
+              gameState: data.gameState as any,
               version: data.version,
-              checksum: data.checksum,
-              createdAt: new Date(data.timestamp),
-              updatedAt: new Date(data.timestamp)
+              created_at: new Date(data.timestamp),
+              updated_at: new Date(data.timestamp)
             }
           });
 
@@ -167,24 +165,40 @@ export class SyncManager {
         JSON.stringify(data)
       );
 
-      // Синхронизация с PostgreSQL
-      await prisma.gameState.upsert({
-        where: { userId },
-        update: {
-          state: JSON.stringify(data.gameState),
-          version: data.version,
-          checksum: data.checksum,
-          updatedAt: new Date(data.timestamp)
-        },
-        create: {
-          userId,
-          state: JSON.stringify(data.gameState),
-          version: data.version,
-          checksum: data.checksum,
-          createdAt: new Date(data.timestamp),
-          updatedAt: new Date(data.timestamp)
-        }
+      // Проверяем, существует ли прогресс
+      const existingProgress = await prisma.progress.findUnique({
+        where: { user_id: userId }
       });
+
+      if (existingProgress) {
+        // Синхронизация с PostgreSQL
+        await prisma.progress.upsert({
+          where: { user_id: userId },
+          update: {
+            gameState: data.gameState as any,
+            version: data.version,
+            updated_at: new Date(data.timestamp)
+          },
+          create: {
+            user_id: userId,
+            gameState: data.gameState as any,
+            version: data.version,
+            created_at: new Date(data.timestamp),
+            updated_at: new Date(data.timestamp)
+          }
+        });
+      } else {
+        // Если прогресса нет, создаем новый
+        await prisma.progress.create({
+          data: {
+            user_id: userId,
+            gameState: data.gameState as any,
+            version: data.version,
+            created_at: new Date(data.timestamp),
+            updated_at: new Date(data.timestamp)
+          }
+        });
+      }
 
       localStorage.setItem(`last_sync_${userId}`, Date.now().toString());
       return true;

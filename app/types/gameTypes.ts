@@ -161,6 +161,7 @@ export interface GameState {
   _saveVersion: number;
   _lastSaved: string;
   _userId: string;
+  _provider?: string;
   _lastModified: number;
   _createdAt: string;
   _wasRepaired: boolean;
@@ -389,9 +390,9 @@ export function createDefaultGameState(): GameState {
       containerCapacity: 100,
       containerSnot: 0,
       fillingSpeed: 1,
-      containerCapacityLevel: 1,
-      fillingSpeedLevel: 1,
-      collectionEfficiency: 1,
+      containerCapacityLevel: 0,
+      fillingSpeedLevel: 0,
+      collectionEfficiency: 1.0,
       Cap: 100,
       lastUpdateTimestamp: Date.now()
     },
@@ -408,16 +409,17 @@ export function createDefaultGameState(): GameState {
         value: 1
       },
       passiveIncome: {
-        level: 1,
-        value: 1
+        level: 0,
+        value: 0
       },
-      collectionEfficiencyLevel: 1,
+      collectionEfficiencyLevel: 0,
       containerLevel: 1,
       fillingSpeedLevel: 1
     },
     _saveVersion: 1,
     _lastSaved: now,
     _userId: '',
+    _provider: '',
     _lastModified: Date.now(),
     _createdAt: now,
     _wasRepaired: false,

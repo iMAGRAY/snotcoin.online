@@ -150,7 +150,7 @@ class BackgroundSyncService {
           attempts: { lt: MAX_RETRY_ATTEMPTS }
         },
         orderBy: [
-          { createdAt: 'asc' } // Сначала обрабатываем самые старые задачи
+          { created_at: 'asc' } // Сначала обрабатываем самые старые задачи
         ],
         take: 10 // Обрабатываем по 10 задач за раз
       });
@@ -178,7 +178,7 @@ class BackgroundSyncService {
             where: { id: task.id },
             data: {
               status: SyncTaskStatus.PROCESSING,
-              updatedAt: new Date()
+              updated_at: new Date()
             }
           });
           
@@ -213,7 +213,7 @@ class BackgroundSyncService {
               where: { id: task.id },
               data: {
                 status: SyncTaskStatus.COMPLETED,
-                updatedAt: new Date()
+                updated_at: new Date()
               }
             });
             
@@ -231,7 +231,7 @@ class BackgroundSyncService {
               data: {
                 status,
                 attempts,
-                updatedAt: new Date()
+                updated_at: new Date()
               }
             });
             
@@ -257,7 +257,7 @@ class BackgroundSyncService {
               data: {
                 status,
                 attempts,
-                updatedAt: new Date()
+                updated_at: new Date()
               }
             });
           } catch (updateError) {
@@ -296,7 +296,7 @@ class BackgroundSyncService {
       
       // Получаем данные из БД
       const userProgress = await prisma.progress.findUnique({
-        where: { userId: userId }
+        where: { user_id: userId }
       });
       
       if (!userProgress) {
@@ -347,7 +347,7 @@ class BackgroundSyncService {
       try {
         // Получаем существующий прогресс из БД
         const existingProgress = await prisma.progress.findUnique({
-          where: { userId: userId }
+          where: { user_id: userId }
         });
         
         // Если нет зашифрованной версии в задаче, но мы можем создать её из Redis
@@ -374,13 +374,13 @@ class BackgroundSyncService {
           
           if (redisVersion > currentVersion || forceSave) {
             await prisma.progress.update({
-              where: { userId: userId },
+              where: { user_id: userId },
               data: {
                 gameState: gameStateJson,
                 encryptedState: encryptedGameState, // Добавляем зашифрованную версию
                 version: redisVersion > currentVersion ? redisVersion : currentVersion + 1,
                 isCompressed: shouldCompress,
-                updatedAt: new Date()
+                updated_at: new Date()
               }
             });
             
@@ -394,13 +394,13 @@ class BackgroundSyncService {
           // Создаем новую запись прогресса
           await prisma.progress.create({
             data: {
-              userId: userId,
+              user_id: userId,
               gameState: gameStateJson,
               encryptedState: encryptedGameState, // Добавляем зашифрованную версию
               version: redisResult.data._saveVersion || 1,
               isCompressed: shouldCompress,
-              createdAt: new Date(),
-              updatedAt: new Date()
+              created_at: new Date(),
+              updated_at: new Date()
             }
           });
           
@@ -432,7 +432,7 @@ class BackgroundSyncService {
       
       // Получаем данные из БД
       const userProgress = await prisma.progress.findUnique({
-        where: { userId: userId }
+        where: { user_id: userId }
       });
       
       if (!userProgress) {
@@ -455,7 +455,7 @@ class BackgroundSyncService {
           
           // Отмечаем как некорректные
           await prisma.progress.update({
-            where: { userId: userId },
+            where: { user_id: userId },
             data: { 
               // Добавляем метку о некорректности данных в дополнительном поле, если есть
               // Или можно убрать эту строку, так как поля нет в схеме
@@ -491,7 +491,7 @@ class BackgroundSyncService {
       await prisma.syncQueue.deleteMany({
         where: {
           status: SyncTaskStatus.COMPLETED,
-          updatedAt: { lt: sevenDaysAgo }
+          updated_at: { lt: sevenDaysAgo }
         }
       });
       
@@ -537,7 +537,7 @@ class BackgroundSyncService {
         await prisma.syncQueue.deleteMany({
           where: {
             status: SyncTaskStatus.FAILED,
-            updatedAt: { lt: thirtyDaysAgo }
+            updated_at: { lt: thirtyDaysAgo }
           }
         });
       }
@@ -557,18 +557,13 @@ class BackgroundSyncService {
       await prisma.syncQueue.create({
         data: {
           user_id: userId,
-          operation: SyncTaskType.REDIS_SYNC,
-          data: JSON.stringify({ 
-            userId, 
-            operation: 'saveGameState',
-            timestamp: Date.now() 
+          operation: 'REDIS_SYNC',
+          data: JSON.stringify({
+            userId,
           }),
-          status: SyncTaskStatus.PENDING,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
+          status: 'pending',
+        },
       });
-      
       return true;
     } catch (error) {
       console.error(`[BackgroundSync] Ошибка при добавлении задачи REDIS_SYNC для ${userId}:`, error);
@@ -584,18 +579,14 @@ class BackgroundSyncService {
       await prisma.syncQueue.create({
         data: {
           user_id: userId,
-          operation: SyncTaskType.DB_SYNC,
-          data: JSON.stringify({ 
-            userId, 
+          operation: 'DB_SYNC',
+          data: JSON.stringify({
+            userId,
             forceSave,
-            timestamp: Date.now() 
           }),
-          status: SyncTaskStatus.PENDING,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
+          status: 'pending',
+        },
       });
-      
       return true;
     } catch (error) {
       console.error(`[BackgroundSync] Ошибка при добавлении задачи DB_SYNC для ${userId}:`, error);

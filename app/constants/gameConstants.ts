@@ -1,20 +1,164 @@
 /**
- * Константы и начальные значения для игры
+ * Константы и начальные состояния для игры
  */
 
-import type { GameState } from '../types/gameTypes';
+import { GameState } from '../context/GameContext';
 
 /**
- * Создает начальное состояние игры для нового пользователя
+ * Создает начальное состояние игры
  * @param userId ID пользователя
  * @returns Начальное состояние игры
  */
 export function createInitialGameState(userId: string): GameState {
+  const now = new Date();
+  
   return {
-    ...initialState,
-    _userId: userId
+    // Мета-информация
+    _userId: userId,
+    _saveVersion: 1,
+    _lastSaved: now.toISOString(),
+    _lastModified: now.getTime(),
+    _createdAt: now.toISOString(),
+    _wasRepaired: false,
+    _repairedAt: now.getTime(),
+    _repairedFields: [],
+    _tempData: null,
+    _isSavingInProgress: false,
+    _skipSave: false,
+    _lastSaveError: null,
+    _isBeforeUnloadSave: false,
+    _isRestoredFromBackup: false,
+    _isInitialState: true,
+    _lastActionTime: now.toISOString(),
+    _lastAction: null,
+    
+    // Пользовательские данные
+    user: {
+      username: null,
+      displayName: null,
+      farcaster_fid: null,
+      farcaster_username: null,
+      farcaster_displayname: null,
+      farcaster_pfp: null,
+      pfp: null,
+      fid: null,
+      verified: null,
+      metadata: {}
+    },
+    
+    // Игровой инвентарь
+    inventory: {
+      snot: 0,
+      snotCoins: 0,
+      containerCapacity: 100,
+      containerSnot: 0,
+      fillingSpeed: 1,
+      containerCapacityLevel: 0,
+      fillingSpeedLevel: 0,
+      collectionEfficiency: 1.0,
+      Cap: 100,
+      lastUpdateTimestamp: now.getTime()
+    },
+    
+    // Контейнер
+    container: {
+      level: 1,
+      capacity: 100,
+      currentAmount: 0,
+      fillRate: 1,
+      currentFill: 0
+    },
+    
+    // Улучшения
+    upgrades: {
+      clickPower: {
+        level: 1,
+        value: 1
+      },
+      passiveIncome: {
+        level: 0,
+        value: 0
+      },
+      collectionEfficiencyLevel: 0,
+      containerLevel: 1,
+      fillingSpeedLevel: 1
+    },
+    
+    // Логи
+    logs: [],
+    
+    // Аналитика
+    analytics: null,
+    
+    // Предметы
+    items: [],
+    
+    // Достижения
+    achievements: {
+      unlockedAchievements: []
+    },
+    
+    // Статистика
+    highestLevel: 1,
+    stats: {
+      clickCount: 0,
+      playTime: 0,
+      startDate: now.toISOString(),
+      highestLevel: 1,
+      totalSnot: 0,
+      totalSnotCoins: 0,
+      consecutiveLoginDays: 0
+    },
+    
+    // Последовательные дни входа
+    consecutiveLoginDays: 0,
+    
+    // Настройки
+    settings: {
+      language: 'en',
+      theme: 'light',
+      notifications: true,
+      tutorialCompleted: false,
+      musicEnabled: true,
+      soundEnabled: true,
+      notificationsEnabled: true
+    },
+    
+    // Настройки звука
+    soundSettings: {
+      musicVolume: 0.5,
+      soundVolume: 0.5,
+      notificationVolume: 0.5,
+      clickVolume: 0.5,
+      effectsVolume: 0.5,
+      backgroundMusicVolume: 0.5,
+      isMuted: false,
+      isEffectsMuted: false,
+      isBackgroundMusicMuted: false
+    },
+    
+    // Игровой интерфейс
+    hideInterface: false,
+    activeTab: 'game',
+    fillingSpeed: 1,
+    containerLevel: 1,
+    isPlaying: false,
+    validationStatus: 'pending',
+    lastValidation: now.toISOString(),
+    gameStarted: false,
+    isLoading: false
   };
 }
+
+/**
+ * Время автосохранения в миллисекундах
+ */
+export const AUTO_SAVE_INTERVAL = 15000;
+
+/**
+ * Минимальный интервал между ручными сохранениями
+ */
+export const MIN_SAVE_INTERVAL = 2000;
 
 /**
  * Константы для игры

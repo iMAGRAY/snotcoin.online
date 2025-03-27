@@ -33,16 +33,23 @@ export async function POST(request: NextRequest) {
       const decodedRefresh = verify(refreshToken, REFRESH_SECRET) as {
         fid: string;
         userId: string;
+        provider?: string;
       };
 
       // Проверяем наличие необходимых полей в токене
-      if (!decodedRefresh || !decodedRefresh.userId || !decodedRefresh.fid) {
+      if (!decodedRefresh || !decodedRefresh.userId) {
         console.error('[API][Refresh] Некорректная структура refresh токена');
         return NextResponse.json(
           { success: false, error: 'Invalid refresh token structure' },
           { status: 401 }
         );
       }
+
+      // Определяем провайдер
+      const provider = decodedRefresh.provider || 
+                    (decodedRefresh.fid ? 'farcaster' : 
+                     decodedRefresh.userId.startsWith('google_') ? 'google' :
+                     decodedRefresh.userId.startsWith('local_') ? 'local' : 'unknown');
 
       let userData;
       try {
@@ -52,10 +59,10 @@ export async function POST(request: NextRequest) {
         if (user) {
           userData = {
             id: user.id,
-            fid: user.fid,
-            farcaster_fid: user.fid,
-            username: user.username,
-            displayName: user.displayName
+            fid: Number(user.farcaster_fid),
+            farcaster_fid: user.farcaster_fid,
+            username: user.farcaster_username,
+            displayName: user.farcaster_displayname
           };
         }
       } catch (userError) {
@@ -83,6 +90,7 @@ export async function POST(request: NextRequest) {
           username: userData.username,
           displayName: userData.displayName,
           userId: userData.id,
+          provider: provider
         },
         JWT_SECRET,
         { expiresIn: TOKEN_EXPIRY }
@@ -93,6 +101,7 @@ export async function POST(request: NextRequest) {
         {
           fid: userData.fid,
           userId: userData.id,
+          provider: provider
         },
         REFRESH_SECRET,
         { expiresIn: REFRESH_EXPIRY }

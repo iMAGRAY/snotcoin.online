@@ -7,7 +7,14 @@
  * Константы для работы с SDK
  */
 export const FARCASTER_SDK = {
-  SCRIPT_URL: 'https://warpcast.com/~/sdk.js',
+  SCRIPT_URL: 'https://kit.warpcast.com/sdk.js',
+  BACKUP_SCRIPT_URL: 'https://cdn.warpcast.com/sdk/sdk.js',
+  ALTERNATIVE_URLS: [
+    '/farcaster-sdk.js', // Локальная копия SDK (приоритет)
+    'https://assets.warpcast.com/sdk.js',
+    'https://www.unpkg.com/@farcaster/auth-kit@0.2.1/dist/index.umd.js',
+    'https://esm.sh/@farcaster/auth-kit@0.2.1'
+  ],
   MIN_BROWSER_VERSIONS: {
     chrome: 80,
     firefox: 75,
@@ -23,7 +30,7 @@ export const FARCASTER_SDK = {
     INVALID_RESPONSE: 'INVALID_RESPONSE'
   },
   TIMEOUT: {
-    SDK_LOAD: 10000, // 10 seconds
+    SDK_LOAD: 15000, // 15 seconds
     AUTH_PROCESS: 30000 // 30 seconds
   }
 } as const;

@@ -81,21 +81,19 @@ export class StorageService {
 
   private async saveToPostgres(data: StorageData): Promise<void> {
     try {
-      await prisma.gameState.upsert({
-        where: { userId: data.userId },
+      await prisma.progress.upsert({
+        where: { user_id: data.userId },
         update: {
-          state: JSON.stringify(data.gameState),
+          gameState: data.gameState as any,
           version: data.version,
-          checksum: data.checksum,
-          updatedAt: new Date(data.timestamp)
+          updated_at: new Date(data.timestamp)
         },
         create: {
-          userId: data.userId,
-          state: JSON.stringify(data.gameState),
+          user_id: data.userId,
+          gameState: data.gameState as any,
           version: data.version,
-          checksum: data.checksum,
-          createdAt: new Date(data.timestamp),
-          updatedAt: new Date(data.timestamp)
+          created_at: new Date(data.timestamp),
+          updated_at: new Date(data.timestamp)
         }
       });
     } catch (error) {
@@ -194,22 +192,22 @@ export class StorageService {
       }
 
       // Наконец, загружаем из PostgreSQL
-      const dbData = await prisma.gameState.findUnique({
-        where: { userId }
+      const progress = await prisma.progress.findUnique({
+        where: { user_id: userId }
       });
 
-      if (dbData) {
+      if (progress) {
         // Кэшируем данные в Redis
         const data: StorageData = {
           userId,
-          gameState: dbData.state ? JSON.parse(dbData.state as string) : null,
-          timestamp: dbData.updatedAt.getTime(),
-          version: dbData.version,
-          checksum: dbData.checksum
+          gameState: progress.gameState ? (progress.gameState as any) : null,
+          timestamp: progress.updated_at.getTime(),
+          version: progress.version,
+          checksum: this.generateChecksum(progress.gameState as any)
         };
         
         await this.saveToRedis(userId, data, DEFAULT_TTL);
-        return dbData.state ? JSON.parse(dbData.state as string) : null;
+        return progress.gameState ? (progress.gameState as any) : null;
       }
 
       return null;
@@ -228,44 +226,22 @@ export class StorageService {
       // Создаем зашифрованную версию сохранения
       const { encryptedSave } = encryptGameSave(data.gameState, data.userId);
       
-      // Преобразуем gameState в JSON строку
-      const gameStateJson = JSON.stringify(data.gameState);
-      
       // Используем upsert для создания или обновления записи
-      const upsertResult = await prisma.gameState.upsert({
-        where: { userId: data.userId },
-        update: {
-          state: gameStateJson,
-          version: data.version,
-          checksum: data.checksum,
-          updatedAt: new Date()
-        },
-        create: {
-          userId: data.userId,
-          state: gameStateJson,
-          version: data.version,
-          checksum: data.checksum,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-      
-      // Обновляем или создаем запись прогресса
       await prisma.progress.upsert({
-        where: { userId: data.userId },
+        where: { user_id: data.userId },
         update: {
-          gameState: gameStateJson,
+          gameState: data.gameState as any,
           encryptedState: encryptedSave,
           version: data.version,
-          updatedAt: new Date()
+          updated_at: new Date()
         },
         create: {
-          userId: data.userId,
-          gameState: gameStateJson,
+          user_id: data.userId,
+          gameState: data.gameState as any,
           encryptedState: encryptedSave,
           version: data.version,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          created_at: new Date(),
+          updated_at: new Date()
         }
       });
 

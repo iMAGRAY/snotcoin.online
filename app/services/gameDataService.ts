@@ -4,6 +4,8 @@ interface SaveResponse {
   success: boolean;
   error?: string;
   version?: number;
+  message?: string;
+  data?: any;
 }
 
 interface LoadResponse {
@@ -29,6 +31,9 @@ interface BackupData {
   timestamp: number;
   version: number;
 }
+
+// Тип для безопасной работы с userId
+type UserId = string;
 
 /**
  * Проверяет наличие полей в объекте и их типы
@@ -269,14 +274,32 @@ function checkBackupSize(data: any): boolean {
 }
 
 /**
+ * Безопасная обертка над функцией createBackup, которая правильно обрабатывает undefined userId
+ * @param userId ID пользователя (может быть undefined)
+ * @param state Состояние для сохранения
+ * @param version Версия сохранения
+ * @returns Успешность операции
+ */
+export function safeCreateBackup(userId: string | undefined, state: GameState, version: number = 1): boolean {
+  if (!userId) {
+    console.warn('[GameDataService] Попытка создать резервную копию с undefined userId');
+    return false;
+  }
+  
+  // Теперь мы гарантированно передаем строку в createBackup
+  return createBackup(userId, state, version);
+}
+
+/**
  * Создает резервную копию состояния игры в localStorage с обработкой ошибок
  * @param userId ID пользователя
  * @param state Состояние для сохранения
  * @param version Версия сохранения
  * @returns Успешность операции
  */
-export function createBackup(userId: string, state: GameState, version: number = 1): boolean {
-  if (!userId || !state) return false;
+export function createBackup(userId: UserId, state: GameState, version: number = 1): boolean {
+  // Проверяем, что userId является строкой и не пустой
+  if (!userId || typeof userId !== 'string' || !state) return false;
   
   try {
     // Проверяем доступность localStorage
@@ -285,106 +308,182 @@ export function createBackup(userId: string, state: GameState, version: number =
       return false;
     }
     
-    // Проверяем оставшееся место в localStorage
-    let remainingSpace;
-    try {
-      // Проверка оставшегося места в localStorage
-      let testKey = '_storage_test_' + Date.now();
-      localStorage.setItem(testKey, '0');
-      let i = 0;
-      try {
-        // Увеличиваем размер тестовых данных, пока не получим ошибку
-        for (i = 0; i < 10000; i++) {
-          localStorage.setItem(testKey, '0'.repeat(i * 1024)); // Добавляем по 1KB за раз
+    // Расчет примерного размера localStorage
+    const getLocalStorageSize = (): number => {
+      let totalSize = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          const value = localStorage.getItem(key) || '';
+          totalSize += key.length + value.length;
         }
-      } catch (e) {
-        // Место в localStorage закончилось
       }
-      localStorage.removeItem(testKey);
-      remainingSpace = i * 1024;
-    } catch (e) {
-      // В случае ошибки при проверке места
-      remainingSpace = 0;
-    }
+      return totalSize * 2; // Примерный размер в байтах (2 байта на символ в UTF-16)
+    };
     
-    // Проверяем, достаточно ли места
-    const stateJson = JSON.stringify({
-      state,
-      version,
-      timestamp: Date.now()
-    });
-    
-    if (stateJson.length > remainingSpace) {
-      console.warn(`[GameDataService] Недостаточно места в localStorage: нужно ${stateJson.length}, доступно ${remainingSpace}`);
-      
-      // Если места недостаточно, очищаем старые данные
+    // Проверка процента заполнения localStorage
+    const checkLocalStorageUsage = (): number => {
       try {
-        // Находим и удаляем старые резервные копии
-        const keysToDelete: string[] = [];
+        const totalSize = getLocalStorageSize();
+        // Средний размер квоты localStorage ~5MB
+        const estimatedQuota = 5 * 1024 * 1024;
+        const usagePercent = (totalSize / estimatedQuota) * 100;
+        return usagePercent;
+      } catch (error) {
+        console.error('[GameDataService] Ошибка при проверке использования localStorage:', error);
+        return 0;
+      }
+    };
+    
+    // Агрессивная очистка старых резервных копий, если хранилище заполнено более чем на 70%
+    const usagePercent = checkLocalStorageUsage();
+    if (usagePercent > 70) {
+      console.warn(`[GameDataService] Высокое использование localStorage: ${usagePercent.toFixed(2)}%. Выполняется агрессивная очистка.`);
+      try {
+        // Собираем все ключи резервных копий
+        const allBackupKeys: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
           if (key && key.startsWith('backup_')) {
-            keysToDelete.push(key);
+            allBackupKeys.push(key);
+          }
+        }
+        
+        // Оставляем только последние 2 копии для текущего пользователя, удаляем все остальные
+        const currentUserBackups = allBackupKeys.filter(key => key.includes(userId));
+        const otherBackups = allBackupKeys.filter(key => !key.includes(userId));
+        
+        // Сортируем по времени (самые новые в конце)
+        currentUserBackups.sort((a, b) => {
+          const timeA = parseInt(a.split('_').pop() || '0', 10);
+          const timeB = parseInt(b.split('_').pop() || '0', 10);
+          return timeA - timeB;
+        });
+        
+        // Удаляем старые копии текущего пользователя, оставляя последние 2
+        if (currentUserBackups.length > 2) {
+          for (let i = 0; i < currentUserBackups.length - 2; i++) {
+            localStorage.removeItem(currentUserBackups[i]);
+            console.log(`[GameDataService] Удалена старая резервная копия: ${currentUserBackups[i]}`);
+          }
+        }
+        
+        // При критическом заполнении также удаляем копии других пользователей
+        if (usagePercent > 85) {
+          for (const key of otherBackups) {
+            if (key && !key.endsWith('_latest')) {
+              localStorage.removeItem(key);
+              console.log(`[GameDataService] Удалена резервная копия другого пользователя: ${key}`);
+            }
+          }
+        }
+      } catch (cleanupError) {
+        console.error('[GameDataService] Ошибка при агрессивной очистке резервных копий:', cleanupError);
+      }
+    } else {
+      // Обычная очистка при нормальном заполнении хранилища
+      try {
+        // Очищаем все старые резервные копии, кроме последней
+        const keysToCheck: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(`backup_${userId}_`) && key !== `backup_${userId}_latest`) {
+            keysToCheck.push(key);
           }
         }
         
         // Сортируем ключи по времени создания (старые первыми)
-        keysToDelete.sort((a, b) => {
+        keysToCheck.sort((a, b) => {
           const timeA = parseInt(a.split('_')[2] || '0', 10);
           const timeB = parseInt(b.split('_')[2] || '0', 10);
           return timeA - timeB;
         });
         
-        // Удаляем старые резервные копии до тех пор, пока не освободится достаточно места
-        while (keysToDelete.length > 0 && stateJson.length > remainingSpace) {
-          const keyToDelete = keysToDelete.shift();
-          if (keyToDelete) {
-            const oldItem = localStorage.getItem(keyToDelete) || '';
-            remainingSpace += oldItem.length;
-            localStorage.removeItem(keyToDelete);
-            console.log(`[GameDataService] Удалена старая резервная копия: ${keyToDelete}`);
+        // Оставляем только последнюю копию, удаляем все остальные
+        if (keysToCheck.length > 1) {
+          // Удаляем все, кроме самой новой
+          for (let i = 0; i < keysToCheck.length - 1; i++) {
+            localStorage.removeItem(keysToCheck[i]);
+            console.log(`[GameDataService] Удалена старая резервная копия: ${keysToCheck[i]}`);
           }
         }
       } catch (cleanupError) {
-        console.error('[GameDataService] Ошибка при очистке localStorage:', cleanupError);
+        console.error('[GameDataService] Ошибка при очистке старых резервных копий:', cleanupError);
       }
     }
+    
+    // Очищаем данные перед сохранением
+    const cleanState = { ...state };
+    
+    // Удаляем ненужные для сохранения поля
+    const fieldsToRemove = [
+      '_thrownBalls', 
+      '_worldRef', 
+      '_bodiesMap', 
+      '_tempData',
+      '_physicsObjects',
+      '_sceneObjects',
+      '_renderData',
+      '_debugInfo',
+      '_frameData',
+      '_particleSystem',
+      '_animationSystem',
+      '_eventEmitter',
+      '_soundSystem',
+      '_renderSystem',
+      '_messageQueue',
+      '_cache'
+    ];
+    
+    fieldsToRemove.forEach(field => {
+      if (field in cleanState) {
+        delete (cleanState as any)[field];
+      }
+    });
     
     // Создаем резервную копию с обновленной версией
     const backupKey = `backup_${userId}_${Date.now()}`;
     
+    // Создаем минимальную версию состояния при высоком заполнении хранилища
+    let stateData;
+    if (usagePercent > 85) {
+      // Создаем сверхкомпактную версию с минимумом данных
+      const minimalState = {
+        _userId: state._userId || userId,
+        _saveVersion: version,
+        inventory: {
+          snot: state.inventory?.snot || 0,
+          snotCoins: state.inventory?.snotCoins || 0,
+          containerCapacity: state.inventory?.containerCapacity || 100,
+          fillingSpeed: state.inventory?.fillingSpeed || 1
+        },
+        _lastSaved: state._lastSaved || new Date().toISOString(),
+        _timestamp: Date.now()
+      };
+      
+      stateData = {
+        state: minimalState,
+        version,
+        timestamp: Date.now()
+      };
+      
+      console.log('[GameDataService] Создана минимальная версия сохранения из-за высокого заполнения хранилища');
+    } else {
+      // Пытаемся сжать JSON перед сохранением
+      stateData = {
+        state: cleanState,
+        version,
+        timestamp: Date.now()
+      };
+    }
+    
     // Используем try-catch для обнаружения ошибок квоты
     try {
+      const stateJson = JSON.stringify(stateData);
       localStorage.setItem(backupKey, stateJson);
       
-      // Ограничиваем количество резервных копий
-      const MAX_BACKUPS = 3;
-      
-      const backupKeys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(`backup_${userId}_`)) {
-          backupKeys.push(key);
-        }
-      }
-      
-      // Если количество резервных копий превышает лимит, удаляем самые старые
-      if (backupKeys.length > MAX_BACKUPS) {
-        backupKeys.sort((a, b) => {
-          const timeA = parseInt(a.split('_')[2] || '0', 10);
-          const timeB = parseInt(b.split('_')[2] || '0', 10);
-          return timeA - timeB;
-        });
-        
-        // Удаляем старые копии
-        for (let i = 0; i < backupKeys.length - MAX_BACKUPS; i++) {
-          const key = backupKeys[i];
-          if (key) {
-            localStorage.removeItem(key);
-            console.log(`[GameDataService] Удалена устаревшая резервная копия: ${key}`);
-          }
-        }
-      }
+      // Обновляем указатель на последнюю резервную копию
+      localStorage.setItem(`backup_${userId}_latest`, backupKey);
       
       console.log(`[GameDataService] Создана резервная копия данных: ${backupKey}`);
       return true;
@@ -393,11 +492,16 @@ export function createBackup(userId: string, state: GameState, version: number =
       
       // В случае ошибки квоты используем сокращенные данные
       try {
-        // Создаем минимальную версию состояния с только критичными данными
+        // Создаем супер минимальную версию состояния с только критичными данными
         const minimalState = {
-          _userId: state._userId,
+          _userId: state._userId || userId,
           _saveVersion: state._saveVersion,
-          inventory: state.inventory,
+          inventory: {
+            snot: state.inventory?.snot || 0,
+            snotCoins: state.inventory?.snotCoins || 0,
+            containerCapacity: state.inventory?.containerCapacity || 100,
+            fillingSpeed: state.inventory?.fillingSpeed || 1
+          },
           _lastSaved: state._lastSaved || new Date().toISOString(),
           _timestamp: Date.now()
         };
@@ -408,12 +512,51 @@ export function createBackup(userId: string, state: GameState, version: number =
           timestamp: Date.now()
         });
         
-        localStorage.setItem(backupKey, minimalJson);
-        console.log(`[GameDataService] Создана минимальная резервная копия данных: ${backupKey}`);
+        // Удаляем предыдущий ключ
+        localStorage.removeItem(backupKey);
+        
+        // Очищаем еще больше старых данных
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('backup_')) {
+            localStorage.removeItem(key);
+          }
+        }
+        
+        // Сохраняем минимальную версию
+        const minimalBackupKey = `backup_${userId}_minimal_${Date.now()}`;
+        localStorage.setItem(minimalBackupKey, minimalJson);
+        localStorage.setItem(`backup_${userId}_latest`, minimalBackupKey);
+        
+        console.log(`[GameDataService] Создана минимальная резервная копия данных: ${minimalBackupKey}`);
         return true;
       } catch (minimalError) {
         console.error('[GameDataService] Ошибка при создании минимальной резервной копии:', minimalError);
-        return false;
+        
+        // Последняя попытка: удаляем все из localStorage и сохраняем только базовые данные
+        try {
+          // Очищаем весь localStorage
+          localStorage.clear();
+          
+          // Сохраняем только самые базовые данные
+          const basicState = {
+            _userId: state._userId || userId,
+            inventory: {
+              snot: state.inventory?.snot || 0,
+              snotCoins: state.inventory?.snotCoins || 0
+            }
+          };
+          
+          const basicKey = `backup_${userId}_basic_${Date.now()}`;
+          localStorage.setItem(basicKey, JSON.stringify({ state: basicState }));
+          localStorage.setItem(`backup_${userId}_latest`, basicKey);
+          
+          console.log(`[GameDataService] Создана базовая резервная копия после очистки хранилища: ${basicKey}`);
+          return true;
+        } catch (finalError) {
+          console.error('[GameDataService] Не удалось создать резервную копию даже после очистки:', finalError);
+          return false;
+        }
       }
     }
   } catch (error) {
@@ -477,12 +620,12 @@ export function getLatestBackup(userId: string): {gameState: GameState, version:
 }
 
 /**
- * Сохраняет состояние игры с проверкой целостности данных
+ * Сохраняет состояние игры с проверкой целостности
  * @param userId ID пользователя
- * @param state Состояние игры
- * @returns Promise<SaveResponse> Результат сохранения
+ * @param gameState Состояние игры для сохранения
+ * @returns Результат операции сохранения
  */
-export async function saveGameStateWithIntegrity(userId: string, state: GameState): Promise<SaveResponse> {
+export async function saveGameStateWithIntegrity(userId: string, gameState: any): Promise<SaveResponse> {
   try {
     // Проверка наличия userId
     if (!userId) {
@@ -493,8 +636,145 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       };
     }
     
+    // Проверка токена авторизации
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const tokenType = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token_type') : null;
+    
+    // Для локальных токенов используем локальное сохранение
+    if (!token || tokenType === 'local' || (token && token.startsWith('local_'))) {
+      console.log('[gameDataService] Используется локальный токен, сохраняем в localStorage');
+      
+      // Очищаем старые данные перед сохранением
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const keysToDelete: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('backup_') && !key.includes('_latest') && !key.includes(userId)) {
+              keysToDelete.push(key);
+            }
+          }
+          
+          // Удаляем старые резервные копии
+          keysToDelete.forEach(key => {
+            localStorage.removeItem(key);
+            console.log(`[gameDataService] Удалена старая резервная копия: ${key}`);
+          });
+        }
+      } catch (cleanupError) {
+        console.warn('[gameDataService] Ошибка при очистке localStorage:', cleanupError);
+      }
+      
+      // Создаем очищенную версию состояния для резервной копии
+      const cleanState = { ...gameState };
+      const fieldsToRemove = [
+        '_thrownBalls', 
+        '_worldRef', 
+        '_bodiesMap', 
+        '_tempData',
+        '_physicsObjects',
+        '_sceneObjects',
+        '_renderData',
+        '_debugInfo',
+        '_frameData',
+        '_particleSystem',
+        '_animationSystem',
+        '_eventEmitter',
+        '_soundSystem',
+        '_renderSystem',
+        '_messageQueue',
+        '_cache'
+      ];
+      
+      fieldsToRemove.forEach(field => {
+        if (field in cleanState) {
+          delete (cleanState as any)[field];
+        }
+      });
+      
+      // Сохраняем в localStorage
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const backupKey = `backup_${userId}_${Date.now()}`;
+          localStorage.setItem(backupKey, JSON.stringify({
+            gameState: cleanState,
+            timestamp: Date.now(),
+            version: cleanState._saveVersion || 1
+          }));
+          
+          // Обновляем ключ последней резервной копии
+          localStorage.setItem(`backup_${userId}_latest`, backupKey);
+          
+          return {
+            success: true,
+            message: 'Игра сохранена локально',
+            data: { backupKey }
+          };
+        } catch (localError) {
+          console.error('[gameDataService] Ошибка при локальном сохранении:', localError);
+          
+          // Пытаемся создать резервную копию с минимальными данными
+          try {
+            // Создаем чистое сохранение без лишних данных
+            const backupKey = `backup_${userId}_minimal_${Date.now()}`;
+            
+            // Минимальная версия состояния
+            const minimalState = {
+              _userId: gameState._userId,
+              _saveVersion: gameState._saveVersion || 1,
+              inventory: {
+                snot: gameState.inventory?.snot || 0,
+                snotCoins: gameState.inventory?.snotCoins || 0,
+                containerCapacity: gameState.inventory?.containerCapacity || 100,
+                fillingSpeed: gameState.inventory?.fillingSpeed || 1
+              }
+            };
+            
+            // Очищаем localStorage от старых данных
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('backup_') && !key.includes('_latest')) {
+                localStorage.removeItem(key);
+              }
+            }
+            
+            // Сохраняем минимальную версию
+            localStorage.setItem(backupKey, JSON.stringify({
+              gameState: minimalState,
+              timestamp: Date.now(),
+              version: gameState._saveVersion || 1
+            }));
+            localStorage.setItem(`backup_${userId}_latest`, backupKey);
+            
+            console.log('[gameDataService] Создано минимальное сохранение из-за ошибки квоты');
+            
+            return {
+              success: true,
+              message: 'Создано минимальное сохранение игры',
+              data: { backupKey }
+            };
+          } catch (minimalError) {
+            console.error('[gameDataService] Ошибка при создании минимального сохранения:', minimalError);
+            
+            // Информируем о проблеме
+            return {
+              success: false,
+              error: 'LOCAL_STORAGE_ERROR',
+              message: 'Недостаточно места в локальном хранилище. Рекомендуется очистить кэш браузера.'
+            };
+          }
+        }
+      }
+      
+      return {
+        success: false,
+        error: 'NO_TOKEN',
+        message: 'Токен авторизации отсутствует, локальное сохранение не выполнено'
+      };
+    }
+    
     // Проверка наличия состояния игры
-    if (!state) {
+    if (!gameState) {
       console.error('[gameDataService] Отсутствует состояние игры при сохранении');
       return {
         success: false,
@@ -504,7 +784,7 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
     
     // Проверка целостности состояния игры
     const inventoryCheck = validateObjectFields(
-      state.inventory,
+      gameState.inventory,
       ['snot', 'snotCoins', 'containerCapacity', 'fillingSpeed'],
       { snot: 'number', snotCoins: 'number', containerCapacity: 'number', fillingSpeed: 'number' }
     );
@@ -516,18 +796,17 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       );
       
       // Исправляем данные перед сохранением через validateGameState
-      state = validateGameState(state);
+      gameState = validateGameState(gameState);
     }
     
     // Проверяем правильность userId в состоянии
-    if (state._userId && state._userId !== userId) {
-      console.warn(`[gameDataService] Несоответствие userId: ${state._userId} в состоянии не совпадает с ${userId}`);
+    if (gameState._userId && gameState._userId !== userId) {
+      console.warn(`[gameDataService] Несоответствие userId: ${gameState._userId} в состоянии не совпадает с ${userId}`);
       // Исправляем userId в состоянии
-      state._userId = userId;
+      gameState._userId = userId;
     }
     
     // Получаем токен из localStorage или иного хранилища
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
     console.log(`[gameDataService] Токен ${token ? 'найден' : 'не найден'} при сохранении для ${userId}`);
     
     try {
@@ -539,9 +818,14 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          userId,
-          gameState: state,
-          version: state._saveVersion || 1,
+          userId: userId,
+          gameState: {
+            ...gameState,
+            _provider: userId.startsWith('farcaster_') ? 'farcaster' : 
+                      userId.startsWith('google_') ? 'google' : 
+                      userId.startsWith('local_') ? 'local' : ''
+          },
+          version: gameState._saveVersion || 1,
           timestamp: Date.now()
         })
       });
@@ -559,7 +843,7 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
         }
         
         // Создаем резервную копию при любой ошибке HTTP
-        createBackup(userId, state, state._saveVersion || 1);
+        safeCreateBackup(userId, gameState, gameState._saveVersion || 1);
         console.log('[gameDataService] Создана резервная копия из-за HTTP ошибки');
         
         throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
@@ -569,8 +853,8 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       console.log(`[gameDataService] Успешно сохранено состояние для ${userId}`, result);
       
       // Создаем периодическую резервную копию (каждые N успешных сохранений)
-      if ((state._saveVersion || 0) % 5 === 0) { // Создаем резервную копию каждые 5 версий
-        createBackup(userId, state, result.version || state._saveVersion || 1);
+      if ((gameState._saveVersion || 0) % 5 === 0) { // Создаем резервную копию каждые 5 версий
+        safeCreateBackup(userId, gameState, result.version || gameState._saveVersion || 1);
       }
       
       return {
@@ -581,7 +865,7 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
       console.error('[gameDataService] Сетевая ошибка при сохранении:', networkError);
       
       // Если не удалось сохранить из-за проблем с сетью, создаем резервную копию
-      createBackup(userId, state, state._saveVersion || 1);
+      safeCreateBackup(userId, gameState, gameState._saveVersion || 1);
       
       return {
         success: false,
@@ -592,8 +876,8 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
     console.error('[gameDataService] Ошибка при сохранении состояния:', error);
     
     // В случае любой другой ошибки также пытаемся создать резервную копию
-    if (userId && state && typeof window !== 'undefined' && window.localStorage) {
-      createBackup(userId, state, state._saveVersion || 1);
+    if (userId && gameState && typeof window !== 'undefined' && window.localStorage) {
+      safeCreateBackup(userId, gameState, gameState._saveVersion || 1);
       console.log('[gameDataService] Создана резервная копия из-за ошибки при сохранении');
     }
     
@@ -626,14 +910,28 @@ export async function loadGameStateWithIntegrity(userId: string): Promise<LoadRe
     // Получаем токен из localStorage или иного хранилища
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
     console.log(`[gameDataService] Токен ${token ? 'найден' : 'не найден'} при загрузке для ${userId}`);
+    if (token) {
+      // Проверяем на валидность без раскрытия полной информации
+      console.log(`[gameDataService] Токен формат: ${typeof token}, длина: ${token.length}, начинается с: ${token.substring(0, 10)}...`);
+    } else {
+      console.warn('[gameDataService] Внимание! Запрос будет выполнен без токена авторизации.');
+    }
     
     try {
       // Используем константы для API путей
-      const response = await fetch(`${API_ROUTES.LOAD}?userId=${userId}`, {
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+      const apiUrl = `${API_ROUTES.LOAD}?userId=${userId}`;
+      console.log(`[gameDataService] Отправка запроса на: ${apiUrl}`);
+      
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(apiUrl, {
+        headers
       });
+
+      console.log(`[gameDataService] Получен ответ с кодом: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -737,5 +1035,113 @@ export async function loadGameStateWithIntegrity(userId: string): Promise<LoadRe
       success: false,
       error: error instanceof Error ? error.message : 'Неизвестная ошибка'
     };
+  }
+}
+
+/**
+ * Очищает localStorage от ненужных данных при превышении указанного порога заполнения
+ * @param threshold Порог заполнения в процентах (0-100)
+ * @param userId ID текущего пользователя для сохранения его критичных данных
+ * @returns true если очистка выполнена, false если очистка не требуется или произошла ошибка
+ */
+export function cleanupLocalStorage(threshold: number = 80, userId?: string | undefined): boolean {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return false;
+  }
+  
+  try {
+    // Расчет примерного размера localStorage
+    let totalSize = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        const value = localStorage.getItem(key) || '';
+        totalSize += key.length + value.length;
+      }
+    }
+    
+    // Примерный размер в байтах (2 байта на символ в UTF-16)
+    const sizeInBytes = totalSize * 2;
+    // Типичный размер квоты localStorage ~5MB
+    const estimatedQuota = 5 * 1024 * 1024;
+    const usagePercent = (sizeInBytes / estimatedQuota) * 100;
+    
+    console.log(`[gameDataService] Использование localStorage: ${(sizeInBytes / 1024 / 1024).toFixed(2)}MB (${usagePercent.toFixed(2)}%)`);
+    
+    // Если хранилище заполнено менее чем на указанный порог, очистка не требуется
+    if (usagePercent < threshold) {
+      return false;
+    }
+    
+    console.warn(`[gameDataService] Критическое заполнение localStorage: ${usagePercent.toFixed(2)}%, выполняется агрессивная очистка`);
+    
+    // Список ключей, которые нужно сохранить в любом случае
+    const criticalKeys = [
+      'user_id',
+      'userId',
+      'game_id',
+      'auth_token',
+      'auth_token_type',
+      'isAuthenticated',
+      // Если есть userId, добавляем его последнюю резервную копию
+      ...(userId ? [`backup_${userId}_latest`] : [])
+    ];
+    
+    // Собираем все ключи для удаления
+    const keysToRemove: string[] = [];
+    const keysToKeep: string[] = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        // Проверяем, не является ли ключ критичным
+        if (criticalKeys.includes(key)) {
+          keysToKeep.push(key);
+          continue;
+        }
+        
+        // Сохраняем последнюю резервную копию текущего пользователя, если userId указан
+        if (userId && key === `backup_${userId}_latest`) {
+          keysToKeep.push(key);
+          continue;
+        }
+        
+        // Получаем фактическое значение последней резервной копии
+        const latestBackupKey = userId ? localStorage.getItem(`backup_${userId}_latest`) : null;
+        if (latestBackupKey && key === latestBackupKey) {
+          keysToKeep.push(key);
+          continue;
+        }
+        
+        // Все остальные ключи помечаем на удаление
+        keysToRemove.push(key);
+      }
+    }
+    
+    // Удаляем все помеченные ключи
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    
+    // Подсчитываем новый размер после очистки
+    totalSize = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        const value = localStorage.getItem(key) || '';
+        totalSize += key.length + value.length;
+      }
+    }
+    
+    const newSizeInBytes = totalSize * 2;
+    const newUsagePercent = (newSizeInBytes / estimatedQuota) * 100;
+    
+    console.log(`[gameDataService] Очистка localStorage выполнена. Удалено ${keysToRemove.length} ключей. Новое использование: ${(newSizeInBytes / 1024 / 1024).toFixed(2)}MB (${newUsagePercent.toFixed(2)}%)`);
+    console.log(`[gameDataService] Сохранено ${keysToKeep.length} критичных ключей: ${keysToKeep.join(', ')}`);
+    
+    return true;
+  } catch (error) {
+    console.error('[gameDataService] Ошибка при очистке localStorage:', error);
+    return false;
   }
 } 

@@ -48,6 +48,8 @@ export interface UserData {
   email?: string | undefined;
   /** Аватар пользователя */
   avatar?: string | undefined;
+  /** URL профильного изображения (то же, что avatar) */
+  pfpUrl?: string | undefined;
   /** Farcaster ID */
   fid: number;
   /** Отображаемое имя */

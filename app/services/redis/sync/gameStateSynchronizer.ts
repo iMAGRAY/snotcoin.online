@@ -176,7 +176,7 @@ export class GameStateSynchronizer {
       
       try {
         const userProgress = await prisma.progress.findUnique({
-          where: { userId: userId }
+          where: { user_id: userId }
         });
         
         if (userProgress) {
@@ -330,7 +330,7 @@ export class GameStateSynchronizer {
       
       try {
         await prisma.progress.delete({
-          where: { userId: userId }
+          where: { user_id: userId }
         });
       } catch (dbError) {
         if ((dbError as any).code !== 'P2025') { // Не найдено

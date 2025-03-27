@@ -63,8 +63,10 @@ type AuthAction =
   | { type: 'SET_DISPATCHED_LOGIN'; payload: boolean };
 
 // Функция для проверки авторизации
-const checkAuth = (dispatch: React.Dispatch<Action>) => {
-  const { isAuthenticated } = useFarcaster()
+const checkAuth = (
+  dispatch: React.Dispatch<Action>, 
+  isAuthenticated: boolean
+) => {
   const authToken = authService.getToken()
   
   if (!isAuthenticated || !authToken) {
@@ -121,22 +123,100 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 };
 
 // Функция для создания и сохранения уникального ID игры
-const ensureGameHasUniqueId = () => {
-  if (typeof window === 'undefined') return;
+const ensureGameHasUniqueId = (
+  dispatchFn?: React.Dispatch<Action>
+): string | null => {
+  if (typeof window === 'undefined') return null;
   
   try {
     // Проверяем, есть ли уже ID игры
     let gameId = localStorage.getItem('game_id');
+    let userId = localStorage.getItem('user_id');
     
-    if (!gameId) {
+    // Если ID отсутствуют или невалидны, создаем новый
+    if (!gameId || gameId === 'undefined' || gameId === 'null' || gameId.trim() === '') {
       // Создаем уникальный ID игры
       gameId = `anonymous_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
       localStorage.setItem('game_id', gameId);
-      localStorage.setItem('user_id', gameId); // Дублируем для совместимости
       console.log(`[HomeContent] Создан новый анонимный ID игры: ${gameId}`);
     }
+    
+    // Проверяем userId отдельно, чтобы обеспечить согласованность
+    if (!userId || userId === 'undefined' || userId === 'null' || userId.trim() === '') {
+      // Используем существующий gameId для user_id, чтобы синхронизировать их
+      localStorage.setItem('user_id', gameId);
+      console.log(`[HomeContent] user_id синхронизирован с game_id: ${gameId}`);
+    } else if (userId !== gameId) {
+      // Если они разные, логируем, но не меняем, это может быть номальной ситуацией при авторизации
+      console.log(`[HomeContent] ID рассинхронизированы: game_id=${gameId}, user_id=${userId}`);
+    }
+    
+    // Если функция dispatch передана и у нас есть действующий gameId, обновляем состояние игры
+    // только если текущий userId в состоянии не совпадает с gameId из localStorage
+    if (dispatchFn && gameId) {
+      // Используем sessionStorage как флаг, чтобы избежать повторных диспатчей
+      const syncPerformed = sessionStorage.getItem('id_sync_performed');
+      if (!syncPerformed) {
+        dispatchFn({
+          type: "SET_USER",
+          payload: { userId: gameId }
+        });
+        sessionStorage.setItem('id_sync_performed', 'true');
+      }
+    }
+    
+    // Проверяем, есть ли уже локальная резервная копия для userId
+    try {
+      // Создаем простое минимальное состояние для резервной копии
+      // если у нас еще нет резервной копии
+      const hasBackup = localStorage.getItem(`backup_${userId || gameId}_latest`);
+      if (!hasBackup) {
+        console.log(`[HomeContent] Создание начальной резервной копии для ${userId || gameId}`);
+        
+        const emptyState = {
+          _userId: userId || gameId,
+          _lastSaved: new Date().toISOString(),
+          inventory: {
+            snot: 0,
+            snotCoins: 0,
+            containerCapacity: 100,
+            containerSnot: 0,
+            fillingSpeed: 1,
+            containerCapacityLevel: 1,
+            fillingSpeedLevel: 1
+          }
+        };
+        
+        // Сохраняем минимальную резервную копию
+        const backupKey = `backup_${userId || gameId}_${Date.now()}`;
+        localStorage.setItem(backupKey, JSON.stringify({
+          gameState: emptyState,
+          timestamp: Date.now(),
+          version: 1
+        }));
+        
+        // Устанавливаем маркер последней копии
+        localStorage.setItem(`backup_${userId || gameId}_latest`, backupKey);
+      }
+    } catch (backupError) {
+      console.error('[HomeContent] Ошибка при создании начальной резервной копии:', backupError);
+    }
+    
+    // Возвращаем используемый ID
+    return gameId;
   } catch (error) {
     console.error("[HomeContent] Ошибка при создании ID игры:", error);
+    
+    // В случае ошибки обращения к localStorage попытаемся создать ID в памяти
+    try {
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      console.log(`[HomeContent] Создан временный ID в памяти: ${tempId}`);
+      // Не пытаемся сохранить в localStorage, так как это может привести к повторному исключению
+      return tempId;
+    } catch (fallbackError) {
+      console.error('[HomeContent] Критическая ошибка при создании ID:', fallbackError);
+      return null;
+    }
   }
 };
 
@@ -146,10 +226,17 @@ const HomeContent: React.FC = () => {
   const [viewportHeight, setViewportHeight] = React.useState("100vh");
   const { user: farcasterUser, isAuthenticated: isFarcasterAuth } = useFarcaster();
   
+  // Refs для отслеживания состояния
+  const idCreatedRef = useRef(false);
+  const hasSyncedRef = useRef(false);
+  
   // При инициализации компонента убеждаемся, что у игры есть уникальный ID
   useEffect(() => {
-    ensureGameHasUniqueId();
-  }, []);
+    if (!idCreatedRef.current) {
+      ensureGameHasUniqueId(dispatch);
+      idCreatedRef.current = true;
+    }
+  }, [dispatch]);
   
   // Ref для безопасного отслеживания предыдущего состояния авторизации
   const prevAuthValueRef = useRef<boolean | null>(null);
@@ -165,8 +252,8 @@ const HomeContent: React.FC = () => {
   
   // Мемоизированная функция проверки авторизации
   const checkAuthentication = useCallback(() => {
-    return checkAuth(dispatch);
-  }, [dispatch]);
+    return checkAuth(dispatch, isFarcasterAuth);
+  }, [dispatch, isFarcasterAuth]);
 
   // Выносим функцию updateAuthState на верхний уровень компонента
   const updateAuthState = useCallback((newAuthState: boolean) => {
@@ -240,6 +327,15 @@ const HomeContent: React.FC = () => {
       return;
     }
     
+    // Проверяем, что SDK доступно
+    const hasSDK = typeof window !== 'undefined' && 
+                  window.farcaster && 
+                  typeof window.farcaster.ready === 'function';
+                  
+    if (!hasSDK) {
+      console.warn('[HomeContent] Farcaster SDK недоступно, но получены данные пользователя');
+    }
+    
     // Устанавливаем данные пользователя
     dispatch({ 
       type: "SET_USER", 
@@ -257,7 +353,7 @@ const HomeContent: React.FC = () => {
         created_at: new Date().toISOString(),
         // Дополнительная информация для логирования
         device_info: navigator?.userAgent || '',
-        login_source: 'frame',
+        login_source: hasSDK ? 'sdk' : 'frame',
       }
     });
     
@@ -349,6 +445,47 @@ const HomeContent: React.FC = () => {
       console.error("Error handling frame parameters:", error);
     }
   }, [dispatch]);
+
+  // Эффект для синхронизации userId в игровом состоянии
+  useEffect(() => {
+    const syncUserId = () => {
+      // Если синхронизация уже выполнена, выходим
+      if (hasSyncedRef.current) return;
+
+      // Проверяем наличие userId в localStorage
+      const storedUserId = localStorage.getItem('user_id') || localStorage.getItem('game_id');
+      
+      // Получаем userId из состояния игры
+      const gameUserId = gameState._userId;
+      
+      // Если есть расхождение, обновляем состояние игры
+      if (storedUserId && (!gameUserId || gameUserId !== storedUserId)) {
+        console.log(`[HomeContent] Синхронизация ID: localStorage="${storedUserId}", gameState="${gameUserId || ''}"`);
+        
+        // Обновляем userId в состоянии игры напрямую через LOAD_GAME_STATE
+        // вместо SET_USER для предотвращения циклов
+        dispatch({
+          type: "LOAD_GAME_STATE",
+          payload: {
+            ...gameState,
+            _userId: storedUserId,
+            // Сохраняем текущие данные пользователя
+            user: gameState.user || null
+          }
+        });
+        
+        // Отмечаем, что синхронизация выполнена
+        hasSyncedRef.current = true;
+      } else {
+        // Если ID уже совпадают, также отмечаем синхронизацию как выполненную
+        hasSyncedRef.current = true;
+      }
+    };
+    
+    // Выполняем синхронизацию только один раз при монтировании или при изменении gameUserId
+    syncUserId();
+    
+  }, [gameState, dispatch]);
 
   // Функция рендеринга активной вкладки
   const renderActiveTab = () => {

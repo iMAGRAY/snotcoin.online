@@ -31,6 +31,12 @@ export enum AuthStep {
   USER_INTERACTION = 'USER_INTERACTION',
   /** Валидация данных */
   VALIDATE_DATA = 'VALIDATE_DATA',
+  /** Ошибка валидации */
+  VALIDATE_ERROR = 'VALIDATE_ERROR',
+  /** Успех валидации */
+  VALIDATE_SUCCESS = 'VALIDATE_SUCCESS',
+  /** Сохранение пользователя */
+  USER_SAVE = 'USER_SAVE',
   /** Авторизация завершена */
   AUTH_COMPLETE = 'AUTH_COMPLETE',
   /** Ошибка авторизации */
@@ -161,6 +167,15 @@ export function resetSession(): void {
  * Собирает информацию о клиенте
  */
 function getClientInfo() {
+  // Проверяем, доступен ли объект navigator (на сервере его нет)
+  if (typeof navigator === 'undefined') {
+    return {
+      userAgent: 'Server',
+      platform: 'Server',
+      language: 'Server'
+    };
+  }
+
   return {
     userAgent: navigator.userAgent,
     platform: navigator.platform,

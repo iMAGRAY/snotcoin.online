@@ -31,7 +31,7 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
 
     case "SET_USER":
       if (action.payload) {
-        // Обновляем state с данными пользователя из Farcaster
+        // Обновляем state с данными пользователя из Farcaster и обязательно устанавливаем _userId
         return withMetadata({ 
           user: { 
             id: action.payload.id?.toString() || action.payload.id,
@@ -45,7 +45,8 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
             fid: action.payload.fid || null,
             verified: action.payload.verified || null,
             metadata: action.payload.metadata || {}
-          } 
+          },
+          _userId: action.payload.userId || action.payload.id?.toString() || action.payload.id
         });
       }
       // Если payload null, сбрасываем пользователя
@@ -326,13 +327,24 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       console.log("[GameReducer] Загружаем сохраненное состояние игры", 
         loadedState._isRestoredFromBackup ? "из резервной копии" : "");
       
+      // Сохраняем userId из localStorage, если он отсутствует в загружаемом состоянии
+      if (typeof window !== 'undefined' && !loadedState._userId) {
+        const storedUserId = localStorage.getItem('user_id') || localStorage.getItem('game_id');
+        if (storedUserId) {
+          console.log(`[GameReducer] Устанавливаем _userId из localStorage: ${storedUserId}`);
+          loadedState._userId = storedUserId;
+        }
+      }
+      
       // Проверяем и восстанавливаем критически важные части состояния
       const normalizedState = {
         ...loadedState,
         // Обновляем метаданные для отслеживания восстановления
         _lastActionTime: new Date().toISOString(),
         _lastAction: action.type,
-        _loadedAt: new Date().toISOString()
+        _loadedAt: new Date().toISOString(),
+        // Убеждаемся, что userId всегда присутствует
+        _userId: loadedState._userId || state._userId || ''
       };
       
       return normalizedState;

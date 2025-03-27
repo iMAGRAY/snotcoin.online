@@ -1,7 +1,19 @@
 {
-  "extends": "next/core-web-vitals",
-  "parserOptions": {
-    "project": "./tsconfig.json"
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": [
+    "@typescript-eslint",
+    "prisma"
+  ],
+  "rules": {
+    "prisma/no-raw-operations-without-where": "error",
+    "prisma/no-nested-updateMany": "error",
+    "prisma/no-object-raw": "error",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": "warn"
   }
 }
 

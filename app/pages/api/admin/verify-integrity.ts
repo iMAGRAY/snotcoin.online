@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Получаем сохранение пользователя
     const userProgress = await prisma.progress.findUnique({
-      where: { userId }
+      where: { user_id: userId }
     });
     
     if (!userProgress) {
@@ -79,11 +79,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         
         // Обновляем запись в базе данных
         await prisma.progress.update({
-          where: { userId },
+          where: { user_id: userId },
           data: {
             gameState: gameStateJson,
             encryptedState: encryptedSave,
-            updatedAt: new Date()
+            version: userProgress.version + 1,
+            updated_at: new Date()
           }
         });
         

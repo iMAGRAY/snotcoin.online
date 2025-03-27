@@ -27,6 +27,84 @@ interface RequestMetrics {
 }
 
 /**
+ * Функция для валидации и нормализации игрового состояния
+ * @param gameState Состояние игры для валидации
+ * @returns Валидированное состояние игры
+ */
+function validateGameState(gameState: any): any {
+  if (!gameState) {
+    logger.warn('Отсутствует состояние игры для валидации');
+    return createInitialGameState('unknown');
+  }
+  
+  try {
+    // Проверяем наличие базовых полей
+    if (!gameState.inventory) {
+      logger.warn('Отсутствует инвентарь в состоянии игры', { gameState });
+      gameState.inventory = {
+        snot: 0,
+        snotCoins: 0,
+        containerCapacity: 100,
+        containerSnot: 0,
+        fillingSpeed: 1,
+        containerCapacityLevel: 0,
+        fillingSpeedLevel: 0,
+        collectionEfficiency: 1.0,
+        Cap: 100,
+        lastUpdateTimestamp: Date.now()
+      };
+    }
+    
+    if (!gameState.container) {
+      logger.warn('Отсутствует контейнер в состоянии игры', { gameState });
+      gameState.container = {
+        level: 1,
+        capacity: 100,
+        currentAmount: 0,
+        fillRate: 1,
+        currentFill: 0
+      };
+    }
+    
+    if (!gameState.upgrades) {
+      logger.warn('Отсутствуют улучшения в состоянии игры', { gameState });
+      gameState.upgrades = {
+        clickPower: {
+          level: 1,
+          value: 1
+        },
+        passiveIncome: {
+          level: 0,
+          value: 0
+        },
+        collectionEfficiencyLevel: 0,
+        containerLevel: 1,
+        fillingSpeedLevel: 1
+      };
+    }
+    
+    // Проверяем и нормализуем версию сохранения
+    if (!gameState._saveVersion) {
+      gameState._saveVersion = 1;
+    }
+    
+    // Проверяем и нормализуем метку времени
+    if (!gameState._lastSaved) {
+      gameState._lastSaved = new Date().toISOString();
+    }
+    
+    return gameState;
+  } catch (error) {
+    logger.error('Ошибка при валидации состояния игры', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    
+    // В случае ошибки возвращаем начальное состояние
+    return createInitialGameState('unknown');
+  }
+}
+
+/**
  * Обработчик GET запроса для загрузки прогресса игры
  */
 export async function GET(request: NextRequest) {
@@ -56,7 +134,10 @@ export async function GET(request: NextRequest) {
     }
     
     const userId = tokenResult.userId;
-    logger.info('Токен верифицирован', { userId });
+    logger.info('Токен верифицирован', { 
+      userId,
+      provider: tokenResult.provider || 'не указан'
+    });
     
     // Попытка загрузки из Redis кэша для быстрого ответа
     const cacheStartTime = performance.now();
@@ -64,82 +145,103 @@ export async function GET(request: NextRequest) {
     let gameStateData = null;
     
     try {
-      const cachedData = await redisService.loadGameState(userId);
-      metrics.cacheTime = performance.now() - cacheStartTime;
-      
-      if (cachedData.success && cachedData.data) {
-        cacheHit = true;
-        metrics.source = 'cache';
+      if (!redisService) {
+        logger.warn('Redis сервис не инициализирован при загрузке из кэша');
+        metrics.cacheTime = performance.now() - cacheStartTime;
+      } else {
+        const cachedData = await redisService.loadGameState(userId);
+        metrics.cacheTime = performance.now() - cacheStartTime;
         
-        logger.info('Прогресс загружен из кэша', { 
-          userId,
-          source: cachedData.source || 'cache',
-          timeMs: metrics.cacheTime.toFixed(2)
-        });
-        
-        // Подготавливаем данные для ответа
-        gameStateData = cachedData.data;
-        
-        // Если в gameStateData отсутствует _createdAt, добавляем его
-        if (!gameStateData._createdAt) {
-          gameStateData._createdAt = new Date().toISOString();
-        }
-        
-        // Обновляем метрики кэша
-        gameMetrics.saveTotalCounter({ cache_hit: true });
-        
-        // Добавляем метаданные
-        const now = new Date().toISOString();
-        const metadata = {
-          version: gameStateData._saveVersion || 1,
-          userId: gameStateData._userId || userId,
-          isCompressed: false,
-          cacheHit: true,
-          savedAt: gameStateData._savedAt || now,
-          loadedAt: now,
-          processingTime: performance.now() - startTime,
-          source: cachedData.source || 'cache'
-        };
-        
-        try {
-          // Маркируем как критическое состояние для более длительного хранения
-          await redisService.saveGameState(userId, gameStateData, { isCritical: true });
-          logger.debug('Состояние помечено как критическое');
+        if (cachedData.success && cachedData.data) {
+          cacheHit = true;
+          metrics.source = 'cache';
           
-          // Записываем метрику времени выполнения
-          metrics.totalTime = performance.now() - startTime;
-          gameMetrics.loadDuration(metrics.totalTime, { 
-            source: 'cache',
-            cache_hit: true
+          logger.info('Прогресс загружен из кэша', { 
+            userId,
+            source: cachedData.source || 'cache',
+            timeMs: metrics.cacheTime.toFixed(2)
           });
           
-          return NextResponse.json({
-            success: true,
-            data: {
-              gameState: gameStateData,
-              metadata
+          // Подготавливаем данные для ответа
+          gameStateData = cachedData.data;
+          
+          // Если в gameStateData отсутствует _createdAt, добавляем его
+          if (!gameStateData._createdAt) {
+            gameStateData._createdAt = new Date().toISOString();
+          }
+          
+          // Обновляем метрики кэша
+          gameMetrics.saveTotalCounter({ cache_hit: true });
+          
+          // Добавляем метаданные
+          const now = new Date().toISOString();
+          const metadata = {
+            version: gameStateData._saveVersion || 1,
+            userId: gameStateData._userId || userId,
+            isCompressed: false,
+            cacheHit: true,
+            savedAt: gameStateData._savedAt || now,
+            loadedAt: now,
+            processingTime: performance.now() - startTime,
+            source: cachedData.source || 'cache'
+          };
+          
+          // Добавляем информацию о провайдере, если отсутствует
+          if (!gameStateData._provider) {
+            // Определяем провайдер на основе информации из токена или userId
+            gameStateData._provider = tokenResult.provider || 
+                                 (userId.startsWith('farcaster_') ? 'farcaster' : 
+                                  userId.startsWith('google_') ? 'google' : 
+                                  userId.startsWith('local_') ? 'local' : '');
+            
+            logger.info('Добавлена информация о провайдере в игровое состояние', { 
+              provider: gameStateData._provider,
+              userId 
+            });
+          }
+          
+          try {
+            // Маркируем как критическое состояние для более длительного хранения
+            if (redisService) {
+              await redisService.saveGameState(userId, gameStateData, { isCritical: true });
+              logger.debug('Состояние помечено как критическое');
             }
-          });
-        } catch (error) {
-          logger.error('Ошибка при сохранении критического состояния', {
-            error: error instanceof Error ? error.message : String(error)
-          });
-          
-          // Продолжаем выполнение даже при ошибке кэширования
-          metrics.totalTime = performance.now() - startTime;
-          gameMetrics.loadDuration(metrics.totalTime, { 
-            source: 'cache',
-            cache_hit: true,
-            error: true
-          });
-          
-          return NextResponse.json({
-            success: true,
-            data: {
-              gameState: gameStateData,
-              metadata
-            }
-          });
+            
+            // Записываем метрику времени выполнения
+            metrics.totalTime = performance.now() - startTime;
+            gameMetrics.loadDuration(metrics.totalTime, { 
+              source: 'cache',
+              cache_hit: true
+            });
+            
+            return NextResponse.json({
+              success: true,
+              data: {
+                gameState: gameStateData,
+                metadata
+              }
+            });
+          } catch (error) {
+            logger.error('Ошибка при сохранении критического состояния', {
+              error: error instanceof Error ? error.message : String(error)
+            });
+            
+            // Продолжаем выполнение даже при ошибке кэширования
+            metrics.totalTime = performance.now() - startTime;
+            gameMetrics.loadDuration(metrics.totalTime, { 
+              source: 'cache',
+              cache_hit: true,
+              error: true
+            });
+            
+            return NextResponse.json({
+              success: true,
+              data: {
+                gameState: gameStateData,
+                metadata
+              }
+            });
+          }
         }
       }
       
@@ -163,17 +265,17 @@ export async function GET(request: NextRequest) {
       // Загружаем прогресс и основные данные пользователя параллельно
       const [progress, user] = await Promise.all([
         prisma.progress.findUnique({
-          where: { userId: userId }
+          where: { user_id: userId }
         }),
         prisma.user.findUnique({
           where: { id: userId },
-          select: { createdAt: true, updatedAt: true, username: true }
+          select: { created_at: true, updated_at: true, farcaster_username: true }
         })
       ]);
       
       metrics.dbTime = performance.now() - dbStartTime;
       
-      if (progress && progress.gameState) {
+      if (progress && progress.game_state) {
         logger.info('Прогресс загружен из БД', { 
           userId,
           timeMs: metrics.dbTime.toFixed(2)
@@ -182,8 +284,8 @@ export async function GET(request: NextRequest) {
         metrics.source = 'database';
         
         // Проверка на сжатие данных
-        const isCompressed = typeof progress.gameState === 'string' && 
-                            progress.gameState.startsWith('{"_compressed":true');
+        const isCompressed = typeof progress.game_state === 'string' && 
+                            progress.game_state.startsWith('{"_compressed":true');
         
         metrics.isCompressed = isCompressed;
         let gameStateData;
@@ -191,7 +293,7 @@ export async function GET(request: NextRequest) {
         if (isCompressed) {
           try {
             // Если данные сжаты, распаковываем их
-            const compressedData = JSON.parse(progress.gameState as string);
+            const compressedData = JSON.parse(progress.game_state as string);
             
             // Здесь должен быть код распаковки, но для простоты просто берем данные
             // TODO: Реализовать настоящую распаковку данных
@@ -214,15 +316,15 @@ export async function GET(request: NextRequest) {
           }
         } else {
           // Если данные не сжаты, просто используем их
-          gameStateData = progress.gameState;
+          gameStateData = progress.game_state;
         }
         
         // Проверяем наличие зашифрованной версии сохранения
-        if (progress.encryptedState) {
+        if (progress.encrypted_state) {
           logger.info('Найдена зашифрованная версия сохранения', { userId });
           
           // Проверяем целостность и расшифровываем сохранение
-          const decryptResult = decryptGameSave(progress.encryptedState, userId);
+          const decryptResult = decryptGameSave(progress.encrypted_state, userId);
           
           if (decryptResult) {
             logger.info('Сохранение успешно расшифровано', { 
@@ -257,7 +359,7 @@ export async function GET(request: NextRequest) {
           userId: userId,
           isCompressed: isCompressed,
           cacheHit: false,
-          savedAt: progress.updatedAt?.toISOString() || now,
+          savedAt: progress.updated_at?.toISOString() || now,
           loadedAt: now,
           processingTime: performance.now() - startTime,
           source: 'database'
@@ -266,9 +368,9 @@ export async function GET(request: NextRequest) {
         // Добавляем метаданные пользователя, если они доступны
         if (user) {
           Object.assign(metadata, {
-            userCreatedAt: user.createdAt?.toISOString(),
-            userUpdatedAt: user.updatedAt?.toISOString(),
-            username: user.username
+            userCreatedAt: user.created_at?.toISOString(),
+            userUpdatedAt: user.updated_at?.toISOString(),
+            username: user.farcaster_username
           });
         }
         
@@ -305,10 +407,30 @@ export async function GET(request: NextRequest) {
           compressed: isCompressed
         });
         
+        // Валидируем полученные данные
+        const validatedState = validateGameState(gameStateData);
+
+        // Убеждаемся, что userId установлен правильно
+        validatedState._userId = userId;
+
+        // Добавляем информацию о провайдере, если отсутствует
+        if (!validatedState._provider) {
+          // Определяем провайдер на основе информации из токена или userId
+          validatedState._provider = tokenResult.provider || 
+                                 (userId.startsWith('farcaster_') ? 'farcaster' : 
+                                  userId.startsWith('google_') ? 'google' : 
+                                  userId.startsWith('local_') ? 'local' : '');
+          
+          logger.info('Добавлена информация о провайдере в игровое состояние', { 
+            provider: validatedState._provider,
+            userId 
+          });
+        }
+
         return NextResponse.json({
           success: true,
           data: {
-            gameState: gameStateData,
+            gameState: validatedState,
             metadata
           }
         });

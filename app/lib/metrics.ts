@@ -27,6 +27,52 @@ interface Gauge {
   lastUpdated: Date;
 }
 
+// Типы параметров метрик
+interface SaveCounterParams {
+  reason?: string;
+  concurrent?: boolean;
+  duplicate?: boolean;
+  userId?: string;
+  throttled?: boolean;
+}
+
+interface LoadCounterParams {
+  reason?: string;
+}
+
+interface SaveErrorParams {
+  reason: string;
+  userId?: string;
+}
+
+interface LoadErrorParams {
+  reason: string;
+  userId?: string;
+}
+
+interface SaveDurationParams {
+  total?: boolean;
+  db_save?: boolean;
+  redis_save?: boolean;
+  critical?: boolean;
+  meaningful_changes?: boolean;
+  merged?: boolean;
+  reason?: string;
+  concurrent?: boolean;
+  source?: string;
+  batched?: boolean;
+  batch_size?: number;
+}
+
+interface LoadDurationParams {
+  source?: string;
+  cache_hit?: boolean;
+  compressed?: boolean;
+  db_error?: boolean;
+  new_user?: boolean;
+  error?: boolean;
+}
+
 class Metrics {
   private counters: Record<string, Counter> = {};
   private histograms: Record<string, Histogram> = {};

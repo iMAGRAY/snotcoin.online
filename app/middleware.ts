@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { authService } from '@/app/services/auth/authService';
+import { verifyJWT } from './utils/auth';
+import { ENV, disableRedis } from './lib/env';
+import { redisService } from './services/redis';
 
 /**
  * Пути, которые не требуют аутентификации
@@ -52,7 +55,13 @@ export async function middleware(request: NextRequest) {
   
   // Пропускаем публичные пути без проверки
   if (isPublicPath(pathname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
+    response.headers.set(
+      'Content-Security-Policy',
+      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+    );
+    return response;
   }
   
   // Проверяем, требует ли API путь аутентификации
@@ -60,7 +69,13 @@ export async function middleware(request: NextRequest) {
   
   // Если это не защищенный API, пропускаем
   if (isApiRequest(pathname) && !isProtectedApi) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
+    response.headers.set(
+      'Content-Security-Policy',
+      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+    );
+    return response;
   }
   
   // Получаем токен сессии из куки
@@ -132,6 +147,12 @@ export async function middleware(request: NextRequest) {
     // для использования в API обработчиках
     response.headers.set('X-User-ID', userId);
     
+    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
+    response.headers.set(
+      'Content-Security-Policy',
+      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+    );
+    
     return response;
   } catch (error) {
     console.error('Auth middleware error:', error);
@@ -165,4 +186,28 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|logo.png|images/|fonts/).*)',
   ],
 };
+
+// Функция для инициализации и проверки сервисов
+async function checkServices() {
+  // Проверяем Redis
+  try {
+    if (ENV.REDIS_ENABLED) {
+      const isAvailable = await redisService.isAvailable();
+      if (!isAvailable) {
+        console.warn('[Middleware] Redis недоступен, отключаем его использование');
+        disableRedis();
+      } else {
+        console.log('[Middleware] Redis доступен и работает');
+      }
+    }
+  } catch (error) {
+    console.error('[Middleware] Ошибка при проверке Redis:', error);
+    disableRedis();
+  }
+}
+
+// Вызываем проверку сервисов при старте
+checkServices().catch(error => {
+  console.error('[Middleware] Ошибка при инициализации сервисов:', error);
+});
 

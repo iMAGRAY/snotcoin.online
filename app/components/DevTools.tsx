@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useGameState } from '../contexts/game/hooks/useGameState'
 import { useGameDispatch } from '../contexts/game/hooks/useGameDispatch'
-import { createBackup } from '../services/gameDataService'
+import { createBackup, safeCreateBackup } from '../services/gameDataService'
 
 // Константы, должны совпадать с теми, что используются в gameDataService.ts
 const BACKUP_METADATA_KEY = 'backup_metadata';
@@ -295,7 +295,7 @@ export default function DevTools() {
       }
       
       // Используем импортированную функцию для создания резервной копии
-      if (createBackup(userId, gameState, gameState._saveVersion || 1)) {
+      if (safeCreateBackup(userId, gameState, gameState._saveVersion || 1)) {
         console.log('[DevTools] Создана резервная копия состояния игры');
         
         // Обновляем информацию о размере localStorage и резервных копиях

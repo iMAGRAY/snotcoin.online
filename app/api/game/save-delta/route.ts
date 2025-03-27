@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     
     // Получаем текущую запись прогресса
     const existingProgress = await prisma.progress.findUnique({
-      where: { userId: user.id }
+      where: { user_id: user.id }
     });
     
     // Проверяем соответствие версий
@@ -83,20 +83,27 @@ export async function POST(request: NextRequest) {
     
     // Обновляем прогресс (увеличиваем версию)
     const updatedProgress = await prisma.progress.update({
-      where: { userId: user.id },
+      where: { user_id: user.id },
       data: {
-        version: newVersion
+        game_state: body.delta,
+        version: newVersion,
+        updated_at: new Date(),
+        is_compressed: body.compressedState !== null
+      },
+      select: {
+        version: true,
+        updated_at: true
       }
     });
     
-    // Формируем ответ
+    // Возвращаем успешный результат
     return NextResponse.json({
       success: true,
       message: "Дельта успешно сохранена",
       progress: {
-        userId: updatedProgress.userId,
+        userId: user.id,
         version: updatedProgress.version,
-        lastUpdated: updatedProgress.updatedAt
+        lastUpdated: updatedProgress.updated_at
       }
     });
   } catch (error) {

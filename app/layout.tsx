@@ -1,9 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { TranslationProvider } from "./i18n"
-import { FarcasterProvider } from "./contexts/FarcasterContext"
-import { GameProvider } from "./contexts/game/providers/GameProvider"
+import { Providers } from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -44,17 +42,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* CSP frame-ancestors директива перенесена в HTTP заголовки */}
-        <meta httpEquiv="Content-Security-Policy" content="frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;" />
+        {/* CSP директивы устанавливаются через HTTP заголовки в middleware */}
       </head>
       <body className={inter.className}>
-        <FarcasterProvider>
-          <TranslationProvider>
-            <GameProvider>
-              {children}
-            </GameProvider>
-          </TranslationProvider>
-        </FarcasterProvider>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   )
