@@ -45,9 +45,9 @@ export default function FarcasterUserInfo({
   if (compact) {
     return (
       <div className={`flex items-center ${className}`}>
-        {user.pfp ? (
+        {user.avatar ? (
           <Image
-            src={user.pfp}
+            src={user.avatar}
             alt={user.displayName || user.username}
             width={32}
             height={32}
@@ -69,9 +69,9 @@ export default function FarcasterUserInfo({
     <div className={`rounded-lg overflow-hidden shadow-sm border border-gray-200 ${className}`}>
       <div className="flex items-start p-4 bg-white">
         <div className="flex-shrink-0">
-          {user.pfp ? (
+          {user.avatar ? (
             <Image
-              src={user.pfp}
+              src={user.avatar}
               alt={user.displayName || user.username}
               width={48}
               height={48}

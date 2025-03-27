@@ -149,7 +149,7 @@ function createDefaultRepairState(): ExtendedGameState {
     _lastModified: Date.now(),
     _wasRepaired: true,
     _repairedAt: Date.now()
-  };
+  } as unknown as ExtendedGameState;
   
   return defaultState;
 }
@@ -202,7 +202,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
     warnings: [],
     repaired: false,
     repairedFields: [],
-    state: {...state}
+    state: {...state} as unknown as ExtendedGameState
   };
   
   // Проверяем наличие инвентаря
@@ -220,7 +220,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       containerSnot: 0,
       Cap: 0,
       lastUpdateTimestamp: Date.now()
-    };
+    } as unknown as Inventory;
     result.repairedFields.push('inventory');
     result.repaired = true;
   } else {
@@ -255,7 +255,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       collectionEfficiencyLevel: 1,
       clickPower: { level: 1, value: 1 },
       passiveIncome: { level: 1, value: 0.1 }
-    };
+    } as unknown as Upgrades;
     result.repairedFields.push('upgrades');
     result.repaired = true;
   } else {
@@ -288,7 +288,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       currentAmount: 0,
       fillRate: 1,
       currentFill: 0
-    };
+    } as unknown as Container;
     result.repairedFields.push('container');
     result.repaired = true;
   } else if (state.container.level === undefined) {
@@ -310,7 +310,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       musicEnabled: true,
       soundEnabled: true,
       notificationsEnabled: true
-    };
+    } as unknown as GameState['settings'];
     result.repairedFields.push('settings');
     result.repaired = true;
   }
@@ -329,7 +329,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       musicVolume: 0.5,
       soundVolume: 0.5,
       notificationVolume: 0.5
-    };
+    } as unknown as GameState['soundSettings'];
     result.repairedFields.push('soundSettings');
     result.repaired = true;
   }
@@ -352,7 +352,7 @@ export function verifyStructuredSaveIntegrity(save: StructuredGameSave): DataInt
     warnings: [],
     repaired: false,
     repairedFields: [],
-    state: emptyState
+    state: emptyState as unknown as ExtendedGameState
   };
   
   // Проверяем наличие критических данных
@@ -420,7 +420,7 @@ export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGa
   
   try {
     // Клонируем состояние для безопасности
-    const fixedState = JSON.parse(JSON.stringify(state));
+    const fixedState = JSON.parse(JSON.stringify(state)) as ExtendedGameState;
     
     // Базовые поля
     fixedState._saveVersion = fixedState._saveVersion || 1;
@@ -460,7 +460,7 @@ export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGa
       musicEnabled: fixedState.settings?.musicEnabled ?? true,
       soundEnabled: fixedState.settings?.soundEnabled ?? true,
       notificationsEnabled: fixedState.settings?.notificationsEnabled ?? true
-    };
+    } as unknown as GameState['settings'];
     
     fixedState.soundSettings = {
       clickVolume: fixedState.soundSettings?.clickVolume ?? 0.5,
@@ -472,7 +472,7 @@ export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGa
       musicVolume: fixedState.soundSettings?.musicVolume ?? 0.5,
       soundVolume: fixedState.soundSettings?.soundVolume ?? 0.5,
       notificationVolume: fixedState.soundSettings?.notificationVolume ?? 0.5
-    };
+    } as unknown as GameState['soundSettings'];
     
     // Интерфейс и состояние игры
     fixedState.activeTab = fixedState.activeTab || 'laboratory';
@@ -650,7 +650,7 @@ function createEmptyGameState(): ExtendedGameState {
     containerLevel: 1,
     fillingSpeed: 1,
     containerSnot: 0
-  };
+  } as unknown as ExtendedGameState;
   
   return result;
 }

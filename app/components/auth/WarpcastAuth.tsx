@@ -4,13 +4,46 @@ import React, { useState, useEffect, useRef } from 'react';
 import { authService } from '@/app/services/auth/authService';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
 import { logAuthInfo, AuthStep, AuthLogType, logAuth } from '@/app/utils/auth-logger';
-import type { FarcasterContext } from '@farcaster/auth-kit';
+import type { FarcasterContext, FarcasterSDK } from '@/app/types/farcaster';
+import { FARCASTER_SDK } from '@/app/types/farcaster';
+
+// Интерфейс для данных пользователя
+interface UserData {
+  user: {
+    id: string;
+    fid?: number;
+    username?: string;
+  };
+  token?: string;
+}
 
 // Интерфейс пропсов компонента
 interface WarpcastAuthProps {
-  onSuccess: (userData: any) => void;
+  onSuccess: (userData: UserData) => void;
   onError: (error: string) => void;
 }
+
+// Функция для проверки поддержки браузера
+const checkBrowserSupport = (): boolean => {
+  const ua = navigator.userAgent;
+  const browserInfo = {
+    chrome: ua.match(/Chrome\/(\d+)/),
+    firefox: ua.match(/Firefox\/(\d+)/),
+    safari: ua.match(/Version\/(\d+).*Safari/),
+    edge: ua.match(/Edg\/(\d+)/)
+  };
+
+  for (const [browser, match] of Object.entries(browserInfo)) {
+    if (match && match[1]) {
+      const version = parseInt(match[1]);
+      if (version < FARCASTER_SDK.MIN_BROWSER_VERSIONS[browser as keyof typeof FARCASTER_SDK.MIN_BROWSER_VERSIONS]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
 
 export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -35,64 +68,98 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       return false;
     }
     
-    const farcaster = window.farcaster;
+    const farcaster = window.farcaster as FarcasterSDK;
     
-    // Проверяем, есть ли необходимые методы
-    if (!farcaster.getContext) {
-      return false;
-    }
-    
-    return true;
+    // Проверяем наличие всех необходимых методов
+    return typeof farcaster.ready === 'function' &&
+           typeof farcaster.getContext === 'function' &&
+           typeof farcaster.fetchUserByFid === 'function';
   };
 
   // Функция для загрузки SDK скрипта
-  const loadFarcasterSDK = () => {
-    // Проверяем, не загружен ли скрипт уже
-    if (document.getElementById('farcaster-sdk-script')) {
-      return;
-    }
-    
-    logAuthInfo(AuthStep.FARCASTER_INIT, 'Загрузка Farcaster SDK скрипта');
-    
-    // Загружаем официальный Warpcast SDK
-    const script = document.createElement('script');
-    script.src = 'https://warpcast.com/~/sdk.js';
-    script.id = 'farcaster-sdk-script';
-    script.async = true;
-    script.onload = () => {
-      // При загрузке скрипта попробуем сразу инициализировать SDK
-      if (window.farcaster && typeof window.farcaster.ready === 'function') {
-        try {
-          window.farcaster.ready();
-          logAuthInfo(AuthStep.FARCASTER_INIT, 'SDK успешно загружен и инициализирован');
-        } catch (error) {
-          console.error('Ошибка при вызове farcaster.ready()', error);
-          logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка при инициализации SDK', {}, error);
-        }
+  const loadFarcasterSDK = async (): Promise<void> => {
+    return new Promise<void>((resolve, reject) => {
+      // Проверяем поддержку браузера
+      if (!checkBrowserSupport()) {
+        reject(new Error(FARCASTER_SDK.ERROR_CODES.BROWSER_NOT_SUPPORTED));
+        return;
       }
-    };
-    script.onerror = (e) => {
-      console.error('Ошибка загрузки Farcaster SDK скрипта', e);
-      logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка загрузки SDK скрипта', {}, e);
-    };
-    document.body.appendChild(script);
+
+      // Проверяем, не загружен ли скрипт уже
+      if (document.getElementById('farcaster-sdk-script')) {
+        resolve();
+        return;
+      }
+      
+      logAuthInfo(AuthStep.FARCASTER_INIT, 'Загрузка Farcaster SDK скрипта');
+      
+      // Загружаем официальный Warpcast SDK
+      const script = document.createElement('script');
+      script.src = FARCASTER_SDK.SCRIPT_URL;
+      script.id = 'farcaster-sdk-script';
+      script.async = true;
+
+      // Таймаут загрузки
+      const timeoutId = setTimeout(() => {
+        reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
+      }, FARCASTER_SDK.TIMEOUT.SDK_LOAD);
+
+      script.onload = async () => {
+        clearTimeout(timeoutId);
+        const farcaster = window.farcaster as FarcasterSDK;
+        if (farcaster && typeof farcaster.ready === 'function') {
+          try {
+            await farcaster.ready();
+            logAuthInfo(AuthStep.FARCASTER_INIT, 'SDK успешно загружен и инициализирован');
+            resolve();
+          } catch (error) {
+            console.error('Ошибка при вызове farcaster.ready()', error);
+            logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка при инициализации SDK', {}, error);
+            reject(error);
+          }
+        } else {
+          reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
+        }
+      };
+
+      script.onerror = (e) => {
+        clearTimeout(timeoutId);
+        console.error('Ошибка загрузки Farcaster SDK скрипта', e);
+        logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка загрузки SDK скрипта', {}, e);
+        reject(new Error(FARCASTER_SDK.ERROR_CODES.NETWORK_ERROR));
+      };
+
+      document.body.appendChild(script);
+    });
   };
 
   // Функция для авторизации через Farcaster
   const handleFarcasterAuth = async () => {
+    const authTimeoutId = setTimeout(() => {
+      setErrorMessage('Превышено время ожидания авторизации');
+      setIsLoading(false);
+    }, FARCASTER_SDK.TIMEOUT.AUTH_PROCESS);
+
     try {
       logAuth(AuthStep.AUTH_START, AuthLogType.INFO, 'Начало авторизации через Farcaster');
       
       // Если SDK не доступен, показываем ошибку
       if (!checkFarcasterSDK()) {
-        throw new Error('Farcaster SDK не доступен. Пожалуйста, используйте Warpcast браузер или расширение.');
+        throw new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED);
+      }
+      
+      const farcaster = window.farcaster as FarcasterSDK;
+      
+      // Ждем готовности SDK
+      if (!farcaster.isReady) {
+        await farcaster.ready();
       }
       
       // Получаем данные пользователя из SDK
-      const userData = await window.farcaster!.getContext();
+      const userData = await farcaster.getContext() as FarcasterContext;
       
       if (!userData || !userData.fid) {
-        throw new Error('Не удалось получить данные пользователя из Farcaster');
+        throw new Error(FARCASTER_SDK.ERROR_CODES.INVALID_RESPONSE);
       }
       
       logAuth(
@@ -106,7 +173,11 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       const authResult = await authService.loginWithFarcaster(userData);
       
       if (!authResult.success) {
-        throw new Error(authResult.error || 'Не удалось авторизоваться');
+        throw new Error(
+          typeof authResult.error === 'string' 
+            ? authResult.error 
+            : FARCASTER_SDK.ERROR_CODES.AUTH_FAILED
+        );
       }
       
       // Обновляем данные пользователя в контексте
@@ -119,18 +190,45 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         { userId: authResult.data?.user?.id }
       );
       
-      // Передаем данные в колбэк
-      onSuccess(authResult.data);
+      clearTimeout(authTimeoutId);
+      onSuccess(authResult.data as UserData);
     } catch (error) {
+      clearTimeout(authTimeoutId);
       console.error('Ошибка авторизации через Farcaster:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка авторизации';
+      
+      let errorMessage = 'Неизвестная ошибка авторизации';
+      if (error instanceof Error) {
+        switch (error.message) {
+          case FARCASTER_SDK.ERROR_CODES.BROWSER_NOT_SUPPORTED:
+            errorMessage = 'Ваш браузер не поддерживается. Пожалуйста, обновите браузер или используйте другой.';
+            break;
+          case FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED:
+            errorMessage = 'Не удалось загрузить Farcaster SDK. Пожалуйста, используйте Warpcast браузер или установите расширение.';
+            break;
+          case FARCASTER_SDK.ERROR_CODES.AUTH_FAILED:
+            errorMessage = 'Не удалось авторизоваться. Пожалуйста, попробуйте снова.';
+            break;
+          case FARCASTER_SDK.ERROR_CODES.USER_REJECTED:
+            errorMessage = 'Вы отменили авторизацию.';
+            break;
+          case FARCASTER_SDK.ERROR_CODES.NETWORK_ERROR:
+            errorMessage = 'Ошибка сети. Пожалуйста, проверьте подключение к интернету.';
+            break;
+          case FARCASTER_SDK.ERROR_CODES.INVALID_RESPONSE:
+            errorMessage = 'Получены некорректные данные от Farcaster.';
+            break;
+          default:
+            errorMessage = error.message;
+        }
+      }
+      
       setErrorMessage(errorMessage);
       
       logAuth(
         AuthStep.AUTH_ERROR, 
         AuthLogType.ERROR, 
         'Ошибка при авторизации через Farcaster', 
-        {}, 
+        { errorCode: error instanceof Error ? error.message : 'UNKNOWN' }, 
         error
       );
       
@@ -157,7 +255,16 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       
       if (!hasSdk) {
         // Если SDK нет, загружаем его
-        loadFarcasterSDK();
+        loadFarcasterSDK()
+          .then(() => {
+            authAttemptedRef.current = true;
+            handleFarcasterAuth();
+          })
+          .catch((error) => {
+            console.error('Ошибка при загрузке SDK:', error);
+            setErrorMessage(error instanceof Error ? error.message : 'Неизвестная ошибка');
+            setIsLoading(false);
+          });
         
         // Увеличиваем счетчик попыток
         setSdkCheckAttempts(prev => prev + 1);
@@ -172,7 +279,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       }
       
       authAttemptedRef.current = true;
-      await handleFarcasterAuth();
+      handleFarcasterAuth();
     };
     
     initAuth();

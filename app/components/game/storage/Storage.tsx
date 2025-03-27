@@ -93,6 +93,7 @@ const RewardDisplay: React.FC<{
         clearTimeout(timer2)
       }
     }
+    return () => {}; // Пустая функция очистки для случая amount === null
   }, [amount, setRewardAmount])
 
   if (amount === null) return null
@@ -170,6 +171,8 @@ const Storage: React.FC = () => {
 
   const handleOpenChest = useCallback(() => {
     const currentChest = chests[currentIndex]
+    if (!currentChest) return
+
     if (gameState.inventory.snot >= currentChest.requiredSnot) {
       setIsChestOpening(true)
       setTimeout(() => {
@@ -195,6 +198,14 @@ const Storage: React.FC = () => {
       // Недостаточно SNOT для открытия сундука
     }
   }, [currentIndex, gameState.inventory.snot, gameDispatch])
+
+  React.useEffect(() => {
+    // Сброс состояния при размонтировании
+    return () => {
+      setIsChestOpening(false);
+      setRewardAmount(null);
+    };
+  }, []);
 
   return (
     <>

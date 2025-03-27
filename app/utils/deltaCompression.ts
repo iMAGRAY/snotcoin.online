@@ -241,39 +241,29 @@ function setValueAtPath(obj: any, path: string[], value: any): void {
   }
 
   // Если путь состоит из одного сегмента, устанавливаем значение напрямую
-  if (path.length === 1) {
+  if (path.length === 1 && path[0]) {
     obj[path[0]] = value;
     return;
   }
 
-  const lastSegment = path.pop();
+  // Получаем последний сегмент и создаем промежуточные объекты
+  const segments = [...path];
+  const lastSegment = segments.pop();
   
   if (!lastSegment) {
-    console.warn('[deltaCompression] Неверный путь: пустой массив после pop');
+    console.warn('[deltaCompression] Некорректный путь в setValueAtPath, пропускаем операцию');
     return;
   }
-  
-  // Находим родительский объект
+
   let current = obj;
-  
-  for (const segment of path) {
-    if (segment === '') continue;
-    
-    if (current[segment] === undefined || current[segment] === null) {
-      // Если индекс числовой, создаем массив, иначе объект
-      current[segment] = /^\d+$/.test(segment) ? [] : {};
+  for (const segment of segments) {
+    if (!segment) continue;
+    if (!(segment in current)) {
+      current[segment] = {};
     }
-    
     current = current[segment];
-    
-    // Проверяем, что мы не потеряли ссылку на объект
-    if (current === undefined || current === null) {
-      console.warn(`[deltaCompression] Потеряна ссылка на объект по пути ${path.join('/')}`);
-      return;
-    }
   }
-  
-  // Устанавливаем значение
+
   current[lastSegment] = value;
 }
 
@@ -526,45 +516,48 @@ function fixPath(path: string): string {
  * @returns Оптимизированная дельта
  */
 export function optimizeDelta(delta: DeltaGameState): DeltaGameState {
-  const optimized = { ...delta };
-  
-  // Находим избыточные операции
-  const pathMap = new Map<string, number>();
-  
-  // Отмечаем все пути
-  for (let i = 0; i < optimized.delta.length; i++) {
-    const op = optimized.delta[i];
-    pathMap.set(op.path, i);
+  if (!delta || !delta.delta || !Array.isArray(delta.delta)) {
+    return delta;
   }
-  
-  // Фильтруем операции, оставляя только последние для каждого пути
-  const filteredOperations: DeltaOperation[] = [];
+
+  const operations = [...delta.delta];
+  const pathMap = new Map<string, number>();
   const processedPaths = new Set<string>();
-  
-  // Обрабатываем с конца для сохранения последних операций
-  for (let i = optimized.delta.length - 1; i >= 0; i--) {
-    const op = optimized.delta[i];
-    
-    // Игнорируем проверки (test)
-    if (op.op === 'test') continue;
-    
-    // Если путь не обработан, добавляем операцию
-    if (!processedPaths.has(op.path)) {
-      filteredOperations.unshift(op);
-      processedPaths.add(op.path);
-      
-      // Если operaton - move или copy, также помечаем исходный путь
-      if ((op.op === 'move' || op.op === 'copy') && op.from) {
-        processedPaths.add(op.from);
+
+  // Создаем карту последних операций для каждого пути
+  operations.forEach((operation, i) => {
+    if (!operation || !operation.path) return;
+    pathMap.set(operation.path, i);
+  });
+
+  // Фильтруем операции
+  const filteredOperations: DeltaOperation[] = [];
+
+  for (let i = operations.length - 1; i >= 0; i--) {
+    const operation = operations[i];
+    if (!operation) continue;
+    if (!operation.path) continue;
+
+    if (operation.op === 'test') continue;
+
+    // Если путь еще не обработан, добавляем операцию
+    if (!processedPaths.has(operation.path)) {
+      filteredOperations.unshift(operation);
+      processedPaths.add(operation.path);
+
+      // Для операций move и copy также отмечаем путь from как обработанный
+      if ((operation.op === 'move' || operation.op === 'copy') && operation.from) {
+        processedPaths.add(operation.from);
       }
     }
   }
-  
-  // Обновляем дельту
-  optimized.delta = filteredOperations;
-  optimized._changeCount = filteredOperations.length;
-  
-  return optimized;
+
+  // Создаем новую дельту с оптимизированными операциями
+  return {
+    ...delta,
+    delta: filteredOperations,
+    _changeCount: filteredOperations.length
+  };
 }
 
 /**

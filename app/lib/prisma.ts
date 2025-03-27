@@ -1,22 +1,40 @@
 import { PrismaClient } from '@prisma/client'
+import type { ExtendedPrismaClient, PrismaError, PrismaQueryEvent } from '@/app/types/prisma'
 
-// Расширяем тип PrismaClient для syncQueue (временное решение)
-type ExtendedPrismaClient = PrismaClient & {
-  syncQueue: any
-}
-
-// Исключаем из транспиляции в production
-// eslint-disable-next-line
+// Создаем глобальную переменную для хранения экземпляра Prisma
 declare global {
   var prisma: ExtendedPrismaClient | undefined
 }
 
-// Создаем и экспортируем экземпляр Prisma как синглтон
-export const prisma: ExtendedPrismaClient = 
-  global.prisma || 
-  (new PrismaClient({ log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'] }) as ExtendedPrismaClient)
+// Создаем или используем существующий экземпляр Prisma
+export const prisma = (global.prisma || new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+})) as ExtendedPrismaClient
 
-// Предотвращаем множественные экземпляры в режиме разработки
+// Сохраняем экземпляр в глобальной переменной в режиме разработки
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma
+}
+
+// Обработка ошибок подключения
+prisma.$on('error', (e: PrismaError) => {
+  console.error('Ошибка Prisma:', e)
+  
+  // Пытаемся переподключиться при ошибке
+  if (e.code === 'P1001' || e.code === 'P1002') {
+    console.log('Попытка переподключения к базе данных...')
+    prisma.$connect()
+  }
+})
+
+// Обработка предупреждений
+prisma.$on('warn', (e: PrismaError) => {
+  console.warn('Предупреждение Prisma:', e)
+})
+
+// Обработка запросов (только в режиме разработки)
+if (process.env.NODE_ENV === 'development') {
+  prisma.$on('query', (e: PrismaQueryEvent) => {
+    console.log('Запрос Prisma:', e)
+  })
 } 

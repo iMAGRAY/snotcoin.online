@@ -9,6 +9,7 @@ import { apiLogger as logger } from '../../../lib/logger'
 import { gameMetrics } from '../../../lib/metrics'
 import { prisma } from '../../../lib/prisma'
 import { mergeGameStates } from '../../../utils/gameStateMerger'
+import { encryptGameSave, verifySaveIntegrity } from '../../../utils/saveEncryption'
 
 export const dynamic = 'force-dynamic'
 
@@ -265,20 +266,35 @@ export async function POST(request: NextRequest) {
       const dbSaveStartTime = performance.now();
       
       try {
+        // Шифруем состояние игры перед сохранением
+        const { encryptedSave, metadata } = encryptGameSave(gameState, userId);
+        
+        // Добавляем информацию о шифровании в метаданные
+        gameState._isEncrypted = true;
+        gameState._encryptionMetadata = {
+          timestamp: metadata.timestamp,
+          version: metadata.version,
+          algorithm: metadata.algorithm
+        };
+        
+        // Преобразуем gameState в JSON строку для сохранения в БД
+        const gameStateJson = JSON.stringify(gameState);
+        
         // Проверяем существование записи прогресса
         const existingProgress = await prisma.progress.findUnique({
-          where: { user_id: userId },
+          where: { userId: userId },
           select: { id: true, version: true }
         });
         
         if (existingProgress) {
           // Обновляем существующую запись
           const updatedProgress = await prisma.progress.update({
-            where: { user_id: userId },
+            where: { userId: userId },
             data: {
-              game_state: gameState,
+              gameState: gameStateJson,
+              encryptedState: encryptedSave, // Сохраняем зашифрованную версию
               version: gameState._saveVersion,
-              updated_at: new Date()
+              updatedAt: new Date()
             }
           });
           
@@ -287,11 +303,11 @@ export async function POST(request: NextRequest) {
             // Запрос на добавление в историю прогресса через сырой SQL
             await prisma.$executeRaw`
               INSERT INTO progress_history (
-                user_id, version, game_state, reason, created_at
+                userId, version, gameState, reason, createdAt
               ) VALUES (
                 ${userId}, 
                 ${gameState._saveVersion}, 
-                ${JSON.stringify(gameState)}, 
+                ${gameStateJson}, 
                 ${saveReason}, 
                 NOW()
               )
@@ -314,11 +330,12 @@ export async function POST(request: NextRequest) {
           // Создаем новую запись прогресса
           const newProgress = await prisma.progress.create({
             data: {
-              user_id: userId,
-              game_state: gameState,
+              userId: userId,
+              gameState: gameStateJson,
+              encryptedState: encryptedSave, // Добавляем зашифрованную версию
               version: gameState._saveVersion,
-              created_at: new Date(),
-              updated_at: new Date()
+              createdAt: new Date(),
+              updatedAt: new Date()
             }
           });
           
@@ -329,7 +346,7 @@ export async function POST(request: NextRequest) {
             ) VALUES (
               ${userId}, 
               ${gameState._saveVersion}, 
-              ${JSON.stringify(gameState)}, 
+              ${gameStateJson}, 
               'initial', 
               NOW()
             )

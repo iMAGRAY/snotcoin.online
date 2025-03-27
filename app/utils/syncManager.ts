@@ -115,7 +115,7 @@ export class SyncManager {
   private userId: string;
   private options: SyncOptions;
   private lastSyncTimestamp: number = 0;
-  private autoSyncInterval?: NodeJS.Timeout;
+  private autoSyncInterval: NodeJS.Timeout | undefined;
   private syncInProgress: boolean = false;
   private localState: ExtendedGameState | null = null;
   private remoteState: ExtendedGameState | null = null;

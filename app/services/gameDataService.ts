@@ -378,8 +378,11 @@ export function createBackup(userId: string, state: GameState, version: number =
         
         // Удаляем старые копии
         for (let i = 0; i < backupKeys.length - MAX_BACKUPS; i++) {
-          localStorage.removeItem(backupKeys[i]);
-          console.log(`[GameDataService] Удалена устаревшая резервная копия: ${backupKeys[i]}`);
+          const key = backupKeys[i];
+          if (key) {
+            localStorage.removeItem(key);
+            console.log(`[GameDataService] Удалена устаревшая резервная копия: ${key}`);
+          }
         }
       }
       

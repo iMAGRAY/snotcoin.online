@@ -421,7 +421,7 @@ export const createDefaultGameState = (userId: string): ExtendedGameState => {
     _lastModified: now,
     _userId: userId,
     _lastSaved: new Date().toISOString()
-  };
+  } as unknown as ExtendedGameState;
 };
 
 /**

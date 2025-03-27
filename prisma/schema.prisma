@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,61 +10,77 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                    String    @id @default(uuid())
-  jwt_token             String?
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
-  farcaster_displayname String?
-  farcaster_pfp         String?
-  farcaster_username    String
-  refresh_token         String?
-  token_expires_at      DateTime?
-  farcaster_fid         String    @unique
-  progress              Progress?
+model GameState {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  state     Json
+  version   Int      @default(1)
+  checksum  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@index([userId])
+  @@map("game_states")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  fid           Int?      @unique // Farcaster ID
+  username      String?
+  displayName   String?
+  pfpUrl        String?
+  verified      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  jwtToken      String?
+  refreshToken  String?
+  tokenExpiresAt DateTime?
+  progress      Progress?
+
+  @@index([fid])
   @@map("users")
 }
 
 model Progress {
-  id            String             @id @default(uuid())
-  user_id       String             @unique
-  game_state    Json
-  version       Int                @default(1)
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
-  is_compressed Boolean            @default(false)
-  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  histories     ProgressHistory[]
+  id           String             @id @default(cuid())
+  userId       String             @unique
+  gameState    Json
+  encryptedState String?          @db.Text
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  isCompressed Boolean            @default(false)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  histories    ProgressHistory[]
 
   @@map("user_progress")
 }
 
 model SyncQueue {
-  id         Int      @id @default(autoincrement())
-  user_id    String
-  operation  String
-  data       Json
-  status     String   @default("pending")
-  created_at DateTime @default(now()) @db.Timestamp(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
-  attempts   Int      @default(0)
+  id        Int      @id @default(autoincrement())
+  userId    String
+  operation String
+  data      Json
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  attempts  Int      @default(0)
 
   @@index([status], map: "idx_sync_queue_status")
-  @@index([user_id], map: "idx_sync_queue_user_id")
+  @@index([userId], map: "idx_sync_queue_user_id")
   @@map("sync_queue")
 }
 
 model ProgressHistory {
-  id          Int      @id @default(autoincrement())
-  user_id     String
-  client_id   String
-  save_type   String
-  save_reason String
-  created_at  DateTime @default(now()) @db.Timestamp(6)
-  progress    Progress @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  userId     String
+  clientId   String
+  saveType   String
+  saveReason String
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+  progress   Progress @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
-  @@index([created_at], map: "idx_progress_history_created_at")
-  @@index([user_id], map: "idx_progress_history_user_id")
+  @@index([createdAt], map: "idx_progress_history_created_at")
+  @@index([userId], map: "idx_progress_history_user_id")
   @@map("progress_history")
 }

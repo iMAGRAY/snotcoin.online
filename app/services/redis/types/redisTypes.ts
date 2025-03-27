@@ -37,11 +37,11 @@ export interface RedisSettings {
   /** Порт Redis сервера */
   port: number;
   /** Пароль для аутентификации */
-  password?: string;
+  password?: string | undefined;
   /** Таймаут соединения в миллисекундах */
-  connectionTimeout?: number;
+  connectionTimeout?: number | undefined;
   /** Максимальное количество повторных попыток на запрос */
-  maxRetriesPerRequest?: number;
+  maxRetriesPerRequest?: number | undefined;
 }
 
 /**
@@ -129,7 +129,7 @@ export interface ClientSaveInfo {
   /** Время сохранения */
   timestamp: number;
   /** Метаданные */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any> | undefined;
 }
 
 /**

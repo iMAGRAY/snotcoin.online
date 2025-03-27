@@ -2,6 +2,25 @@
  * Глобальные расширения интерфейсов для TypeScript
  */
 
+/**
+ * Тип контекста Farcaster
+ */
+interface FarcasterContext {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfp?: {
+    url: string;
+    verified: boolean;
+  };
+  verified?: boolean;
+  custody?: {
+    address: string;
+    type: string;
+  };
+  verifications?: string[];
+}
+
 // Расширение интерфейса Window
 interface Window {
   /**
@@ -22,23 +41,7 @@ interface Window {
   };
   
   /**
-   * Хранилище данных Farcaster
+   * Глобальный объект Farcaster SDK
    */
-  farcaster?: {
-    getContext: () => Promise<{
-      fid: number;
-      username: string;
-      displayName?: string;
-      pfp?: {
-        url: string;
-        verified: boolean;
-      };
-      verified?: boolean;
-      custody?: {
-        address: string;
-        type: string;
-      };
-      verifications?: string[];
-    }>;
-  };
+  farcaster?: FarcasterSDK;
 } 

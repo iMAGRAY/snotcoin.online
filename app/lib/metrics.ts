@@ -109,9 +109,9 @@ class Metrics {
   getHistogram(name: string, labels: Record<string, any> = {}): {
     count: number;
     sum: number;
-    avg?: number;
-    min?: number;
-    max?: number;
+    avg?: number | undefined;
+    min?: number | undefined;
+    max?: number | undefined;
   } {
     const key = this.formatKey(name, labels);
     const histogram = this.histograms[key];

@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
     
     // Получаем данные пользователя из токена
     const userData = authService.decodeToken(token);
-    const userId = userData?.userId || userData?.id;
+    const userId = userData?.id;
     
     if (!isValid || !userId) {
       // Пробуем получить refresh token

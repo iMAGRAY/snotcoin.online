@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
+import { FarcasterSDK } from '@/app/types/farcaster';
 
 interface CastPublisherProps {
   defaultText?: string;
@@ -34,27 +35,17 @@ export default function CastPublisher({
     setSuccess(false);
     
     try {
-      // Проверяем доступность Farcaster SDK
-      if (typeof window !== 'undefined' && window.farcaster && window.farcaster.publishCast) {
-        // Публикуем через Farcaster SDK напрямую
-        await window.farcaster.publishCast(text.trim());
-        setSuccess(true);
-        setText('');
-        
-        if (onSuccess) {
-          onSuccess();
+      if (typeof window !== 'undefined' && window.farcaster) {
+        const farcaster = window.farcaster as FarcasterSDK;
+        if (farcaster.publishCast) {
+          await farcaster.publishCast(text.trim());
+          setText('');
+          onSuccess?.();
         }
-      } else {
-        throw new Error('Farcaster SDK недоступен. Используйте Warpcast для публикации.');
       }
-    } catch (err) {
-      console.error('Ошибка публикации:', err);
-      const error = err instanceof Error ? err : new Error('Неизвестная ошибка публикации');
-      setError(error);
-      
-      if (onError) {
-        onError(error);
-      }
+    } catch (error) {
+      console.error('Error publishing cast:', error);
+      onError?.(error instanceof Error ? error : new Error('Failed to publish cast'));
     } finally {
       setIsLoading(false);
     }

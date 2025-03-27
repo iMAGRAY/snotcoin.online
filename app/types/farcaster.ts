@@ -123,13 +123,4 @@ export interface FarcasterSDK {
     /** Валидация действия фрейма */
     validateFrameAction: (frameData: any) => Promise<boolean>;
   };
-}
-
-declare global {
-  interface Window {
-    /** Глобальный объект Farcaster SDK */
-    farcaster?: FarcasterSDK;
-  }
-}
-
-export {}; 
+} 

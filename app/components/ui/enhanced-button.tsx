@@ -139,15 +139,16 @@ export const EnhancedButton = React.forwardRef<HTMLButtonElement, EnhancedButton
 
     // Если есть анимации, оборачиваем в motion.div
     if (whileHover || whileTap || initial || animate) {
+      // Создаем объект с пропсами, исключая undefined
+      const motionProps: any = { style: { display: "inline-block" } };
+      if (whileHover) motionProps.whileHover = whileHover;
+      if (whileTap) motionProps.whileTap = whileTap;
+      if (initial) motionProps.initial = initial;
+      if (animate) motionProps.animate = animate;
+      if (transition) motionProps.transition = transition;
+      
       return (
-        <motion.div
-          whileHover={whileHover}
-          whileTap={whileTap}
-          initial={initial}
-          animate={animate}
-          transition={transition}
-          style={{ display: "inline-block" }}
-        >
+        <motion.div {...motionProps}>
           {buttonElement}
         </motion.div>
       )

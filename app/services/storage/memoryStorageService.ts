@@ -132,9 +132,13 @@ export function saveBackup(userId: string, state: ExtendedGameState): void {
       
       // Ограничиваем размер хранилища резервных копий
       if (backupStore.size > 50) {
-        const oldestKey = Array.from(backupStore.entries())
-          .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
-        backupStore.delete(oldestKey);
+        const entries = Array.from(backupStore.entries())
+          .sort((a, b) => a[1].timestamp - b[1].timestamp);
+        
+        if (entries.length > 0 && entries[0]) {
+          const oldestKey = entries[0][0];
+          backupStore.delete(oldestKey);
+        }
       }
     }
   } catch (error) {

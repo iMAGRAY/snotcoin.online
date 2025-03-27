@@ -13,7 +13,7 @@ export class UserModel {
   static async findByFarcasterId(fid: number | string) {
     try {
       return await prisma.user.findUnique({
-        where: { farcaster_fid: String(fid) }
+        where: { fid: Number(fid) }
       });
     } catch (error) {
       console.error('Ошибка при поиске пользователя по farcaster_fid:', error);
@@ -32,13 +32,13 @@ export class UserModel {
     photo_url?: string;
   }) {
     try {
-      // Используем напрямую поля farcaster_*
+      // Используем поля из схемы Prisma
       return await prisma.user.create({
         data: {
-          farcaster_fid: String(userData.farcaster_fid),
-          farcaster_username: userData.username || '',
-          farcaster_displayname: userData.first_name || '',
-          farcaster_pfp: userData.photo_url || '',
+          fid: Number(userData.farcaster_fid),
+          username: userData.username || '',
+          displayName: userData.first_name || '',
+          pfpUrl: userData.photo_url || '',
         }
       });
     } catch (error) {
@@ -61,8 +61,8 @@ export class UserModel {
       return prisma.user.update({
         where: { id: userData.id },
         data: {
-          farcaster_username: userData.username || undefined,
-          farcaster_displayname: userData.first_name || undefined
+          username: userData.username ? userData.username : null,
+          displayName: userData.first_name ? userData.first_name : null
         }
       });
     } catch (error) {
@@ -78,7 +78,7 @@ export class UserModel {
     try {
       return prisma.user.update({
         where: { id: userId },
-        data: { jwt_token: token }
+        data: { jwtToken: token }
       });
     } catch (error) {
       console.error('Ошибка при обновлении токена:', error);
@@ -94,7 +94,7 @@ export class UserModel {
       const user = await prisma.user.findFirst({
         where: { 
           id: userId,
-          jwt_token: token
+          jwtToken: token
         }
       });
       
@@ -116,7 +116,7 @@ export class ProgressModel {
   static async findByUserId(userId: string) {
     try {
       return prisma.progress.findUnique({
-        where: { user_id: userId }
+        where: { userId: userId }
       });
     } catch (error) {
       console.error('Ошибка при поиске прогресса:', error);
@@ -131,8 +131,8 @@ export class ProgressModel {
     try {
       return prisma.progress.create({
         data: {
-          user_id: userId,
-          game_state: gameState as any
+          userId: userId,
+          gameState: gameState as any
         }
       });
     } catch (error) {
@@ -153,9 +153,9 @@ export class ProgressModel {
       }
       
       return prisma.progress.update({
-        where: { user_id: userId },
+        where: { userId: userId },
         data: {
-          game_state: gameState as any,
+          gameState: gameState as any,
           version: { increment: 1 }
         }
       });

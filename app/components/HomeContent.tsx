@@ -246,7 +246,7 @@ const HomeContent: React.FC = () => {
       payload: {
         id: farcasterUser.id,
         name: farcasterUser.displayName || farcasterUser.username || 'Unknown',
-        avatar: farcasterUser.pfp || '',
+        avatar: farcasterUser.avatar || '',
         fid: farcasterUser.fid,
         username: farcasterUser.username || '',
         email: '',
@@ -272,7 +272,7 @@ const HomeContent: React.FC = () => {
         const safeUserData = {
           id: farcasterUser.id,
           name: farcasterUser.displayName || farcasterUser.username || 'Unknown',
-          avatar: farcasterUser.pfp || '',
+          avatar: farcasterUser.avatar || '',
           fid: farcasterUser.fid,
           username: farcasterUser.username || '',
           auth_provider: 'farcaster',
@@ -379,7 +379,7 @@ const HomeContent: React.FC = () => {
   const handleAuthentication = () => {
     const isAuth = authService.isAuthenticated();
     if (isAuth) {
-      const userData = authService.getUserData();
+      const userData = authService.getCurrentUser();
       if (userData) {
         dispatch({ type: "SET_USER", payload: userData });
       }

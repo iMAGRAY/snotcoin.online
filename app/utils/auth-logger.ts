@@ -15,52 +15,62 @@ export enum AuthLogType {
   TELEMETRY = 'TELEMETRY'
 }
 
-// Этапы авторизации
+/**
+ * Шаги процесса авторизации
+ */
 export enum AuthStep {
-  INIT = 'INIT',              // Инициализация процесса авторизации
-  AUTH_START = 'AUTH_START',  // Начало процесса авторизации
-  AUTH_ERROR = 'AUTH_ERROR',  // Ошибки в процессе авторизации
-  AUTH_COMPLETE = 'AUTH_COMPLETE', // Успешная авторизация
-  USER_INTERACTION = 'USER_INTERACTION', // Взаимодействие пользователя
-  TOKEN_RECEIVED = 'TOKEN_RECEIVED', // Получение токена
-  TOKEN_VALIDATION = 'TOKEN_VALIDATION', // Валидация токена
-  FARCASTER_INIT = 'FARCASTER_INIT',      // Инициализация Farcaster авторизации
-  FARCASTER_REQUEST = 'FARCASTER_REQUEST', // Запрос к API Farcaster
-  FARCASTER_QR_DISPLAY = 'FARCASTER_QR_DISPLAY', // Отображение QR-кода
-  FARCASTER_POLLING = 'FARCASTER_POLLING', // Ожидание подтверждения
-  FARCASTER_VERIFY_DATA = 'FARCASTER_VERIFY_DATA', // Проверка данных Farcaster
-  FARCASTER_SUCCESS = 'FARCASTER_SUCCESS', // Успешная авторизация через Farcaster
-  SESSION_CHECK = 'SESSION_CHECK', // Проверка сессии
-  SESSION_ERROR = 'SESSION_ERROR', // Ошибки сессии
-  SESSION_REFRESH = 'SESSION_REFRESH', // Обновление сессии
-  VALIDATE_DATA = 'VALIDATE_DATA', // Валидация данных пользователя
-  VALIDATE_FARCASTER = 'VALIDATE_FARCASTER', // Валидация Farcaster данных
-  AUTH_RETRY = 'AUTH_RETRY', // Повторная попытка авторизации
+  /** Инициализация */
+  INIT = 'INIT',
+  /** Начало авторизации */
+  AUTH_START = 'AUTH_START',
+  /** Инициализация Farcaster */
+  FARCASTER_INIT = 'FARCASTER_INIT',
+  /** Запрос к Farcaster */
+  FARCASTER_REQUEST = 'FARCASTER_REQUEST',
+  /** Взаимодействие с пользователем */
+  USER_INTERACTION = 'USER_INTERACTION',
+  /** Валидация данных */
+  VALIDATE_DATA = 'VALIDATE_DATA',
+  /** Авторизация завершена */
+  AUTH_COMPLETE = 'AUTH_COMPLETE',
+  /** Ошибка авторизации */
+  AUTH_ERROR = 'AUTH_ERROR',
+  /** Отмена авторизации */
+  AUTH_CANCEL = 'AUTH_CANCEL',
+  /** Начало выхода */
+  LOGOUT_START = 'LOGOUT_START',
+  /** Выход завершен */
+  LOGOUT_COMPLETE = 'LOGOUT_COMPLETE',
+  /** Ошибка при выходе */
+  LOGOUT_ERROR = 'LOGOUT_ERROR',
+  /** Запись в хранилище */
+  STORAGE_WRITE = 'STORAGE_WRITE',
+  /** Чтение из хранилища */
+  STORAGE_READ = 'STORAGE_READ',
+  /** Ошибка хранилища */
+  STORAGE_ERROR = 'STORAGE_ERROR',
+  /** Ошибка обновления токена */
+  TOKEN_REFRESH_ERROR = 'TOKEN_REFRESH_ERROR'
 }
 
 // Интерфейс записи лога
 export interface AuthLogEntry {
   timestamp: string;
   sessionId: string;
-  userId?: number | string;
+  userId: string | number | null;
   step: AuthStep;
   type: AuthLogType;
   message: string;
-  data?: any;
-  error?: any;
-  clientInfo?: {
-    userAgent?: string;
-    platform?: string;
-    screenSize?: string;
-    language?: string;
-    referrer?: string;
+  data: any;
+  error: any;
+  clientInfo: {
+    userAgent: string;
+    platform: string;
+    language: string;
   };
-  serverInfo?: {
-    endpoint?: string;
-    method?: string;
-    statusCode?: number;
-    responseTime?: number;
-    serverName?: string;
+  serverInfo: {
+    version: string;
+    environment: string;
   };
 }
 
@@ -150,20 +160,12 @@ export function resetSession(): void {
 /**
  * Собирает информацию о клиенте
  */
-function getClientInfo(): AuthLogEntry['clientInfo'] | undefined {
-  if (typeof window === 'undefined') return undefined;
-  
-  try {
-    return {
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      screenSize: `${window.screen.width}x${window.screen.height}`,
-      language: navigator.language,
-      referrer: document.referrer
-    };
-  } catch (e) {
-    return undefined;
-  }
+function getClientInfo() {
+  return {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    language: navigator.language
+  };
 }
 
 /**
@@ -201,21 +203,23 @@ export function logAuth(
   step: AuthStep,
   type: AuthLogType,
   message: string,
-  data?: any,
-  error?: any,
-  serverInfo?: AuthLogEntry['serverInfo']
+  data: Record<string, any> = {},
+  error: any = null
 ): AuthLogEntry {
   const logEntry: AuthLogEntry = {
     timestamp: new Date().toISOString(),
     sessionId: getSessionId(),
-    userId: getUserId() || undefined,
+    userId: getUserId() || null,
     step,
     type,
     message,
-    data: data ? (typeof data === 'object' ? { ...data } : data) : undefined,
-    error: error ? processError(error) : undefined,
+    data,
+    error,
     clientInfo: getClientInfo(),
-    serverInfo
+    serverInfo: {
+      version: process.env.VERSION || 'unknown',
+      environment: process.env.NODE_ENV || 'development'
+    }
   };
   
   // Выводим в консоль только ошибки
@@ -245,7 +249,7 @@ export function logAuth(
       // Игнорируем ошибки localStorage
     }
   }
-  
+
   return logEntry;
 }
 
@@ -330,47 +334,57 @@ export function exportAuthLogs(): string {
  */
 export function getAuthFlowSummary(): string {
   const logs = getAuthLogs();
-  let summary = `=== Сводка процесса авторизации ===\n`;
-  summary += `Сессия: ${getSessionId()}\n`;
-  summary += `Пользователь: ${getUserId() || 'Неизвестен'}\n`;
-  summary += `Всего записей: ${logs.length}\n\n`;
-  
-  if (logs.length === 0) {
-    summary += 'Логи авторизации отсутствуют.\n';
-    return summary;
+  if (!logs || logs.length === 0) {
+    return 'Нет доступных логов';
   }
-  
+
   const firstLog = logs[0];
   const lastLog = logs[logs.length - 1];
-  
+
+  if (!firstLog || !lastLog) {
+    return 'Некорректные логи';
+  }
+
+  let summary = 'Сводка процесса авторизации:\n\n';
   summary += `Начало: ${new Date(firstLog.timestamp).toLocaleString()} (${firstLog.step})\n`;
   summary += `Конец: ${new Date(lastLog.timestamp).toLocaleString()} (${lastLog.step})\n`;
-  
-  // Подсчет шагов по типам
-  const stepCounts: Record<string, number> = {};
-  logs.forEach(log => {
-    stepCounts[log.step] = (stepCounts[log.step] || 0) + 1;
+
+  // Подсчет количества логов по типам
+  const typeCounts = logs.reduce((acc, log) => {
+    acc[log.type] = (acc[log.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  summary += '\nСтатистика по типам:\n';
+  Object.entries(typeCounts).forEach(([type, count]) => {
+    summary += `${type}: ${count}\n`;
   });
-  
-  summary += `\nШаги процесса:\n`;
-  Object.entries(stepCounts).forEach(([step, count]) => {
-    summary += `- ${step}: ${count} раз\n`;
-  });
-  
-  // Нахождение ошибок
-  const errors = logs.filter(log => log.type === AuthLogType.ERROR);
-  if (errors.length > 0) {
-    summary += `\nОшибки (${errors.length}):\n`;
-    errors.forEach((error, index) => {
-      summary += `${index + 1}. [${error.step}] ${error.message}\n`;
-    });
-  } else {
-    summary += `\nОшибки отсутствуют.\n`;
-  }
-  
-  // Общая продолжительность
+
+  // Подсчет длительности
   const duration = new Date(lastLog.timestamp).getTime() - new Date(firstLog.timestamp).getTime();
-  summary += `\nПродолжительность: ${duration / 1000} секунд\n`;
-  
+  summary += `\nОбщая длительность: ${(duration / 1000).toFixed(2)} секунд\n`;
+
+  return summary;
+}
+
+export function getAuthSummary(logs: AuthLogEntry[]): string {
+  if (logs.length === 0) {
+    return 'Нет записей в логе';
+  }
+
+  const firstLog = logs[0];
+  const lastLog = logs[logs.length - 1];
+
+  if (!firstLog || !lastLog) {
+    return 'Некорректные данные в логе';
+  }
+
+  let summary = 'Сводка по авторизации:\n';
+  summary += `Начало: ${new Date(firstLog.timestamp).toLocaleString()} (${firstLog.step})\n`;
+  summary += `Конец: ${new Date(lastLog.timestamp).toLocaleString()} (${lastLog.step})\n`;
+
+  const duration = new Date(lastLog.timestamp).getTime() - new Date(firstLog.timestamp).getTime();
+  summary += `Длительность: ${Math.round(duration / 1000)} секунд\n`;
+
   return summary;
 } 

@@ -75,9 +75,9 @@ export async function GET(request: Request) {
     // Получаем прогресс для пользователя
     let gameState = defaultGameState;
     
-    if (user.progress && user.progress.game_state) {
+    if (user.progress && user.progress.gameState) {
       // Парсим JSON данные
-      const stateData = user.progress.game_state as Record<string, any>;
+      const stateData = user.progress.gameState as Record<string, any>;
       gameState = {
         level: stateData.level || defaultGameState.level,
         experience: stateData.experience || defaultGameState.experience,
@@ -90,17 +90,17 @@ export async function GET(request: Request) {
       success: true,
       user: {
         id: user.id,
-        fid: user.farcaster_fid,
-        username: user.farcaster_username,
-        displayName: user.farcaster_displayname,
-        pfp: user.farcaster_pfp,
-        joinedAt: user.created_at
+        fid: user.fid,
+        username: user.username,
+        displayName: user.displayName,
+        pfp: user.pfpUrl,
+        joinedAt: user.createdAt
       },
       progress: {
         level: gameState.level,
         experience: gameState.experience,
         inventory: gameState.inventory,
-        lastUpdated: user.progress?.updated_at || user.created_at
+        lastUpdated: user.progress?.updatedAt || user.createdAt
       }
     });
   } catch (error) {

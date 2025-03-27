@@ -9,6 +9,12 @@ import { createBackup } from '../services/gameDataService'
 const BACKUP_METADATA_KEY = 'backup_metadata';
 const MAX_BACKUP_SIZE = 500 * 1024; // 500 КБ
 
+interface BackupInfo {
+  exists: boolean;
+  count: number;
+  latestTimestamp: string | null;
+}
+
 /**
  * Компонент для отладки сохранения прогресса
  */
@@ -17,7 +23,7 @@ export default function DevTools() {
   const dispatch = useGameDispatch()
   const [userId, setUserId] = useState<string>('')
   const [storageInfo, setStorageInfo] = useState<Record<string, string>>({})
-  const [backupInfo, setBackupInfo] = useState<{exists: boolean, count: number, latestTimestamp?: string}>({exists: false, count: 0})
+  const [backupInfo, setBackupInfo] = useState<BackupInfo>({exists: false, count: 0, latestTimestamp: null})
   const [localStorageSize, setLocalStorageSize] = useState<string>("0 КБ")
   
   // Состояния для управления позицией и размером окна
@@ -61,7 +67,7 @@ export default function DevTools() {
       
       // Проверяем наличие резервных копий через метаданные
       let backupCount = 0;
-      let latestTimestamp: string | undefined;
+      let latestTimestamp: string | null = null;
       
       if (userId) {
         const metadataJson = localStorage.getItem(BACKUP_METADATA_KEY);
@@ -108,17 +114,17 @@ export default function DevTools() {
   
   // Получаем информацию из localStorage при монтировании
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined') return () => {};
     
     try {
       // Получаем информацию из localStorage
-      const storedUserId = localStorage.getItem('user_id')
-      const storedUserIdAlt = localStorage.getItem('userId')
-      const storedGameId = localStorage.getItem('game_id')
-      const authToken = localStorage.getItem('auth_token')
+      const storedUserId = localStorage.getItem('user_id');
+      const storedUserIdAlt = localStorage.getItem('userId');
+      const storedGameId = localStorage.getItem('game_id');
+      const authToken = localStorage.getItem('auth_token');
       
       const userId = storedUserId || storedUserIdAlt || storedGameId || '';
-      setUserId(userId || 'Не найден')
+      setUserId(userId || 'Не найден');
       
       // Получаем размер localStorage
       const storageSize = getLocalStorageSize();
@@ -126,7 +132,7 @@ export default function DevTools() {
       
       // Проверяем наличие резервных копий через метаданные
       let backupCount = 0;
-      let latestTimestamp: string | undefined;
+      let latestTimestamp: string | null = null;
       
       const metadataJson = localStorage.getItem(BACKUP_METADATA_KEY);
       if (metadataJson && userId) {
@@ -188,9 +194,10 @@ export default function DevTools() {
         window.removeEventListener('game-save-error', handleSaveError);
       };
     } catch (error) {
-      console.error('[DevTools] Ошибка при получении информации из localStorage:', error)
+      console.error('[DevTools] Ошибка при получении информации из localStorage:', error);
+      return () => {};
     }
-  }, [gameState._userId])
+  }, [gameState._userId]);
   
   // Обработчики для перемещения окна
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {

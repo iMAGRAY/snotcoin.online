@@ -1,7 +1,13 @@
 /**
  * Утилита для умного слияния состояний игры при конфликтах версий
  */
-import { ExtendedGameState, Inventory } from '../types/gameTypes';
+import { 
+  ExtendedGameState, 
+  Inventory, 
+  InventoryItem, 
+  GameStateStats, 
+  Achievements as GameAchievements 
+} from '../types/gameTypes';
 import { apiLogger as logger } from '../lib/logger';
 
 /**
@@ -53,14 +59,6 @@ export interface MergeResult {
 /**
  * Базовые интерфейсы для объектов игры
  */
-interface InventoryItem {
-  id: string;
-  quantity: number;
-  stackable?: boolean;
-  acquired_at?: string;
-  metadata?: Record<string, any>;
-}
-
 interface Quest {
   id: string;
   progress: number;
@@ -77,37 +75,6 @@ interface Achievement {
   unlocked: boolean;
   unlocked_at?: string;
   metadata?: Record<string, any>;
-}
-
-// Тип для GameStats, соответствующий типам в GameState
-interface GameStats {
-  playtime: number;
-  score: number;
-  last_played_at?: string;
-  clickCount: number;
-  playTime: number;
-  startDate: string;
-  highestLevel?: number;
-  totalSnot?: number;
-  totalSnotCoins?: number;
-  consecutiveLoginDays?: number;
-  [key: string]: any;
-}
-
-// Тип в стиле GameState
-interface GameStateStats {
-  clickCount: number;
-  playTime: number;
-  startDate: string;
-  highestLevel?: number;
-  totalSnot?: number;
-  totalSnotCoins?: number;
-  consecutiveLoginDays?: number;
-}
-
-// Тип в стиле GameState
-interface GameAchievements {
-  unlockedAchievements: string[];
 }
 
 /**
@@ -227,12 +194,14 @@ export function mergeGameStates(
     newState._saveVersion || 1
   ) + 1;
   
+  // Добавляем информацию о слиянии
   result.state._lastMerged = new Date().toISOString();
   result.state._mergeInfo = {
-    duration: performance.now() - startTime,
+    timestamp: Date.now(),
+    strategy: options.strategy,
     conflicts: result.conflicts.total,
     resolved: result.conflicts.resolved,
-    strategy: options.strategy
+    duration: performance.now() - startTime
   };
   
   logger.info('Выполнено слияние игровых состояний', { 
@@ -284,30 +253,28 @@ function mergeInventoryObjects(oldInventory: Inventory, newInventory: Inventory,
 function mergeInventory(oldInventory: InventoryItem[], newInventory: InventoryItem[], options: MergeOptions): InventoryItem[] {
   const mergedInventory = [...oldInventory];
   
-  // Для каждого предмета в новом инвентаре
   for (const newItem of newInventory) {
     const existingItemIndex = mergedInventory.findIndex(item => item.id === newItem.id);
     
-    if (existingItemIndex >= 0) {
-      // Предмет существует, объединяем количество
+    if (existingItemIndex !== -1) {
       const existingItem = mergedInventory[existingItemIndex];
-      
-      if (newItem.stackable) {
-        // Для стекуемых предметов берем максимальное количество
+      if (existingItem) {
         mergedInventory[existingItemIndex] = {
-          ...existingItem,
-          quantity: Math.max(existingItem.quantity, newItem.quantity)
-        };
-      } else {
-        // Для нестекуемых предметов объединяем свойства, приоритет у новых
-        mergedInventory[existingItemIndex] = {
-          ...existingItem,
-          ...newItem
+          id: existingItem.id,
+          quantity: Math.max(existingItem.quantity, newItem.quantity),
+          stackable: newItem.stackable ?? existingItem.stackable ?? false,
+          acquired_at: existingItem.acquired_at || newItem.acquired_at || new Date().toISOString(),
+          metadata: { ...(existingItem.metadata || {}), ...(newItem.metadata || {}) }
         };
       }
     } else {
-      // Добавляем новый предмет
-      mergedInventory.push({ ...newItem });
+      mergedInventory.push({
+        id: newItem.id,
+        quantity: newItem.quantity,
+        stackable: newItem.stackable ?? false,
+        acquired_at: newItem.acquired_at || new Date().toISOString(),
+        metadata: newItem.metadata || {}
+      });
     }
   }
   

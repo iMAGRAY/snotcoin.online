@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { redisCacheAdapter } from '../cache/redisCacheAdapter';
 import { memoryCacheManager } from '../cache/memoryCacheManager';
 import { REDIS_KEY_PREFIXES, DEFAULT_TTL, CRITICAL_TTL } from '../utils/constants';
+import { encryptGameSave } from '../../../utils/saveEncryption';
 
 // Создаем экземпляр Prisma
 const prisma = new PrismaClient();
@@ -175,20 +176,20 @@ export class GameStateSynchronizer {
       
       try {
         const userProgress = await prisma.progress.findUnique({
-          where: { user_id: userId }
+          where: { userId: userId }
         });
         
         if (userProgress) {
           // Проверяем тип и формат данных перед парсингом
           let dbGameState: ExtendedGameState;
           
-          // Извлекаем game_state из записи
-          const gameStateData = userProgress.game_state;
+          // Извлекаем gameState из записи
+          const gameStateData = userProgress.gameState;
           
           // Обрабатываем разные типы представления данных
           if (typeof gameStateData === 'object' && gameStateData !== null) {
             // Если это уже объект (Prisma может вернуть данные в виде объекта)
-            dbGameState = gameStateData as ExtendedGameState;
+            dbGameState = gameStateData as unknown as ExtendedGameState;
             console.log(`[GameSync] Данные из БД уже в формате объекта`);
           } else if (typeof gameStateData === 'string') {
             // Проверяем, не является ли строка "[object Object]"
@@ -206,7 +207,12 @@ export class GameStateSynchronizer {
             
             // Пытаемся распарсить как JSON
             try {
-              dbGameState = JSON.parse(gameStateData) as ExtendedGameState;
+              // Если gameStateData уже строка JSON, парсим её,
+              // иначе преобразуем объект в строку и затем парсим для безопасности
+              const parsedData = typeof gameStateData === 'string'
+                ? JSON.parse(gameStateData)
+                : JSON.parse(JSON.stringify(gameStateData));
+              dbGameState = parsedData as unknown as ExtendedGameState;
               console.log(`[GameSync] Данные из БД успешно распарсены из JSON-строки`);
             } catch (parseError) {
               console.error(`[GameSync] Ошибка при парсинге данных из БД:`, parseError);
@@ -324,7 +330,7 @@ export class GameStateSynchronizer {
       
       try {
         await prisma.progress.delete({
-          where: { user_id: userId }
+          where: { userId: userId }
         });
       } catch (dbError) {
         if ((dbError as any).code !== 'P2025') { // Не найдено
@@ -361,8 +367,19 @@ export class GameStateSynchronizer {
     const startTime = Date.now();
     
     try {
-      // Создаем задачу синхронизации с БД
-      await this.queueDbSyncTask(userId, forceSave);
+      // Получаем данные из Redis
+      const redisResult = await this.loadGameState(userId);
+      
+      if (redisResult.success && redisResult.data) {
+        // Создаем зашифрованную версию сохранения
+        const { encryptedSave } = encryptGameSave(redisResult.data, userId);
+        
+        // Добавляем к задаче информацию о зашифрованной версии
+        await this.queueDbSyncTask(userId, forceSave, encryptedSave);
+      } else {
+        // Если данных нет в Redis, просто создаем задачу без шифрования
+        await this.queueDbSyncTask(userId, forceSave);
+      }
       
       return {
         success: true,
@@ -415,8 +432,9 @@ export class GameStateSynchronizer {
    * Создает задачу синхронизации с БД
    * @param userId ID пользователя
    * @param forceSave Принудительное сохранение
+   * @param encryptedSave Зашифрованная версия сохранения
    */
-  private async queueDbSyncTask(userId: string, forceSave: boolean = false): Promise<void> {
+  private async queueDbSyncTask(userId: string, forceSave: boolean = false, encryptedSave?: string): Promise<void> {
     try {
       await prisma.$executeRaw`
         INSERT INTO sync_queue (user_id, operation, data, status, created_at, updated_at)
@@ -426,6 +444,7 @@ export class GameStateSynchronizer {
           ${JSON.stringify({ 
             userId, 
             forceSave,
+            encryptedSave,
             timestamp: Date.now() 
           })}::jsonb, 
           ${'pending'}, 

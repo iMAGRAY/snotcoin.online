@@ -29,7 +29,7 @@ const SaveSystemDemo: React.FC = () => {
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string>('');
-  
+
   // Загружаем начальное состояние при инициализации
   useEffect(() => {
     if (isInitialized && !isInitializing) {
@@ -64,8 +64,8 @@ const SaveSystemDemo: React.FC = () => {
     
     const result = await loadState();
     
-    if (result.success && result.data?.state) {
-      setGameState(result.data.state);
+    if (result.success && result.data) {
+      setGameState(result.data);
       setStatusMessage(`Загружено успешно (${result.metrics?.duration}мс)`);
     } else {
       setStatusMessage(`Ошибка загрузки: ${result.error}`);
@@ -82,8 +82,8 @@ const SaveSystemDemo: React.FC = () => {
       if (result.success) {
         // Загружаем новое состояние (будет создано по умолчанию)
         const loadResult = await loadState();
-        if (loadResult.success && loadResult.data?.state) {
-          setGameState(loadResult.data.state);
+        if (loadResult.success && loadResult.data) {
+          setGameState(loadResult.data);
         }
         
         setStatusMessage('Данные сброшены успешно');
@@ -119,8 +119,8 @@ const SaveSystemDemo: React.FC = () => {
     try {
       const result = await importStateFromString(exportedState);
       
-      if (result.success && result.data?.state) {
-        setGameState(result.data.state);
+      if (result.success && result.data) {
+        setGameState(result.data);
         setStatusMessage('Состояние импортировано успешно');
       } else {
         setStatusMessage(`Ошибка импорта: ${result.error}`);

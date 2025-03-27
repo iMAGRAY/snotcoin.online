@@ -58,6 +58,12 @@ export const addSaveToQueue = (
       // Обновляем существующую запись
       const existingItem = saveQueue[existingItemIndex];
       
+      // Проверяем, что элемент существует
+      if (!existingItem) {
+        console.warn(`[SaveQueue] Не найден элемент очереди для индекса ${existingItemIndex}`);
+        return;
+      }
+      
       // Если новый приоритет выше, или это критическое сохранение, обновляем
       if (priority > existingItem.priority || isCritical) {
         saveQueue[existingItemIndex] = {

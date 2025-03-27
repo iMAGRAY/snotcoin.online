@@ -188,7 +188,16 @@ export class RedisService {
     try {
       const key = `client-save-info:${userId}`;
       const result = await redisCacheAdapter.get<ClientSaveInfo>(key);
-      return result;
+      // Проверяем наличие необходимых полей
+      if (result && result.timestamp) {
+        const saveInfo: ClientSaveInfo = {
+          client_id: result.client_id,
+          timestamp: result.timestamp,
+          metadata: result.metadata || {} // Используем пустой объект вместо undefined
+        };
+        return saveInfo;
+      }
+      return null;
     } catch (error) {
       console.error('[RedisService] Ошибка получения информации о сохранении клиента:', error);
       return null;

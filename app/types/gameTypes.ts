@@ -14,11 +14,16 @@ export interface FarcasterUser {
 // Пользователь
 export interface User {
   id: string;
-  username?: string;
-  displayName?: string;
-  farcaster_fid?: string;
-  pfp?: string;
-  [key: string]: any;
+  username: string | null;
+  displayName: string | null;
+  farcaster_fid: string | null;
+  farcaster_username: string | null;
+  farcaster_displayname: string | null;
+  farcaster_pfp: string | null;
+  pfp: string | null;
+  fid: number | null;
+  verified: boolean | null;
+  metadata?: Record<string, any>;
 }
 
 // Настройки
@@ -104,6 +109,17 @@ export interface Item {
 }
 
 /**
+ * Предмет в инвентаре
+ */
+export interface InventoryItem {
+  id: string;
+  quantity: number;
+  stackable: boolean;
+  acquired_at: string;
+  metadata: Record<string, any>;
+}
+
+/**
  * Состояние улучшения
  */
 export interface Upgrade {
@@ -122,6 +138,19 @@ export interface Achievements {
 }
 
 /**
+ * Статистика игры
+ */
+export interface GameStateStats {
+  clickCount: number;
+  playTime: number;
+  startDate: string;
+  highestLevel: number;
+  totalSnot: number;
+  totalSnotCoins: number;
+  consecutiveLoginDays: number;
+}
+
+/**
  * Основное состояние игры
  */
 export interface GameState {
@@ -129,55 +158,91 @@ export interface GameState {
   inventory: Inventory;
   container: Container;
   upgrades: Upgrades;
-  _saveVersion?: number;
-  _lastSaved?: string;
-  _userId?: string;
-  _lastModified?: number;
-  _createdAt?: string;
-  _wasRepaired?: boolean;
-  _repairedAt?: number;
-  _repairedFields?: string[];
-  _tempData?: any;
-  _isSavingInProgress?: boolean;
-  _skipSave?: boolean;
-  _lastSaveError?: string;
-  _isBeforeUnloadSave?: boolean;
-  _isRestoredFromBackup?: boolean;
-  _isInitialState?: boolean;
-  _lastActionTime?: string;
-  _lastAction?: string;
-  logs?: any[];
-  analytics?: any;
-  items?: any[];
-  achievements?: {
+  _saveVersion: number;
+  _lastSaved: string;
+  _userId: string;
+  _lastModified: number;
+  _createdAt: string;
+  _wasRepaired: boolean;
+  _repairedAt: number;
+  _repairedFields: string[];
+  _tempData: any | null;
+  _isSavingInProgress: boolean;
+  _skipSave: boolean;
+  _lastSaveError: string | null;
+  _isBeforeUnloadSave: boolean;
+  _isRestoredFromBackup: boolean;
+  _isInitialState: boolean;
+  _lastActionTime: string;
+  _lastAction: string;
+  logs: any[];
+  analytics: any | null;
+  items: Item[];
+  achievements: {
     unlockedAchievements: string[];
   };
-  highestLevel?: number;
-  stats?: {
-    clickCount: number;
-    playTime: number;
-    startDate: string;
-    highestLevel?: number;
-    totalSnot?: number;
-    totalSnotCoins?: number;
-    consecutiveLoginDays?: number;
-  };
-  consecutiveLoginDays?: number;
-  settings?: Settings;
-  soundSettings?: SoundSettings;
-  hideInterface?: boolean;
-  activeTab?: string;
-  fillingSpeed?: number;
-  containerLevel?: number;
-  isPlaying?: boolean;
-  validationStatus?: string;
-  lastValidation?: string;
-  gameStarted?: boolean;
-  isLoading?: boolean;
+  highestLevel: number;
+  stats: GameStateStats;
+  consecutiveLoginDays: number;
+  settings: Settings;
+  soundSettings: SoundSettings;
+  hideInterface: boolean;
+  activeTab: string;
+  fillingSpeed: number;
+  containerLevel: number;
+  isPlaying: boolean;
+  validationStatus: string;
+  lastValidation: string;
+  gameStarted: boolean;
+  isLoading: boolean;
 }
 
 export interface ExtendedGameState extends GameState {
-  [key: string]: any;
+  _decompressedAt?: string;
+  _compressedAt?: string;
+  _compressionVersion?: number;
+  _backupId?: string;
+  _backupTimestamp?: number;
+  _backupType?: string;
+  _backupReason?: string;
+  _backupMetadata?: Record<string, any>;
+  _syncId?: string;
+  _syncTimestamp?: number;
+  _syncType?: string;
+  _syncReason?: string;
+  _syncMetadata?: Record<string, any>;
+  _validationErrors?: string[];
+  _validationWarnings?: string[];
+  _validationMetadata?: Record<string, any>;
+  _lastMerged?: string;
+  _mergeInfo?: {
+    timestamp: number;
+    strategy: string;
+    conflicts: number;
+    resolved: number;
+    duration: number;
+  };
+  _savedAt?: string;
+  score?: number;
+  source?: string;
+  containerSnot?: number;
+  quests?: Record<string, {
+    id: string;
+    progress: number;
+    completed: boolean;
+    completed_at?: string;
+    started_at?: string;
+    steps?: Record<string, boolean>;
+    metadata?: Record<string, any>;
+  }>;
+  _isEncrypted?: boolean;
+  _encryptionMetadata?: {
+    timestamp: number;
+    version: number;
+    saveId: string;
+  };
+  _integrityVerified?: boolean;
+  _integrityWarning?: boolean;
 }
 
 export type ActionType =
@@ -315,16 +380,17 @@ export interface GameStateUpdate {
  * Создает состояние игры по умолчанию
  */
 export function createDefaultGameState(): GameState {
+  const now = new Date().toISOString();
   return {
     user: null,
     inventory: {
       snot: 0,
       snotCoins: 0,
+      containerCapacity: 100,
+      containerSnot: 0,
+      fillingSpeed: 1,
       containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
-      containerCapacity: 100,
-      fillingSpeed: 1,
-      containerSnot: 0,
       collectionEfficiency: 1,
       Cap: 100,
       lastUpdateTimestamp: Date.now()
@@ -333,57 +399,85 @@ export function createDefaultGameState(): GameState {
       level: 1,
       capacity: 100,
       currentAmount: 0,
-      fillRate: 1
+      fillRate: 1,
+      currentFill: 0
     },
     upgrades: {
+      clickPower: {
+        level: 1,
+        value: 1
+      },
+      passiveIncome: {
+        level: 1,
+        value: 1
+      },
+      collectionEfficiencyLevel: 1,
       containerLevel: 1,
-      fillingSpeedLevel: 1,
-      clickPower: { level: 1, value: 1 },
-      passiveIncome: { level: 1, value: 0.1 },
-      collectionEfficiencyLevel: 1
+      fillingSpeedLevel: 1
     },
     _saveVersion: 1,
-    _lastSaved: new Date().toISOString(),
+    _lastSaved: now,
+    _userId: '',
+    _lastModified: Date.now(),
+    _createdAt: now,
+    _wasRepaired: false,
+    _repairedAt: Date.now(),
+    _repairedFields: [],
+    _tempData: null,
     _isSavingInProgress: false,
     _skipSave: false,
-    _lastSaveError: undefined,
+    _lastSaveError: null,
     _isBeforeUnloadSave: false,
-    _lastModified: Date.now(),
-    _wasRepaired: false,
-    _repairedAt: undefined,
-    _repairedFields: [],
-    _tempData: undefined,
+    _isRestoredFromBackup: false,
+    _isInitialState: true,
+    _lastActionTime: now,
+    _lastAction: 'RESET_GAME_STATE',
     logs: [],
-    analytics: undefined,
+    analytics: null,
     items: [],
-    achievements: { unlockedAchievements: [] },
-    highestLevel: 1,
-    stats: { clickCount: 0, playTime: 0, startDate: new Date().toISOString() },
-    consecutiveLoginDays: 0,
-    settings: { 
-      musicEnabled: true, 
-      soundEnabled: true, 
-      notificationsEnabled: true, 
-      theme: "default", 
-      language: "en",
-      notifications: true,
-      tutorialCompleted: false
+    achievements: {
+      unlockedAchievements: []
     },
-    soundSettings: { 
-      musicVolume: 0.5, 
-      soundVolume: 0.5, 
+    highestLevel: 1,
+    stats: {
+      clickCount: 0,
+      playTime: 0,
+      startDate: now,
+      highestLevel: 1,
+      totalSnot: 0,
+      totalSnotCoins: 0,
+      consecutiveLoginDays: 0
+    },
+    consecutiveLoginDays: 0,
+    settings: {
+      language: 'en',
+      theme: 'light',
+      notifications: true,
+      tutorialCompleted: false,
+      musicEnabled: true,
+      soundEnabled: true,
+      notificationsEnabled: true
+    },
+    soundSettings: {
+      musicVolume: 0.5,
+      soundVolume: 0.5,
       notificationVolume: 0.5,
-      backgroundMusicVolume: 0.5,
-      isBackgroundMusicMuted: false,
       clickVolume: 0.5,
       effectsVolume: 0.5,
+      backgroundMusicVolume: 0.5,
       isMuted: false,
-      isEffectsMuted: false
+      isEffectsMuted: false,
+      isBackgroundMusicMuted: false
     },
     hideInterface: false,
-    activeTab: "laboratory",
+    activeTab: 'game',
     fillingSpeed: 1,
-    containerLevel: 1
+    containerLevel: 1,
+    isPlaying: false,
+    validationStatus: 'pending',
+    lastValidation: now,
+    gameStarted: false,
+    isLoading: false
   };
 }
 
@@ -398,76 +492,9 @@ export function createDefaultExtendedGameState(userId: string): ExtendedGameStat
 }
 
 export function createInitialGameState(userId?: string): GameState {
-  return {
-    user: null,
-    inventory: {
-      snot: 0,
-      snotCoins: 0,
-      containerCapacityLevel: 1,
-      fillingSpeedLevel: 1,
-      containerCapacity: 100,
-      fillingSpeed: 1,
-      containerSnot: 0,
-      collectionEfficiency: 1,
-      Cap: 100,
-      lastUpdateTimestamp: Date.now()
-    },
-    container: {
-      level: 1,
-      capacity: 100,
-      currentAmount: 0,
-      fillRate: 1
-    },
-    upgrades: {
-      containerLevel: 1,
-      fillingSpeedLevel: 1,
-      clickPower: { level: 1, value: 1 },
-      passiveIncome: { level: 1, value: 0.1 },
-      collectionEfficiencyLevel: 1
-    },
-    _saveVersion: 1,
-    _userId: userId,
-    _isSavingInProgress: false,
-    _skipSave: false,
-    _lastSaveError: undefined,
-    _isBeforeUnloadSave: false,
-    _lastModified: Date.now(),
-    _wasRepaired: false,
-    _repairedAt: undefined,
-    _repairedFields: [],
-    _tempData: undefined,
-    logs: [],
-    analytics: undefined,
-    items: [],
-    achievements: { unlockedAchievements: [] },
-    highestLevel: 1,
-    stats: { clickCount: 0, playTime: 0, startDate: new Date().toISOString() },
-    consecutiveLoginDays: 0,
-    settings: { 
-      musicEnabled: true, 
-      soundEnabled: true, 
-      notificationsEnabled: true, 
-      theme: "default", 
-      language: "en",
-      notifications: true,
-      tutorialCompleted: false
-    },
-    soundSettings: { 
-      musicVolume: 0.5, 
-      soundVolume: 0.5, 
-      notificationVolume: 0.5,
-      backgroundMusicVolume: 0.5,
-      isBackgroundMusicMuted: false,
-      clickVolume: 0.5,
-      effectsVolume: 0.5,
-      isMuted: false,
-      isEffectsMuted: false
-    },
-    hideInterface: false,
-    activeTab: "laboratory",
-    fillingSpeed: 1,
-    containerLevel: 1,
-    isPlaying: false,
-    validationStatus: "pending"
-  };
+  const state = createDefaultGameState();
+  if (userId) {
+    state._userId = userId;
+  }
+  return state;
 } 

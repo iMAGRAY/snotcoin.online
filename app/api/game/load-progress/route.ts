@@ -11,6 +11,7 @@ import { apiLogger as logger } from '../../../lib/logger'
 import { gameMetrics } from '../../../lib/metrics'
 import { prisma } from '../../../lib/prisma'
 import { logTiming } from '../../../lib/logger'
+import { decryptGameSave, verifySaveIntegrity } from '../../../utils/saveEncryption'
 
 export const dynamic = 'force-dynamic'
 
@@ -162,17 +163,17 @@ export async function GET(request: NextRequest) {
       // Загружаем прогресс и основные данные пользователя параллельно
       const [progress, user] = await Promise.all([
         prisma.progress.findUnique({
-          where: { user_id: userId }
+          where: { userId: userId }
         }),
         prisma.user.findUnique({
           where: { id: userId },
-          select: { created_at: true, updated_at: true, farcaster_username: true }
+          select: { createdAt: true, updatedAt: true, username: true }
         })
       ]);
       
       metrics.dbTime = performance.now() - dbStartTime;
       
-      if (progress && progress.game_state) {
+      if (progress && progress.gameState) {
         logger.info('Прогресс загружен из БД', { 
           userId,
           timeMs: metrics.dbTime.toFixed(2)
@@ -181,8 +182,8 @@ export async function GET(request: NextRequest) {
         metrics.source = 'database';
         
         // Проверка на сжатие данных
-        const isCompressed = typeof progress.game_state === 'string' && 
-                            progress.game_state.startsWith('{"_compressed":true');
+        const isCompressed = typeof progress.gameState === 'string' && 
+                            progress.gameState.startsWith('{"_compressed":true');
         
         metrics.isCompressed = isCompressed;
         let gameStateData;
@@ -190,7 +191,7 @@ export async function GET(request: NextRequest) {
         if (isCompressed) {
           try {
             // Если данные сжаты, распаковываем их
-            const compressedData = JSON.parse(progress.game_state as string);
+            const compressedData = JSON.parse(progress.gameState as string);
             
             // Здесь должен быть код распаковки, но для простоты просто берем данные
             // TODO: Реализовать настоящую распаковку данных
@@ -213,7 +214,40 @@ export async function GET(request: NextRequest) {
           }
         } else {
           // Если данные не сжаты, просто используем их
-          gameStateData = progress.game_state;
+          gameStateData = progress.gameState;
+        }
+        
+        // Проверяем наличие зашифрованной версии сохранения
+        if (progress.encryptedState) {
+          logger.info('Найдена зашифрованная версия сохранения', { userId });
+          
+          // Проверяем целостность и расшифровываем сохранение
+          const decryptResult = decryptGameSave(progress.encryptedState, userId);
+          
+          if (decryptResult) {
+            logger.info('Сохранение успешно расшифровано', { 
+              userId,
+              version: decryptResult._saveVersion
+            });
+            
+            // Используем расшифрованные данные
+            gameStateData = decryptResult;
+            
+            // Добавляем флаг, что данные были проверены
+            gameStateData._integrityVerified = true;
+          } else {
+            // Ошибка расшифровки, логируем и продолжаем с нешифрованными данными
+            logger.warn('Ошибка при расшифровке сохранения', {
+              userId,
+              error: 'Failed to decrypt game save'
+            });
+            
+            gameMetrics.loadErrorCounter({ reason: 'decryption_error' });
+            
+            // Если не удалось расшифровать, но при этом есть обычное сохранение,
+            // мы продолжаем с ним, но добавляем предупреждение
+            gameStateData._integrityWarning = true;
+          }
         }
         
         // Добавляем или обновляем метаданные
@@ -223,7 +257,7 @@ export async function GET(request: NextRequest) {
           userId: userId,
           isCompressed: isCompressed,
           cacheHit: false,
-          savedAt: progress.updated_at?.toISOString() || now,
+          savedAt: progress.updatedAt?.toISOString() || now,
           loadedAt: now,
           processingTime: performance.now() - startTime,
           source: 'database'
@@ -232,9 +266,9 @@ export async function GET(request: NextRequest) {
         // Добавляем метаданные пользователя, если они доступны
         if (user) {
           Object.assign(metadata, {
-            userCreatedAt: user.created_at?.toISOString(),
-            userUpdatedAt: user.updated_at?.toISOString(),
-            username: user.farcaster_username
+            userCreatedAt: user.createdAt?.toISOString(),
+            userUpdatedAt: user.updatedAt?.toISOString(),
+            username: user.username
           });
         }
         

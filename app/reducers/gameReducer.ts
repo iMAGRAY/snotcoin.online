@@ -35,10 +35,16 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         return withMetadata({ 
           user: { 
             id: action.payload.id?.toString() || action.payload.id,
-            farcaster_fid: action.payload.fid || action.payload.farcaster_fid,
-            username: action.payload.username,
-            displayName: action.payload.displayName,
-            pfp: action.payload.pfp
+            username: action.payload.username || null,
+            displayName: action.payload.displayName || null,
+            farcaster_fid: action.payload.fid?.toString() || action.payload.farcaster_fid || null,
+            farcaster_username: action.payload.username || null,
+            farcaster_displayname: action.payload.displayName || null,
+            farcaster_pfp: action.payload.pfp || null,
+            pfp: action.payload.pfp || null,
+            fid: action.payload.fid || null,
+            verified: action.payload.verified || null,
+            metadata: action.payload.metadata || {}
           } 
         });
       }
@@ -187,7 +193,8 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         return {
           ...customState,
           _lastActionTime: new Date().toISOString(),
-          _lastAction: action.type
+          _lastAction: action.type,
+          lastValidation: new Date().toISOString()
         };
       }
       
@@ -200,18 +207,92 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
           ...state.inventory,
           snot: 0,
           snotCoins: 0,
+          containerCapacity: 100,
           containerSnot: 0,
-          containerCapacity: 1,
-          fillingSpeed: 1 / (24 * 60 * 60), // 1 SNOT per day
+          fillingSpeed: 1,
+          containerCapacityLevel: 1,
+          fillingSpeedLevel: 1,
+          collectionEfficiency: 1,
+          Cap: 100,
+          lastUpdateTimestamp: Date.now()
+        },
+        container: {
+          level: 1,
+          capacity: 100,
+          currentAmount: 0,
+          fillRate: 1,
+          currentFill: 0
+        },
+        upgrades: {
+          containerLevel: 1,
+          fillingSpeedLevel: 1,
+          clickPower: { level: 1, value: 1 },
+          passiveIncome: { level: 1, value: 0.1 },
+          collectionEfficiencyLevel: 1
         },
         _saveVersion: 1,
         _lastSaved: new Date().toISOString(),
+        _userId: '',
+        _lastModified: Date.now(),
+        _createdAt: new Date().toISOString(),
+        _wasRepaired: false,
+        _repairedAt: Date.now(),
+        _repairedFields: [],
+        _tempData: null,
+        _isSavingInProgress: false,
+        _skipSave: false,
+        _lastSaveError: null,
+        _isBeforeUnloadSave: false,
+        _isRestoredFromBackup: false,
         _isInitialState: true,
         _lastActionTime: new Date().toISOString(),
         _lastAction: action.type,
-        user: currentUser
+        logs: [],
+        analytics: null,
+        items: [],
+        achievements: { unlockedAchievements: [] },
+        highestLevel: 1,
+        stats: {
+          clickCount: 0,
+          playTime: 0,
+          startDate: new Date().toISOString(),
+          highestLevel: 1,
+          totalSnot: 0,
+          totalSnotCoins: 0,
+          consecutiveLoginDays: 0
+        },
+        consecutiveLoginDays: 0,
+        settings: {
+          language: 'en',
+          theme: 'light',
+          notifications: true,
+          tutorialCompleted: false,
+          musicEnabled: true,
+          soundEnabled: true,
+          notificationsEnabled: true
+        },
+        soundSettings: {
+          musicVolume: 0.5,
+          soundVolume: 0.5,
+          notificationVolume: 0.5,
+          clickVolume: 0.5,
+          effectsVolume: 0.5,
+          backgroundMusicVolume: 0.5,
+          isMuted: false,
+          isEffectsMuted: false,
+          isBackgroundMusicMuted: false
+        },
+        hideInterface: false,
+        activeTab: 'game',
+        fillingSpeed: 1,
+        containerLevel: 1,
+        isPlaying: false,
+        validationStatus: 'pending',
+        lastValidation: new Date().toISOString(),
+        gameStarted: false,
+        isLoading: false
       };
-      
+
       return defaultState;
     }
 
@@ -221,7 +302,7 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         activeTab: "laboratory",
         user: null,
         validationStatus: "pending",
-        lastValidation: undefined,
+        lastValidation: new Date().toISOString(),
         _saveVersion: (state._saveVersion || 0) + 1,
         _lastSaved: new Date().toISOString(),
         _lastActionTime: new Date().toISOString(),

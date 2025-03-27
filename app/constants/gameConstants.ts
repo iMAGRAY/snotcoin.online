@@ -35,13 +35,15 @@ export const initialState: GameState = {
     containerCapacityLevel: 1,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
-    Cap: 100
+    Cap: 100,
+    lastUpdateTimestamp: Date.now()
   },
   container: {
     level: 1,
     capacity: 100,
     currentAmount: 0,
-    fillRate: 1
+    fillRate: 1,
+    currentFill: 0
   },
   upgrades: {
     containerLevel: 1,
@@ -51,46 +53,66 @@ export const initialState: GameState = {
     collectionEfficiencyLevel: 1
   },
   _saveVersion: 1,
+  _lastSaved: new Date().toISOString(),
+  _userId: '',
+  _lastModified: Date.now(),
+  _createdAt: new Date().toISOString(),
+  _wasRepaired: false,
+  _repairedAt: Date.now(),
+  _repairedFields: [],
+  _tempData: null,
   _isSavingInProgress: false,
   _skipSave: false,
-  _lastSaveError: undefined,
+  _lastSaveError: null,
   _isBeforeUnloadSave: false,
-  _lastModified: Date.now(),
-  _wasRepaired: false,
-  _repairedAt: undefined,
-  _repairedFields: [],
-  _tempData: undefined,
+  _isRestoredFromBackup: false,
+  _isInitialState: true,
+  _lastActionTime: new Date().toISOString(),
+  _lastAction: 'RESET_GAME_STATE',
   logs: [],
-  analytics: undefined,
+  analytics: null,
   items: [],
   achievements: { unlockedAchievements: [] },
   highestLevel: 1,
-  stats: { clickCount: 0, playTime: 0, startDate: new Date().toISOString() },
+  stats: {
+    clickCount: 0,
+    playTime: 0,
+    startDate: new Date().toISOString(),
+    highestLevel: 1,
+    totalSnot: 0,
+    totalSnotCoins: 0,
+    consecutiveLoginDays: 0
+  },
   consecutiveLoginDays: 0,
-  settings: { 
-    musicEnabled: true, 
-    soundEnabled: true, 
-    notificationsEnabled: true, 
-    theme: "default", 
-    language: "en",
+  settings: {
+    language: 'en',
+    theme: 'light',
     notifications: true,
-    tutorialCompleted: false
+    tutorialCompleted: false,
+    musicEnabled: true,
+    soundEnabled: true,
+    notificationsEnabled: true
   },
   soundSettings: {
     musicVolume: 0.5,
     soundVolume: 0.5,
     notificationVolume: 0.5,
-    backgroundMusicVolume: 0.3,
-    isBackgroundMusicMuted: false,
     clickVolume: 0.5,
     effectsVolume: 0.5,
+    backgroundMusicVolume: 0.5,
     isMuted: false,
-    isEffectsMuted: false
+    isEffectsMuted: false,
+    isBackgroundMusicMuted: false
   },
   hideInterface: false,
-  activeTab: "laboratory",
+  activeTab: 'game',
   fillingSpeed: 1,
-  containerLevel: 1
+  containerLevel: 1,
+  isPlaying: false,
+  validationStatus: 'pending',
+  lastValidation: new Date().toISOString(),
+  gameStarted: false,
+  isLoading: false
 };
 
 /**

@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        farcaster_username: userData.username || existingUser.farcaster_username,
-        farcaster_displayname: userData.displayName || existingUser.farcaster_displayname,
-        farcaster_pfp: userData.pfp || existingUser.farcaster_pfp,
-        farcaster_fid: userData.fid || existingUser.farcaster_fid
+        username: userData.username || existingUser.username,
+        displayName: userData.displayName || existingUser.displayName,
+        pfpUrl: userData.pfp || existingUser.pfpUrl,
+        fid: userData.fid || existingUser.fid
       }
     });
     
@@ -63,10 +63,10 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         id: updatedUser.id,
-        fid: updatedUser.farcaster_fid,
-        username: updatedUser.farcaster_username,
-        displayName: updatedUser.farcaster_displayname,
-        pfp: updatedUser.farcaster_pfp
+        fid: updatedUser.fid,
+        username: updatedUser.username,
+        displayName: updatedUser.displayName,
+        pfp: updatedUser.pfpUrl
       }
     });
   } catch (error) {

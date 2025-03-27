@@ -2,10 +2,12 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { authService, AuthUser } from '../services/auth/authService';
+import { authService } from '../services/auth/authService';
+import { FarcasterContext as FarcasterUserContext, FarcasterSDK } from '@/app/types/farcaster';
+import { SafeUser } from '@/app/types/utils';
 
 interface FarcasterContextType {
-  user: AuthUser | null;
+  user: SafeUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: () => Promise<void>;
@@ -30,7 +32,7 @@ interface FarcasterProviderProps {
 }
 
 export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<SafeUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -98,19 +100,17 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   };
 
   // Получение данных пользователя по FID
-  const getUserByFid = async (fid: string) => {
+  const fetchUserByFid = async (fid: string | number): Promise<FarcasterUserContext | null> => {
     try {
-      // Если у нас есть Farcaster SDK, используем его напрямую
-      if (typeof window !== 'undefined' && window.farcaster && window.farcaster.fetchUserByFid) {
-        return await window.farcaster.fetchUserByFid(Number(fid));
+      if (typeof window !== 'undefined' && window.farcaster) {
+        const farcaster = window.farcaster as FarcasterSDK;
+        if (farcaster.fetchUserByFid) {
+          return await farcaster.fetchUserByFid(Number(fid));
+        }
       }
-      
-      // Иначе можно реализовать запрос к API Warpcast
-      // Но это требует дополнительных настроек и API-ключей
-      console.warn('[FarcasterContext] Farcaster SDK не доступен для получения данных пользователя');
       return null;
     } catch (error) {
-      console.error('[FarcasterContext] Error fetching user by FID:', error);
+      console.error('Error fetching user by FID:', error);
       return null;
     }
   };
@@ -156,7 +156,7 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
     logout,
     refreshUserData,
     refreshTokens,
-    getUserByFid,
+    getUserByFid: fetchUserByFid,
   };
 
   return (

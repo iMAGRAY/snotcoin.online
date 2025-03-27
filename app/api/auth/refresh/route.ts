@@ -52,9 +52,10 @@ export async function POST(request: NextRequest) {
         if (user) {
           userData = {
             id: user.id,
-            fid: user.farcaster_fid,
-            username: user.farcaster_username,
-            displayName: user.farcaster_displayname
+            fid: user.fid,
+            farcaster_fid: user.fid,
+            username: user.username,
+            displayName: user.displayName
           };
         }
       } catch (userError) {
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
         userData = {
           id: decodedRefresh.userId,
           fid: decodedRefresh.fid,
+          farcaster_fid: decodedRefresh.fid,
           username: `user${decodedRefresh.fid}`,
           displayName: `User ${decodedRefresh.fid}`
         };
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest) {
       const token = sign(
         {
           fid: userData.fid,
+          farcaster_fid: userData.farcaster_fid,
           username: userData.username,
           displayName: userData.displayName,
           userId: userData.id,

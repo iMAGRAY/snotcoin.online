@@ -127,14 +127,12 @@ export class RedisConnectionManager {
   private async setupConnection(): Promise<Redis> {
     console.log('[Redis] Установка соединения с Redis...');
     
-    const redisOptions: RedisOptions = {
+    // Создаем объект опций и добавляем только определенные значения
+    const redisOptions: any = {
       host: this.settings.host,
       port: this.settings.port,
-      password: this.settings.password,
-      connectTimeout: this.settings.connectionTimeout,
-      maxRetriesPerRequest: this.settings.maxRetriesPerRequest,
       enableAutoPipelining: true,
-      retryStrategy: (times) => {
+      retryStrategy: (times: number) => {
         // Экспоненциальная задержка для повторных попыток
         if (times > MAX_CONNECTION_ATTEMPTS) {
           console.error(`[Redis] Превышено максимальное количество попыток соединения (${MAX_CONNECTION_ATTEMPTS})`);
@@ -150,6 +148,19 @@ export class RedisConnectionManager {
         return delay;
       }
     };
+    
+    // Добавляем опциональные параметры только если они определены
+    if (this.settings.password) {
+      redisOptions.password = this.settings.password;
+    }
+    
+    if (this.settings.connectionTimeout) {
+      redisOptions.connectTimeout = this.settings.connectionTimeout;
+    }
+    
+    if (this.settings.maxRetriesPerRequest) {
+      redisOptions.maxRetriesPerRequest = this.settings.maxRetriesPerRequest;
+    }
     
     return new Redis(redisOptions);
   }

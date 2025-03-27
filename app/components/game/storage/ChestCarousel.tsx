@@ -75,7 +75,9 @@ const ChestCarousel: React.FC<ChestCarouselProps> = React.memo(
             onDragEnd={handleDragEnd}
           >
             <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto px-4 mb-20 mt-[350px]">
-              <ChestImage src={currentChest.image} alt={currentChest.name} isOpening={isChestOpening} />
+              {currentChest && (
+                <ChestImage src={currentChest.image} alt={currentChest.name} isOpening={isChestOpening} />
+              )}
             </div>
           </motion.div>
         </AnimatePresence>

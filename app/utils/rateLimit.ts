@@ -15,7 +15,7 @@ const CLEANUP_INTERVAL = 5 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const key in rateLimitStore) {
-    if (rateLimitStore[key].resetTime < now) {
+    if (rateLimitStore[key] && rateLimitStore[key].resetTime < now) {
       delete rateLimitStore[key];
     }
   }

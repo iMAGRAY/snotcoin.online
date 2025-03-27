@@ -78,7 +78,7 @@ const testState: ExtendedGameState = {
   _saveVersion: 1,
   _lastModified: Date.now(),
   _decompressedAt: new Date().toISOString()
-};
+} as unknown as ExtendedGameState;
 
 async function testRedisState() {
   console.log('Тестирование сохранения и загрузки состояния в Redis...');

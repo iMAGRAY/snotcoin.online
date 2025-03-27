@@ -13,7 +13,7 @@ interface LoadResult {
   success: boolean;
   data?: GameState;
   error?: string;
-  version?: number;
+  version?: number | undefined;
 }
 
 /**
