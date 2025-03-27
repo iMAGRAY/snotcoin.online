@@ -191,7 +191,7 @@ export function GameProvider({
   }, [propUserId]);
 
   // Загрузка сохраненного состояния
-  const loadSavedState = async () => {
+  const loadSavedState = useCallback(async () => {
     if (!userId || isLoading || initialLoadDoneRef.current) {
       return;
     }
@@ -209,6 +209,13 @@ export function GameProvider({
       
       // Загружаем состояние из любого доступного хранилища
       const normalizedId = normalizeUserId(userId);
+      
+      if (!normalizedId) {
+        console.warn(`[GameProvider] Невозможно загрузить состояние: нормализованный userId пуст`);
+        setIsLoading(false);
+        return;
+      }
+      
       const { data, source } = await storageService.loadGameState(normalizedId);
       
       if (data) {
@@ -263,7 +270,7 @@ export function GameProvider({
       initialLoadDoneRef.current = true; 
       lastUserIdRef.current = userId;
     }
-  };
+  }, [userId, isLoading, dispatch]);
 
   // Функция для сохранения состояния игры
   const saveState = useCallback(async () => {
@@ -279,6 +286,32 @@ export function GameProvider({
     
     // Получаем нормализованный ID пользователя
     const normalizedId = normalizeUserId(userId);
+    
+    // Подготовка состояния к сохранению
+    const prepareGameStateForSave = (state: GameState): ExtendedGameState => {
+      // Создаем копию состояния
+      const stateCopy = { ...state };
+      
+      // Удаляем ненужные поля
+      const fieldsToRemove = [
+        '_skipSave',
+        '_isSaving',
+        '_messageQueue',
+        '_cache'
+      ];
+      
+      fieldsToRemove.forEach(field => {
+        if ((stateCopy as any)[field]) {
+          delete (stateCopy as any)[field];
+        }
+      });
+      
+      return {
+        ...stateCopy,
+        _lastSaved: new Date().toISOString(),
+        _userId: userId
+      };
+    };
     
     try {
       setIsSaving(true);
@@ -303,14 +336,33 @@ export function GameProvider({
         console.log(`[GameProvider] Обычное сохранение выполнено в процессе размонтирования компонента`);
       }
       
-      // Отправляем событие успешного сохранения
+      // Отправляем событие в зависимости от результата сохранения
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('game-saved', {
-          detail: {
-            userId,
-            storageType
+        if (success) {
+          window.dispatchEvent(new CustomEvent('game-saved', {
+            detail: {
+              userId,
+              storageType
+            }
+          }));
+        } else {
+          console.warn(`[GameProvider] Сохранение выполнено с ошибкой`);
+          
+          // Создаем резервную копию, если основное сохранение не удалось
+          try {
+            await storageService.createBackup(normalizedId, preparedState, preparedState._saveVersion || 1);
+            console.log(`[GameProvider] Создана резервная копия из-за неуспешного сохранения`);
+          } catch (backupError) {
+            console.error(`[GameProvider] Не удалось создать резервную копию после неуспешного сохранения:`, backupError);
           }
-        }));
+          
+          window.dispatchEvent(new CustomEvent('game-save-error', {
+            detail: {
+              userId,
+              error: 'SAVE_FAILED'
+            }
+          }));
+        }
       }
     } catch (error) {
       console.error('[GameProvider] Ошибка при сохранении игрового состояния:', error);
@@ -318,7 +370,7 @@ export function GameProvider({
       // Создаем резервную копию в случае ошибки
       try {
         // Убедитесь, что normalizedId определен
-        if (userId) {
+        if (userId && normalizedId) {
           const backupState = prepareGameStateForSave(state);
           await storageService.createBackup(
             normalizedId,
@@ -326,6 +378,8 @@ export function GameProvider({
             backupState._saveVersion || 1
           );
           console.log('[GameProvider] Создана резервная копия из-за ошибки сохранения');
+        } else {
+          console.warn('[GameProvider] Невозможно создать резервную копию: отсутствует userId или normalizedId');
         }
       } catch (backupError) {
         console.error('[GameProvider] Не удалось создать резервную копию при ошибке сохранения:', backupError);
@@ -357,7 +411,8 @@ export function GameProvider({
       // Перезапускаем таймер автосохранения, если он включен
       if (enableAutoSave && userId) {
         // Проверяем, что компонент не размонтирован
-        if (userId && unmountInProgress[userId]) {
+        const normalizedId = normalizeUserId(userId);
+        if (userId && unmountInProgress[normalizedId]) {
           return;
         }
         
@@ -413,9 +468,10 @@ export function GameProvider({
       });
       
       // Сбрасываем флаг размонтирования, если компонент был повторно смонтирован
-      if (unmountInProgress[userId]) {
+      const normalizedId = normalizeUserId(userId);
+      if (unmountInProgress[normalizedId]) {
         console.log(`[GameProvider] Повторное монтирование компонента для ${userId}`);
-        unmountInProgress[userId] = false;
+        unmountInProgress[normalizedId] = false;
       }
     }
   }, [userId, loadSavedState]);
@@ -427,8 +483,11 @@ export function GameProvider({
       setIsSaving(false);
       
       // Если компонент уже размонтирован, ничего не делаем
-      if (userId && unmountInProgress[userId]) {
-        return;
+      if (userId) {
+        const normalizedId = normalizeUserId(userId);
+        if (unmountInProgress[normalizedId]) {
+          return;
+        }
       }
       
       try {
@@ -535,9 +594,16 @@ export function GameProvider({
               console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${normalizedId}:`, error);
               
               // Создаем резервную копию в случае ошибки при финальном сохранении
-              const safeUserId = getSafeUserId();
-              await storageService.createBackup(normalizedId, state, state._saveVersion || 1);
-              console.log('[GameProvider] Создана резервная копия из-за ошибки при финальном сохранении');
+              try {
+                if (normalizedId) {
+                  await storageService.createBackup(normalizedId, state, state._saveVersion || 1);
+                  console.log('[GameProvider] Создана резервная копия из-за ошибки при финальном сохранении');
+                } else {
+                  console.warn('[GameProvider] Невозможно создать резервную копию: отсутствует нормализованный userId');
+                }
+              } catch (backupError) {
+                console.error(`[GameProvider] Не удалось создать резервную копию при ошибке финального сохранения:`, backupError);
+              }
             } finally {
               // Сбрасываем флаг размонтирования после завершения сохранения
               if (normalizedId) {
@@ -567,7 +633,7 @@ export function GameProvider({
         unmountRecordsCount--;
       }
     };
-  }, [state._userId, state._skipSave, enableAutoSave, saveState, state]);
+  }, [state._userId, state._skipSave, enableAutoSave, saveState]);
 
   // Предоставляем состояние и диспетчер через контексты
   return (
