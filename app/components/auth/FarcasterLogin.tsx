@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
-import { saveToken, saveUserId } from '@/app/services/auth/authenticationService';
+import { authService } from '@/app/services/auth/authService';
+import { AuthStep, AuthLogType, logAuth } from '@/app/utils/auth-logger';
 
 interface FarcasterLoginProps {
   onSuccess?: () => void;
@@ -30,33 +31,16 @@ export default function FarcasterLogin({
     return typeof window !== 'undefined' && window.farcaster !== undefined;
   };
 
-  // Функция для обработки успешной аутентификации
-  const handleSuccessfulAuth = (data: any) => {
-    if (data.token) {
-      try {
-        // Сохраняем токен с использованием authenticationService
-        saveToken(data.token);
-        console.log('[FarcasterLogin] Токен сохранен через authenticationService');
-        
-        // Сохраняем ID пользователя, если доступен
-        if (data.user && data.user.id) {
-          saveUserId(data.user.id);
-          console.log(`[FarcasterLogin] ID пользователя ${data.user.id} сохранен через authenticationService`);
-        }
-      } catch (storageError) {
-        console.error('[FarcasterLogin] Ошибка при сохранении данных авторизации:', storageError);
-        throw new Error('Ошибка при сохранении данных авторизации');
-      }
-    } else {
-      console.error('[FarcasterLogin] Сервер не вернул токен авторизации');
-      throw new Error('Авторизация не удалась: токен не получен от сервера');
-    }
-  };
-
-  // Обновленная функция handleLogin для использования централизованного механизма работы с токенами
+  // Обновленная функция handleLogin для использования централизованного сервиса авторизации
   const handleLogin = async () => {
     setIsLoading(true);
     setError(null);
+
+    logAuth(
+      AuthStep.USER_INTERACTION, 
+      AuthLogType.INFO, 
+      'Начало процесса авторизации через Farcaster'
+    );
 
     try {
       if (!isFarcasterAvailable()) {
@@ -69,41 +53,37 @@ export default function FarcasterLogin({
         throw new Error('Farcaster SDK не обнаружен. Обновите страницу или попробуйте позже.');
       }
       
+      logAuth(
+        AuthStep.FARCASTER_REQUEST, 
+        AuthLogType.INFO, 
+        'Запрос данных пользователя от Farcaster SDK'
+      );
       const userData = await farcaster.getContext();
       
       if (!userData || !userData.fid) {
         throw new Error('Не удалось получить данные пользователя Farcaster');
       }
 
-      // Отправляем данные на наш сервер для авторизации
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fid: userData.fid,
-          username: userData.username,
-          displayName: userData.displayName,
-          pfp: userData.pfp?.url
-        }),
-      });
+      logAuth(
+        AuthStep.VALIDATE_DATA, 
+        AuthLogType.INFO, 
+        'Получены данные пользователя из Farcaster SDK',
+        { fid: userData.fid, username: userData.username }
+      );
 
-      // Обработка неуспешных HTTP-статусов
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Ошибка HTTP: ${response.status}`);
+      // Используем единый сервис авторизации
+      const result = await authService.loginWithFarcaster(userData);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Ошибка при авторизации');
       }
 
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || 'Ошибка при авторизации');
-      }
-
-      // Обработка успешной авторизации
-      handleSuccessfulAuth(data);
+      logAuth(
+        AuthStep.AUTH_COMPLETE, 
+        AuthLogType.INFO, 
+        'Авторизация успешна',
+        { userId: result.data?.user?.id, farcasterId: result.data?.user?.fid }
+      );
 
       // Обновляем данные в контексте
       await refreshUserData();
@@ -118,9 +98,16 @@ export default function FarcasterLogin({
         window.location.href = redirectPath;
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('[FarcasterLogin] Error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка при авторизации';
       setError(errorMessage);
+      
+      logAuth(
+        AuthStep.AUTH_ERROR,
+        AuthLogType.ERROR,
+        'Ошибка авторизации через Farcaster',
+        { error: errorMessage }
+      );
 
       if (onError && err instanceof Error) {
         onError(err);

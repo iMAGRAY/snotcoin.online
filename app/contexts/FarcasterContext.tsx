@@ -2,23 +2,10 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface FarcasterUser {
-  id: string;
-  fid: number;
-  username: string;
-  displayName?: string;
-  pfp?: string;
-}
-
-interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
+import { authService, AuthUser } from '../services/auth/authService';
 
 interface FarcasterContextType {
-  user: FarcasterUser | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: () => Promise<void>;
@@ -43,15 +30,23 @@ interface FarcasterProviderProps {
 }
 
 export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
-  const [user, setUser] = useState<FarcasterUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const router = useRouter();
 
   // Обновление данных пользователя с сервера
   const refreshUserData = async () => {
     try {
       setIsLoading(true);
+      
+      // Сначала пробуем получить пользователя из токена
+      const userFromToken = authService.getUserFromToken();
+      if (userFromToken) {
+        setUser(userFromToken);
+        return true;
+      }
+      
+      // Если не удалось получить из токена, делаем запрос к API
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(`${baseUrl}/api/farcaster/auth`);
       const data = await response.json();
@@ -73,7 +68,7 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
         return false;
       }
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      console.error('[FarcasterContext] Error fetching user data:', error);
       setUser(null);
       return false;
     } finally {
@@ -84,33 +79,20 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   // Обновление токенов через refresh token
   const refreshTokens = async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${baseUrl}/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const success = await authService.refreshToken();
       
-      const data = await response.json();
-      
-      if (data.success && data.tokens) {
-        setTokens(data.tokens);
-        
-        // Сохраняем токен в localStorage для совместимости с dataService
-        try {
-          localStorage.setItem('auth_token', data.tokens.accessToken);
-          console.log('[FarcasterContext] Обновленный токен сохранен в localStorage');
-        } catch (storageError) {
-          console.warn('[FarcasterContext] Не удалось сохранить токен в localStorage:', storageError);
+      if (success) {
+        // Обновляем пользователя в контексте
+        const userFromToken = authService.getUserFromToken();
+        if (userFromToken) {
+          setUser(userFromToken);
         }
-        
         return true;
       }
       
       return false;
     } catch (error) {
-      console.error('Error refreshing tokens:', error);
+      console.error('[FarcasterContext] Error refreshing tokens:', error);
       return false;
     }
   };
@@ -125,10 +107,10 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
       
       // Иначе можно реализовать запрос к API Warpcast
       // Но это требует дополнительных настроек и API-ключей
-      console.warn('Farcaster SDK не доступен для получения данных пользователя');
+      console.warn('[FarcasterContext] Farcaster SDK не доступен для получения данных пользователя');
       return null;
     } catch (error) {
-      console.error('Error fetching user by FID:', error);
+      console.error('[FarcasterContext] Error fetching user by FID:', error);
       return null;
     }
   };
@@ -138,33 +120,31 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
     refreshUserData();
   }, []);
 
-  // Функция для входа в систему через Neynar
+  // Функция для входа в систему
   const login = async () => {
     try {
       // Перенаправляем на страницу авторизации
       router.push('/auth');
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[FarcasterContext] Login error:', error);
     }
   };
 
   // Функция для выхода из системы
   const logout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-      });
+      const success = await authService.logout();
       
-      if (response.ok) {
+      if (success) {
         setUser(null);
-        setTokens(null);
+        
         // Обновляем страницу или делаем что-то еще после выхода
         if (typeof window !== 'undefined') {
           window.location.reload();
         }
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('[FarcasterContext] Logout error:', error);
     }
   };
 

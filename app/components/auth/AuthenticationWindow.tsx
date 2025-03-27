@@ -7,68 +7,18 @@ import { useGameDispatch } from "../../contexts/game/hooks"
 import { MotionDiv } from "../motion/MotionWrapper"
 import { ICONS } from "../../constants/uiConstants"
 import { AuthLogType, AuthStep, logAuth, logAuthInfo, setUserId } from "../../utils/auth-logger"
+import { useFarcaster } from "../../contexts/FarcasterContext"
+import { authService } from "../../services/auth/authService"
 import WarpcastAuth from "./WarpcastAuth"
 
 interface AuthenticationWindowProps {
   onAuthenticate: (userData: any) => void
 }
 
-// Хранилище для хранения данных аутентификации в памяти
-export const authStore = {
-  authToken: null as any,
-  isAuthenticated: false,
-  
-  // Методы для работы с данными аутентификации
-  setAuthData(token: any, isAuth: boolean) {
-    // Проверяем, изменилось ли что-то
-    if (this.authToken === token && this.isAuthenticated === isAuth) {
-      return; // Ничего не изменилось, выходим
-    }
-    
-    this.authToken = token;
-    this.isAuthenticated = isAuth;
-    
-    // Логирование сохранения токена
-    logAuth(
-      AuthStep.TOKEN_RECEIVED, 
-      AuthLogType.INFO, 
-      'Данные авторизации сохранены в хранилище', 
-      { isAuthenticated: isAuth, hasToken: !!token, userId: token?.user?.id }
-    );
-    
-    // Сохраняем идентификатор пользователя в системе логирования
-    if (token?.user?.id) {
-      setUserId(token.user.id);
-    }
-  },
-  
-  clearAuthData() {
-    if (!this.authToken && !this.isAuthenticated) {
-      return; // Уже очищено
-    }
-    
-    logAuthInfo(AuthStep.USER_INTERACTION, 'Очистка данных авторизации в хранилище');
-    this.authToken = null;
-    this.isAuthenticated = false;
-  },
-  
-  getAuthToken() {
-    try {
-      return this.authToken;
-    } catch (error) {
-      console.error('[AuthStore] Ошибка при получении токена:', error);
-      return null;
-    }
-  },
-  
-  getIsAuthenticated() {
-    return this.isAuthenticated;
-  }
-};
-
 const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthenticate }) => {
   const { t } = useTranslation()
   const gameDispatch = useGameDispatch()
+  const { isAuthenticated } = useFarcaster()
 
   // Логируем монтирование компонента
   useEffect(() => {
@@ -98,7 +48,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
       );
       
       // Проверяем, не был ли пользователь уже аутентифицирован
-      if (authStore.getIsAuthenticated()) {
+      if (authService.isAuthenticated()) {
         logAuth(
           AuthStep.AUTH_COMPLETE, 
           AuthLogType.WARNING, 
@@ -107,9 +57,11 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
         return;
       }
       
-      // Save user data
-      authStore.setAuthData(userData, true)
-
+      // Сохраняем идентификатор пользователя в системе логирования
+      if (userData?.user?.id) {
+        setUserId(userData.user.id);
+      }
+      
       // Update game state
       gameDispatch({ type: "SET_USER", payload: userData })
       
@@ -144,7 +96,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
   }
 
   // Предотвращаем монтирование компонента авторизации, если пользователь уже аутентифицирован
-  if (authStore.getIsAuthenticated()) {
+  if (isAuthenticated) {
     return null;
   }
 

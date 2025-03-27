@@ -4,7 +4,7 @@
  */
 import type { ExtendedGameState } from "../../types/gameTypes";
 import type { SaveProgressResponse, LoadProgressResponse } from "../../types/saveTypes";
-import { getToken, getUserId, refreshToken } from '../auth/authenticationService';
+import { authService } from '../auth/authService';
 
 /**
  * Базовый URL для API
@@ -21,13 +21,13 @@ const activeRequests: AbortController[] = [];
 export async function getAuthHeader(): Promise<Record<string, string>> {
   try {
     // Получаем токен из сервиса аутентификации
-    const token = getToken();
+    const token = authService.getToken();
     
     // Если токен отсутствует, пробуем обновить его
     if (!token) {
-      const refreshed = await refreshToken();
+      const refreshed = await authService.refreshToken();
       if (refreshed) {
-        const newToken = getToken();
+        const newToken = authService.getToken();
         if (newToken) {
           return { 'Authorization': `Bearer ${newToken}` };
         }
@@ -53,7 +53,7 @@ export async function saveGameStateViaAPI(gameState: ExtendedGameState | string,
   try {
     const headers = await getAuthHeader();
     // Получаем userId из разных источников для обеспечения надежности
-    let userId: string | null = getUserId();
+    let userId: string | null = authService.getUserId();
     
     // Если gameState это строка (сжатые данные), используем userId только из внешних источников
     const isCompressedString = typeof gameState === 'string';
@@ -102,7 +102,7 @@ export async function saveGameStateViaAPI(gameState: ExtendedGameState | string,
     // Если токен истек (401), пробуем обновить и повторить запрос
     if (response.status === 401) {
       console.warn('[API] Токен истек, пробуем обновить и повторить сохранение');
-      const refreshed = await refreshToken();
+      const refreshed = await authService.refreshToken();
       
       if (refreshed) {
         const newHeaders = await getAuthHeader();
@@ -146,7 +146,7 @@ export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGa
   try {
     const headers = await getAuthHeader();
     // Получаем userId из разных источников для обеспечения надежности
-    let userId: string | null = getUserId();
+    let userId: string | null = authService.getUserId();
     let gameState: ExtendedGameState | undefined;
     
     // Проверяем, что передали: userId или gameState
@@ -188,7 +188,7 @@ export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGa
       // Если токен истек (401), пробуем обновить и повторить запрос
       if (response.status === 401) {
         console.warn('[API] Токен истек, пробуем обновить и повторить загрузку');
-        const refreshed = await refreshToken();
+        const refreshed = await authService.refreshToken();
         
         if (refreshed) {
           const newHeaders = await getAuthHeader();
@@ -288,7 +288,7 @@ export async function saveGameStateToRedisViaAPI(
 ): Promise<boolean> {
   try {
     // Получаем токен для авторизации
-    const token = getToken();
+    const token = authService.getToken();
     
     if (!token) {
       console.warn(`[ApiService] Не удалось получить токен для сохранения в Redis`);
@@ -332,7 +332,7 @@ export async function loadGameStateFromRedisViaAPI(userId: string): Promise<Exte
     console.log(`[ApiService] Загрузка данных из Redis через API для ${userId}`);
     
     // Получаем токен для авторизации
-    const token = getToken();
+    const token = authService.getToken();
     
     if (!token) {
       console.warn(`[ApiService] Не удалось получить токен для загрузки данных из Redis`);

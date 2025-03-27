@@ -1,116 +1,60 @@
 /**
- * Контекст пользователя Farcaster, содержащий информацию о текущем пользователе
+ * Типы для работы с Farcaster SDK
+ * @module
  */
-interface FarcasterContext {
-  /** Уникальный Farcaster ID пользователя */
-  fid: number;
-  
-  /** Username пользователя (без @) */
-  username: string;
-  
-  /** Отображаемое имя пользователя */
-  displayName: string;
-  
-  /** Информация о профильном изображении пользователя */
-  pfp: {
-    /** URL профильного изображения */
-    url: string;
-    /** Флаг, указывающий, верифицировано ли изображение */
-    verified: boolean;
-  };
-  
-  /** Информация о кастодиальном кошельке пользователя */
-  custody: {
-    /** Адрес кошелька */
-    address: string;
-    /** Тип кошелька */
-    type: string;
-  };
-  
-  /** Массив верифицированных доменов пользователя */
-  verifications: string[];
-  
-  /** Флаг, указывающий, верифицирован ли пользователь */
-  verified: boolean;
-  
-  /** URL профиля пользователя */
-  url: string;
-  
-  /** Домен пользователя в Farcaster */
-  domain: string;
-}
 
-/**
- * Опции для публикации каста (сообщения) в Farcaster
- */
-interface FarcasterCastOption {
-  /** Текст сообщения */
-  text: string;
-  
-  /** Массив вложений (URL, изображения и т.д.) */
-  embeds?: {
-    /** URL для вложения */
-    url?: string;
-    
-    /** Информация об изображении */
-    image?: {
-      /** URL изображения */
-      url: string;
-    };
-  }[];
-  
-  /** Информация о сообщении, на которое отвечает пользователь */
-  replyTo?: {
-    /** FID автора сообщения, на которое отвечает пользователь */
+declare module '@farcaster/auth-kit' {
+  export interface FarcasterContext {
     fid: number;
-    
-    /** Хеш сообщения, на которое отвечает пользователь */
-    hash: string;
-  };
-  
-  /** Массив FID упомянутых пользователей */
-  mentions?: number[];
-  
-  /** Массив позиций упоминаний в тексте */
-  mentionsPositions?: number[];
+    username: string;
+    displayName: string;
+    pfp?: {
+      url: string;
+      verified: boolean;
+    };
+    verified: boolean;
+    custody?: {
+      address: string;
+      type: string;
+    };
+    verifications?: string[];
+    domain?: string;
+    url?: string;
+  }
+
+  export interface FarcasterCastOption {
+    text: string;
+    embeds?: {
+      url?: string;
+      image?: {
+        url: string;
+      };
+    }[];
+    replyTo?: {
+      fid: number;
+      hash: string;
+    };
+    mentions?: number[];
+    mentionsPositions?: number[];
+  }
+
+  export interface FarcasterSDK {
+    ready: () => void;
+    getContext: () => Promise<FarcasterContext>;
+    fetchUserByFid: (fid: number) => Promise<any>;
+    publishCast: (text: string | FarcasterCastOption) => Promise<any>;
+    reactToCast?: (hash: string, reaction: 'like' | 'recast') => Promise<any>;
+    followUser?: (fid: number) => Promise<any>;
+    checkFollowing?: (targetFid: number) => Promise<boolean>;
+    frame?: any;
+    [key: string]: any;
+  }
 }
 
-/**
- * Интерфейс для Farcaster SDK, предоставляемого Warpcast
- */
-interface FarcasterSDK {
-  /** Проверка готовности SDK */
-  ready: () => void;
-  
-  /** Получение контекста текущего пользователя */
-  getContext: () => Promise<FarcasterContext>;
-  
-  /** Получение пользователя по FID */
-  fetchUserByFid?: (fid: number) => Promise<any>;
-  
-  /** Публикация каста (сообщения) */
-  publishCast?: (text: string | FarcasterCastOption) => Promise<any>;
-  
-  /** Отправка реакции на каст */
-  reactToCast?: (hash: string, reaction: 'like' | 'recast') => Promise<any>;
-  
-  /** Подписка на пользователя */
-  followUser?: (fid: number) => Promise<any>;
-  
-  /** Проверка подписки на пользователя */
-  checkFollowing?: (targetFid: number) => Promise<boolean>;
-  
-  /** Объект для работы с Frames (в Frames SDK) */
-  frame?: any;
-  
-  /** Другие свойства, которые могут быть в SDK */
-  [key: string]: any;
+declare global {
+  interface Window {
+    farcaster?: import('@farcaster/auth-kit').FarcasterSDK;
+  }
 }
 
-/**
- * Расширение интерфейса Window для работы с Farcaster SDK
- */
-interface Window {
-  /** Farcaster SDK, предоставляемый Warpcast */
-  farcaster?: FarcasterSDK;
-} 
+export {}; 

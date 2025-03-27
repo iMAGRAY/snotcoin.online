@@ -10,7 +10,7 @@ import { Tab } from "@headlessui/react"
 import type { ProfileSection } from "../../../types/profile-types"
 import { useRouter } from "next/navigation"
 import Settings from "../settings/Settings"
-import { authStore } from '../../auth/AuthenticationWindow'
+import { authService } from '../../../services/auth/authService'
 import { ICONS } from "../../../constants/uiConstants"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs"
 import { FaChartLine, FaStore, FaTrophy } from "react-icons/fa"
@@ -57,7 +57,7 @@ const ProfilePage: React.FC = () => {
   }
 
   const handleLogout = useCallback(() => {
-    authStore.clearAuthData()
+    authService.logout()
     
     gameDispatch({ type: "SET_USER", payload: null })
     gameDispatch({ type: "RESET_GAME_STATE" })

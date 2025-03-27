@@ -1,70 +1,28 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { logAuthInfo, AuthStep } from '@/app/utils/auth-logger';
-import { farcasterStore } from '../FarcasterFrameHandler';
+import { authService } from '@/app/services/auth/authService';
+import { useFarcaster } from '@/app/contexts/FarcasterContext';
+import { logAuthInfo, AuthStep, AuthLogType, logAuth } from '@/app/utils/auth-logger';
+import type { FarcasterContext } from '@farcaster/auth-kit';
 
-// Объявляем интерфейс для Farcaster Context
-interface FarcasterContext {
-  fid: number;
-  username: string;
-  displayName: string;
-  pfp?: {
-    url: string;
-    verified: boolean;
-  };
-  verified: boolean;
-  custody?: {
-    address: string;
-    type: string;
-  };
-  verifications?: string[];
-  domain?: string;
-  url?: string;
-}
-
-// Добавляем типы для нестандартных объектов фреймов/мобильных приложений
-interface FrameObject {
-  isFrameLoaded?: () => boolean;
-  [key: string]: any;
-}
-
+// Интерфейс пропсов компонента
 interface WarpcastAuthProps {
   onSuccess: (userData: any) => void;
   onError: (error: string) => void;
-}
-
-// Расширяем тип Window для поддержки мобильного объекта fc
-declare global {
-  interface Window {
-    fc?: {
-      isFrameLoaded?: () => boolean;
-      [key: string]: any;
-    };
-    // Примечание: farcaster уже определен в farcaster.d.ts как FarcasterSDK
-  }
 }
 
 export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sdkCheckAttempts, setSdkCheckAttempts] = useState(0);
-  const isAuthenticatedRef = useRef(false); // Используем ref для отслеживания состояния аутентификации
+  const authAttemptedRef = useRef(false);
+  const { refreshUserData, isAuthenticated } = useFarcaster();
   
-  // Безопасная функция обновления состояния загрузки
-  const safeSetIsLoading = (value: boolean) => {
-    // Обновляем только если значение изменилось
-    setIsLoading(prev => {
-      if (prev === value) return prev;
-      return value;
-    });
-  };
-
   // Функция для проверки наличия SDK
   const checkFarcasterSDK = (): boolean => {
     // Если пользователь уже аутентифицирован, сразу возвращаем true
-    if (isAuthenticatedRef.current || farcasterStore.isAuthenticated()) {
-      isAuthenticatedRef.current = true;
+    if (isAuthenticated) {
       return true;
     }
     
@@ -72,23 +30,12 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       return false;
     }
     
-    // Проверяем, доступен ли объект fc в мобильном приложении
-    if (typeof (window as any).fc !== 'undefined') {
-      const fc = (window as any).fc as FrameObject;
-      return true;
-    }
-    
     // Проверяем, доступен ли объект farcaster в браузере
-    if (!(window as any).farcaster) {
+    if (typeof window.farcaster === 'undefined') {
       return false;
     }
     
-    const farcaster = (window as any).farcaster;
-    
-    // Проверяем наличие Frames SDK
-    if (typeof farcaster.frame !== 'undefined') {
-      return true;
-    }
+    const farcaster = window.farcaster;
     
     // Проверяем, есть ли необходимые методы
     if (!farcaster.getContext) {
@@ -105,11 +52,9 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       return;
     }
     
-    // Определяем, находимся ли мы в фрейме
-    const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
-    const isFrameMode = isInIframe || document.referrer.includes('warpcast.com');
+    logAuthInfo(AuthStep.FARCASTER_INIT, 'Загрузка Farcaster SDK скрипта');
     
-    // Загружаем только официальный Warpcast SDK
+    // Загружаем официальный Warpcast SDK
     const script = document.createElement('script');
     script.src = 'https://warpcast.com/~/sdk.js';
     script.id = 'farcaster-sdk-script';
@@ -119,415 +64,180 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       if (window.farcaster && typeof window.farcaster.ready === 'function') {
         try {
           window.farcaster.ready();
+          logAuthInfo(AuthStep.FARCASTER_INIT, 'SDK успешно загружен и инициализирован');
         } catch (error) {
           console.error('Ошибка при вызове farcaster.ready()', error);
+          logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка при инициализации SDK', {}, error);
         }
       }
     };
-    script.onerror = () => console.error('Ошибка загрузки Farcaster SDK скрипта');
+    script.onerror = (e) => {
+      console.error('Ошибка загрузки Farcaster SDK скрипта', e);
+      logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка загрузки SDK скрипта', {}, e);
+    };
     document.body.appendChild(script);
   };
 
-  // Функция инициализации авторизации
-  const initWarpcastAuth = async () => {
-    // Если мы не в состоянии загрузки, прерываем выполнение
-    if (!isLoading) return;
-    
+  // Функция для авторизации через Farcaster
+  const handleFarcasterAuth = async () => {
     try {
-      // Предотвращаем повторную инициализацию
-      if (isAuthenticatedRef.current) {
-        safeSetIsLoading(false);
-        return;
-      }
+      logAuth(AuthStep.AUTH_START, AuthLogType.INFO, 'Начало авторизации через Farcaster');
       
-      // Проверяем, не авторизован ли пользователь уже
-      if (farcasterStore.isSDKInitialized() && farcasterStore.isAuthenticated()) {
-        isAuthenticatedRef.current = true;
-        safeSetIsLoading(false);
-        return;
-      }
-
-      logAuthInfo(AuthStep.INIT, 'Инициализация авторизации через Warpcast');
-      
-      // Проверяем, доступен ли SDK через FarcasterFrameHandler
-      if (farcasterStore.isSDKInitialized()) {
-        // Получаем контекст пользователя
-        const userContext = await farcasterStore.getUserContext();
-        
-        if (userContext) {
-          logAuthInfo(AuthStep.VALIDATE_DATA, 'Получены данные пользователя из farcasterStore', {
-            fid: userContext.fid,
-            username: userContext.username
-          });
-          
-          // Отправляем данные на сервер для валидации и создания JWT
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-          const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              fid: userContext.fid,
-              username: userContext.username,
-              displayName: userContext.displayName,
-              pfp: userContext.pfp?.url,
-            }),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка при отправке данных на сервер', {
-              status: response.status,
-              statusText: response.statusText,
-              error: errorText
-            });
-            throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}\n${errorText}`);
-          }
-
-          const data = await response.json();
-
-          if (data.success && data.tokens) {
-            // Сохраняем в localStorage для совместимости с dataService
-            try {
-              localStorage.setItem('auth_token', data.tokens.accessToken);
-              console.log('[WarpcastAuth] Токен сохранен в localStorage для совместимости с dataService');
-              
-              // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
-              if (data.user && data.user.id) {
-                localStorage.setItem('user_id', data.user.id);
-                console.log(`[WarpcastAuth] ID пользователя ${data.user.id} сохранен в localStorage`);
-              }
-            } catch (storageError) {
-              console.warn('[WarpcastAuth] Не удалось сохранить токен в localStorage:', storageError);
-            }
-
-            // Вызываем колбэк успешной авторизации
-            if (data.user) {
-              onSuccess(data.user);
-            }
-
-            logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация через Warpcast успешна');
-            // Отмечаем в store, что пользователь уже аутентифицирован
-            farcasterStore.setIsAuthenticated(true);
-            isAuthenticatedRef.current = true;
-            
-            // Вызываем колбэк успеха перед обновлением состояния
-            safeSetIsLoading(false);
-            return;
-          } else {
-            logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка при обработке данных пользователя', { error: data.message });
-            const errorMsg = data.message || 'Ошибка авторизации';
-            safeSetIsLoading(false);
-            // Сначала выключаем загрузку, затем устанавливаем ошибку
-            setErrorMessage(errorMsg);
-            onError(errorMsg);
-            return;
-          }
-        } else {
-          logAuthInfo(AuthStep.AUTH_ERROR, 'Не удалось получить контекст пользователя из farcasterStore');
-        }
-      } else {
-        logAuthInfo(AuthStep.INIT, 'SDK не найден в farcasterStore, ждем инициализации');
-      }
-      
-      // Если SDK еще не доступен, но попыток было мало, увеличиваем счетчик и ждем
+      // Если SDK не доступен, показываем ошибку
       if (!checkFarcasterSDK()) {
-        if (sdkCheckAttempts < 5) {
-          // Увеличиваем счетчик попыток и пытаемся загрузить SDK
-          setSdkCheckAttempts(prev => prev + 1);
-          
-          // При первой попытке загружаем SDK скрипт
-          if (sdkCheckAttempts === 0 && typeof document !== 'undefined') {
-            loadFarcasterSDK();
-          }
-          
-          return;
-        }
-        
-        // Если SDK все еще недоступен после нескольких попыток
-        const errorMsg = 'Farcaster SDK не доступен. Убедитесь, что вы открыли страницу в Warpcast или включили Frame support.';
-        safeSetIsLoading(false);
-        // Сначала выключаем загрузку, затем устанавливаем ошибку
-        setErrorMessage(errorMsg);
-        return;
-      }
-
-      // Здесь мы уверены, что SDK доступен
-      // Уведомляем Farcaster, что страница готова
-      const farcaster = (window as any).farcaster;
-      if (farcaster && typeof farcaster.ready === 'function') {
-        farcaster.ready();
+        throw new Error('Farcaster SDK не доступен. Пожалуйста, используйте Warpcast браузер или расширение.');
       }
       
-      logAuthInfo(AuthStep.AUTH_START, 'Запрос пользовательских данных Farcaster');
+      // Получаем данные пользователя из SDK
+      const userData = await window.farcaster!.getContext();
       
-      // Определяем, какой метод использовать для получения данных
-      let userContext: FarcasterContext | null = null;
-      
-      // Пробуем разные методы для получения контекста пользователя
-      if (farcaster.getContext) {
-        userContext = await farcaster.getContext();
-      } else if ((window as any).fc && (window as any).fc.getContext) {
-        userContext = await (window as any).fc.getContext();
-      } else {
-        throw new Error('Не найден метод для получения данных пользователя');
+      if (!userData || !userData.fid) {
+        throw new Error('Не удалось получить данные пользователя из Farcaster');
       }
       
-      logAuthInfo(AuthStep.VALIDATE_DATA, 'Получен ответ от Farcaster API', {
-        hasUserContext: !!userContext,
-        hasFid: userContext?.fid ? 'yes' : 'no',
-        data: userContext
-      });
+      logAuth(
+        AuthStep.VALIDATE_DATA, 
+        AuthLogType.INFO, 
+        'Получены данные пользователя из Farcaster', 
+        { fid: userData.fid, username: userData.username }
+      );
       
-      if (!userContext || !userContext.fid) {
-        logAuthInfo(AuthStep.AUTH_ERROR, 'Не удалось получить данные пользователя Farcaster');
-        const errorMsg = 'Не удалось получить данные пользователя. Пожалуйста, войдите в Warpcast.';
-        safeSetIsLoading(false);
-        // Сначала выключаем загрузку, затем устанавливаем ошибку
-        setErrorMessage(errorMsg);
-        onError(errorMsg);
-        return;
+      // Авторизуемся через сервис
+      const authResult = await authService.loginWithFarcaster(userData);
+      
+      if (!authResult.success) {
+        throw new Error(authResult.error || 'Не удалось авторизоваться');
       }
       
-      logAuthInfo(AuthStep.VALIDATE_DATA, 'Получены данные пользователя Farcaster', {
-        fid: userContext.fid,
-        username: userContext.username
-      });
-
-      // Отправляем данные на сервер для валидации и создания JWT
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const response = await fetch(`${baseUrl}/api/farcaster/auth`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fid: userContext.fid,
-          username: userContext.username,
-          displayName: userContext.displayName,
-          pfp: userContext.pfp?.url,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.tokens) {
-        // Сохраняем в localStorage для совместимости с dataService
-        try {
-          localStorage.setItem('auth_token', data.tokens.accessToken);
-          console.log('[WarpcastAuth] Токен сохранен в localStorage для совместимости с dataService');
-          
-          // Важно! Сохраняем user_id, полученный с сервера, а не генерируем его на клиенте
-          if (data.user && data.user.id) {
-            localStorage.setItem('user_id', data.user.id);
-            console.log(`[WarpcastAuth] ID пользователя ${data.user.id} сохранен в localStorage`);
-          }
-        } catch (storageError) {
-          console.warn('[WarpcastAuth] Не удалось сохранить токен в localStorage:', storageError);
-        }
-
-        // Вызываем колбэк успешной авторизации
-        if (data.user) {
-          onSuccess(data.user);
-        }
-
-        logAuthInfo(AuthStep.AUTH_COMPLETE, 'Авторизация через Warpcast успешна');
-        // Отмечаем в store, что пользователь уже аутентифицирован
-        farcasterStore.setIsAuthenticated(true);
-        isAuthenticatedRef.current = true;
-        
-        // Вызываем колбэк успеха перед обновлением состояния
-        safeSetIsLoading(false);
-      } else {
-        logAuthInfo(AuthStep.AUTH_ERROR, 'Ошибка при обработке данных пользователя', { error: data.message });
-        const errorMsg = data.message || 'Ошибка авторизации';
-        safeSetIsLoading(false);
-        // Сначала выключаем загрузку, затем устанавливаем ошибку
-        setErrorMessage(errorMsg);
-        onError(errorMsg);
-      }
+      // Обновляем данные пользователя в контексте
+      await refreshUserData();
+      
+      logAuth(
+        AuthStep.AUTH_COMPLETE, 
+        AuthLogType.INFO, 
+        'Авторизация через Farcaster успешно завершена', 
+        { userId: authResult.data?.user?.id }
+      );
+      
+      // Передаем данные в колбэк
+      onSuccess(authResult.data);
     } catch (error) {
-      logAuthInfo(AuthStep.AUTH_ERROR, 'Неожиданная ошибка при авторизации через Warpcast', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
-      safeSetIsLoading(false);
-      // Сначала выключаем загрузку, затем устанавливаем ошибку
-      setErrorMessage(errorMsg);
-      onError(errorMsg);
+      console.error('Ошибка авторизации через Farcaster:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка авторизации';
+      setErrorMessage(errorMessage);
+      
+      logAuth(
+        AuthStep.AUTH_ERROR, 
+        AuthLogType.ERROR, 
+        'Ошибка при авторизации через Farcaster', 
+        {}, 
+        error
+      );
+      
+      onError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // useEffect для настройки таймера опроса SDK только при монтировании
+  // Эффект для инициализации SDK и авторизации
   useEffect(() => {
-    // Проверяем, не аутентифицирован ли уже пользователь
-    if (farcasterStore.isAuthenticated()) {
-      isAuthenticatedRef.current = true;
-      safeSetIsLoading(false);
-      return () => {}; // Возвращаем пустую функцию очистки
-    }
+    // Предотвращаем повторные попытки авторизации
+    if (authAttemptedRef.current) return;
     
-    let interval: NodeJS.Timeout | null = null;
-    let retryCount = 0;
-    const maxRetries = 10;
-    
-    // Функция для проверки доступности SDK
-    const checkSDKAvailability = async () => {
-      // Если пользователь уже аутентифицирован, прекращаем опрос
-      if (isAuthenticatedRef.current || farcasterStore.isAuthenticated()) {
-        if (interval) {
-          clearInterval(interval);
-          interval = null;
-        }
-        isAuthenticatedRef.current = true;
-        safeSetIsLoading(false);
+    // Проверяем наличие SDK или загружаем его
+    const initAuth = async () => {
+      // Если пользователь уже аутентифицирован, выходим
+      if (isAuthenticated) {
+        setIsLoading(false);
         return;
       }
       
-      logAuthInfo(AuthStep.INIT, `Проверка SDK, попытка ${retryCount + 1}/${maxRetries}`);
+      const hasSdk = checkFarcasterSDK();
       
-      if (farcasterStore.isSDKInitialized()) {
-        logAuthInfo(AuthStep.INIT, 'SDK доступен в farcasterStore, получение контекста');
-        const userContext = await farcasterStore.getUserContext();
+      if (!hasSdk) {
+        // Если SDK нет, загружаем его
+        loadFarcasterSDK();
         
-        if (userContext) {
-          logAuthInfo(AuthStep.VALIDATE_DATA, 'Получен контекст пользователя', {
-            fid: userContext.fid,
-            username: userContext.username
-          });
-          
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-          }
-          
-          // Вызываем initWarpcastAuth для завершения авторизации
-          initWarpcastAuth();
-          return;
+        // Увеличиваем счетчик попыток
+        setSdkCheckAttempts(prev => prev + 1);
+        
+        // Если уже было много попыток, показываем сообщение пользователю
+        if (sdkCheckAttempts >= 3) {
+          setErrorMessage('Не удалось загрузить Farcaster SDK. Пожалуйста, используйте Warpcast браузер или установите расширение.');
+          setIsLoading(false);
         }
+        
+        return;
       }
       
-      retryCount++;
-      if (retryCount >= maxRetries) {
-        logAuthInfo(AuthStep.AUTH_ERROR, `Превышено максимальное количество попыток получения SDK (${maxRetries})`);
-        
-        if (interval) {
-          clearInterval(interval);
-          interval = null;
-        }
-        
-        // Если SDK не удалось получить, пытаемся загрузить его самостоятельно
-        if (sdkCheckAttempts === 0) {
-          logAuthInfo(AuthStep.INIT, 'Попытка загрузить SDK самостоятельно');
-          loadFarcasterSDK();
-          setSdkCheckAttempts(1);
-        }
-      }
+      authAttemptedRef.current = true;
+      await handleFarcasterAuth();
     };
     
-    // Запускаем проверку доступности SDK сразу
-    checkSDKAvailability();
+    initAuth();
     
-    // Запускаем интервал проверки SDK только если пользователь еще не аутентифицирован
-    interval = setInterval(checkSDKAvailability, 1000);
+    // Повторно проверяем SDK каждые 2 секунды, если он еще не загружен
+    const intervalId = setInterval(() => {
+      if (checkFarcasterSDK() && !authAttemptedRef.current) {
+        clearInterval(intervalId);
+        authAttemptedRef.current = true;
+        handleFarcasterAuth();
+      }
+    }, 2000);
     
-    // Очищаем интервал при размонтировании компонента
     return () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
+      clearInterval(intervalId);
     };
-  }, []); // Пустой массив зависимостей, чтобы эффект выполнился только при монтировании
+  }, [sdkCheckAttempts, isAuthenticated, refreshUserData]);
 
-  // useEffect для реакции на изменение sdkCheckAttempts
-  useEffect(() => {
-    // Пропускаем первый рендер (sdkCheckAttempts = 0)
-    if (sdkCheckAttempts === 0) return;
-    
-    // Если пользователь уже аутентифицирован, останавливаем процесс
-    if (isAuthenticatedRef.current || farcasterStore.isAuthenticated()) {
-      isAuthenticatedRef.current = true;
-      safeSetIsLoading(false);
-      return;
-    }
-    
-    // Запускаем инициализацию только при изменении sdkCheckAttempts > 0
-    initWarpcastAuth();
-  }, [sdkCheckAttempts]); // Не добавляем isLoading и другие состояния в зависимости
-
-  // useEffect для проверки состояния аутентификации при изменении isLoading
-  useEffect(() => {
-    // Этот эффект запускается только в ответ на изменение isLoading
-    // Проверяем Farcaster store при загрузке компонента
-    if (farcasterStore.isAuthenticated()) {
-      isAuthenticatedRef.current = true;
-      
-      // Если компонент все еще в состоянии загрузки, но пользователь уже аутентифицирован
-      if (isLoading) {
-        safeSetIsLoading(false);
-      }
-    }
-  }, [isLoading]);
-
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-4">Авторизация через Warpcast</h2>
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div>
-          <p className="text-gray-700">
-            Выполняется авторизация через Warpcast...
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Попытка: {sdkCheckAttempts + 1}/6
-          </p>
+  // Рендер компонента
+  return (
+    <div className="flex flex-col items-center space-y-4">
+      {isLoading ? (
+        <div className="py-4 w-full flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+          <span className="ml-3 text-gray-300">Подключение к Farcaster...</span>
         </div>
-      </div>
-    );
-  }
-
-  if (errorMessage) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-4">Ошибка авторизации</h2>
-        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4 w-full text-center">
-          <p className="font-bold">Не удалось подключиться к Warpcast</p>
-          <p>{errorMessage}</p>
-          
-          <div className="mt-2 text-xs text-gray-700">
-            <p>SDK проверок: {sdkCheckAttempts}</p>
-            <p>User Agent: {typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'}</p>
-          </div>
-        </div>
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">
-            Для авторизации откройте эту страницу в приложении Warpcast.
-          </p>
-          <a 
-            href={`https://warpcast.com/~/launch?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : 'https://snotcoin.online')}`}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full transition-colors inline-block"
+      ) : errorMessage ? (
+        <div className="bg-red-900/30 p-4 rounded-lg w-full">
+          <p className="text-red-400 text-sm">{errorMessage}</p>
+          <button 
+            onClick={() => {
+              setErrorMessage(null);
+              setIsLoading(true);
+              authAttemptedRef.current = false;
+              setSdkCheckAttempts(0);
+            }}
+            className="mt-2 bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm"
           >
-            Открыть в Warpcast
-          </a>
-          
-          <div className="mt-4 text-xs text-gray-500 p-2 border border-gray-200 rounded bg-gray-50">
-            <p className="font-semibold mb-1">Примечание для разработчиков:</p>
-            <p>Farcaster SDK доступен в трех форматах:</p>
-            <ul className="list-disc list-inside">
-              <li>В приложении Warpcast (мобильный)</li>
-              <li>В WebView браузера Warpcast</li>
-              <li>В Farcaster Frames</li>
-            </ul>
-            <p className="mt-1">
-              Убедитесь, что вы открываете приложение в одном из этих контекстов.
-            </p>
-          </div>
+            Попробовать снова
+          </button>
         </div>
-      </div>
-    );
-  }
-
-  return null;
+      ) : (
+        <button
+          onClick={() => {
+            setIsLoading(true);
+            authAttemptedRef.current = false;
+            handleFarcasterAuth();
+          }}
+          className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-colors bg-purple-600 hover:bg-purple-700 text-white"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 24 24" 
+            fill="currentColor" 
+            className="w-5 h-5 mr-2"
+          >
+            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1.24 14.779h2.48v-5.439l3.76 5.439h2.84l-4.35-6 4.35-5.96h-2.72l-3.88 5.37V4.82h-2.48v11.959z"/>
+          </svg>
+          <span>Войти через Farcaster</span>
+        </button>
+      )}
+      
+      <p className="text-xs text-gray-500 text-center">
+        Требуется аккаунт Farcaster. <a href="https://warpcast.com/download" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">Скачать Warpcast</a>
+      </p>
+    </div>
+  );
 } 

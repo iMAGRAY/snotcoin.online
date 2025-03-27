@@ -12,7 +12,7 @@ const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
 })
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 import AuthenticationWindow from "./auth/AuthenticationWindow"
-import { authStore } from './auth/AuthenticationWindow'
+import { authService } from '../services/auth/authService'
 import DevTools from './DevTools'
 
 // Dynamically import components that use browser APIs
@@ -64,15 +64,12 @@ type AuthAction =
 
 // Функция для проверки авторизации
 const checkAuth = (dispatch: React.Dispatch<Action>) => {
-  const isAuth = authStore.getIsAuthenticated()
-  const authToken = authStore.getAuthToken()
-
-  if (!isAuth || !authToken) {
+  const { isAuthenticated } = useFarcaster()
+  const authToken = authService.getToken()
+  
+  if (!isAuthenticated || !authToken) {
+    // Не аутентифицирован
     dispatch({ type: "SET_USER", payload: null })
-    
-    // Даже если нет авторизации, убедимся, что у игры есть уникальный ID
-    ensureGameHasUniqueId();
-    
     return false
   }
 
@@ -95,7 +92,7 @@ const checkAuth = (dispatch: React.Dispatch<Action>) => {
     }
   } catch (error) {
     // Ошибка парсинга токена
-    authStore.clearAuthData();
+    authService.logout()
     dispatch({ type: "SET_USER", payload: null });
     
     // Даже при ошибке, гарантируем наличие ID
@@ -217,7 +214,7 @@ const HomeContent: React.FC = () => {
     const handleTokenExpired = () => {
       console.log("[HomeContent] Получено событие истечения токена, переаутентификация...");
       localDispatch({ type: 'SET_AUTHENTICATED', payload: false });
-      authStore.clearAuthData(); // Очищаем устаревшие данные аутентификации
+      authService.logout();
       performAuthCheck();
     };
     
@@ -282,10 +279,9 @@ const HomeContent: React.FC = () => {
           created_at: new Date().toISOString(),
         };
         
-        // Сохраняем данные
-        localStorage.setItem('farcaster_user', JSON.stringify(safeUserData));
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('authToken', JSON.stringify(safeUserData));
+        // Сохраняем данные через authService
+        authService.saveUserData(safeUserData);
+        authService.setAuthenticated(true);
         
         // Уведомляем другие вкладки об изменении статуса авторизации
         window.dispatchEvent(new StorageEvent('storage', {
@@ -381,7 +377,13 @@ const HomeContent: React.FC = () => {
 
   // Функция для обработки аутентификации
   const handleAuthentication = () => {
-    // Просто триггерим проверку авторизации
+    const isAuth = authService.isAuthenticated();
+    if (isAuth) {
+      const userData = authService.getUserData();
+      if (userData) {
+        dispatch({ type: "SET_USER", payload: userData });
+      }
+    }
     checkAuthentication();
   };
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyJWT, decodeToken } from '@/app/utils/jwt';
+import { authService } from '@/app/services/auth/authService';
 
 /**
  * Пути, которые не требуют аутентификации
@@ -82,9 +82,14 @@ export async function middleware(request: NextRequest) {
   
   try {
     // Проверяем JWT токен
-    const { valid, userId, error } = await verifyJWT(sessionCookie.value);
+    const token = sessionCookie.value;
+    const isValid = authService.validateTokenExpiration(token);
     
-    if (!valid || !userId) {
+    // Получаем данные пользователя из токена
+    const userData = authService.decodeToken(token);
+    const userId = userData?.userId || userData?.id;
+    
+    if (!isValid || !userId) {
       // Пробуем получить refresh token
       const refreshTokenCookie = cookies().get('refresh_token');
       
@@ -112,7 +117,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({
           success: false,
           message: 'Требуется авторизация',
-          error
+          error: 'Недействительный токен'
         }, { status: 401 });
       } else {
         const url = new URL('/', request.url);

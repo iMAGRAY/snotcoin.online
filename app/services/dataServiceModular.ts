@@ -24,7 +24,7 @@ import * as saveQueue from './queue/saveQueueService';
 import { redisService } from './redis';
 
 // Импорт сервиса аутентификации
-import { getToken } from './authenticationService';
+import { authService } from './auth/authService';
 
 // Импорт функции создания начального состояния игры
 import { createInitialGameState } from '../constants/gameConstants';
@@ -339,7 +339,7 @@ export function setupBeforeUnloadHandler(
       // Используем Beacon API для надежной отправки перед закрытием
       if (navigator.sendBeacon) {
         // Получаем JWT-токен
-        const token = getToken();
+        const token = authService.getToken();
         
         // Если токена нет, не отправляем запрос
         if (!token) {

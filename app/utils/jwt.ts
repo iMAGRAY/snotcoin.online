@@ -1,137 +1,85 @@
-import { SignJWT, jwtVerify, decodeJwt } from 'jose';
-import { PrismaClient } from '@prisma/client';
-import { UserModel } from './models';
+import * as jwt from 'jsonwebtoken';
 
-// Создаем клиент, но больше не используем его активно
-const prisma = new PrismaClient();
-
-// Секрет для подписи JWT
+// Секрет для подписи JWT, должен быть в переменных окружения
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Функция для генерации случайного строкового токена
-export function generateRandomToken(length: number = 32): string {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const charactersLength = characters.length;
-  
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  
-  return result;
+/**
+ * Интерфейс для результата верификации токена
+ */
+export interface TokenVerificationResult {
+  valid: boolean;
+  userId?: string;
+  error?: string;
 }
 
-// Функция для создания JWT токена
-export async function generateJWT(userId: string): Promise<{ token: string, expiresAt: Date }> {
-  const secret = new TextEncoder().encode(JWT_SECRET);
-  const expiresIn = 30 * 24 * 60 * 60; // 30 дней в секундах
-  
-  const expiresAt = new Date();
-  expiresAt.setSeconds(expiresAt.getSeconds() + expiresIn);
-  
-  const token = await new SignJWT({ userId })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(expiresAt)
-    .sign(secret);
-  
-  return { token, expiresAt };
+/**
+ * Интерфейс содержимого токена
+ */
+export interface TokenPayload {
+  userId: string;
+  exp?: number;
+  iat?: number;
 }
 
-// Функция для генерации refresh токена без взаимодействия с БД
-export async function generateRefreshToken(userId: string): Promise<{ token: string, expiresAt: Date }> {
-  const refreshToken = generateRandomToken(64);
-  const expiresIn = 90 * 24 * 60 * 60; // 90 дней в секундах
-  
-  const expiresAt = new Date();
-  expiresAt.setSeconds(expiresAt.getSeconds() + expiresIn);
-  
-  console.log(`Создан refresh токен для пользователя ${userId}, истекает ${expiresAt.toISOString()}`);
-  
-  return { token: refreshToken, expiresAt };
-}
-
-// Функция для проверки JWT токена
-export async function verifyJWT(token: string): Promise<{ userId: string, valid: boolean, error?: string }> {
+/**
+ * Проверяет JWT токен и возвращает информацию о его валидности
+ * @param token JWT токен для проверки
+ * @returns Объект с результатами проверки
+ */
+export async function verifyJWT(token: string): Promise<TokenVerificationResult> {
   try {
-    const secret = new TextEncoder().encode(JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
+    if (!token) {
+      return { valid: false, error: 'TOKEN_MISSING' };
+    }
+
+    // Получаем секрет из переменных окружения
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[JWT] Отсутствует JWT_SECRET в переменных окружения');
+      return { valid: false, error: 'SERVER_CONFIGURATION_ERROR' };
+    }
+
+    // Верифицируем токен
+    const payload = jwt.verify(token, jwtSecret) as TokenPayload;
     
+    // Проверяем наличие userId в payload
     if (!payload || !payload.userId) {
-      return { userId: '', valid: false, error: 'Invalid token payload' };
+      return { valid: false, error: 'INVALID_TOKEN_FORMAT' };
     }
-    
-    return { userId: payload.userId as string, valid: true };
+
+    // Проверяем срок действия токена
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return { valid: false, error: 'TOKEN_EXPIRED' };
+    }
+
+    return { valid: true, userId: payload.userId };
   } catch (error) {
-    return { 
-      userId: '', 
-      valid: false, 
-      error: error instanceof Error ? error.message : 'Unknown error during token verification' 
-    };
+    // Обрабатываем различные ошибки JWT
+    if (error instanceof jwt.JsonWebTokenError) {
+      return { valid: false, error: 'INVALID_SIGNATURE' };
+    } else if (error instanceof jwt.NotBeforeError) {
+      return { valid: false, error: 'TOKEN_NOT_ACTIVE' };
+    } else if (error instanceof jwt.TokenExpiredError) {
+      return { valid: false, error: 'TOKEN_EXPIRED' };
+    } else {
+      console.error('[JWT] Unexpected error during token verification:', error);
+      return { valid: false, error: 'VERIFICATION_ERROR' };
+    }
   }
 }
 
-// Функция для обновления токенов с помощью refresh токена
-export async function refreshTokens(refreshToken: string): Promise<{ 
-  accessToken: string, 
-  refreshToken: string, 
-  expiresAt: Date,
-  success: boolean,
-  userId?: string,
-  error?: string
-}> {
-  try {
-    console.log('Попытка обновления токенов через refresh token:', refreshToken.substring(0, 10) + '...');
-    
-    // Декодируем старый токен для получения userId
-    // В будущей версии нужно реализовать полную проверку refresh токена в БД
-    const decoded = decodeJwt(refreshToken);
-    const userId = decoded.userId as string;
-    
-    if (!userId) {
-      throw new Error('Не удалось получить userId из refresh токена');
-    }
-
-    console.log(`Обновление токенов для пользователя ${userId}`);
-    
-    // Генерируем новый access токен
-    const { token: newAccessToken, expiresAt } = await generateJWT(userId);
-    
-    // Генерируем новый refresh токен
-    const { token: newRefreshToken } = await generateRefreshToken(userId);
-    
-    // Сохраняем токен в базе данных
-    await UserModel.updateToken(userId, newAccessToken);
-    
-    console.log('Токены успешно обновлены и сохранены в БД');
-    
-    return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-      expiresAt,
-      success: true,
-      userId
-    };
-  } catch (error) {
-    console.error('Ошибка при обновлении токенов:', error);
-    
-    return { 
-      accessToken: '', 
-      refreshToken: '', 
-      expiresAt: new Date(), 
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error during token refresh' 
-    };
+/**
+ * Извлекает токен из HTTP заголовка Authorization или URL параметров
+ * @param authHeader Заголовок Authorization
+ * @param tokenFromUrl Токен из URL параметров
+ * @returns Извлеченный токен или null
+ */
+export function extractToken(authHeader?: string | null, tokenFromUrl?: string | null): string | null {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  } else if (tokenFromUrl) {
+    return tokenFromUrl;
   }
-}
-
-// Функция для декодирования JWT токена без проверки подписи
-export function decodeToken(token: string): { userId?: string, [key: string]: any } | null {
-  try {
-    const decoded = decodeJwt(token);
-    return decoded as { userId?: string, [key: string]: any };
-  } catch (error) {
-    console.error('Ошибка декодирования токена:', error);
-    return null;
-  }
+  return null;
 } 

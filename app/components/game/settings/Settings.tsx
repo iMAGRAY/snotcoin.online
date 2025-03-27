@@ -12,7 +12,7 @@ import TokenomicPage from "./TokenomicPage"
 import AboutPage from "./AboutPage"
 import { useRouter } from "next/navigation"
 import MenuItem from "../../../components/ui/menu-item"
-import { authStore } from '../../auth/AuthenticationWindow';
+import { authService } from '../../../services/auth/authService'
 import Link from "next/link"
 
 interface SettingsProps {
@@ -65,8 +65,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   }
 
   const handleLogout = useCallback(() => {
-    // Clear auth data from memory store instead of localStorage
-    authStore.clearAuthData();
+    authService.logout()
 
     // Dispatch a custom event to notify other components
     window.dispatchEvent(new Event("logout"))

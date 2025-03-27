@@ -4,7 +4,6 @@ import "./globals.css"
 import { TranslationProvider } from "./i18n"
 import { FarcasterProvider } from "./contexts/FarcasterContext"
 import { GameProvider } from "./contexts/game/providers/GameProvider"
-import AuthStoreInitializer from "./utils/AuthStoreInitializer"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -52,7 +51,6 @@ export default function RootLayout({
         <FarcasterProvider>
           <TranslationProvider>
             <GameProvider>
-              <AuthStoreInitializer />
               {children}
             </GameProvider>
           </TranslationProvider>
