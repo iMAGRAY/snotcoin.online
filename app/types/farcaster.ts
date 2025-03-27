@@ -4,69 +4,83 @@
  */
 
 /**
+ * Добавляем в интерфейс Window свойства для Farcaster SDK
+ */
+declare global {
+  interface Window {
+    farcaster?: FarcasterSDK;
+    farcasterLastInitAttempt?: number;
+    farcasterInitInProgress?: boolean;
+    farcasterScriptBeingRemoved?: boolean;
+  }
+}
+
+/**
  * Константы для работы с SDK
  */
 export const FARCASTER_SDK = {
-  SCRIPT_URL: 'https://kit.warpcast.com/sdk.js',
-  BACKUP_SCRIPT_URL: 'https://cdn.warpcast.com/sdk/sdk.js',
+  SCRIPT_URL: 'https://auth.warpcast.com/farcaster-sdk.js',
+  BACKUP_SCRIPT_URL: 'https://browser-sdk.farcaster.xyz/sdk.js',
   ALTERNATIVE_URLS: [
-    '/farcaster-sdk.js', // Локальная копия SDK (приоритет)
-    'https://assets.warpcast.com/sdk.js',
-    'https://www.unpkg.com/@farcaster/auth-kit@0.2.1/dist/index.umd.js',
-    'https://esm.sh/@farcaster/auth-kit@0.2.1'
+    '/farcaster-sdk.js', // Локальная копия скрипта
+    'https://cdn.jsdelivr.net/npm/@farcaster/auth@0.0.8/sdk.js'
   ],
   MIN_BROWSER_VERSIONS: {
     chrome: 80,
-    firefox: 75,
-    safari: 13,
+    firefox: 80,
+    safari: 14,
     edge: 80
   },
   ERROR_CODES: {
     SDK_NOT_LOADED: 'SDK_NOT_LOADED',
+    AUTH_TIMEOUT: 'AUTH_TIMEOUT',
     BROWSER_NOT_SUPPORTED: 'BROWSER_NOT_SUPPORTED',
-    AUTH_FAILED: 'AUTH_FAILED',
     USER_REJECTED: 'USER_REJECTED',
-    NETWORK_ERROR: 'NETWORK_ERROR',
-    INVALID_RESPONSE: 'INVALID_RESPONSE'
+    SERVER_ERROR: 'SERVER_ERROR'
   },
   TIMEOUT: {
-    SDK_LOAD: 15000, // 15 seconds
-    AUTH_PROCESS: 30000 // 30 seconds
+    SDK_LOAD: 10000, // 10 секунд на загрузку SDK
+    AUTH_OPERATION: 30000, // 30 секунд на операцию авторизации
+    INIT: 5000 // 5 секунд на инициализацию SDK
   }
 } as const;
 
 /**
- * Контекст пользователя Farcaster
+ * Интерфейс для контекста Farcaster
  */
 export interface FarcasterContext {
-  /** Уникальный идентификатор пользователя */
+  user?: FarcasterUser;
+  authenticated: boolean;
+  verifiedAddresses?: string[];
+  requireFarcasterAuth: boolean;
+}
+
+/**
+ * Интерфейс для пользователя Farcaster
+ */
+export interface FarcasterUser {
   fid: number;
-  /** Имя пользователя */
   username: string;
-  /** Отображаемое имя */
   displayName?: string;
-  /** Аватар пользователя */
   pfp?: {
-    /** URL аватара */
     url: string;
-    /** Флаг верификации аватара */
-    verified: boolean;
   };
-  /** Флаг верификации аккаунта */
-  verified?: boolean;
-  /** Данные о custody */
-  custody?: {
-    /** Адрес кошелька */
-    address: string;
-    /** Тип custody */
-    type: string;
+  profile?: {
+    bio?: {
+      text?: string;
+    };
   };
-  /** Массив верификаций */
-  verifications?: string[];
-  /** Домен пользователя */
-  domain?: string;
-  /** URL профиля */
-  url?: string;
+}
+
+/**
+ * Интерфейс для SDK Farcaster
+ */
+export interface FarcasterSDK {
+  ready: () => Promise<void>;
+  getContext: () => Promise<FarcasterContext | null>;
+  fetchUserByFid: (fid: number) => Promise<FarcasterUser | null>;
+  signIn?: () => Promise<FarcasterContext>;
+  signOut?: () => Promise<void>;
 }
 
 /**
@@ -96,38 +110,4 @@ export interface FarcasterCastOption {
   mentions?: number[];
   /** Позиции упоминаний в тексте */
   mentionsPositions?: number[];
-}
-
-/**
- * Интерфейс для Farcaster SDK
- */
-export interface FarcasterSDK {
-  /** Инициализация SDK */
-  ready: () => Promise<void>;
-  /** Флаг готовности SDK */
-  isReady: boolean;
-  /** Получение контекста текущего пользователя */
-  getContext: () => Promise<FarcasterContext>;
-  /** Получение данных пользователя по FID */
-  fetchUserByFid: (fid: number) => Promise<FarcasterContext>;
-  /** Публикация каста */
-  publishCast: (text: string | FarcasterCastOption) => Promise<{
-    /** Хеш каста */
-    hash: string;
-    /** Временная метка */
-    timestamp: number;
-  }>;
-  /** Реакция на каст */
-  reactToCast?: (hash: string, reaction: 'like' | 'recast') => Promise<boolean>;
-  /** Подписка на пользователя */
-  followUser?: (fid: number) => Promise<boolean>;
-  /** Проверка подписки на пользователя */
-  checkFollowing?: (targetFid: number) => Promise<boolean>;
-  /** Методы для работы с фреймами */
-  frame?: {
-    /** Подписание действия фрейма */
-    signFrameAction: (frameData: any) => Promise<any>;
-    /** Валидация действия фрейма */
-    validateFrameAction: (frameData: any) => Promise<boolean>;
-  };
 } 

@@ -7,8 +7,6 @@ import { createInitialGameState, Action, GameState } from '../../../types/gameTy
 import { 
   saveGameStateWithIntegrity as saveGameState, 
   loadGameStateWithIntegrity as loadGameState,
-  createBackup,
-  safeCreateBackup,
   getLatestBackup,
   API_ROUTES 
 } from '../../../services/gameDataService'
@@ -17,6 +15,8 @@ import {
   safeSetItem, 
   getLocalStorageSize 
 } from '../../../services/localStorageManager'
+import * as storageService from '../../../services/storageService'
+import { StorageType } from '../../../services/storageService'
 
 interface GameProviderProps {
   children: React.ReactNode
@@ -32,6 +32,10 @@ const MAX_UNMOUNT_RECORDS = 100;
 const unmountInProgress: Record<string, boolean> = {};
 // Для отслеживания времени размонтирования компонентов
 const unmountTimestamps: Record<string, number> = {};
+// Для отслеживания последних сохранений
+const lastSaveTimestamps: Record<string, number> = {};
+// Минимальный интервал между сохранениями (в миллисекундах)
+const MIN_SAVE_INTERVAL = 2000; // 2 секунды
 // Счетчик для отслеживания общего количества записей
 let unmountRecordsCount = 0;
 
@@ -50,6 +54,7 @@ const cleanupUnmountRecords = () => {
     if (unmountTimestamps[key] && now - unmountTimestamps[key] > timeLimit) {
       delete unmountInProgress[key];
       delete unmountTimestamps[key];
+      delete lastSaveTimestamps[key]; // Также очищаем записи о последних сохранениях
       unmountRecordsCount--;
       cleanedCount++;
     }
@@ -66,6 +71,7 @@ const cleanupUnmountRecords = () => {
     keysToRemove.forEach(key => {
       delete unmountInProgress[key];
       delete unmountTimestamps[key];
+      delete lastSaveTimestamps[key]; // Также очищаем записи о последних сохранениях
       unmountRecordsCount--;
       cleanedCount++;
     });
@@ -87,7 +93,7 @@ const getUserIdFromStorage = (): string | null => {
     const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || localStorage.getItem('game_id');
     if (userId) {
       console.log(`[GameProvider] Найден userId в localStorage: ${userId}`);
-      return userId;
+      return normalizeUserId(userId);
     }
     return null;
   } catch (error) {
@@ -95,6 +101,33 @@ const getUserIdFromStorage = (): string | null => {
     return null;
   }
 };
+
+/**
+ * Нормализует userId, удаляя префикс если он есть
+ * @param userId исходный userId
+ * @returns нормализованный userId
+ */
+const normalizeUserId = (userId: string | undefined): string => {
+  if (!userId) return '';
+  
+  // Удаляем префиксы, если они есть
+  const prefixes = ['farcaster_', 'twitter_', 'github_', 'email_'];
+  for (const prefix of prefixes) {
+    if (userId.startsWith(prefix)) {
+      return userId.substring(prefix.length);
+    }
+  }
+  
+  return userId;
+};
+
+// Правильно определяем тип ExtendedGameState
+interface ExtendedGameState {
+  _lastSaved: string;
+  _userId: string;
+  _saveVersion: number;
+  [key: string]: any; // Дополнительные поля из GameState
+}
 
 export function GameProvider({
   children,
@@ -158,139 +191,65 @@ export function GameProvider({
   }, [propUserId]);
 
   // Загрузка сохраненного состояния
-  const loadSavedState = useCallback(async () => {
-    if (!userId) {
-      console.log('[GameProvider] Пропуск загрузки состояния: отсутствует userId');
-      return false;
+  const loadSavedState = async () => {
+    if (!userId || isLoading || initialLoadDoneRef.current) {
+      return;
     }
     
     try {
+      console.log(`[GameProvider] Начинаем загрузку сохранения для ${userId}`);
       setIsLoading(true);
-      console.log(`[GameProvider] Загрузка состояния для пользователя: ${userId}`);
       
-      // Проверяем наличие токена авторизации
-      const authToken = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      if (!authToken) {
-        console.warn(`[GameProvider] Отсутствует токен авторизации для пользователя: ${userId}`);
+      // Инициализируем storageService при первой загрузке
+      await storageService.initStorage({
+        autoCleanup: true,
+        maxBackups: 3,
+        preferredStorage: StorageType.HYBRID
+      });
+      
+      // Загружаем состояние из любого доступного хранилища
+      const normalizedId = normalizeUserId(userId);
+      const { data, source } = await storageService.loadGameState(normalizedId);
+      
+      if (data) {
+        console.log(`[GameProvider] Успешно загружено состояние для ${userId} из ${source}`);
         
-        // Проверяем наличие локальной резервной копии
-        const backupData = getLatestBackup(userId);
-        if (backupData && backupData.gameState) {
-          console.log(`[GameProvider] Найдена локальная резервная копия для ${userId}, используем её`);
-          
-          // Обновляем состояние из резервной копии
-          dispatch({
-            type: 'LOAD_GAME_STATE',
-            payload: {
-              ...backupData.gameState,
-              _userId: userId,
-              _saveVersion: backupData.version || 1,
-              _loadedFromBackup: true
-            }
-          });
-          
-          // Отмечаем, что загрузка выполнена и возвращаем успех
-          initialLoadDoneRef.current = true;
-          lastUserIdRef.current = userId;
-          return true;
+        // Проверяем, не было ли размонтирование во время загрузки
+        if (unmountInProgress[normalizedId]) {
+          console.warn(`[GameProvider] Компонент был размонтирован во время загрузки, загрузка отменена`);
+          setIsLoading(false);
+          return;
         }
         
-        // Если нет резервной копии, создаем новое состояние
-        console.log(`[GameProvider] Нет резервной копии для ${userId}, инициализируем новое состояние`);
-        dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: createInitialGameState(userId)
-        });
-        initialLoadDoneRef.current = true;
-        return false;
-      }
-      
-      const loadedState = await loadGameState(userId);
-      
-      // Проверяем, что компонент не был размонтирован во время загрузки
-      if (userId && unmountInProgress[userId]) {
-        console.log(`[GameProvider] Отмена обработки загруженного состояния - компонент размонтирован`);
-        return false;
-      }
-      
-      // Проверяем, получены ли правильные данные перед их применением
-      if (loadedState.success && loadedState.data) {
-        // Синхронизируем состояние игры
-        console.log(`[GameProvider] Успешно загружено состояние для ${userId}`, loadedState);
-        
-        // Обновляем состояние через редьюсер
-        dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: {
-            ...loadedState.data,
-            _userId: userId,
-            // Установка версии сервера, если имеется
-            _saveVersion: loadedState.version || 1
+        // Загружаем состояние
+        try {
+          dispatch({
+            type: 'LOAD_GAME_STATE',
+            payload: data
+          });
+          
+          // Если загружено из старого формата (localStorage или другого хранилища), 
+          // создаем резервную копию в IndexedDB для будущего использования
+          if (source === StorageType.LOCAL_STORAGE && storageService.getStorageConfig().preferredStorage !== StorageType.LOCAL_STORAGE) {
+            console.log(`[GameProvider] Создаем резервную копию в IndexedDB для будущего использования`);
+            await storageService.createBackup(normalizedId, data, data._saveVersion || 1);
           }
-        });
-        
-        // Сохраняем последний userId
-        lastUserIdRef.current = userId;
-        
-        // Отмечаем, что загрузка выполнена
-        initialLoadDoneRef.current = true;
-        return true;
-      } else {
-        console.log(`[GameProvider] Нет данных для пользователя ${userId}, проверяем резервные копии`);
-        
-        // Проверяем наличие локальной резервной копии
-        const backupData = getLatestBackup(userId);
-        if (backupData && backupData.gameState) {
-          console.log(`[GameProvider] Найдена локальная резервная копия для ${userId}, используем её`);
           
-          // Обновляем состояние из резервной копии
-          dispatch({
-            type: 'LOAD_GAME_STATE',
-            payload: {
-              ...backupData.gameState,
-              _userId: userId,
-              _saveVersion: backupData.version || 1,
-              _loadedFromBackup: true
-            }
-          });
-          
+          console.log(`[GameProvider] Успешно загружено состояние для ${userId}`);
           initialLoadDoneRef.current = true;
-          lastUserIdRef.current = userId;
-          return true;
+        } catch (loadError) {
+          console.error(`[GameProvider] Ошибка при загрузке состояния:`, loadError);
         }
-        
-        // Если нет данных и нет резервной копии, инициализируем новое состояние с userId
+      } else {
+        console.log(`[GameProvider] Сохранение не найдено для ${userId}, инициализируем новое состояние`);
         dispatch({
           type: 'LOAD_GAME_STATE',
           payload: createInitialGameState(userId)
         });
         initialLoadDoneRef.current = true;
-        return false;
       }
     } catch (error) {
-      console.error('[GameProvider] Ошибка при загрузке состояния:', error);
-      
-      // Проверяем наличие локальной резервной копии
-      const backupData = typeof getLatestBackup === 'function' ? getLatestBackup(userId) : null;
-      if (backupData && backupData.gameState) {
-        console.log(`[GameProvider] Найдена локальная резервная копия после ошибки для ${userId}, используем её`);
-        
-        // Обновляем состояние из резервной копии
-        dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: {
-            ...backupData.gameState,
-            _userId: userId,
-            _saveVersion: backupData.version || 1,
-            _loadedFromBackup: true,
-            _hadLoadError: true
-          }
-        });
-        
-        initialLoadDoneRef.current = true;
-        lastUserIdRef.current = userId;
-        return true;
-      }
+      console.error(`[GameProvider] Ошибка при загрузке состояния:`, error);
       
       // В случае ошибки инициализируем новое состояние
       dispatch({
@@ -298,235 +257,96 @@ export function GameProvider({
         payload: createInitialGameState(userId)
       });
       initialLoadDoneRef.current = true;
-      return false;
     } finally {
+      // Завершаем загрузку
       setIsLoading(false);
+      initialLoadDoneRef.current = true; 
+      lastUserIdRef.current = userId;
     }
-  }, [userId]);
+  };
 
-  // Автоматическое сохранение состояния игры
+  // Функция для сохранения состояния игры
   const saveState = useCallback(async () => {
-    // Пропускаем сохранение, если отсутствует userId, автосохранение отключено,
-    // или установлен флаг _skipSave
+    // Проверяем, что есть ID пользователя и сохранение разрешено
     if (!userId || !enableAutoSave || state._skipSave) {
-      if (!userId) {
-        console.log('[GameProvider] saveState: userId отсутствует, сохранение отменено');
-        
-        // Если userId отсутствует, но есть game_id в localStorage, используем его
-        const backupId = getUserIdFromStorage();
-        if (backupId && backupId !== state._userId) {
-          console.log(`[GameProvider] saveState: используем резервный ID: ${backupId}`);
-          
-          // Устанавливаем userId напрямую в state через dispatch
-          dispatch({
-            type: 'LOAD_GAME_STATE',
-            payload: {
-              ...state,
-              _userId: backupId
-            }
-          });
-          
-          // Чтобы избежать бесконечного цикла, запускаем отложенное сохранение
-          setTimeout(() => {
-            // Проверяем, что userId реально установился
-            if (state._userId) {
-              console.log(`[GameProvider] Отложенное сохранение для установленного userId: ${state._userId}`);
-              saveState();
-            }
-          }, 100);
-          
-          return;
-        }
-      } else if (!enableAutoSave) {
-        console.log('[GameProvider] saveState: автосохранение отключено, сохранение отменено');
-      } else if (state._skipSave) {
-        console.log('[GameProvider] saveState: установлен флаг _skipSave, сохранение отменено');
-      }
       return;
     }
     
-    // Проверяем заполненность localStorage перед сохранением
-    const checkStorageQuota = () => {
-      // Используем функцию getSafeUserId и явное приведение типов
-      const safeId = getSafeUserId();
-      
-      // Используем явное приведение типов для userId
-      cleanupLocalStorage(80, safeId as string);
-      
-      // Проверяем текущий размер хранилища
-      const { percent } = getLocalStorageSize();
-      return percent > 80;
-    };
-    
-    // Выполняем проверку и очистку localStorage перед сохранением
-    checkStorageQuota();
-    
-    // Новая проверка: Если компонент размонтирован и saveState вызван не из финального сохранения
-    if (userId && unmountInProgress[userId] && !finalSaveSentRef.current) {
-      console.log('[GameProvider] saveState: компонент размонтирован, но это не финальное сохранение, продолжаем');
-      // Здесь мы не прерываем выполнение функции, чтобы обеспечить сохранение даже при размонтировании
+    // Если уже идет сохранение, пропускаем
+    if (isSaving) {
+      return;
     }
     
-    // Событие начала сохранения
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('game-save-start', { detail: { userId } }));
-    }
+    // Получаем нормализованный ID пользователя
+    const normalizedId = normalizeUserId(userId);
     
     try {
-      // Показываем индикатор сохранения
       setIsSaving(true);
       
-      // Подготовка данных игры перед сохранением
-      const prepareGameStateForSave = (state: any) => {
-        // Создаем копию для безопасного изменения
-        const stateCopy = { ...state };
-        
-        // Удаляем ненужные поля перед сохранением
-        const fieldsToRemove = [
-          '_thrownBalls', 
-          '_worldRef', 
-          '_bodiesMap', 
-          '_tempData',
-          '_physicsObjects',
-          '_sceneObjects',
-          '_renderData',
-          '_debugInfo',
-          '_frameData',
-          '_particleSystem',
-          '_animationSystem',
-          '_eventEmitter',
-          '_soundSystem',
-          '_renderSystem',
-          '_messageQueue',
-          '_cache'
-        ];
-        
-        fieldsToRemove.forEach(field => {
-          if ((stateCopy as any)[field]) {
-            delete (stateCopy as any)[field];
-          }
-        });
-        
-        return {
-          ...stateCopy,
-          _lastSaved: new Date().toISOString(),
-          _userId: userId
-        };
-      };
+      // Подготавливаем состояние к сохранению
+      const preparedState = prepareGameStateForSave(state);
       
-      // Проверяем, что userId установлен в состоянии
-      const stateToSave = prepareGameStateForSave(state);
+      console.log(`[GameProvider] Сохранение состояния для пользователя: ${normalizedId}`);
       
-      console.log(`[GameProvider] Сохранение состояния для пользователя: ${userId}`);
+      // Сохраняем состояние и получаем информацию о типе хранилища
+      const { success, storageType } = await storageService.saveGameState(
+        normalizedId,
+        preparedState,
+        preparedState._saveVersion || 1
+      );
       
-      // Обеспечиваем, что userId это строка
-      const idToUse = userId as string;
+      // Обновляем lastUserIdRef
+      lastUserIdRef.current = userId;
       
-      // Сохраняем состояние игры
-      const saveResult = await saveGameState(idToUse, stateToSave);
-      
-      // Проверяем, не был ли компонент размонтирован во время сохранения
-      if (userId && unmountInProgress[userId] && !finalSaveSentRef.current) {
-        console.log(`[GameProvider] Сохранение выполнено после размонтирования компонента`);
+      // Если сохранение выполнено в процессе размонтирования, сбрасываем флаг
+      if (userId && unmountInProgress[normalizedId] && !finalSaveSentRef.current) {
+        console.log(`[GameProvider] Обычное сохранение выполнено в процессе размонтирования компонента`);
       }
       
-      if (saveResult.success) {
-        console.log(`[GameProvider] Состояние успешно сохранено для ${userId}`);
-        
-        // Событие успешного сохранения
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('game-save-success', { detail: { userId } }));
-        }
-      } else {
-        const saveError = saveResult.error || 'Неизвестная ошибка';
-        console.error(`[GameProvider] Ошибка при сохранении состояния для ${userId}:`, saveError);
-        
-        // Если ошибка связана с localStorage, показываем предупреждение пользователю
-        if (saveError === 'LOCAL_STORAGE_ERROR' || 
-            saveResult.message?.includes('локальное хранилище') ||
-            (typeof saveError === 'string' && saveError.includes('QuotaExceeded'))) {
-          
-          // Очищаем localStorage от ненужных данных
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              // Находим и удаляем все старые резервные копии, кроме последней
-              const backupKeys: string[] = [];
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('backup_') && !key.endsWith('_latest')) {
-                  backupKeys.push(key);
-                }
-              }
-              
-              // Сортируем по времени (старые первыми)
-              backupKeys.sort((a, b) => {
-                const timeA = parseInt(a.split('_')[2] || '0', 10);
-                const timeB = parseInt(b.split('_')[2] || '0', 10);
-                return timeA - timeB;
-              });
-              
-              // Оставляем только самую последнюю копию
-              if (backupKeys.length > 1) {
-                for (let i = 0; i < backupKeys.length - 1; i++) {
-                  localStorage.removeItem(backupKeys[i]);
-                }
-              }
-              
-              // Показываем предупреждение пользователю
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('storage-quota-exceeded', { 
-                  detail: { message: 'Хранилище браузера переполнено. Рекомендуется очистить кэш.' }
-                }));
-              }
-            }
-          } catch (cleanupError) {
-            console.error('[GameProvider] Ошибка при очистке localStorage:', cleanupError);
+      // Отправляем событие успешного сохранения
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('game-saved', {
+          detail: {
+            userId,
+            storageType
           }
-        }
-        
-        // Пытаемся сделать резервную копию, если основное сохранение не удалось
-        if (typeof window !== 'undefined' && window.localStorage && userId) {
-          const safeUserId = getSafeUserId();
-          safeCreateBackup(userId, stateToSave, stateToSave._saveVersion || 1);
-          console.log('[GameProvider] Создана резервная копия из-за ошибки API');
-        }
-        
-        // Событие ошибки сохранения
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('game-save-error', { 
-            detail: { 
-              userId, 
-              error: typeof saveError === 'string' ? saveError : 'Неизвестная ошибка'
-            }
-          }));
-        }
+        }));
       }
     } catch (error) {
-      console.error('[GameProvider] Ошибка при сохранении состояния:', error);
+      console.error('[GameProvider] Ошибка при сохранении игрового состояния:', error);
       
       // Создаем резервную копию в случае ошибки
-      if (typeof window !== 'undefined' && window.localStorage && userId) {
-        const safeUserId = getSafeUserId();
-        safeCreateBackup(userId, state, state._saveVersion || 1);
-        console.log('[GameProvider] Создана резервная копия из-за ошибки при сохранении');
+      try {
+        // Убедитесь, что normalizedId определен
+        if (userId) {
+          const backupState = prepareGameStateForSave(state);
+          await storageService.createBackup(
+            normalizedId,
+            backupState,
+            backupState._saveVersion || 1
+          );
+          console.log('[GameProvider] Создана резервная копия из-за ошибки сохранения');
+        }
+      } catch (backupError) {
+        console.error('[GameProvider] Не удалось создать резервную копию при ошибке сохранения:', backupError);
       }
       
-      // Событие ошибки сохранения
+      // Отправляем событие об ошибке
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('game-save-error', { 
-          detail: { 
-            userId, 
-            error: error instanceof Error ? error.message : String(error) 
+        window.dispatchEvent(new CustomEvent('game-save-error', {
+          detail: {
+            userId,
+            error: error instanceof Error ? error.message : String(error)
           }
         }));
       }
     } finally {
       // Скрываем индикатор сохранения, но только если компонент не размонтирован
-      if (!userId || !unmountInProgress[userId]) {
+      if (!userId || !unmountInProgress[normalizedId]) {
         setIsSaving(false);
       }
     }
-  }, [state, enableAutoSave]);
+  }, [state, enableAutoSave, userId, isSaving]);
 
   // Оборачиваем dispatch для перезапуска таймера автосохранения
   const wrappedDispatch = useCallback(
@@ -603,99 +423,43 @@ export function GameProvider({
   // Обработчик события закрытия страницы
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!userId || !enableAutoSave || state._skipSave || beforeUnloadSaveSentRef.current) {
+      // Выключаем индикатор сохранения
+      setIsSaving(false);
+      
+      // Если компонент уже размонтирован, ничего не делаем
+      if (userId && unmountInProgress[userId]) {
         return;
       }
       
-      // Помечаем, что сохранение при закрытии страницы отправлено
-      beforeUnloadSaveSentRef.current = true;
-      
-      console.log(`[GameProvider] Закрытие страницы, выполняем финальное сохранение для ${userId}`);
-      
-      // Подготавливаем данные для сохранения
-      const stateToSave = {
-        ...state,
-        _lastSaved: new Date().toISOString(),
-        _userId: userId,
-        _isCriticalSave: true, // Пометка критичности для API
-        _closeType: 'beforeunload', // Причина сохранения
-        _saveVersion: (state._saveVersion || 0) + 1 // Увеличиваем версию
-      };
-      
-      // Выполняем сохранение, используя несколько методов для надежности
-      let saveAttempted = false;
-      
-      // Метод 1: Использование navigator.sendBeacon для отправки данных даже после закрытия страницы
-      if (navigator.sendBeacon) {
-        try {
-          const payload = {
-            userId,
-            gameState: stateToSave,
-            isCriticalSave: true,
-            version: stateToSave._saveVersion,
-            timestamp: Date.now()
+      try {
+        // Создаем резервную копию только если есть userId и сохранение не отключено
+        if (userId && enableAutoSave && !state._skipSave) {
+          console.log(`[GameProvider] Создание резервной копии перед закрытием окна`);
+          
+          // Используем синхронное API для создания резервной копии
+          const preparedState = {
+            ...state,
+            _lastSaved: new Date().toISOString(),
+            _userId: userId
           };
           
-          // Создаем Blob с данными для отправки
-          const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-          
-          // Отправляем данные через Beacon API
-          const beaconSent = navigator.sendBeacon(API_ROUTES.SAVE, blob);
-          
-          // Записываем результат
-          saveAttempted = beaconSent;
-          
-          if (!beaconSent) {
-            console.warn('[GameProvider] sendBeacon не отправлен, используем запасные методы');
-          } else {
-            console.log('[GameProvider] sendBeacon успешно отправлен');
+          // Используем localStorage напрямую, так как в beforeUnload нельзя использовать асинхронные вызовы
+          try {
+            const backupKey = `backup_${userId}_${Date.now()}`;
+            localStorage.setItem(backupKey, JSON.stringify({
+              gameState: preparedState,
+              timestamp: Date.now(),
+              version: preparedState._saveVersion || 1
+            }));
+            
+            localStorage.setItem(`backup_${userId}_latest`, backupKey);
+            console.log(`[GameProvider] Резервная копия создана перед закрытием окна`);
+          } catch (storageError) {
+            console.error(`[GameProvider] Ошибка при создании резервной копии перед закрытием:`, storageError);
           }
-        } catch (beaconError) {
-          console.error('[GameProvider] Ошибка при использовании sendBeacon:', beaconError);
         }
-      }
-      
-      // Метод 2: Создаем резервную копию в localStorage для восстановления при следующем запуске
-      try {
-        if (userId) {
-          const safeUserId = getSafeUserId();
-          safeCreateBackup(userId, stateToSave, stateToSave._saveVersion || 1);
-          console.log('[GameProvider] Создана резервная копия данных при закрытии страницы');
-        }
-      } catch (backupError) {
-        console.error('[GameProvider] Ошибка создания резервной копии:', backupError);
-      }
-      
-      // Метод 3: Попытка синхронного запроса, если браузер дает такую возможность
-      if (!saveAttempted) {
-        try {
-          // Создаем синхронный XMLHttpRequest для последней попытки сохранения
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', API_ROUTES.SAVE, false); // false = синхронный запрос
-          xhr.setRequestHeader('Content-Type', 'application/json');
-          xhr.send(JSON.stringify({
-            userId,
-            gameState: stateToSave,
-            isCriticalSave: true
-          }));
-          
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('[GameProvider] Синхронный запрос успешно выполнен');
-          } else {
-            console.warn(`[GameProvider] Синхронный запрос вернул статус ${xhr.status}`);
-          }
-        } catch (syncError) {
-          console.error('[GameProvider] Ошибка синхронного запроса:', syncError);
-        }
-      }
-      
-      // Можно добавить задержку для лучшего сохранения данных
-      // Это не блокирует закрытие страницы полностью, но дает немного времени
-      if (!saveAttempted) {
-        // Для выделения времени на асинхронные операции, заставляем браузер отобразить
-        // диалоговое окно подтверждения (в современных браузерах это стандартное сообщение)
-        event.preventDefault();
-        event.returnValue = ''; // Для старых браузеров
+      } catch (error) {
+        console.error(`[GameProvider] Ошибка при обработке закрытия окна:`, error);
       }
     };
     
@@ -718,6 +482,8 @@ export function GameProvider({
       const userId = state._userId;
       if (!userId) return;
       
+      const normalizedId = normalizeUserId(userId);
+      
       // Очищаем таймер автосохранения
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -725,14 +491,28 @@ export function GameProvider({
       }
       
       // Устанавливаем флаг размонтирования
-      unmountInProgress[userId] = true;
-      unmountTimestamps[userId] = Date.now();
+      unmountInProgress[normalizedId] = true;
+      unmountTimestamps[normalizedId] = Date.now();
       unmountRecordsCount++;
       
       // Проверяем необходимость очистки старых записей
       cleanupUnmountRecords();
       
-      console.log(`[GameProvider] Компонент размонтирован для userId: ${userId}`);
+      console.log(`[GameProvider] Компонент размонтирован для userId: ${normalizedId}`);
+      
+      // Проверяем, когда было последнее сохранение
+      const now = Date.now();
+      const lastSaveTime = lastSaveTimestamps[normalizedId] || 0;
+      const timeSinceLastSave = now - lastSaveTime;
+      
+      // Если сохранение было недавно, пропускаем
+      if (timeSinceLastSave < MIN_SAVE_INTERVAL) {
+        console.log(`[GameProvider] Пропуск сохранения при размонтировании - последнее сохранение было ${timeSinceLastSave}мс назад (минимальный интервал: ${MIN_SAVE_INTERVAL}мс)`);
+        return;
+      }
+      
+      // Обновляем время последнего сохранения
+      lastSaveTimestamps[normalizedId] = now;
       
       // Приоритетное сохранение при размонтировании
       if (enableAutoSave && !state._skipSave) {
@@ -742,48 +522,48 @@ export function GameProvider({
         // Асинхронное сохранение с нулевой задержкой для избегания блокировки размонтирования
         setTimeout(async () => {
           // Проверяем, что компонент все еще в процессе размонтирования (не был повторно смонтирован)
-          if (userId && unmountInProgress[userId]) {
-            console.log(`[GameProvider] Выполняется приоритетное сохранение при размонтировании для userId: ${userId}`);
+          if (normalizedId && unmountInProgress[normalizedId]) {
+            console.log(`[GameProvider] Выполняется приоритетное сохранение при размонтировании для userId: ${normalizedId}`);
             
             // Устанавливаем флаг финального сохранения
             finalSaveSentRef.current = true;
             
             try {
               await saveState();
-              console.log(`[GameProvider] Приоритетное сохранение при размонтировании успешно выполнено для userId: ${userId}`);
+              console.log(`[GameProvider] Приоритетное сохранение при размонтировании успешно выполнено для userId: ${normalizedId}`);
             } catch (error) {
-              console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${userId}:`, error);
+              console.error(`[GameProvider] Ошибка при приоритетном сохранении при размонтировании для userId: ${normalizedId}:`, error);
               
               // Создаем резервную копию в случае ошибки при финальном сохранении
               const safeUserId = getSafeUserId();
-              safeCreateBackup(userId, state, state._saveVersion || 1);
+              await storageService.createBackup(normalizedId, state, state._saveVersion || 1);
               console.log('[GameProvider] Создана резервная копия из-за ошибки при финальном сохранении');
             } finally {
               // Сбрасываем флаг размонтирования после завершения сохранения
-              if (userId) {
-                delete unmountInProgress[userId];
-                delete unmountTimestamps[userId];
+              if (normalizedId) {
+                delete unmountInProgress[normalizedId];
+                delete unmountTimestamps[normalizedId];
                 unmountRecordsCount--;
-                console.log(`[GameProvider] Флаг размонтирования сброшен для userId: ${userId}`);
+                console.log(`[GameProvider] Флаг размонтирования сброшен для userId: ${normalizedId}`);
               }
             }
           } else {
-            console.log(`[GameProvider] Приоритетное сохранение при размонтировании отменено - компонент уже не в процессе размонтирования для userId: ${userId}`);
+            console.log(`[GameProvider] Приоритетное сохранение при размонтировании отменено - компонент уже не в процессе размонтирования для userId: ${normalizedId}`);
             
             // Сбрасываем флаг размонтирования, если компонент не в процессе размонтирования
-            if (userId) {
-              delete unmountInProgress[userId];
-              delete unmountTimestamps[userId];
+            if (normalizedId) {
+              delete unmountInProgress[normalizedId];
+              delete unmountTimestamps[normalizedId];
               unmountRecordsCount--;
             }
           }
         }, 0);
       } else {
-        console.log(`[GameProvider] Приоритетное сохранение при размонтировании пропущено из-за настроек для userId: ${userId}`);
+        console.log(`[GameProvider] Приоритетное сохранение при размонтировании пропущено из-за настроек для userId: ${normalizedId}`);
         
         // Сбрасываем флаг размонтирования
-        delete unmountInProgress[userId];
-        delete unmountTimestamps[userId];
+        delete unmountInProgress[normalizedId];
+        delete unmountTimestamps[normalizedId];
         unmountRecordsCount--;
       }
     };

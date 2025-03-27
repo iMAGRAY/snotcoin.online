@@ -85,35 +85,6 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         return;
       }
 
-      // Проверяем, не загружен ли скрипт уже
-      const oldScript = document.getElementById('farcaster-sdk-script');
-      if (oldScript) {
-        console.log('[WarpcastAuth] Найден существующий SDK скрипт');
-        
-        // Проверяем также, что SDK доступен
-        if (window.farcaster && typeof window.farcaster.ready === 'function') {
-          console.log('[WarpcastAuth] SDK скрипт уже загружен и инициализирован');
-          resolve();
-          return;
-        } else {
-          console.warn('[WarpcastAuth] SDK скрипт загружен, но SDK не инициализирован');
-          
-          // Удаляем старый скрипт, чтобы загрузить заново
-          try {
-            // Создаем копию скрипта, чтобы отследить его удаление
-            const scriptParent = oldScript.parentNode;
-            if (scriptParent) {
-              scriptParent.removeChild(oldScript);
-              console.log('[WarpcastAuth] Старый SDK скрипт успешно удален');
-            }
-          } catch (e) {
-            console.error('[WarpcastAuth] Ошибка при удалении старого SDK скрипта:', e);
-          }
-        }
-      }
-      
-      logAuthInfo(AuthStep.FARCASTER_INIT, 'Загрузка Farcaster SDK скрипта');
-      
       // Собираем все URL в один массив для попыток загрузки
       const allUrls: string[] = [
         // Приоритизируем локальный скрипт
@@ -124,7 +95,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       ].filter(Boolean) as string[];
       
       let currentUrlIndex = 0;
-      
+
       // Функция для загрузки скрипта с заданным URL
       const loadScript = (scriptUrl: string) => {
         // Загружаем SDK
@@ -205,120 +176,79 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
                       
                       // Загружаем с нового URL
                       const nextUrl = allUrls[currentUrlIndex];
-                      if (nextUrl) {
-                        loadScript(nextUrl);
-                      }
+                      loadScript(nextUrl);
                     } else {
                       reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
                     }
                   }
                 }
               } else {
-                console.error('[WarpcastAuth] SDK загружен, но API недоступен:', window.farcaster);
+                console.error('[WarpcastAuth] SDK загружен, но API не доступно');
+                if (timeoutId) {
+                  clearTimeout(timeoutId);
+                  timeoutId = null;
+                }
                 
-                // Пробуем повторно проверить наличие SDK, если не превышен лимит попыток
-                if (retryCount < maxRetries) {
-                  retryCount++;
-                  console.log(`[WarpcastAuth] Повторная проверка доступности SDK (${retryCount}/${maxRetries})...`);
-                  setTimeout(initializeSDK, 1000);
+                // Пробуем следующий URL в списке
+                currentUrlIndex++;
+                if (currentUrlIndex < allUrls.length) {
+                  console.warn(`[WarpcastAuth] API недоступно при загрузке с ${scriptUrl}, пробуем следующий URL: ${allUrls[currentUrlIndex]}`);
+                  
+                  // Удаляем текущий скрипт
+                  const currentScript = document.getElementById('farcaster-sdk-script');
+                  if (currentScript && currentScript.parentNode) {
+                    currentScript.parentNode.removeChild(currentScript);
+                  }
+                  
+                  // Загружаем с нового URL
+                  const nextUrl = allUrls[currentUrlIndex];
+                  loadScript(nextUrl);
+                } else {
+                  reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
+                }
+              }
+            } catch (sdkError) {
+              console.error('[WarpcastAuth] Ошибка при доступе к SDK:', sdkError);
+              
+              if (retryCount < maxRetries) {
+                retryCount++;
+                console.log(`[WarpcastAuth] Повторная попытка инициализации SDK (${retryCount}/${maxRetries})...`);
+                setTimeout(initializeSDK, 1000); // Пробуем через секунду
+              } else {
+                // Пробуем следующий URL в списке
+                currentUrlIndex++;
+                if (currentUrlIndex < allUrls.length) {
+                  console.warn(`[WarpcastAuth] Ошибка при доступе к SDK с ${scriptUrl}, пробуем следующий URL: ${allUrls[currentUrlIndex]}`);
+                  
+                  // Удаляем текущий скрипт
+                  const currentScript = document.getElementById('farcaster-sdk-script');
+                  if (currentScript && currentScript.parentNode) {
+                    currentScript.parentNode.removeChild(currentScript);
+                  }
+                  
+                  // Загружаем с нового URL
+                  const nextUrl = allUrls[currentUrlIndex];
+                  loadScript(nextUrl);
                 } else {
                   if (timeoutId) {
                     clearTimeout(timeoutId);
                     timeoutId = null;
                   }
-                  
-                  // Пробуем следующий URL в списке
-                  currentUrlIndex++;
-                  if (currentUrlIndex < allUrls.length) {
-                    console.warn(`[WarpcastAuth] API недоступно при загрузке с ${scriptUrl}, пробуем следующий URL: ${allUrls[currentUrlIndex]}`);
-                    
-                    // Удаляем текущий скрипт
-                    const currentScript = document.getElementById('farcaster-sdk-script');
-                    if (currentScript && currentScript.parentNode) {
-                      currentScript.parentNode.removeChild(currentScript);
-                    }
-                    
-                    // Загружаем с нового URL
-                    const nextUrl = allUrls[currentUrlIndex];
-                    if (nextUrl) {
-                      loadScript(nextUrl);
-                    }
-                  } else {
-                    reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
-                  }
+                  reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
                 }
               }
-            } catch (initError) {
-              console.error('[WarpcastAuth] Ошибка инициализации после загрузки:', initError);
-              if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-              }
-              reject(initError);
             }
-          }, 500); // Небольшая задержка для инициализации
+          }, 500);
         };
-
+        
+        // Обработчики событий скрипта
         script.onload = () => {
           console.log(`[WarpcastAuth] SDK скрипт загружен с ${scriptUrl}, инициализация...`);
-          
-          // Сначала проверяем, что SDK не инициализирован уже
-          if (window.farcaster && window.farcaster.isReady) {
-            console.log('[WarpcastAuth] SDK уже инициализирован, пропускаем дополнительную инициализацию');
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-              timeoutId = null;
-            }
-            resolve();
-            return;
-          }
-          
-          // Попытка создать объект farcaster, если он отсутствует после загрузки скрипта
-          if (!window.farcaster) {
-            console.warn('[WarpcastAuth] Скрипт загружен, но объект window.farcaster отсутствует, создаем заглушку');
-            
-            // Создаем локальную заглушку для Farcaster SDK
-            window.farcaster = {
-              _isReady: false,
-              isReady: false,
-              ready: async function() {
-                console.log('[WarpcastAuth] Вызов ready() на локальной заглушке SDK');
-                this._isReady = true;
-                this.isReady = true;
-                return true;
-              },
-              getContext: async function() {
-                console.log('[WarpcastAuth] Получение контекста из локальной заглушки SDK');
-                // Генерируем случайный локальный ID
-                const localId = `local_${Math.random().toString(36).substring(2, 10)}`;
-                localStorage.setItem('farcaster_local_id', localId);
-                
-                return {
-                  fid: Math.floor(Math.random() * 9000) + 1000,
-                  username: `local_user_${localId}`,
-                  displayName: 'Локальный пользователь',
-                  pfp: { url: '/images/default_avatar.png', verified: false },
-                  verified: false
-                };
-              },
-              fetchUserByFid: async function(fid: number) {
-                return { 
-                  fid, 
-                  username: `user_${fid}`, 
-                  displayName: `Пользователь ${fid}`,
-                  pfp: { url: '/images/default_avatar.png', verified: false },
-                  verified: false
-                };
-              }
-            };
-          }
-          
           initializeSDK();
         };
 
-        script.onerror = (errorEvent) => {
-          console.error(`[WarpcastAuth] Ошибка загрузки Farcaster SDK скрипта с ${scriptUrl}`, errorEvent);
-          
+        script.onerror = () => {
+          console.error(`[WarpcastAuth] Ошибка загрузки SDK скрипта с ${scriptUrl}`);
           if (timeoutId) {
             clearTimeout(timeoutId);
             timeoutId = null;
@@ -327,28 +257,115 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
           // Пробуем следующий URL в списке
           currentUrlIndex++;
           if (currentUrlIndex < allUrls.length) {
-            console.warn(`[WarpcastAuth] Ошибка загрузки с URL ${scriptUrl}, пробуем следующий: ${allUrls[currentUrlIndex]}`);
+            console.warn(`[WarpcastAuth] Ошибка загрузки с ${scriptUrl}, пробуем следующий: ${allUrls[currentUrlIndex]}`);
+            
+            // Загружаем с нового URL
             const nextUrl = allUrls[currentUrlIndex];
-            if (nextUrl) {
-              loadScript(nextUrl);
-            }
+            loadScript(nextUrl);
           } else {
-            // Если все URL перепробованы - возвращаем ошибку
-            logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Ошибка загрузки SDK скрипта', {}, errorEvent);
-            reject(new Error(FARCASTER_SDK.ERROR_CODES.NETWORK_ERROR));
+            reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
           }
         };
 
-        document.body.appendChild(script);
+        // Добавляем скрипт в документ
+        document.head.appendChild(script);
       };
-      
-      // Начинаем загрузку с первого URL
-      const initialUrl = allUrls[currentUrlIndex];
-      if (initialUrl) {
-        loadScript(initialUrl);
+
+      // Проверяем, не загружен ли скрипт уже
+      const oldScript = document.getElementById('farcaster-sdk-script');
+      if (oldScript) {
+        console.log('[WarpcastAuth] Найден существующий SDK скрипт');
+        
+        // Проверяем также, что SDK доступен
+        if (window.farcaster && typeof window.farcaster.ready === 'function') {
+          // Проверяем, можно ли инициализировать SDK
+          window.farcaster.ready()
+            .then(() => {
+              console.log('[WarpcastAuth] SDK скрипт уже загружен и инициализирован');
+              resolve();
+            })
+            .catch((initError: Error) => {
+              console.warn('[WarpcastAuth] SDK загружен, но не может быть инициализирован:', initError);
+              
+              // Отмечаем время попытки инициализации
+              const lastInitAttempt = window.farcasterLastInitAttempt || 0;
+              const now = Date.now();
+              
+              // Если последняя попытка была менее 10 секунд назад, просто выходим и ждем ее результата
+              if (now - lastInitAttempt < 10000) {
+                console.log('[WarpcastAuth] Недавно была попытка инициализации, ожидаем ее завершения');
+                resolve();
+                return;
+              }
+              
+              // Обновляем время последней попытки
+              window.farcasterLastInitAttempt = now;
+              
+              // Удаляем старый скрипт, чтобы загрузить заново только если прошло достаточно времени
+              try {
+                // Создаем копию скрипта, чтобы отследить его удаление
+                const scriptParent = oldScript.parentNode;
+                if (scriptParent) {
+                  scriptParent.removeChild(oldScript);
+                  console.log('[WarpcastAuth] Старый SDK скрипт успешно удален');
+                  
+                  // Даем время браузеру для очистки
+                  setTimeout(() => {
+                    // Продолжаем загрузку нового скрипта
+                    loadScript(allUrls[0]); // Всегда начинаем с локальной копии
+                  }, 500);
+                }
+              } catch (removeError) {
+                console.error('[WarpcastAuth] Ошибка при удалении старого SDK скрипта:', removeError);
+                reject(new Error('Ошибка очистки SDK'));
+              }
+            });
+          return;
+        } else {
+          console.warn('[WarpcastAuth] SDK скрипт загружен, но SDK не инициализирован');
+          
+          // Проверяем, не пытается ли другой экземпляр компонента уже удалить скрипт
+          if (window.farcasterScriptBeingRemoved) {
+            console.log('[WarpcastAuth] Скрипт в процессе удаления другим компонентом, ожидаем');
+            setTimeout(() => {
+              // Пробуем снова через небольшую задержку
+              loadFarcasterSDK().then(resolve).catch(reject);
+            }, 1000);
+            return;
+          }
+          
+          // Устанавливаем флаг, что скрипт в процессе удаления
+          window.farcasterScriptBeingRemoved = true;
+          
+          // Удаляем старый скрипт, чтобы загрузить заново
+          try {
+            // Создаем копию скрипта, чтобы отследить его удаление
+            const scriptParent = oldScript.parentNode;
+            if (scriptParent) {
+              scriptParent.removeChild(oldScript);
+              console.log('[WarpcastAuth] Старый SDK скрипт успешно удален');
+              
+              // Сбрасываем флаг после удаления
+              window.farcasterScriptBeingRemoved = false;
+              
+              // Даем время браузеру для очистки
+              setTimeout(() => {
+                // Продолжаем загрузку нового скрипта
+                loadScript(allUrls[0]); // Всегда начинаем с локальной копии
+              }, 500);
+            }
+          } catch (removeError) {
+            console.error('[WarpcastAuth] Ошибка при удалении старого SDK скрипта:', removeError);
+            window.farcasterScriptBeingRemoved = false;
+            reject(new Error('Ошибка очистки SDK'));
+          }
+        }
       } else {
-        logAuth(AuthStep.FARCASTER_INIT, AuthLogType.ERROR, 'Нет доступных URL для загрузки SDK', {});
-        reject(new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED));
+        // Если скрипт не найден, загружаем его
+        logAuthInfo(AuthStep.FARCASTER_INIT, 'Загрузка Farcaster SDK скрипта');
+        
+        // Начинаем с локальной копии
+        loadScript(allUrls[0]);
       }
     });
   }, []);
@@ -516,16 +533,20 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
 
   // Эффект для инициализации SDK и авторизации
   useEffect(() => {
-    // Предотвращаем повторные попытки авторизации
-    if (authAttemptedRef.current) return;
+    // Если уже загружается или инициализирован, не запускаем повторно
+    if (window.farcasterInitInProgress || authAttemptedRef.current) return;
     
     let isMounted = true;
+    
+    // Устанавливаем флаг инициализации
+    window.farcasterInitInProgress = true;
     
     // Проверяем наличие SDK или загружаем его
     const initAuth = async () => {
       // Если пользователь уже аутентифицирован, выходим
       if (isAuthenticated) {
         setIsLoading(false);
+        window.farcasterInitInProgress = false;
         return;
       }
       
@@ -538,12 +559,14 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
             if (!isMounted) return;
             authAttemptedRef.current = true;
             handleFarcasterAuth();
+            window.farcasterInitInProgress = false;
           })
           .catch((error) => {
             if (!isMounted) return;
             console.error('Ошибка при загрузке SDK:', error);
             setErrorMessage(error instanceof Error ? error.message : 'Неизвестная ошибка');
             setIsLoading(false);
+            window.farcasterInitInProgress = false;
             
             // Увеличиваем счетчик попыток только при ошибке
             if (sdkCheckAttempts < 3) {
@@ -555,6 +578,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         if (sdkCheckAttempts >= 3) {
           setErrorMessage('Не удалось загрузить Farcaster SDK. Пожалуйста, используйте Warpcast браузер или установите расширение.');
           setIsLoading(false);
+          window.farcasterInitInProgress = false;
         }
         
         return;
@@ -562,29 +586,19 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       
       authAttemptedRef.current = true;
       handleFarcasterAuth();
+      window.farcasterInitInProgress = false;
     };
     
     initAuth();
     
-    // Повторно проверяем SDK каждые 2 секунды, если он еще не загружен,
-    // но не более 3 попыток
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    if (!authAttemptedRef.current && sdkCheckAttempts < 3) {
-      intervalId = setInterval(() => {
-        if (checkFarcasterSDK() && !authAttemptedRef.current) {
-          if (intervalId) clearInterval(intervalId);
-          authAttemptedRef.current = true;
-          handleFarcasterAuth();
-        }
-      }, 2000);
-    }
+    // Не используем интервал для повторных проверок, так как это может
+    // вызывать параллельные загрузки SDK
     
     return () => {
       isMounted = false;
-      if (intervalId) clearInterval(intervalId);
+      window.farcasterInitInProgress = false;
     };
-  }, [sdkCheckAttempts, isAuthenticated, refreshUserData, handleFarcasterAuth]);
+  }, [sdkCheckAttempts, isAuthenticated, refreshUserData, handleFarcasterAuth, loadFarcasterSDK]);
 
   // Рендер компонента
   return (
