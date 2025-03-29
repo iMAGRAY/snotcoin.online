@@ -1,23 +1,29 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { FarcasterContext as FarcasterUserContext, FarcasterSDK } from '@/app/types/farcaster';
-import { SafeUser } from '@/app/types/utils';
-import { useAuth } from '@/app/hooks/useAuth';
-import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// import { useRouter } from 'next/navigation'; // Не используется
+// import { FarcasterSDK, FARCASTER_SDK } from '@/app/types/farcaster'; // Старые типы не нужны
+import { FarcasterUser, FarcasterContext as SDKContext } from '@/app/types/farcaster'; // Используем только FarcasterUser
+// import { UserData } from '@/app/types/auth'; // Не используется
+// import { useAuth } from '@/app/hooks/useAuth'; // Не используется
+import { logAuth, AuthStep, AuthLogType, logAuthInfo, logAuthError } from '@/app/utils/auth-logger';
 
-interface FarcasterContextType {
-  user: SafeUser | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUserData: () => Promise<boolean>;
-  getUserByFid: (fid: string) => Promise<any>;
+// Импортируем SDK для Mini Apps
+import { sdk as miniAppSdk } from '@farcaster/frame-sdk';
+
+// Типы для статуса SDK
+type SdkStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface FarcasterContextProps {
+  // Убираем user, isAuthenticated, isLoading, login, logout, refreshUserData, fetchUserByFid
+  sdkUser: FarcasterUser | null;
+  sdkStatus: SdkStatus;
+  sdkError: string | null;
 }
 
-const FarcasterContext = createContext<FarcasterContextType | undefined>(undefined);
+const FarcasterContext = createContext<FarcasterContextProps | undefined>(
+  undefined
+);
 
 export const useFarcaster = () => {
   const context = useContext(FarcasterContext);
@@ -31,130 +37,88 @@ interface FarcasterProviderProps {
   children: ReactNode;
 }
 
-export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
-  const [user, setUser] = useState<SafeUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+// Убираем декларацию для window.farcaster
+// declare global { ... }
+
+export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }) => {
+  // Убираем useAuth
+  // const { user: authUser, isAuthenticated, isLoading: isAuthLoading } = useAuth(); 
+  const [sdkUser, setSdkUser] = useState<FarcasterUser | null>(null);
+  const [sdkStatus, setSdkStatus] = useState<SdkStatus>('idle'); // Начинаем с idle
+  const [sdkError, setSdkError] = useState<string | null>(null);
+  // const router = useRouter(); // Не используется
+  // const isSdkInitializedRef = useRef<boolean>(false); // Не используется
+
+  // Убираем login, logout, refreshUserData, fetchUserByFid
   
-  // Используем наш новый хук авторизации
-  const { 
-    user: authUser, 
-    isLoading: authLoading, 
-    isAuthenticated, 
-    refreshAuthState, 
-    logout: authLogout 
-  } = useAuth();
+  // --- Удаляем всю старую логику инициализации SDK (loadScript, initializeSdk, старый useEffect) --- 
 
-  // Обновление данных пользователя
-  const refreshUserData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Используем функцию из AuthProvider
-      const success = await refreshAuthState();
-      
-      if (success && authUser) {
-        setUser(authUser as SafeUser);
-        return true;
-      } else {
-        setUser(null);
-        return false;
-      }
-    } catch (error) {
-      console.error('[FarcasterContext] Error fetching user data:', error);
-      
-      logAuth(
-        AuthStep.AUTH_ERROR,
-        AuthLogType.ERROR,
-        'Ошибка при обновлении данных пользователя',
-        {},
-        error
-      );
-      
-      setUser(null);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // --- Новая логика инициализации для Mini App (остается) --- 
+  useEffect(() => {
+    let isMounted = true;
+    console.log('[FarcasterContext] useEffect for Mini App SDK context RUNNING.');
+    setSdkStatus('loading');
+    setSdkError(null);
 
-  // Получение данных пользователя по FID
-  const fetchUserByFid = async (fid: string | number): Promise<FarcasterUserContext | null> => {
-    try {
-      if (typeof window !== 'undefined' && window.farcaster) {
-        const farcaster = window.farcaster as FarcasterSDK;
-        if (farcaster.fetchUserByFid) {
-          return await farcaster.fetchUserByFid(Number(fid));
+    const getMiniAppContext = async () => {
+      try {
+        const contextPromise = miniAppSdk.context;
+        if (!contextPromise) {
+           throw new Error('miniAppSdk.context property is not available.');
+        }
+        
+        const context = await contextPromise; 
+        console.log('[FarcasterContext] Resolved Mini App context:', context);
+
+        if (!isMounted) {
+           console.log('[FarcasterContext] Unmounted after resolving Mini App context.');
+           return;
+        }
+
+        if (context && context.user && typeof context.user.fid === 'number') {
+          const userData: FarcasterUser = {
+            fid: context.user.fid,
+            username: context.user.username || 'N/A',
+            displayName: context.user.displayName || 'N/A',
+            pfp: { url: context.user.pfpUrl || '' },
+            // verifications: context.user.verifiedAddresses || [], // Пока оставляем закомментированным
+          };
+          
+          console.log('[FarcasterContext] Setting Mini App user data:', userData);
+          setSdkUser(userData);
+          setSdkStatus('ready');
+          logAuthInfo(AuthStep.FARCASTER_INIT, 'Mini App context received successfully.', { fid: context.user.fid });
+        } else {
+          console.warn('[FarcasterContext] Mini App context resolved, but missing user data or FID.', context);
+          setSdkUser(null);
+          setSdkStatus('error');
+          setSdkError('Mini App context resolved, but missing user data or FID.');
+          logAuthError(AuthStep.FARCASTER_INIT, 'Mini App context resolved, but missing user data or FID.', { context });
+        }
+      } catch (error: any) {
+        console.error('[FarcasterContext] Error resolving or processing Mini App context:', error);
+        if (isMounted) {
+          setSdkUser(null);
+          setSdkStatus('error');
+          setSdkError(error.message || 'Failed to resolve or process Mini App context');
+          logAuthError(AuthStep.FARCASTER_INIT, 'Error resolving or processing Mini App context', { error: error.message });
         }
       }
-      return null;
-    } catch (error) {
-      console.error('Error fetching user by FID:', error);
-      return null;
-    }
-  };
+    };
 
-  // Синхронизируем состояние с AuthProvider
-  useEffect(() => {
-    if (authUser && !authLoading) {
-      setUser(authUser as SafeUser);
-      setIsLoading(false);
-    } else if (!authLoading) {
-      setUser(null);
-      setIsLoading(false);
-    }
-  }, [authUser, authLoading]);
+    getMiniAppContext();
 
-  // Функция для входа в систему
-  const login = async () => {
-    try {
-      // Перенаправляем на страницу авторизации
-      router.push('/auth');
-    } catch (error) {
-      console.error('[FarcasterContext] Login error:', error);
-      
-      logAuth(
-        AuthStep.AUTH_ERROR,
-        AuthLogType.ERROR,
-        'Ошибка при попытке входа',
-        {},
-        error
-      );
-    }
-  };
+    return () => {
+      console.log('[FarcasterContext] useEffect for Mini App SDK context CLEANUP running.');
+      isMounted = false;
+    };
+  }, []);
 
-  // Функция для выхода из системы
-  const logout = async () => {
-    try {
-      // Используем функцию из AuthProvider
-      await authLogout();
-      setUser(null);
-      
-      // Обновляем страницу или делаем что-то еще после выхода
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('[FarcasterContext] Logout error:', error);
-      
-      logAuth(
-        AuthStep.LOGOUT_ERROR,
-        AuthLogType.ERROR,
-        'Ошибка при выходе из системы',
-        {},
-        error
-      );
-    }
-  };
-
-  const value: FarcasterContextType = {
-    user,
-    isLoading: isLoading || authLoading,
-    isAuthenticated: !!user,
-    login,
-    logout,
-    refreshUserData,
-    getUserByFid: fetchUserByFid,
+  // Обновляем значение контекста
+  const value: FarcasterContextProps = {
+    sdkUser,
+    sdkStatus,
+    sdkError,
   };
 
   return (

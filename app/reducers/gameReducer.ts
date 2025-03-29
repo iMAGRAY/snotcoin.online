@@ -347,7 +347,12 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         _userId: loadedState._userId || state._userId || ''
       };
       
-      return normalizedState;
+      // Возвращаем объединенное состояние с isLoading: false
+      return {
+        ...state, // Включаем все поля из предыдущего состояния
+        ...normalizedState, // Перезаписываем загруженными/нормализованными данными
+        isLoading: false // Явно устанавливаем isLoading в false
+      };
     }
 
     case "SET_GAME_STARTED":
