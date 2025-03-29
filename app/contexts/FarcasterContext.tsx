@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 // import { useRouter } from 'next/navigation'; // Не используется
 // import { FarcasterSDK, FARCASTER_SDK } from '@/app/types/farcaster'; // Старые типы не нужны
-import { FarcasterUser, FarcasterContext as SDKContext } from '@/app/types/farcaster'; // Используем только FarcasterUser
+import { FarcasterUser } from '@/app/types/farcaster'; // Используем только FarcasterUser
 // import { UserData } from '@/app/types/auth'; // Не используется
 // import { useAuth } from '@/app/hooks/useAuth'; // Не используется
 import { logAuth, AuthStep, AuthLogType, logAuthInfo, logAuthError } from '@/app/utils/auth-logger';
@@ -56,7 +56,7 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
   // --- Новая логика инициализации для Mini App (остается) --- 
   useEffect(() => {
     let isMounted = true;
-    console.log('[FarcasterContext] useEffect for Mini App SDK context RUNNING.');
+    // Убираем лишний лог о запуске эффекта
     setSdkStatus('loading');
     setSdkError(null);
 
@@ -68,10 +68,10 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
         }
         
         const context = await contextPromise; 
-        console.log('[FarcasterContext] Resolved Mini App context:', context);
+        // Убираем вывод всего контекста, оставляем только финальный лог с данными пользователя
 
         if (!isMounted) {
-           console.log('[FarcasterContext] Unmounted after resolving Mini App context.');
+           // Этот лог можно оставить для отладки размонтирования
            return;
         }
 
@@ -84,19 +84,20 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
             // verifications: context.user.verifiedAddresses || [], // Пока оставляем закомментированным
           };
           
-          console.log('[FarcasterContext] Setting Mini App user data:', userData);
+          // Можно оставить один лог с данными пользователя
+          console.log('[FarcasterContext] User authenticated:', userData.fid, userData.username);
           setSdkUser(userData);
           setSdkStatus('ready');
           logAuthInfo(AuthStep.FARCASTER_INIT, 'Mini App context received successfully.', { fid: context.user.fid });
         } else {
-          console.warn('[FarcasterContext] Mini App context resolved, but missing user data or FID.', context);
+          console.warn('[FarcasterContext] Missing user data or FID in context');
           setSdkUser(null);
           setSdkStatus('error');
           setSdkError('Mini App context resolved, but missing user data or FID.');
           logAuthError(AuthStep.FARCASTER_INIT, 'Mini App context resolved, but missing user data or FID.', { context });
         }
       } catch (error: any) {
-        console.error('[FarcasterContext] Error resolving or processing Mini App context:', error);
+        console.error('[FarcasterContext] Error with Mini App context:', error.message);
         if (isMounted) {
           setSdkUser(null);
           setSdkStatus('error');
@@ -109,7 +110,7 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
     getMiniAppContext();
 
     return () => {
-      console.log('[FarcasterContext] useEffect for Mini App SDK context CLEANUP running.');
+      // Убираем лишний лог о размонтировании
       isMounted = false;
     };
   }, []);

@@ -149,20 +149,22 @@ class ApiClient {
    */
   async saveGameProgress(
     gameState: GameState, 
+    fid: string | number,
     options: SaveGameOptions = {}
   ): Promise<SaveGameResponse> {
     try {
-      const token = localStorage.getItem('auth_token');
-      
-      if (!token) {
-        throw new Error('Требуется авторизация');
+      if (!fid) {
+        throw new Error('TOKEN_MISSING');
       }
       
       return await this.request<SaveGameResponse>('/api/game/save-progress', {
         method: 'POST',
-        headers: this.withAuthToken(token),
+        headers: {
+          'X-Farcaster-User': String(fid)  // Добавляем FID в заголовки
+        },
         body: {
           gameState,
+          fid: String(fid),
           isCritical: options.isCritical || false,
           reason: options.reason || 'manual'
         }
@@ -179,16 +181,14 @@ class ApiClient {
   /**
    * Загружает прогресс игры
    */
-  async loadGameProgress(): Promise<LoadGameResponse> {
+  async loadGameProgress(fid: string | number): Promise<LoadGameResponse> {
     try {
-      const token = localStorage.getItem('auth_token');
-      
-      if (!token) {
+      if (!fid) {
         throw new Error('Требуется авторизация');
       }
       
-      return await this.request<LoadGameResponse>('/api/game/load-progress', {
-        headers: this.withAuthToken(token)
+      return await this.request<LoadGameResponse>(`/api/game/load-progress?fid=${String(fid)}`, {
+        headers: {}
       });
     } catch (error) {
       console.error('API error (loadGameProgress):', error);

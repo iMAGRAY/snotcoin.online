@@ -69,6 +69,59 @@ function generateBatchId(): string {
   return `batch_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 }
 
+// Объявление глобальных типов для устранения ошибок TypeScript
+declare global {
+  var lastSaveTime: Map<string, number>;
+  var lastFarcasterRequestTime: Map<string, number>;
+}
+
+// Проверка квоты на запросы
+const checkRequestFrequency = async (fid: string): Promise<boolean> => {
+  try {
+    // Используем in-memory map для ограничения частоты запросов
+    // Это позволяет работать даже при недоступности Redis
+    
+    const now = Date.now();
+    const MIN_SAVE_INTERVAL = 3000; // Минимальный интервал между сохранениями (3 секунды)
+    const MIN_FARCASTER_INTERVAL = 5000; // Более строгий интервал для Farcaster (5 секунд)
+    
+    // Map для хранения времени последнего сохранения для каждого пользователя
+    // Глобальная переменная, чтобы сохранялась между запросами
+    if (!global.lastSaveTime) {
+      global.lastSaveTime = new Map<string, number>();
+    }
+    
+    // Map для хранения времени последнего запроса с Farcaster
+    if (!global.lastFarcasterRequestTime) {
+      global.lastFarcasterRequestTime = new Map<string, number>();
+    }
+    
+    // Проверяем, не слишком ли часто этот пользователь делает запросы
+    const lastTime = global.lastSaveTime.get(fid) || 0;
+    if (now - lastTime < MIN_SAVE_INTERVAL) {
+      return false; // Слишком частые запросы
+    }
+    
+    // Для запросов с Farcaster применяем более строгие ограничения
+    const isFarcasterRequest = fid && fid.length > 0;
+    if (isFarcasterRequest) {
+      const lastFarcasterTime = global.lastFarcasterRequestTime.get(fid) || 0;
+      if (now - lastFarcasterTime < MIN_FARCASTER_INTERVAL) {
+        return false; // Слишком частые запросы от Farcaster
+      }
+      global.lastFarcasterRequestTime.set(fid, now);
+    }
+    
+    // Обновляем время последнего запроса
+    global.lastSaveTime.set(fid, now);
+    return true;
+  } catch (error) {
+    console.error(`[API] Ошибка при проверке частоты запросов:`, error);
+    // В случае ошибки разрешаем запрос, чтобы не блокировать функциональность
+    return true;
+  }
+};
+
 export async function POST(request: NextRequest) {
   const startTime = performance.now();
   const metrics: RequestMetrics = { startTime };
@@ -615,22 +668,27 @@ export async function POST(request: NextRequest) {
         // Сохраняем историю прогресса, если это критическое сохранение или слияние
         if (isCritical || mergeNeeded || (gameState._saveVersion || 0) % 5 === 0) {
           try {
-            // Запрос на добавление в историю прогресса через сырой SQL
-            await prisma.$executeRaw`
+            // Используем $executeRawUnsafe вместо $executeRaw с интерполяцией переменных
+            await prisma.$executeRawUnsafe(`
               INSERT INTO progress_history (
-                ${ModelFields.ProgressHistory.user_id}, 
-                ${ModelFields.ProgressHistory.client_id}, 
-                ${ModelFields.ProgressHistory.save_type}, 
-                ${ModelFields.ProgressHistory.save_reason}, 
-                ${ModelFields.ProgressHistory.created_at}
+                "userId", 
+                "clientId", 
+                "saveType", 
+                "saveReason", 
+                "createdAt"
               ) VALUES (
-                ${userId}, 
-                ${clientId || 'unknown'},
-                ${isCritical ? 'critical' : (mergeNeeded ? 'merged' : 'regular')},
-                ${saveReason},
+                $1, 
+                $2,
+                $3,
+                $4,
                 NOW()
               )
-            `;
+            `, 
+            userId, 
+            clientId || 'unknown',
+            isCritical ? 'critical' : (mergeNeeded ? 'merged' : 'regular'),
+            saveReason
+            );
             
             logger.debug('Состояние сохранено в историю прогресса', {
               userId,
