@@ -451,4 +451,75 @@ export const getStorageInfo = async (userId: string): Promise<{ size: number; co
     console.error(`[indexedDBService] Не удалось получить информацию о хранилище для ${userId}:`, error);
     return { size: 0, count: 0 };
   }
+};
+
+/**
+ * Получает все сохранения игры для пользователя из IndexedDB
+ * @param userId ID пользователя
+ * @returns Массив объектов сохранений
+ */
+export const getAllUserSaves = async (userId: string): Promise<Array<{
+  id: string;
+  data: any;
+  lastUpdated: number;
+  version: number;
+}>> => {
+  try {
+    const db = await getDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_GAME_DATA, 'readonly');
+      const store = transaction.objectStore(STORE_GAME_DATA);
+      
+      // Поиск сохранений для конкретного пользователя
+      const results: Array<{
+        id: string;
+        data: any;
+        lastUpdated: number;
+        version: number;
+      }> = [];
+      
+      // Перебираем все сохранения в хранилище
+      const cursorRequest = store.openCursor();
+      
+      cursorRequest.onerror = (event) => {
+        const error = (event.target as IDBRequest).error;
+        console.error(`[indexedDBService] Ошибка при получении сохранений для ${userId}:`, error);
+        reject(error);
+      };
+      
+      cursorRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        
+        // Если курсор существует, обрабатываем текущую запись
+        if (cursor) {
+          const saveData = cursor.value;
+          
+          // Проверяем, принадлежит ли сохранение этому пользователю
+          if (saveData.id === userId) {
+            results.push({
+              id: saveData.id,
+              data: saveData.data,
+              lastUpdated: saveData.lastUpdated,
+              version: saveData.version || 1
+            });
+          }
+          
+          // Переходим к следующей записи
+          cursor.continue();
+        } else {
+          // Курсор закончился, возвращаем результаты
+          console.log(`[indexedDBService] Найдено ${results.length} сохранений для ${userId}`);
+          
+          // Сортируем по времени последнего обновления (сначала новые)
+          results.sort((a, b) => b.lastUpdated - a.lastUpdated);
+          
+          resolve(results);
+        }
+      };
+    });
+  } catch (error) {
+    console.error(`[indexedDBService] Не удалось получить сохранения для ${userId}:`, error);
+    return [];
+  }
 }; 

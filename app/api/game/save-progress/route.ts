@@ -12,6 +12,11 @@ import { mergeGameStates } from '../../../utils/gameStateMerger'
 import { encryptGameSave, verifySaveIntegrity } from '../../../utils/saveEncryption'
 import { ModelFields, createProgressData, createProgressHistoryData, createSyncQueueData } from '../../../utils/modelHelpers'
 import { recordSaveAttempt } from '../../../services/monitoring'
+import { PrismaClientKnownRequestError } from '@prisma/client'
+import { redisClient } from '@/app/services/redis/client'
+import { extractAuthToken } from '@/app/lib/auth/token'
+import { GameState } from '@/app/types/game'
+import { Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +45,10 @@ const saveLocks = new Map<string, boolean>();
 
 // Время последнего сохранения для каждого пользователя и минимальный интервал между запросами
 const lastSaveTime = new Map<string, number>();
+// Отдельная карта для отслеживания запросов через Farcaster
+const lastFarcasterRequestTime = new Map<string, number>();
 const MIN_SAVE_INTERVAL_MS = 300; // Минимальный интервал между сохранениями (мс)
+const FARCASTER_MIN_INTERVAL_MS = 500; // Более строгий интервал для Farcaster запросов
 const THROTTLE_STATUS_CODE = 429; // Too Many Requests
 
 // Буферы состояния для отложенного сохранения
@@ -77,25 +85,133 @@ export async function POST(request: NextRequest) {
   try {
     logger.info('Получен запрос на сохранение прогресса');
     
+    // Получение и проверка источника запроса для Farcaster
+    const origin = request.headers.get('origin') || '';
+    const referer = request.headers.get('referer') || '';
+    const isFarcasterOrigin = 
+      origin.includes('farcaster.xyz') || 
+      origin.includes('warpcast.com') ||
+      referer.includes('farcaster.xyz') || 
+      referer.includes('warpcast.com');
+    
     // Получение и проверка токена доступа
     const token = request.headers.get('authorization')?.split(' ')[1] || '';
     const clientId = request.headers.get('x-client-id') || 'unknown';
     
-    tokenResult = await verifyJWT(token);
-    if (!tokenResult.valid || !tokenResult.userId) {
-      logger.warn('Недействительный токен', { error: tokenResult.error });
-      gameMetrics.saveErrorCounter({ reason: 'invalid_token' });
-      
-      return NextResponse.json({
-        success: false,
-        error: tokenResult.error || 'INVALID_TOKEN',
-        message: 'Недействительный токен',
-        processingTime: performance.now() - startTime
-      }, { status: 401 });
-    }
+    // Проверка наличия Farcaster FID в заголовке для Mini Apps
+    const farcasterFid = request.headers.get('x-farcaster-user');
     
-    userId = tokenResult.userId;
-    logger.info('Токен верифицирован', { userId, clientId });
+    // Используем FID из Farcaster если он есть, иначе обычную JWT авторизацию
+    if (farcasterFid) {
+      // Валидация FID - строго числовое значение
+      if (!/^\d+$/.test(farcasterFid)) {
+        logger.warn('Недействительный Farcaster FID', { fid: farcasterFid });
+        gameMetrics.saveErrorCounter({ reason: 'invalid_farcaster_fid' });
+        
+        return NextResponse.json({
+          success: false,
+          error: 'INVALID_FARCASTER_FID',
+          message: 'Недействительный Farcaster FID',
+          processingTime: performance.now() - startTime
+        }, { status: 401 });
+      }
+      
+      // Проверяем существует ли пользователь в базе данных
+      try {
+        const existingUser = await prisma.user.findFirst({
+          where: { farcaster_fid: farcasterFid }
+        });
+        
+        // Если пользователь не найден, создаем его
+        if (!existingUser) {
+          logger.info('Создаем нового пользователя Farcaster', { fid: farcasterFid });
+          
+          const newUser = await prisma.user.create({
+            data: {
+              farcaster_fid: farcasterFid,
+              farcaster_username: `user_${farcasterFid}`, // Временное имя
+              created_at: new Date(),
+              updated_at: new Date()
+            }
+          });
+          
+          userId = newUser.id;
+          logger.info('Создан новый пользователь Farcaster', { userId, fid: farcasterFid });
+        } else {
+          userId = existingUser.id;
+          logger.info('Найден существующий пользователь Farcaster', { userId, fid: farcasterFid });
+        }
+      } catch (userError) {
+        logger.error('Ошибка при проверке/создании пользователя Farcaster', {
+          error: userError instanceof Error ? userError.message : String(userError),
+          fid: farcasterFid
+        });
+        
+        // Используем FID как userId если возникла ошибка, но создаем префикс
+        userId = `farcaster_${farcasterFid}`;
+      }
+      
+      // Проверка соответствия источника для запросов с Farcaster FID
+      if (!isFarcasterOrigin && process.env.NODE_ENV === 'production') {
+        logger.warn('Подозрительный запрос с Farcaster FID из неизвестного источника', { 
+          fid: farcasterFid, 
+          origin, 
+          referer 
+        });
+        gameMetrics.saveErrorCounter({ reason: 'suspicious_farcaster_origin' });
+        
+        // В продакшене блокируем, в разработке можно разрешить
+        if (process.env.STRICT_FARCASTER_ORIGIN === 'true') {
+          return NextResponse.json({
+            success: false,
+            error: 'INVALID_REQUEST_ORIGIN',
+            message: 'Недопустимый источник запроса',
+            processingTime: performance.now() - startTime
+          }, { status: 403 });
+        }
+      }
+      
+      // Проверка частоты запросов для Farcaster (более строгое ограничение)
+      const now = Date.now();
+      const lastFarcasterTime = lastFarcasterRequestTime.get(farcasterFid) || 0;
+      const timeSinceLastFarcasterRequest = now - lastFarcasterTime;
+      
+      if (timeSinceLastFarcasterRequest < FARCASTER_MIN_INTERVAL_MS) {
+        logger.warn('Превышен лимит запросов для Farcaster пользователя', {
+          fid: farcasterFid,
+          timeSince: timeSinceLastFarcasterRequest
+        });
+        
+        return NextResponse.json({
+          success: false,
+          error: 'TOO_MANY_REQUESTS',
+          message: 'Слишком много запросов. Пожалуйста, попробуйте позже.',
+          processingTime: performance.now() - startTime
+        }, { status: 429 });
+      }
+      
+      // Обновляем время последнего запроса через Farcaster
+      lastFarcasterRequestTime.set(farcasterFid, now);
+      
+      logger.info('Авторизация через Farcaster FID', { userId, clientId, origin });
+    } else {
+      // Стандартная JWT авторизация
+      tokenResult = await verifyJWT(token);
+      if (!tokenResult.valid || !tokenResult.userId) {
+        logger.warn('Недействительный токен', { error: tokenResult.error });
+        gameMetrics.saveErrorCounter({ reason: 'invalid_token' });
+        
+        return NextResponse.json({
+          success: false,
+          error: tokenResult.error || 'INVALID_TOKEN',
+          message: 'Недействительный токен',
+          processingTime: performance.now() - startTime
+        }, { status: 401 });
+      }
+      
+      userId = tokenResult.userId;
+      logger.info('Токен верифицирован', { userId, clientId });
+    }
     
     // Проверка частоты запросов (rate limiting)
     const now = Date.now();
@@ -654,7 +770,17 @@ export async function POST(request: NextRequest) {
     // Логирование ошибки
     logger.error('Непредвиденная ошибка при сохранении', { 
       error: error instanceof Error ? error.message : String(error),
-      userId: typeof userId !== 'undefined' ? userId : 'unknown'
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: typeof userId !== 'undefined' ? userId : 'unknown',
+      method: 'POST',
+      route: '/api/game/save-progress',
+      details: {
+        hasFarcasterHeader: !!request.headers.get('X-Farcaster-User'),
+        farcasterUser: request.headers.get('X-Farcaster-User') || 'none',
+        contentType: request.headers.get('Content-Type') || 'none',
+        origin: request.headers.get('Origin') || 'none',
+        referer: request.headers.get('Referer') || 'none',
+      }
     });
     
     // Увеличиваем счетчик ошибок

@@ -5,6 +5,7 @@
 import { createClient } from 'redis';
 import { apiLogger as logger } from '../lib/logger';
 import { ENV } from '../lib/env';
+import { Redis } from 'ioredis';
 
 // Типы для Redis сервиса
 export interface ServiceResponse {
@@ -25,81 +26,139 @@ let redisClient: any = null;
 let redisConnectionFailed = false;
 let connectionAttempts = 0;
 
+// Глобальная переменная для отслеживания доступности Redis
+let isRedisAvailable = false;
+let isConnectionFailed = false;
+let connectionFailureTime = 0;
+const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 минут между попытками подключения
+
 /**
  * Получает Redis клиент, создавая его при необходимости
  */
-async function getRedisClient() {
-  // Если Redis отключен через переменную окружения
-  if (!REDIS_ENABLED) {
-    console.log('[Redis] Redis отключен через переменную окружения REDIS_ENABLED');
+export async function getRedisClient(): Promise<Redis | null> {
+  // Если Redis уже инициализирован и доступен, возвращаем его
+  if (redisClient && isRedisAvailable) {
+    return redisClient;
+  }
+  
+  // Если соединение ранее не удалось и не прошел таймаут переподключения,
+  // возвращаем null без новых попыток
+  if (isConnectionFailed && (Date.now() - connectionFailureTime) < RECONNECT_TIMEOUT) {
     return null;
   }
   
-  // Если предыдущие попытки подключения уже были неудачными, не пытаемся снова
-  if (redisConnectionFailed && connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-    console.log(`[Redis] Достигнуто максимальное количество попыток подключения (${MAX_CONNECTION_ATTEMPTS}), Redis отключен`);
-    return null;
+  // Пытаемся инициализировать новое соединение
+  return initRedisClient();
+}
+
+/**
+ * Инициализирует Redis клиент
+ */
+export async function initRedisClient(): Promise<Redis | null> {
+  // Сбрасываем флаги при инициализации
+  isConnectionFailed = false;
+  
+  if (redisClient && isRedisAvailable) {
+    return redisClient;
   }
   
-  if (!redisClient) {
+  console.log("[Redis] Автоматическая инициализация соединения при запросе клиента");
+  console.log("[Redis] Установка соединения с Redis...");
+  
+  const MAX_RETRIES = 3;
+  connectionAttempts = 0;
+  
+  while (connectionAttempts < MAX_RETRIES) {
+    connectionAttempts++;
+    console.log(`[Redis] Попытка ${connectionAttempts} из ${MAX_RETRIES}`);
+    
     try {
-      connectionAttempts++;
-      console.log('[Redis] Автоматическая инициализация соединения при запросе клиента');
-      console.log('[Redis] Установка соединения с Redis...');
-      console.log(`[Redis] Попытка ${connectionAttempts} из ${MAX_CONNECTION_ATTEMPTS}`);
+      const options: any = {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        db: parseInt(process.env.REDIS_DB || '0'),
+        connectTimeout: 5000, // 5 секунд
+        maxRetriesPerRequest: 1
+      };
       
-      redisClient = createClient({
-        url: REDIS_URL,
-        socket: {
-          reconnectStrategy: (retries) => {
-            // Ограничиваем количество повторных попыток
-            if (retries >= 3) {
-              redisConnectionFailed = true;
-              console.error(`[Redis] Превышено количество повторных попыток (${retries})`);
-              return new Error('Превышено количество повторных попыток подключения к Redis');
-            }
-            // Экспоненциальная задержка между попытками: 1s, 2s, 4s
-            return Math.min(Math.pow(2, retries) * 1000, 10000);
-          },
-          connectTimeout: 5000 // 5 секунд таймаут на соединение
-        }
+      // Добавляем пароль только если он указан
+      if (process.env.REDIS_PASSWORD) {
+        options.password = process.env.REDIS_PASSWORD;
+      }
+      
+      const newClient = new Redis(options);
+      
+      await newClient.ping();
+      console.log("[Redis] Соединение установлено успешно!");
+      
+      // Успешное подключение - устанавливаем флаги
+      redisClient = newClient;
+      redisConnectionFailed = false;
+      isRedisAvailable = true;
+      isConnectionFailed = false;
+      
+      // Настраиваем обработчик для автоматического переподключения при разрыве соединения
+      newClient.on('error', (error) => {
+        console.error("[Redis] Ошибка соединения:", error);
+        handleConnectionError(error);
       });
       
-      redisClient.on('error', (err: any) => {
-        console.error('[Redis] Ошибка соединения:', err);
-        if (err.code === 'ECONNREFUSED') {
-          redisConnectionFailed = true;
-        }
-        redisClient = null;
+      newClient.on('connect', () => {
+        console.log("[Redis] Соединение восстановлено");
+        setRedisAvailable(true);
       });
       
-      redisClient.on('ready', () => {
-        console.log('[Redis] Соединение установлено');
-        console.log('[Redis] Клиент готов к использованию');
-        redisConnectionFailed = false;
-      });
-      
-      redisClient.on('reconnecting', () => {
-        console.log('[Redis] Попытка переподключения...');
-      });
-      
-      // Устанавливаем таймаут на подключение
-      const connectionPromise = redisClient.connect();
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout connecting to Redis')), 5000);
-      });
-      
-      await Promise.race([connectionPromise, timeoutPromise]);
-      console.log('[Redis] Соединение установлено');
+      return newClient;
     } catch (error) {
-      console.error('[Redis] Ошибка при создании клиента:', error);
-      redisClient = null;
-      redisConnectionFailed = true;
+      console.error("[Redis] Ошибка соединения:", error);
+      
+      if (connectionAttempts < MAX_RETRIES) {
+        console.log("[Redis] Попытка переподключения...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.log("[Redis] Достигнуто максимальное количество попыток соединения");
+        redisConnectionFailed = true;
+        handleConnectionError(error as Error);
+        return null;
+      }
     }
   }
   
-  return redisClient;
+  return null;
 }
+
+/**
+ * Проверяет, доступен ли Redis
+ */
+export const isRedisServiceAvailable = (): boolean => {
+  // Если соединение не удалось ранее, и не прошло время таймаута переподключения,
+  // считаем Redis недоступным без новых попыток соединения
+  if (isConnectionFailed && (Date.now() - connectionFailureTime) < RECONNECT_TIMEOUT) {
+    return false;
+  }
+  
+  return isRedisAvailable;
+};
+
+/**
+ * Обрабатывает ошибку соединения с Redis
+ */
+export const handleConnectionError = (error: Error): void => {
+  console.error('[Redis] Ошибка соединения:', error);
+  isRedisAvailable = false;
+  isConnectionFailed = true;
+  connectionFailureTime = Date.now();
+};
+
+/**
+ * Устанавливает статус Redis как доступный
+ */
+export const setRedisAvailable = (available: boolean = true): void => {
+  isRedisAvailable = available;
+  if (available) {
+    isConnectionFailed = false;
+  }
+};
 
 /**
  * Сервис для работы с Redis
@@ -345,5 +404,68 @@ export const redisService = {
       });
       return null;
     }
+  }
+};
+
+// Wrapper для сохранения и загрузки данных с учетом возможного отсутствия Redis
+export const saveRawData = async (key: string, data: any, expirationSeconds?: number): Promise<boolean> => {
+  try {
+    // Если Redis недоступен, возвращаем false без попыток сохранения
+    if (!isRedisServiceAvailable()) {
+      console.log(`[Redis] Пропуск сохранения для ${key} - Redis недоступен`);
+      return false;
+    }
+    
+    const client = await getRedisClient();
+    
+    if (!client) {
+      console.log(`[Redis] Не удалось получить клиент для сохранения ${key}`);
+      return false;
+    }
+    
+    if (expirationSeconds) {
+      await client.setex(key, expirationSeconds, typeof data === 'string' ? data : JSON.stringify(data));
+    } else {
+      await client.set(key, typeof data === 'string' ? data : JSON.stringify(data));
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`[Redis] Ошибка при сохранении данных для ${key}:`, error);
+    handleConnectionError(error as Error);
+    return false;
+  }
+};
+
+export const loadRawData = async (key: string): Promise<any | null> => {
+  try {
+    // Если Redis недоступен, возвращаем null без попыток загрузки
+    if (!isRedisServiceAvailable()) {
+      console.log(`[Redis] Пропуск загрузки для ${key} - Redis недоступен`);
+      return null;
+    }
+    
+    const client = await getRedisClient();
+    
+    if (!client) {
+      console.log(`[Redis] Не удалось получить клиент для загрузки ${key}`);
+      return null;
+    }
+    
+    const data = await client.get(key);
+    
+    if (!data) {
+      return null;
+    }
+    
+    try {
+      return JSON.parse(data);
+    } catch {
+      return data; // Если не удалось распарсить как JSON, возвращаем как строку
+    }
+  } catch (error) {
+    console.error(`[Redis] Ошибка при загрузке данных для ${key}:`, error);
+    handleConnectionError(error as Error);
+    return null;
   }
 }; 

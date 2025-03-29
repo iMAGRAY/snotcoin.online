@@ -550,4 +550,86 @@ export async function getUserStorageInfo(userId: string): Promise<{
       totalSize: 0
     };
   }
-} 
+}
+
+/**
+ * Получает все доступные сохранения пользователя из всех хранилищ
+ * @param userId ID пользователя
+ * @returns Массив объектов с данными сохранений
+ */
+export const getAllUserSaves = async (userId: string): Promise<Array<{
+  source: StorageType;
+  data: any;
+  timestamp: number;
+  version?: number;
+  key?: string;
+}>> => {
+  // Проверяем инициализацию
+  if (!isInitialized) {
+    await initStorage(storageConfig);
+  }
+  
+  const results: Array<{
+    source: StorageType;
+    data: any;
+    timestamp: number;
+    version?: number;
+    key?: string;
+  }> = [];
+  
+  try {
+    console.log(`[storageService] Получение всех сохранений для ${userId}`);
+    
+    // Получаем сохранения из localStorage
+    try {
+      // Импортируем getAllUserSaves из localStorageManager
+      const { getAllUserSaves } = await import('./storage/localStorageManager');
+      const localSaves = getAllUserSaves(userId);
+      
+      // Добавляем сохранения из localStorage в результаты
+      localSaves.forEach((save: { key: string; data: any; timestamp: number }) => {
+        results.push({
+          source: StorageType.LOCAL_STORAGE,
+          data: save.data,
+          timestamp: save.timestamp,
+          version: save.data._saveVersion,
+          key: save.key
+        });
+      });
+      
+      console.log(`[storageService] Найдено ${localSaves.length} сохранений в localStorage`);
+    } catch (localError) {
+      console.warn(`[storageService] Ошибка при получении сохранений из localStorage:`, localError);
+    }
+    
+    // Получаем сохранения из IndexedDB, если оно доступно
+    if (indexedDB.isIndexedDBAvailable()) {
+      try {
+        const idbSaves = await indexedDB.getAllUserSaves(userId);
+        
+        // Добавляем сохранения из IndexedDB в результаты
+        idbSaves.forEach(save => {
+          results.push({
+            source: StorageType.INDEXED_DB,
+            data: save.data,
+            timestamp: save.lastUpdated,
+            version: save.version,
+            key: save.id
+          });
+        });
+        
+        console.log(`[storageService] Найдено ${idbSaves.length} сохранений в IndexedDB`);
+      } catch (idbError) {
+        console.warn(`[storageService] Ошибка при получении сохранений из IndexedDB:`, idbError);
+      }
+    }
+    
+    // Сортируем все сохранения по timestamp (сначала новые)
+    results.sort((a, b) => b.timestamp - a.timestamp);
+    
+    return results;
+  } catch (error) {
+    console.error(`[storageService] Критическая ошибка при получении всех сохранений для ${userId}:`, error);
+    return results;
+  }
+}; 

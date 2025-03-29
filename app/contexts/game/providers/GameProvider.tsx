@@ -195,106 +195,68 @@ export function GameProvider({
   // Ref для отслеживания, идет ли уже запрос на загрузку
   const loadRequestInProgressRef = useRef<boolean>(false)
 
-  // Загрузка сохраненного состояния
-  const loadSavedState = useCallback(async () => {
-    if (isLoading || initialLoadDoneRef.current) {
-      console.log(`[GameProvider] Load request ignored. isLoading: ${isLoading}, initialLoadDone: ${initialLoadDoneRef.current}`);
-      return;
-    }
-    
+  // Загрузка данных пользователя
+  const loadUserData = useCallback(async (userId: string) => {
     try {
-      console.log(`[GameProvider] Starting state load for userId: ${userId}`);
-      setIsLoading(true);
-      
-      const normalizedId = normalizeUserId(userId); 
-      
-      if (!normalizedId) {
-        console.warn(`[GameProvider] Cannot load state: normalized userId is empty`);
-        setIsLoading(false);
-        initialLoadDoneRef.current = true; // Считаем "загрузку" (пустого состояния) завершенной
-        return;
+      if (!userId) {
+        console.error('[GameProvider] Отсутствует ID пользователя для загрузки данных');
+        return false;
       }
       
-      // Логируем вызов loadGameState
-      console.log(`[GameProvider] Calling storageService.loadGameState for normalizedId: ${normalizedId}`);
-      const { data, source } = await storageService.loadGameState(normalizedId);
+      console.log('[GameProvider] Starting state load for userId:', userId);
       
-      // Логируем результат loadGameState
-      console.log(`[GameProvider] storageService.loadGameState returned. Source: ${source}, Data found: ${!!data}`);
-      if (data && typeof data === 'object') {
-         console.log(`[GameProvider] Loaded data preview (keys): ${Object.keys(data).join(', ')}`);
-      }
-      
-      if (data) {
-        console.log(`[GameProvider] Successfully loaded state for ${userId} from ${source}`);
-        
-        // Логируем вызов validateGameState
-        console.log('[GameProvider] Calling validateGameState...');
-        const validatedData = validateGameState(data, userId);
-        // Логируем результат валидации (опционально, может быть слишком много данных)
-        // console.log('[GameProvider] validateGameState result:', validatedData);
-
-        // Загружаем состояние
-        try {
-          // Логируем вызов dispatch
-          console.log(`[GameProvider] Dispatching LOAD_GAME_STATE for ${userId}`);
-          dispatch({
-            type: 'LOAD_GAME_STATE',
-            payload: validatedData // Используем валидированные данные
-          });
-          console.log(`[GameProvider] Dispatched LOAD_GAME_STATE successfully for ${userId}`);
-          
-          // Переносим данные в основное хранилище, если они были загружены из localStorage в гибридном режиме
-          if (source === StorageType.LOCAL_STORAGE && storageService.getStorageConfig().preferredStorage === StorageType.HYBRID) {
-            console.log(`[GameProvider] Migrating data from localStorage to IndexedDB for ${normalizedId}`);
-            try {
-              await storageService.saveGameState(normalizedId, validatedData, validatedData._saveVersion || 1);
-              console.log(`[GameProvider] Migration successful.`);
-            } catch (migrationError) {
-              console.error(`[GameProvider] Error migrating data to IndexedDB:`, migrationError);
-            }
-          }
-          
-        } catch (loadError) {
-          console.error(`[GameProvider] Error dispatching loaded state for ${userId}:`, loadError);
-          // Если dispatch не удался, инициализируем дефолтное состояние
-          console.log(`[GameProvider] Initializing default state due to dispatch error for ${userId}`);
-          dispatch({ type: 'LOAD_GAME_STATE', payload: createDefaultGameState(userId) });
+      // Сначала пробуем загрузить из localStorage напрямую
+      let gameData = null;
+      try {
+        const localData = localStorage.getItem(`gameState_${userId}`);
+        if (localData) {
+          gameData = JSON.parse(localData);
+          console.log('[GameProvider] Loaded game state directly from localStorage');
         }
-      } else {
-        console.log(`[GameProvider] No saved state found for ${userId}, initializing default state`);
-        dispatch({
-          type: 'LOAD_GAME_STATE',
-          payload: createDefaultGameState(userId) 
-        });
+      } catch (localError) {
+        console.warn('[GameProvider] Error loading from localStorage directly:', localError);
       }
+      
+      // Если не нашли прямое сохранение, используем storageService
+      if (!gameData) {
+        try {
+          const loadResult = await storageService.loadGameState(userId);
+          gameData = loadResult?.data;
+          
+          if (gameData) {
+            console.log('[GameProvider] Data found for', userId);
+          } else {
+            console.log('[GameProvider] Data not found for', userId);
+          }
+        } catch (storageError) {
+          console.error('[GameProvider] Error loading from storageService:', storageError);
+        }
+      }
+      
+      // Если нашли данные, загружаем их в состояние
+      if (gameData) {
+        dispatch({ type: 'LOAD_GAME_STATE', payload: gameData });
+        return true;
+      }
+      
+      // Если данные не найдены, создаем новое состояние
+      console.log('[GameProvider] No saved state found for', userId, ', initializing default state');
+      dispatch({ type: 'LOAD_GAME_STATE', payload: createDefaultGameState(userId) });
+      return false;
     } catch (error) {
-      console.error(`[GameProvider] Error during loadSavedState for ${userId}:`, error);
-      // В случае ошибки инициализируем новое состояние
-      console.log(`[GameProvider] Initializing default state due to load error for ${userId}`);
-      dispatch({
-        type: 'LOAD_GAME_STATE',
-        payload: createDefaultGameState(userId) 
-      });
-    } finally {
-      // Завершаем загрузку
-      console.log(`[GameProvider] Finishing load process for userId: ${userId}. Setting isLoading=false, initialLoadDone=true`);
-      setIsLoading(false);
-      initialLoadDoneRef.current = true; 
-      lastUserIdRef.current = userId;
-      loadRequestInProgressRef.current = false;
+      console.error('[GameProvider] Error loading user data:', error);
+      dispatch({ type: 'LOAD_GAME_STATE', payload: createDefaultGameState(userId) });
+      return false;
     }
-  }, [userId, isLoading, dispatch]);
+  }, [dispatch]);
 
   // Функция для сохранения состояния игры
   const saveState = useCallback(async () => {
     if (!userId || !enableAutoSave) { 
-      console.log(`[GameProvider] Save skipped. userId: ${userId}, enableAutoSave: ${enableAutoSave}`);
       return;
     }
     
     if (isSaving || state._skipSave) {
-      console.log(`[GameProvider] Save skipped. isSaving: ${isSaving}, state._skipSave: ${state._skipSave}`);
       return;
     }
     
@@ -306,70 +268,58 @@ export function GameProvider({
 
     const prepareGameStateForSave = (currentState: GameState): ExtendedGameState => {
       const stateToSave = { ...currentState };
-      // НЕ удаляем _skipSave здесь
-      // if ('_skipSave' in stateToSave) {
-      //    delete stateToSave._skipSave;
-      // }
-      
       // Обновляем метаданные
       stateToSave._lastSaved = new Date().toISOString();
       stateToSave._userId = userId;
       stateToSave._saveVersion = (stateToSave._saveVersion || 0) + 1;
-      return stateToSave; // Возвращаем объект с _skipSave
+      return stateToSave;
     };
     
     try {
       setIsSaving(true);
       const preparedState = prepareGameStateForSave(state);
-      console.log(`[GameProvider] Starting state save for userId: ${normalizedId}. Version: ${preparedState._saveVersion}`);
       
       // Создаем объект для сохранения БЕЗ поля _skipSave
       const { _skipSave, ...stateToActuallySave } = preparedState;
 
-      // Логируем вызов saveGameState
-      console.log(`[GameProvider] Calling storageService.saveGameState for normalizedId: ${normalizedId}`);
+      // Сохраняем без лишних логов
       const { success, storageType } = await storageService.saveGameState(
         normalizedId,
         stateToActuallySave, // Передаем объект без _skipSave
         preparedState._saveVersion // Версию берем из подготовленного состояния
       );
-      // Логируем результат сохранения
-      console.log(`[GameProvider] storageService.saveGameState finished. Success: ${success}, StorageType: ${storageType}`);
 
       lastUserIdRef.current = userId;
       
       if (typeof window !== 'undefined') {
         if (success) {
-          console.log(`[GameProvider] Save successful for ${userId}. Dispatching game-saved event.`);
           window.dispatchEvent(new CustomEvent('game-saved', {
             detail: { userId, storageType }
           }));
         } else {
-          console.warn(`[GameProvider] Save failed for ${userId}. Attempting backup...`);
+          console.warn(`[GameProvider] Save failed, creating backup...`);
           window.dispatchEvent(new CustomEvent('game-save-error', {
             detail: { userId, error: 'SAVE_FAILED' }
           }));
           try {
             await storageService.createBackup(normalizedId, preparedState, preparedState._saveVersion || 1);
-            console.log(`[GameProvider] Backup created successfully for ${userId} after failed save.`);
           } catch (backupError) {
-            console.error(`[GameProvider] Failed to create backup for ${userId} after failed save:`, backupError);
+            console.error(`[GameProvider] Failed to create backup:`, backupError);
           }
         }
       }
     } catch (error) {
-      console.error(`[GameProvider] Error during saveState for ${userId}:`, error);
+      console.error(`[GameProvider] Error during saveState:`, error);
       // Попытка создать резервную копию в случае ошибки
       try {
         if (normalizedId) {
           const backupState = prepareGameStateForSave(state);
           await storageService.createBackup(normalizedId, backupState, backupState._saveVersion || 1);
-          console.log(`[GameProvider] Backup created successfully for ${userId} after save error.`);
         } else {
           console.warn('[GameProvider] Cannot create backup on save error: missing normalizedId');
         }
       } catch (backupError) {
-        console.error(`[GameProvider] Failed to create backup for ${userId} after save error:`, backupError);
+        console.error(`[GameProvider] Failed to create backup:`, backupError);
       }
       
       if (typeof window !== 'undefined') {
@@ -378,7 +328,6 @@ export function GameProvider({
         }));
       }
     } finally {
-      console.log(`[GameProvider] Finishing save process for userId: ${userId}. Setting isSaving=false`);
       setIsSaving(false);
     }
   }, [state, enableAutoSave, userId, isSaving]);
@@ -394,12 +343,10 @@ export function GameProvider({
           autoSaveTimerRef.current = null;
         }
         
-        // Логируем установку таймера
-        console.log(`[GameProvider] Action ${action.type}. Setting autosave timer (${autoSaveInterval}ms) for userId: ${userId}`);
+        // Убираем лишний лог, запускаем таймер сохранения
         autoSaveTimerRef.current = setTimeout(() => {
-           console.log(`[GameProvider] Autosave timer triggered for userId: ${userId}. Calling saveState...`);
            saveState().catch(error => {
-             console.error(`[GameProvider] Error during autosave for userId: ${userId}:`, error);
+             console.error(`[GameProvider] Error during autosave:`, error);
            });
         }, autoSaveInterval);
       }
@@ -411,7 +358,7 @@ export function GameProvider({
   useEffect(() => {
     // Проверяем, изменился ли userId (сравниваем userId из props с lastUserIdRef)
     if (userId !== lastUserIdRef.current) {
-      console.log(`[GameProvider] Изменился userId: ${lastUserIdRef.current || 'undefined'} -> ${userId}`);
+      console.log(`[GameProvider] Changed userId: ${lastUserIdRef.current || 'undefined'} -> ${userId}`);
       initialLoadDoneRef.current = false;
       // Сбрасываем флаг запроса на загрузку при смене пользователя
       loadRequestInProgressRef.current = false; 
@@ -420,12 +367,12 @@ export function GameProvider({
     // Загружаем сохраненное состояние при монтировании или изменении userId
     // Убираем проверку loadRequestInProgressRef, так как смена userId должна всегда инициировать загрузку
     if (userId && !initialLoadDoneRef.current) { 
-      console.log(`[GameProvider] Запуск загрузки состояния для ${userId}`);
+      // Запускаем загрузку без лишнего лога
       loadRequestInProgressRef.current = true; // Устанавливаем флаг перед вызовом
       
       // Добавляем обработку ошибок при загрузке
-      loadSavedState().catch(error => {
-        console.error(`[GameProvider] Критическая ошибка при загрузке состояния:`, error);
+      loadUserData(userId).catch(error => {
+        console.error(`[GameProvider] Critical loading error:`, error);
         // Устанавливаем флаг, что загрузка завершена (чтобы избежать циклов повторных загрузок)
         initialLoadDoneRef.current = true;
         // Сбрасываем флаг запроса в случае ошибки
@@ -439,7 +386,7 @@ export function GameProvider({
         });
       });
     }
-  }, [userId, loadSavedState]);
+  }, [userId, loadUserData]);
   
   // Предоставляем состояние и диспетчер через контексты
   return (

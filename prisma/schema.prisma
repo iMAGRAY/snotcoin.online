@@ -13,7 +13,7 @@ datasource db {
 model User {
   id                  String    @id @default(cuid())
   farcaster_fid       String?   @unique // Farcaster ID как строка
-  farcaster_username  String    // Обязательное поле
+  farcaster_username  String?   // Делаем необязательным
   farcaster_displayname String?
   farcaster_pfp       String?
   jwt_token           String?
