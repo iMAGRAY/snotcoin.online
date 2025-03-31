@@ -46,8 +46,8 @@ const checkBrowserSupport = (): boolean => {
 };
 
 export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) {
-  // Используем статус и ошибку SDK из контекста
-  const { refreshUserData, isAuthenticated, sdkStatus, sdkError } = useFarcaster(); 
+  // Используем только статус и ошибку SDK из контекста
+  const { sdkStatus, sdkError } = useFarcaster(); 
   
   // Локальное состояние для отслеживания процесса авторизации
   const [isAuthorizing, setIsAuthorizing] = useState(false);
@@ -160,9 +160,6 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         console.error('[WarpcastAuth] Ошибка при сохранении данных пользователя:', userError);
       }
       
-      // Обновляем данные пользователя в контексте
-      await refreshUserData();
-      
       logAuth(
         AuthStep.AUTH_COMPLETE, 
         AuthLogType.INFO, 
@@ -226,7 +223,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
          setIsAuthorizing(false);
       }
     }
-  }, [sdkStatus, refreshUserData, onSuccess, onError]); // Добавляем sdkStatus в зависимости
+  }, [sdkStatus, onSuccess, onError]); // Удаляем refreshUserData из зависимостей
 
   // Рендер компонента (обновляем условия)
   return (

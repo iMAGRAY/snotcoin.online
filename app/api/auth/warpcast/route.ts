@@ -7,6 +7,12 @@ import { UserData } from '@/app/types/auth';
 import { FarcasterContext } from '@/app/types/farcaster';
 import { prisma } from '@/app/lib/prisma';
 
+/**
+ * Указываем Next.js, что этот маршрут должен быть динамическим
+ * и не должен пытаться рендериться статически
+ */
+export const dynamic = 'force-dynamic';
+
 // Константы для JWT и refresh токена
 const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-do-not-use-in-production';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your-refresh-secret-do-not-use-in-production';
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
     const userData = await request.json() as FarcasterContext;
     
     // Проверяем наличие обязательных полей
-    if (!userData || !userData.fid) {
+    if (!userData || !userData.user?.fid) {
       logAuth(
         AuthStep.VALIDATE_ERROR, 
         AuthLogType.ERROR, 

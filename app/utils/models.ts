@@ -132,7 +132,7 @@ export class ProgressModel {
       return await prisma.progress.create({
         data: {
           user_id: userId,
-          gameState,
+          game_state: gameState,
           version: 1,
           created_at: new Date(),
           updated_at: new Date()
@@ -157,7 +157,7 @@ export class ProgressModel {
       return await prisma.progress.update({
         where: { user_id: userId },
         data: {
-          gameState,
+          game_state: gameState,
           version: progress.version + 1,
           updated_at: new Date()
         }

@@ -20,7 +20,7 @@ export class SyncManager {
   private static instance: SyncManager;
   private syncQueue: Map<string, SyncJob> = new Map();
   private isProcessing: boolean = false;
-  private syncInterval: NodeJS.Timeout | null = null;
+  private syncInterval: ReturnType<typeof setInterval> | null = null;
 
   private readonly strategies: Record<string, SyncStrategy> = {
     immediate: {
@@ -110,13 +110,13 @@ export class SyncManager {
           await prisma.progress.upsert({
             where: { user_id: job.userId },
             update: {
-              gameState: data.gameState as any,
+              game_state: data.gameState as any,
               version: data.version,
               updated_at: new Date(data.timestamp)
             },
             create: {
               user_id: job.userId,
-              gameState: data.gameState as any,
+              game_state: data.gameState as any,
               version: data.version,
               created_at: new Date(data.timestamp),
               updated_at: new Date(data.timestamp)
@@ -175,13 +175,13 @@ export class SyncManager {
         await prisma.progress.upsert({
           where: { user_id: userId },
           update: {
-            gameState: data.gameState as any,
+            game_state: data.gameState as any,
             version: data.version,
             updated_at: new Date(data.timestamp)
           },
           create: {
             user_id: userId,
-            gameState: data.gameState as any,
+            game_state: data.gameState as any,
             version: data.version,
             created_at: new Date(data.timestamp),
             updated_at: new Date(data.timestamp)
@@ -192,7 +192,7 @@ export class SyncManager {
         await prisma.progress.create({
           data: {
             user_id: userId,
-            gameState: data.gameState as any,
+            game_state: data.gameState as any,
             version: data.version,
             created_at: new Date(data.timestamp),
             updated_at: new Date(data.timestamp)

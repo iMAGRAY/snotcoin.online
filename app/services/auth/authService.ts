@@ -60,7 +60,7 @@ class AuthService {
         AuthStep.AUTH_START,
         AuthLogType.INFO,
         'Начало авторизации через Farcaster',
-        { fid: userData.fid }
+        { fid: userData.user?.fid }
       );
 
       // Проверяем отмену операции
@@ -69,21 +69,21 @@ class AuthService {
       }
 
       // Валидация данных пользователя
-      if (!userData.fid || !userData.username) {
+      if (!userData.user?.fid || !userData.user?.username) {
         throw new Error('INVALID_USER_DATA');
       }
 
       // Преобразуем данные в формат UserData
       const user: UserData = {
-        id: userData.fid.toString(),
-        username: userData.username,
-        fid: userData.fid,
-        displayName: userData.displayName,
-        avatar: userData.pfp?.url,
-        verified: userData.verified,
+        id: userData.user.fid.toString(),
+        username: userData.user.username,
+        fid: userData.user.fid,
+        displayName: userData.user.displayName,
+        avatar: userData.user.pfp?.url,
+        verified: false,
         metadata: {
-          custody: userData.custody,
-          verifications: userData.verifications
+          custody: null,
+          verifications: null
         }
       };
 
@@ -93,7 +93,7 @@ class AuthService {
       }
 
       // Сохраняем данные
-      this.storage.set(AUTH_STORAGE_KEYS.TOKEN, userData.fid.toString());
+      this.storage.set(AUTH_STORAGE_KEYS.TOKEN, userData.user.fid.toString());
       this.storage.set(AUTH_STORAGE_KEYS.USER, user);
 
       this.currentState = AuthState.SUCCESS;

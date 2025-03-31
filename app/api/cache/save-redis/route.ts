@@ -7,6 +7,12 @@ import { verifyJWT } from '../../../utils/auth';
 import { ErrorCodes } from '../../../types/apiTypes';
 
 /**
+ * Указываем Next.js, что этот маршрут должен быть динамическим
+ * и не должен пытаться рендериться статически
+ */
+export const dynamic = 'force-dynamic';
+
+/**
  * Обработчик для сохранения данных в Redis с клиентской стороны
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {

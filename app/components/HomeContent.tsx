@@ -55,10 +55,12 @@ const HomeContent: React.FC = () => {
   
   useEffect(() => {
     if (!gameState.isLoading && !readyCalledRef.current) {
+      console.log('[HomeContent] Game state loaded. Calling sdk.actions.ready().');
       const callReady = async () => {
         try {
           await sdk.actions.ready();
           readyCalledRef.current = true;
+          console.log('[HomeContent] sdk.actions.ready() called successfully.');
         } catch (error) {
           console.error('[HomeContent] Error calling sdk.actions.ready():', error);
         }
@@ -93,10 +95,14 @@ const HomeContent: React.FC = () => {
     }
   }, [gameState.activeTab]);
 
+  console.log(`[HomeContent] Rendering. isLoading: ${gameState.isLoading}`);
+
   if (gameState.isLoading) {
+    console.log('[HomeContent] Game state is loading, rendering null.');
     return null;
   }
 
+  console.log('[HomeContent] Game state loaded, rendering main game content.');
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
       <MotionDiv className='main-game-container' style={{ height: viewportHeight }}>

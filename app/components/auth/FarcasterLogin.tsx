@@ -24,7 +24,7 @@ export default function FarcasterLogin({
 }: FarcasterLoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { refreshUserData } = useFarcaster();
+  const farcasterContext = useFarcaster();
 
   // Проверяем наличие Farcaster SDK
   const isFarcasterAvailable = () => {
@@ -84,9 +84,6 @@ export default function FarcasterLogin({
         'Авторизация успешна',
         { userId: result.data?.user?.id, farcasterId: result.data?.user?.fid }
       );
-
-      // Обновляем данные в контексте
-      await refreshUserData();
 
       // Вызываем обработчик успеха, если он предоставлен
       if (onSuccess) {

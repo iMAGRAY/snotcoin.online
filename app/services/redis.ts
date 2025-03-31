@@ -13,6 +13,7 @@ export interface ServiceResponse {
   error?: string;
   data?: any;
   source?: string;
+  metrics?: Record<string, any>;
 }
 
 // Конфигурация Redis

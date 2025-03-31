@@ -52,13 +52,6 @@ export const ICONS = {
   AUTH: {
     BACKGROUND: '/images/auth/authentication.webp',
   },
-  SOCIAL_NETWORKS: {
-    X: '/images/socialnetworks/x.webp',
-    DISCORD: '/images/socialnetworks/discord.webp',
-    TELEGRAM: '/images/socialnetworks/telegram.webp',
-    WARPCAST: '/images/socialnetworks/warpcast.webp',
-    GITHUB: '/images/socialnetworks/github.webp',
-  }
 };
 
 // Цветовые классы

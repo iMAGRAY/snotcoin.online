@@ -5,6 +5,7 @@
 import { PrismaClient } from '@prisma/client';
 import { redisService } from './redis';
 import { encryptGameSave } from '../utils/saveEncryption';
+import { decompress } from '../utils/decompression';
 
 // Расширяем тип PrismaClient для syncQueue
 // @ts-ignore - Используем type assertion для того, чтобы обходить проверку типов
@@ -46,7 +47,7 @@ export enum SyncTaskStatus {
  */
 class BackgroundSyncService {
   private isRunning: boolean = false;
-  private interval: NodeJS.Timeout | null = null;
+  private syncInterval: ReturnType<typeof setInterval> | null = null;
   private isProcessingTask: boolean = false;
   private lastSyncTime: Date | null = null;
   private processedTasksCount: number = 0;
@@ -84,7 +85,7 @@ class BackgroundSyncService {
     this.isRunning = true;
     
     // Запускаем интервальную обработку задач
-    this.interval = setInterval(() => this.processTasks(), SYNC_INTERVAL);
+    this.syncInterval = setInterval(() => this.processTasks(), SYNC_INTERVAL);
     
     // Сразу запускаем первую обработку
     this.processTasks();
@@ -103,9 +104,9 @@ class BackgroundSyncService {
     
     this.isRunning = false;
     
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
     }
   }
   
@@ -305,7 +306,11 @@ class BackgroundSyncService {
       }
       
       // Парсим данные игры
-      const gameState = JSON.parse(userProgress.gameState as string);
+      const gameState = JSON.parse(
+        userProgress.is_compressed
+          ? await decompress(userProgress.game_state as string)
+          : userProgress.game_state as string
+      );
       
       // Сохраняем в Redis
       const redisResult = await redisService.saveGameState(userId, gameState, { isCritical: true });
@@ -376,10 +381,10 @@ class BackgroundSyncService {
             await prisma.progress.update({
               where: { user_id: userId },
               data: {
-                gameState: gameStateJson,
-                encryptedState: encryptedGameState, // Добавляем зашифрованную версию
+                game_state: gameStateJson,
+                encrypted_state: encryptedGameState, // Добавляем зашифрованную версию
                 version: redisVersion > currentVersion ? redisVersion : currentVersion + 1,
-                isCompressed: shouldCompress,
+                is_compressed: shouldCompress,
                 updated_at: new Date()
               }
             });
@@ -395,10 +400,10 @@ class BackgroundSyncService {
           await prisma.progress.create({
             data: {
               user_id: userId,
-              gameState: gameStateJson,
-              encryptedState: encryptedGameState, // Добавляем зашифрованную версию
+              game_state: gameStateJson,
+              encrypted_state: encryptedGameState, // Добавляем зашифрованную версию
               version: redisResult.data._saveVersion || 1,
-              isCompressed: shouldCompress,
+              is_compressed: shouldCompress,
               created_at: new Date(),
               updated_at: new Date()
             }
@@ -442,7 +447,11 @@ class BackgroundSyncService {
       
       // Парсим и проверяем данные игры
       try {
-        const gameState = JSON.parse(userProgress.gameState as string);
+        const gameState = JSON.parse(
+          userProgress.is_compressed
+            ? await decompress(userProgress.game_state as string)
+            : userProgress.game_state as string
+        );
         
         // Проверяем наличие основных полей
         const isValid = gameState &&

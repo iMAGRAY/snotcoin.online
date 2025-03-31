@@ -34,7 +34,7 @@ interface StorageOptions {
 
 export class StorageService {
   private static instance: StorageService;
-  private saveQueue: Map<string, NodeJS.Timeout> = new Map();
+  private saveQueue: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private processingQueue: boolean = false;
 
   private constructor() {}
@@ -84,13 +84,13 @@ export class StorageService {
       await prisma.progress.upsert({
         where: { user_id: data.userId },
         update: {
-          gameState: data.gameState as any,
+          game_state: data.gameState as any,
           version: data.version,
           updated_at: new Date(data.timestamp)
         },
         create: {
           user_id: data.userId,
-          gameState: data.gameState as any,
+          game_state: data.gameState as any,
           version: data.version,
           created_at: new Date(data.timestamp),
           updated_at: new Date(data.timestamp)
@@ -200,14 +200,14 @@ export class StorageService {
         // Кэшируем данные в Redis
         const data: StorageData = {
           userId,
-          gameState: progress.gameState ? (progress.gameState as any) : null,
+          gameState: progress.game_state ? (progress.game_state as any) : null,
           timestamp: progress.updated_at.getTime(),
           version: progress.version,
-          checksum: this.generateChecksum(progress.gameState as any)
+          checksum: this.generateChecksum(progress.game_state as any)
         };
         
         await this.saveToRedis(userId, data, DEFAULT_TTL);
-        return progress.gameState ? (progress.gameState as any) : null;
+        return progress.game_state ? (progress.game_state as any) : null;
       }
 
       return null;
@@ -230,15 +230,15 @@ export class StorageService {
       await prisma.progress.upsert({
         where: { user_id: data.userId },
         update: {
-          gameState: data.gameState as any,
-          encryptedState: encryptedSave,
+          game_state: data.gameState as any,
+          encrypted_state: encryptedSave,
           version: data.version,
           updated_at: new Date()
         },
         create: {
           user_id: data.userId,
-          gameState: data.gameState as any,
-          encryptedState: encryptedSave,
+          game_state: data.gameState as any,
+          encrypted_state: encryptedSave,
           version: data.version,
           created_at: new Date(),
           updated_at: new Date()

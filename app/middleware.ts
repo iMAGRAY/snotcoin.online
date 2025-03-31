@@ -59,7 +59,9 @@ export async function middleware(request: NextRequest) {
     // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
     response.headers.set(
       'Content-Security-Policy',
-      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+      process.env.NODE_ENV === 'production'
+        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
     );
     return response;
   }
@@ -73,7 +75,9 @@ export async function middleware(request: NextRequest) {
     // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
     response.headers.set(
       'Content-Security-Policy',
-      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+      process.env.NODE_ENV === 'production'
+        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
     );
     return response;
   }
@@ -150,7 +154,9 @@ export async function middleware(request: NextRequest) {
     // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
     response.headers.set(
       'Content-Security-Policy',
-      "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+      process.env.NODE_ENV === 'production'
+        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
+        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
     );
     
     return response;

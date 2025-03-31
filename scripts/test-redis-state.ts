@@ -83,8 +83,14 @@ const testState: ExtendedGameState = {
 async function testRedisState() {
   console.log('Тестирование сохранения и загрузки состояния в Redis...');
   
-  // Инициализируем сервис
-  await redisService.initialize();
+  // Проверяем доступность Redis
+  const isAvailable = await redisService.isAvailable();
+  console.log(`Redis доступен: ${isAvailable}`);
+  
+  if (!isAvailable) {
+    console.log('❌ Redis недоступен, тестирование невозможно');
+    return;
+  }
   
   try {
     // Преобразуем состояние в структурированный формат
@@ -95,7 +101,7 @@ async function testRedisState() {
     console.log('Сохраняем тестовое состояние...');
     const saveResult = await redisService.saveGameState('test_user_123', testState, {
       isCritical: true,
-      compress: true
+      compression: true
     });
     
     if (saveResult.success) {
@@ -131,8 +137,9 @@ async function testRedisState() {
     }
     
     // Получаем статистику
-    const stats = await redisService.getCacheStats();
-    console.log('\nСтатистика Redis:', stats);
+    // Закомментировано, так как метод не существует
+    // const stats = await redisService.getCacheStats();
+    // console.log('\nСтатистика Redis:', stats);
     
   } catch (error) {
     console.error('❌ Ошибка при тестировании:', error);

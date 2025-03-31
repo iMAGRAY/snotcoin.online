@@ -70,8 +70,13 @@ export class NeynarService {
     error?: string;
   }> {
     try {
-      if (!userData.fid) {
+      if (!userData.user?.fid) {
         return { isValid: false, error: 'Missing FID in user data' };
+      }
+
+      const userContext = userData.user;
+      if (!userContext) {
+        return { isValid: false, error: 'Missing user data' };
       }
 
       // Логируем начало проверки
@@ -79,14 +84,14 @@ export class NeynarService {
         AuthStep.VALIDATE_DATA,
         AuthLogType.INFO,
         'Начало валидации пользователя через Neynar API',
-        { fid: userData.fid, username: userData.username }
+        { fid: userContext.fid, username: userContext.username }
       );
 
       // Используем fetchWithRetry для запроса к Neynar API с повторными попытками
       let neynarData;
       try {
         neynarData = await fetchWithRetry(async () => {
-          const response = await fetch(`${NEYNAR_API_URL}/v1/farcaster/user?fid=${userData.fid}`, {
+          const response = await fetch(`${NEYNAR_API_URL}/v1/farcaster/user?fid=${userContext.fid}`, {
             headers: {
               'Accept': 'application/json',
               'api_key': NEYNAR_API_KEY
@@ -107,7 +112,7 @@ export class NeynarService {
           AuthStep.VALIDATE_ERROR,
           AuthLogType.ERROR,
           'Ошибка при запросе к Neynar API',
-          { fid: userData.fid },
+          { fid: userContext.fid },
           fetchError
         );
         return { 
@@ -124,7 +129,7 @@ export class NeynarService {
           AuthStep.VALIDATE_ERROR,
           AuthLogType.ERROR,
           'Neynar API вернул пустой ответ или нет пользователя',
-          { fid: userData.fid }
+          { fid: userContext.fid }
         );
         return { isValid: false, error: 'No user data found' };
       }
@@ -132,27 +137,27 @@ export class NeynarService {
       const user = neynarData.result.user;
 
       // Проверяем, что данные с клиента соответствуют данным от Neynar
-      if (user.fid !== userData.fid) {
+      if (user.fid !== userContext.fid) {
         logAuth(
           AuthStep.VALIDATE_ERROR,
           AuthLogType.ERROR,
           'Несоответствие FID',
-          { clientFid: userData.fid, neynarFid: user.fid }
+          { clientFid: userContext.fid, neynarFid: user.fid }
         );
         return { isValid: false, error: 'FID mismatch' };
       }
 
       // Нормализация данных пользователя
       const normalizedUser: UserData = {
-        id: userData.fid.toString(),
-        username: user.username || userData.username,
-        fid: userData.fid,
-        displayName: user.displayName || userData.displayName,
-        avatar: user.pfp?.url || userData.pfp?.url,
-        verified: user.verifications?.length > 0 || userData.verified,
+        id: userContext.fid.toString(),
+        username: user.username || userContext.username,
+        fid: userContext.fid,
+        displayName: user.displayName || userContext.displayName,
+        avatar: user.pfp?.url || userContext.pfp?.url,
+        verified: user.verifications?.length > 0 || false,
         metadata: {
-          custody: userData.custody || user.custodyAddress,
-          verifications: user.verifications || userData.verifications,
+          custody: user.custodyAddress,
+          verifications: user.verifications || [],
           followerCount: user.followerCount,
           followingCount: user.followingCount,
           profile: {
@@ -166,7 +171,7 @@ export class NeynarService {
         AuthStep.VALIDATE_SUCCESS,
         AuthLogType.INFO,
         'Пользователь успешно валидирован через Neynar',
-        { fid: userData.fid, username: normalizedUser.username }
+        { fid: userContext.fid, username: normalizedUser.username }
       );
 
       return { isValid: true, user: normalizedUser };
@@ -175,7 +180,7 @@ export class NeynarService {
         AuthStep.VALIDATE_ERROR,
         AuthLogType.ERROR,
         'Ошибка при валидации пользователя',
-        { fid: userData.fid },
+        { fid: userData.user?.fid },
         error
       );
       return {

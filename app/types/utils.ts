@@ -51,7 +51,16 @@ export type UserProfile = Omit<UserData, 'metadata'> & {
  * Утилитные типы для работы с Farcaster
  */
 export type FarcasterResponse<T> = Promise<T | null>;
-export type FarcasterUser = Pick<FarcasterContext, 'fid' | 'username' | 'displayName' | 'pfp'>;
+
+// Определяем тип напрямую, без использования Pick<FarcasterContext>
+export interface FarcasterUser {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfp?: {
+    url: string;
+  };
+}
 
 /**
  * Типы для обработки ошибок

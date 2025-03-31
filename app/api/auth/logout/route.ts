@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 /**
+ * Указываем Next.js, что этот маршрут должен быть динамическим
+ * и не должен пытаться рендериться статически
+ */
+export const dynamic = 'force-dynamic';
+
+/**
  * Обработчик для выхода пользователя
  * Очищает refresh_token и другие связанные куки
  */

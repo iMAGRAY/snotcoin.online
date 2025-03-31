@@ -208,7 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Авторизация пользователя
   const login = useCallback(async (userData: FarcasterContext): Promise<boolean> => {
     setIsLoading(true);
-    console.log('[useAuth] Начало процесса авторизации', { fid: userData.fid, username: userData.username });
+    console.log('[useAuth] Начало процесса авторизации', { 
+      fid: userData.user?.fid, 
+      username: userData.user?.username 
+    });
 
     try {
       // Отправляем данные на сервер для валидации через Neynar

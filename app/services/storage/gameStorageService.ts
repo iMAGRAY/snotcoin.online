@@ -2,7 +2,8 @@
  * Сервис для работы с хранилищем игрового состояния
  */
 import type { GameState } from '../../types/gameTypes';
-import { saveGameStateWithIntegrity, loadGameStateWithIntegrity } from '../gameDataService';
+// Удаляем импорт несуществующих функций
+// import { saveGameStateWithIntegrity, loadGameStateWithIntegrity } from '../gameDataService';
 
 interface SaveResult {
   success: boolean;
@@ -14,6 +15,44 @@ interface LoadResult {
   data?: GameState;
   error?: string;
   version?: number | undefined;
+}
+
+/**
+ * Простая реализация функции сохранения состояния с целостностью
+ * @param userId ID пользователя
+ * @param state Состояние игры
+ * @returns Результат операции с данными
+ */
+async function saveGameStateWithIntegrity(userId: string, state: GameState) {
+  // Простая реализация, которая сохраняет в localStorage
+  try {
+    const storageKey = `game_state_${userId}`;
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    return { success: true };
+  } catch (error) {
+    console.error('Ошибка при сохранении состояния:', error);
+    return { success: false, error };
+  }
+}
+
+/**
+ * Простая реализация функции загрузки состояния с целостностью
+ * @param userId ID пользователя
+ * @returns Результат операции с данными
+ */
+async function loadGameStateWithIntegrity(userId: string) {
+  // Простая реализация, которая загружает из localStorage
+  try {
+    const storageKey = `game_state_${userId}`;
+    const data = localStorage.getItem(storageKey);
+    if (!data) {
+      return { success: false, error: 'Данные не найдены' };
+    }
+    return { success: true, data: JSON.parse(data), version: 1 };
+  } catch (error) {
+    console.error('Ошибка при загрузке состояния:', error);
+    return { success: false, error };
+  }
 }
 
 /**

@@ -7,60 +7,52 @@ import { FarcasterProvider, useFarcaster } from './contexts/FarcasterContext';
 import { FarcasterUser } from './types/farcaster';
 import LoadingScreen from './components/LoadingScreen';
 import { ErrorDisplay } from './components/ErrorBoundary';
-import { GameSaverService } from './services/game'; // Импортируем через индексный файл
-import { ToastProvider } from './components/ui/use-toast'; // Исправляем путь импорта
 
 // Обертка для управления состоянием загрузки SDK и отображения заглушки
 const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
   const { sdkStatus, sdkUser, sdkError } = useFarcaster();
   const [loggedStatus, setLoggedStatus] = useState<string | null>(null);
 
-  // Логирование изменений статуса - только при изменении статуса
+  // Логирование изменений статуса
   useEffect(() => {
     const currentStatusSignature = `${sdkStatus}-${sdkUser?.fid}-${sdkError}`;
     if (currentStatusSignature !== loggedStatus) {
-      // Логируем только значимые изменения, не захламляя консоль
-      if (sdkError) {
-        console.log(`[GameProviderWrapper] Status Update: sdkStatus=${sdkStatus}, sdkUserFid=${sdkUser?.fid}, sdkError=${sdkError}`);
-      } else if (sdkStatus === 'ready' && sdkUser?.fid) {
-        console.log(`[GameProviderWrapper] Authenticated! User FID: ${sdkUser.fid}`);
-      }
+      console.log(`[GameProviderWrapper] Status Update: sdkStatus=${sdkStatus}, sdkUserFid=${sdkUser?.fid}, sdkError=${sdkError}`);
       setLoggedStatus(currentStatusSignature);
     }
   }, [sdkStatus, sdkUser, sdkError, loggedStatus]);
 
-  // Пока SDK не готов, показываем заглушку без лишних логов
+  // Пока SDK не готов или не произошла ошибка, показываем заглушку
   if (sdkStatus === 'idle' || sdkStatus === 'loading') {
+    console.log(`[GameProviderWrapper] Showing loading placeholder: SDK Status=${sdkStatus}`);
     return <LoadingScreen progress={50} statusMessage="Connecting to Farcaster..." />;
   }
 
   // Если произошла ошибка SDK
   if (sdkStatus === 'error') {
-    console.error(`[GameProviderWrapper] SDK Error: ${sdkError}`);
+    console.error(`[GameProviderWrapper] SDK Error: ${sdkError}. Rendering error display.`);
     return <ErrorDisplay message={sdkError || 'Failed to initialize Farcaster connection.'} />;
   }
 
   // Если SDK готов, но нет пользователя (маловероятно в Mini App, но для полноты)
   if (sdkStatus === 'ready' && !sdkUser?.fid) {
-     console.warn('[GameProviderWrapper] SDK ready but no user FID found');
+     console.warn('[GameProviderWrapper] SDK ready but no user FID found. Rendering error display.');
      return <ErrorDisplay message={'Farcaster user data not available.'} />;
   }
 
-  // SDK готов и есть пользователь - оборачиваем GameProvider в GameSaver
+  // SDK готов и есть пользователь
   if (sdkStatus === 'ready' && sdkUser?.fid) {
+    // Передаем fid как userId в GameProvider
+    console.log(`[GameProviderWrapper] Rendering GameProvider with userId (from SDK FID): ${sdkUser.fid} (SDK OK)`);
     return (
-      <GameProvider userId={String(sdkUser.fid)}>
-        <ToastProvider>
-          <GameSaverService debugMode={true}> {/* Обновляем имя компонента */}
-            {children}
-          </GameSaverService>
-        </ToastProvider>
+      <GameProvider userId={String(sdkUser.fid)} >
+        {children}
       </GameProvider>
     );
   }
 
   // Непредвиденное состояние
-  console.error(`[GameProviderWrapper] Unexpected state`);
+  console.error(`[GameProviderWrapper] Unexpected state: sdkStatus=${sdkStatus}, sdkUser=${sdkUser}, sdkError=${sdkError}`);
   return <ErrorDisplay message='An unexpected error occurred during initialization.' />;
 };
 

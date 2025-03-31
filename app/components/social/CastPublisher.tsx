@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useFarcaster } from '@/app/contexts/FarcasterContext';
-import { FarcasterSDK } from '@/app/types/farcaster';
+// Импортируем FarcasterSDK напрямую из глобального типа, определенного в farcaster.d.ts
+// import { FarcasterSDK } from '@/app/types/farcaster';
 
 interface CastPublisherProps {
   defaultText?: string;
@@ -25,7 +26,9 @@ export default function CastPublisher({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [success, setSuccess] = useState(false);
-  const { isAuthenticated } = useFarcaster();
+  const { sdkUser } = useFarcaster();
+  
+  const isAuthenticated = !!sdkUser;
 
   const handlePublish = async () => {
     if (!text.trim()) return;
@@ -36,10 +39,11 @@ export default function CastPublisher({
     
     try {
       if (typeof window !== 'undefined' && window.farcaster) {
-        const farcaster = window.farcaster as FarcasterSDK;
+        const farcaster = window.farcaster;
         if (farcaster.publishCast) {
           await farcaster.publishCast(text.trim());
           setText('');
+          setSuccess(true);
           onSuccess?.();
         }
       }

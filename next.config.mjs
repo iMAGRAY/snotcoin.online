@@ -42,7 +42,9 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://kit.warpcast.com https://cdn.warpcast.com https://assets.warpcast.com https://www.unpkg.com https://unpkg.com https://esm.sh https://telegram.org https://*.telegram.org https://*.neynar.com https://neynarxyz.github.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+            value: isProd 
+              ? "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://kit.warpcast.com https://cdn.warpcast.com https://assets.warpcast.com https://www.unpkg.com https://unpkg.com https://esm.sh https://telegram.org https://*.telegram.org https://*.neynar.com https://neynarxyz.github.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+              : "default-src 'self'; frame-ancestors *; connect-src 'self' https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.kaspersky-labs.com https://gc.kis.v2.scr.kaspersky-labs.com https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://kit.warpcast.com https://cdn.warpcast.com https://assets.warpcast.com https://www.unpkg.com https://unpkg.com https://esm.sh https://telegram.org https://*.telegram.org https://*.neynar.com https://neynarxyz.github.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
           },
           {
             key: 'X-Frame-Options',
@@ -63,7 +65,33 @@ const nextConfig = {
     NEXT_PUBLIC_NEYNAR_CLIENT_ID: process.env.NEYNAR_CLIENT_ID,
     NEXT_PUBLIC_IMAGE_HOST: process.env.NEXT_PUBLIC_IMAGE_HOST,
   },
-  webpack: (config, { isServer }) => {
+  // Отключаем проверку CSP для eval в режиме разработки
+  experimental: {
+    reactRefresh: process.env.NODE_ENV === 'production',
+  },
+  webpack: (config, { dev, isServer }) => {
+    // Отключаем React Refresh в режиме разработки для решения проблем с CSP
+    if (dev && !isServer) {
+      const rules = config.module.rules
+        .find((rule) => typeof rule.oneOf === 'object')
+        .oneOf.filter((rule) => Array.isArray(rule.use));
+
+      rules.forEach((rule) => {
+        rule.use.forEach((moduleLoader) => {
+          if (
+            moduleLoader.loader?.includes('next/dist/compiled/babel/babel-loader') &&
+            moduleLoader.options?.plugins?.length
+          ) {
+            // Удаляем плагин react-refresh
+            moduleLoader.options.plugins = moduleLoader.options.plugins.filter(
+              (plugin) => !plugin.toString().includes('react-refresh')
+            );
+          }
+        });
+      });
+    }
+
+    // Существующие настройки webpack
     config.resolve.alias = {
       ...config.resolve.alias,
       '@components': path.join(__dirname, 'app/components'),

@@ -184,7 +184,7 @@ export class GameStateSynchronizer {
           let dbGameState: ExtendedGameState;
           
           // Извлекаем gameState из записи
-          const gameStateData = userProgress.gameState;
+          const gameStateData = userProgress.game_state;
           
           // Обрабатываем разные типы представления данных
           if (typeof gameStateData === 'object' && gameStateData !== null) {

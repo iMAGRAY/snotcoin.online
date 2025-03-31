@@ -18,7 +18,9 @@ interface AuthenticationWindowProps {
 const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthenticate }) => {
   const { t } = useTranslation()
   const gameDispatch = useGameDispatch()
-  const { isAuthenticated } = useFarcaster()
+  const { sdkUser } = useFarcaster()
+  
+  const isAuthenticated = !!sdkUser
 
   // Логируем монтирование компонента
   useEffect(() => {

@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     try {
       // Парсим JSON строку в объект
-      gameState = JSON.parse(userProgress.gameState as string) as ExtendedGameState;
+      gameState = JSON.parse(userProgress.game_state as string) as ExtendedGameState;
     } catch (parseError) {
       return res.status(400).json({
         success: false,
@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
     
-    const encryptedState = userProgress.encryptedState;
+    const encryptedState = userProgress.encrypted_state;
     
     // Проверяем целостность сохранения
     const integrityResult = verifyGameStateIntegrity(gameState, encryptedState || undefined);
@@ -81,8 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await prisma.progress.update({
           where: { user_id: userId },
           data: {
-            gameState: gameStateJson,
-            encryptedState: encryptedSave,
+            game_state: gameStateJson,
+            encrypted_state: encryptedSave,
             version: userProgress.version + 1,
             updated_at: new Date()
           }

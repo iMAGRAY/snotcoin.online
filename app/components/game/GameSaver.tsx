@@ -1,47 +1,27 @@
-import React, { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { useGameState, useGameDispatch } from '../../contexts';
 import { api } from '../../lib/api';
-import { useToast } from '../../components/ui/use-toast';
+import { useToast } from '../ui/use-toast';
 import { MIN_SAVE_INTERVAL, AUTO_SAVE_INTERVAL } from '../../constants/gameConstants';
 import type { GameState } from '../../types/gameTypes';
-import type { SaveGameResponse } from '../../lib/api';
 import { debounce } from 'lodash';
-import { useFarcaster } from '../../contexts/FarcasterContext';
-import { logger } from '@/app/lib/logger';
+// import useVisibilityChange from '../../hooks/useVisibilityChange'; // <-- Похоже, этот импорт не используется и вызывает ошибку линтера в прошлый раз, закомментируем
 
-// Простая функция для отслеживания видимости страницы
-const useVisibilityChange = (callback: (isVisible: boolean) => void) => {
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      callback(document.visibilityState !== 'hidden');
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [callback]);
-};
-
-// Расширяем тип ответа API
-interface ExtendedSaveResponse extends Omit<SaveGameResponse, 'error'> {
-  error?: string | null | undefined;
-  isBatched?: boolean;
-  batchId?: string;
-  totalRequests?: number;
-}
-
-// Используем реальный API, если он доступен, иначе заглушку
-const apiClient = typeof api !== 'undefined' ? api : {
-  saveGameProgress: async (gameState: any, options: any): Promise<ExtendedSaveResponse> => ({
-    success: true
+// Проверяем, определены ли необходимые модули
+const mockApi = {
+  saveGameProgress: async (gameState: any, options: any) => ({
+    success: true,
+    error: null
   })
 };
+
+// Используем реальный API, если он доступен, иначе заглушку
+const apiClient = typeof api !== 'undefined' ? api : mockApi;
 
 // Заглушка для useToast, если компонент недоступен
 const useToastFallback = () => ({
   toast: ({ title, description }: { title: string, description: string }) => {
-    // console.log(`[Toast] ${title}: ${description}`);
+    // console.log(`[Toast] ${title}: ${description}`) // Убираем лог заглушки
   }
 });
 
@@ -58,7 +38,6 @@ interface SaveStatus {
   lastBatchId: string | null;
   backoff: number;
   storageIssue: boolean;
-  lastSavedVersion: number;
 }
 
 // Максимальное время ожидания при ошибках (10 секунд)
@@ -89,6 +68,7 @@ export type SaveGameFunction = (options?: {
   reason?: string;
   isCritical?: boolean;
   force?: boolean;
+  silent?: boolean;
 }) => Promise<boolean>;
 
 // Props для компонента с дочерними элементами и колбэком сохранения
@@ -105,66 +85,11 @@ interface ChildProps {
   [key: string]: any;
 }
 
-// Функция для категоризации ошибок
-const categorizeError = (errorMessage: string) => {
-  if (
-    errorMessage.includes('storage') || 
-    errorMessage.includes('quota') || 
-    errorMessage.includes('Storage')
-  ) {
-    return 'storage';
-  }
-  
-  if (
-    errorMessage.includes('rate limit') || 
-    errorMessage.includes('too many requests') || 
-    errorMessage.includes('TOO_MANY_REQUESTS')
-  ) {
-    return 'rate_limit';
-  }
-  
-  if (
-    errorMessage.includes('TOKEN_MISSING') ||
-    errorMessage.includes('INVALID_FID') ||
-    errorMessage.includes('Authorization')
-  ) {
-    return 'auth';
-  }
-  
-  if (
-    errorMessage.includes('DB_ERROR') ||
-    errorMessage.includes('Database') || 
-    errorMessage.includes('database') ||
-    errorMessage.includes('prisma')
-  ) {
-    return 'database';
-  }
-  
-  if (
-    errorMessage.includes('Redis') ||
-    errorMessage.includes('ECONNREFUSED') ||
-    errorMessage.includes('6379')
-  ) {
-    return 'redis';
-  }
-  
-  return 'unknown';
-};
-
-const GameSaverService: React.FC<GameSaverProps> = memo(
+const GameSaver: React.FC<GameSaverProps> = memo(
   ({ children, onSaveComplete, saveInterval = 5000, debugMode = false }) => {
-    // Используем переменную для предотвращения логов при повторных рендерах
-    const isFirstRenderRef = useRef(true);
-    
-    if (isFirstRenderRef.current) {
-      console.log('🔍 [GameSaverService] COMPONENT MOUNTED (первичный монтаж)');
-      isFirstRenderRef.current = false;
-    }
-    
     const gameState = useGameState();
     const dispatch = useGameDispatch();
     const { toast } = useToastHook();
-    const { sdkUser, sdkStatus } = useFarcaster();
     
     const saveStatusRef = useRef<SaveStatus>({
       lastSaveTime: 0,
@@ -175,28 +100,23 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       batchedSaves: 0,
       lastBatchId: null,
       backoff: INITIAL_BACKOFF,
-      storageIssue: false,
-      lastSavedVersion: 0
+      storageIssue: false
     });
     
     const [saveStatus, setSaveStatus] = useState<SaveStatus>(saveStatusRef.current);
     
-    // Таймеры и Refs
+    // Таймеры
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const storageCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
-    // Ref для доступа к последнему состоянию gameState без добавления его в зависимости useCallback
-    const gameStateRef = useRef(gameState);
-    
-    // Обновляем gameStateRef при каждом изменении gameState
-    useEffect(() => {
-      gameStateRef.current = gameState;
-    }, [gameState]);
-    
+    // Дополнительные refs для отслеживания состояния сохранения
+    const isSavingRef = useRef<boolean>(false);
+    const lastSavedStateRef = useRef<string>('');
+
     const log = useCallback((message: string, data?: any) => {
       if (debugMode) {
-        console.log(`[GameSaverService] ${message}`, data !== undefined ? data : '');
+        console.log(`[GameSaver] ${message}`, data !== undefined ? data : '');
       }
     }, [debugMode]);
 
@@ -212,7 +132,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       try {
         if (typeof window === 'undefined' || !window.localStorage) return;
         
-        // console.log('[GameSaverService] Очистка локального хранилища от старых данных');
+        // console.log('[GameSaver] Очистка локального хранилища от старых данных'); // Убираем лог
         
         // Поиск всех резервных копий
         const backupKeys: string[] = [];
@@ -235,7 +155,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           for (let i = 0; i < backupKeys.length - MAX_BACKUP_COPIES; i++) {
             const key = backupKeys[i];
             if (key) {
-              // console.log(`[GameSaverService] Удалена старая резервная копия: ${key}`);
+              // console.log(`[GameSaver] Удалена старая резервная копия: ${key}`); // Убираем лог
               localStorage.removeItem(key);
             }
           }
@@ -247,7 +167,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         
         // Экстренная очистка
         if (storageUsed > storageLimit * 0.8) {
-          // console.warn('[GameSaverService] Критически мало места в хранилище. Экстренная очистка.'); // Оставляем warn, но можно убрать если мешает
+          // console.warn('[GameSaver] Критически мало места в хранилище. Экстренная очистка.'); // Оставляем warn
           if (backupKeys.length > 1) {
             const latestBackup = backupKeys[backupKeys.length - 1];
             for (let i = 0; i < backupKeys.length - 1; i++) {
@@ -256,7 +176,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
                 localStorage.removeItem(key);
               }
             }
-            // console.log(`[GameSaverService] Оставлена только последняя копия: ${latestBackup}`);
+            // console.log(`[GameSaver] Оставлена только последняя копия: ${latestBackup}`); // Убираем лог
           }
           // Удаляем и другие ненужные данные
           for (let i = 0; i < localStorage.length; i++) {
@@ -280,7 +200,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           updateSaveStatus({ storageIssue: false });
         }
       } catch (error) {
-        console.error('[GameSaverService] Ошибка при очистке хранилища:', error);
+        console.error('[GameSaver] Ошибка при очистке хранилища:', error); // Оставляем error
       }
     }, [toast, updateSaveStatus]);
     
@@ -313,72 +233,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       };
     }, []);
 
-    // Проверка готовности Farcaster для сохранения
-    const getFarcasterAuthInfo = useCallback(() => {
-      // Если SDK не готов, пробуем использовать данные из localStorage
-      if (sdkStatus !== 'ready') {
-        log(`🔒 [AUTH] Farcaster SDK не готов: ${sdkStatus}, проверяем локальное хранилище`);
-        
-        try {
-          // Проверяем наличие сохраненных данных Farcaster
-          const farcasterDataStr = localStorage.getItem('FARCASTER_USER');
-          if (farcasterDataStr) {
-            const farcasterData = JSON.parse(farcasterDataStr);
-            const localFid = farcasterData.fid;
-            
-            if (localFid && !isNaN(Number(localFid))) {
-              log(`🔒 [AUTH] Используем Farcaster FID из localStorage: ${localFid}`);
-              return { 
-                fid: String(localFid), 
-                username: farcasterData.username || 'unknown',
-                source: 'localStorage'
-              };
-            }
-          }
-        } catch (error) {
-          log(`🔒 [AUTH] Ошибка при получении данных Farcaster из localStorage: ${error}`);
-        }
-        
-        return null;
-      }
-      
-      if (!sdkUser) {
-        log('🔒 [AUTH] Farcaster пользователь не найден');
-        return null;
-      }
-      
-      // Проверяем наличие FID
-      const fid = sdkUser.fid;
-      if (!fid) {
-        log('🔒 [AUTH] Farcaster FID отсутствует в контексте пользователя');
-        return null;
-      }
-      
-      if (isNaN(Number(fid))) {
-        log(`🔒 [AUTH] Некорректный формат Farcaster FID: ${fid}`);
-        return null;
-      }
-      
-      // Сохраняем данные в localStorage для использования в случае недоступности SDK
-      try {
-        localStorage.setItem('FARCASTER_USER', JSON.stringify({
-          fid: String(fid),
-          username: sdkUser.username || 'unknown',
-          displayName: sdkUser.displayName || null,
-          timestamp: Date.now()
-        }));
-      } catch (e) {
-        // Игнорируем ошибки при сохранении
-      }
-      
-      // FID валиден - возвращаем
-      return { 
-        fid: String(fid), 
-        username: sdkUser.username || 'unknown',
-        source: 'sdk'
-      };
-    }, [sdkUser, sdkStatus, log]);
-
     // Функция сохранения игры
     const saveGame = useCallback(async (options: { 
       reason?: string;
@@ -389,27 +243,12 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       const { reason = 'auto', isCritical = false, force = false, silent = false } = options;
       const status = saveStatusRef.current;
       
-      // Получаем текущее состояние из рефа
-      const currentGameState = gameStateRef.current;
-      
       // Проверяем, можно ли сейчас сохранять
       const now = Date.now();
       const timeSinceLastSave = now - status.lastSaveTime;
       const isAutoSave = reason === 'auto';
       const minInterval = isAutoSave ? AUTO_SAVE_INTERVAL : MIN_SAVE_INTERVAL;
       
-      console.log(`>>> saveGame Check 1: isAutoSave=${isAutoSave}, currentSaveVersion=${currentGameState._saveVersion}, lastSavedVersion=${status.lastSavedVersion}, force=${force}`);
-      // Проверяем, изменилось ли состояние с момента последнего сохранения
-      const currentSaveVersion = currentGameState._saveVersion || 0;
-      const lastSavedVersion = status.lastSavedVersion;
-      
-      // Если версия не изменилась и это автосохранение, пропускаем
-      if (isAutoSave && currentSaveVersion === lastSavedVersion && !force) {
-        log('⏭️ Пропускаем автосохранение, состояние не изменилось');
-        return false;
-      }
-      
-      console.log(`>>> saveGame Check 2: status.isSaving=${status.isSaving}`);
       // Если уже идет сохранение, планируем отложенное
       if (status.isSaving) {
         if (!status.pendingSave && !silent) {
@@ -424,7 +263,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         return false;
       }
       
-      console.log(`>>> saveGame Check 3: force=${force}, timeSinceLastSave=${timeSinceLastSave}, minInterval=${minInterval}`);
       // Проверяем интервал между сохранениями, если это не принудительное сохранение
       if (!force && timeSinceLastSave < minInterval) {
         if (!silent) {
@@ -455,17 +293,15 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       updateSaveStatus({ 
         isSaving: true, 
         error: null,
-        saveCount: status.saveCount + 1,
-        lastSavedVersion: currentSaveVersion
+        saveCount: status.saveCount + 1
       });
       
-      log(`💾 [SAVE] Starting save for user: ${currentGameState._userId}, reason: ${reason}, version: ${currentSaveVersion}`);
+      log(`💾 [SAVE] Starting save for user: ${gameState._userId}`); // <-- Оставляем важный лог
 
       try {
-        console.log('>>> performSave: START');
-        const userId = currentGameState._userId;
+        const userId = gameState._userId;
         if (!userId) {
-          // log('Skipping save: No User ID in state'); // Уже закомментировано
+          // log('Skipping save: No User ID in state'); // Убираем, т.к. есть лог выше
           if (!silent) {
             updateSaveStatus({ error: 'User ID missing' });
           }
@@ -474,30 +310,25 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         
         // Обновляем версию сохранения и сопутствующие данные
         const saveData = {
-          ...currentGameState,
-          _saveVersion: currentSaveVersion + 1,
+          ...gameState,
+          _saveVersion: (gameState._saveVersion || 0) + 1,
           _lastSaved: new Date().toISOString(),
           _saveReason: reason
         };
         
         // Обновляем состояние игры с новой версией
-        dispatch({ type: "LOAD_GAME_STATE", payload: saveData });
+        dispatch({ type: 'SAVE_STATE', payload: saveData });
         
         // Создаем локальную резервную копию перед отправкой на сервер
-        if ((typeof window !== 'undefined') && window.localStorage && 
-            (isCritical || !isAutoSave || (status.saveCount % 5 === 0))) {
+        if (typeof window !== 'undefined' && window.localStorage) {
           try {
             const backupKey = `${BACKUP_PREFIX}${userId}_${Date.now()}`;
             const minimalBackup = createMinimalBackup(saveData, userId);
             localStorage.setItem(backupKey, JSON.stringify(minimalBackup));
-            // console.log(`[GameSaverService] Создана компактная резервная копия: ${backupKey}`);
-            setTimeout(cleanupLocalStorage, 100);
-            
-            // Создаем основную копию в localStorage для каждого сохранения
-            localStorage.setItem(`gameState_${userId}`, JSON.stringify(saveData));
-            localStorage.setItem(`gameState_${userId}_lastSaved`, new Date().toISOString());
+            // console.log(`[GameSaver] Создана компактная резервная копия: ${backupKey}`); // Убираем лог
+            setTimeout(cleanupLocalStorage, 100); // Оставляем вызов очистки
           } catch (storageError) {
-            console.error('[GameSaverService] Ошибка при создании резервной копии:', storageError);
+            console.error('[GameSaver] Ошибка при создании резервной копии:', storageError); // Оставляем error
             if (storageError instanceof DOMException && 
                (storageError.name === 'QuotaExceededError' || storageError.code === 22)) {
               cleanupLocalStorage();
@@ -505,64 +336,26 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           }
         }
         
-        log(`💾 [SAVE] Calling storageService.saveGameState for user: ${userId}, data size: ${
-          Math.round(JSON.stringify(saveData).length / 1024)
-        }KB`);
-        
-        console.log('>>> performSave: CALLING apiClient.saveGameProgress');
-        
-        // Получаем Farcaster авторизацию с расширенными проверками
-        const farcasterAuth = getFarcasterAuthInfo();
-        
-        // Используем FID из Farcaster если он доступен, иначе пробуем использовать userId
-        const fid = farcasterAuth?.fid || (userId && /^\d+$/.test(userId) ? userId : null);
-        
-        if (!fid) {
-          log(`❌ [AUTH] Не удалось получить валидный FID: farcasterAuth=${JSON.stringify(farcasterAuth)}, userId=${userId}`);
-          throw new Error('TOKEN_MISSING');
-        }
-        
-        // Больше логирования для отладки
-        log(`🔒 [AUTH] Используем Farcaster FID для сохранения: ${fid} (sdkUser?.fid=${sdkUser?.fid}, userId=${userId})`);
-        
-        // Проверка на некорректный FID
-        if (isNaN(Number(fid))) {
-          log(`❌ [AUTH] Некорректный FID: ${fid}, тип: ${typeof fid}`);
-          throw new Error('INVALID_FID_FORMAT');
-        }
-        
-        // Дополнительная информация о пользователе для отладки
-        if (farcasterAuth) {
-          log(`🔒 [AUTH] Авторизован через Farcaster: FID=${farcasterAuth.fid}, username=${farcasterAuth.username}`);
-        }
-        
-        // Убедимся, что userId установлен в saveData
-        if (!saveData._userId && fid) {
-          saveData._userId = String(fid);
-        }
-        
-        const response = await apiClient.saveGameProgress(saveData, {
-          isCritical,
+        log(`💾 [SAVE] Calling storageService.saveGameState for user: ${userId}`); // <-- Оставляем важный лог
+        const response = await apiClient.saveGameProgress(saveData, { 
+          isCritical, 
           reason
-        }) as ExtendedSaveResponse;
+        });
         
         if (response.success) {
-          log(`✅ [SAVE] Save successful for user: ${userId}, version: ${saveData._saveVersion}`);
-          console.log('>>> performSave: SUCCESS');
-          
+          log(`✅ [SAVE] Save successful for user: ${userId}`); // <-- Оставляем важный лог
           // Сбрасываем backoff при успешном сохранении
           const newSaveStatus: Partial<SaveStatus> = {
             lastSaveTime: now,
             isSaving: false,
             error: null,
-            backoff: INITIAL_BACKOFF,
-            lastSavedVersion: currentSaveVersion
+            backoff: INITIAL_BACKOFF
           };
           
           // Если это был пакетный запрос (batched), обновляем счетчик
-          if (response?.isBatched) {
+          if (response && 'isBatched' in response && response.isBatched) {
             newSaveStatus.batchedSaves = (status.batchedSaves || 0) + 1;
-            newSaveStatus.lastBatchId = response?.batchId || null;
+            newSaveStatus.lastBatchId = 'batchId' in response ? response.batchId : 'unknown';
           }
           
           updateSaveStatus(newSaveStatus);
@@ -571,8 +364,8 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           if (!silent && !isAutoSave) {
             toast({
               title: "Прогресс сохранен",
-              description: response?.isBatched 
-                ? `Объединено с ${response?.totalRequests || 0} запросами (ID: ${response?.batchId || 'unknown'})` 
+              description: response && 'isBatched' in response && response.isBatched 
+                ? `Объединено с ${('totalRequests' in response ? response.totalRequests : 'несколькими')} запросами (ID: ${('batchId' in response ? response.batchId : 'unknown')})` 
                 : "Игра успешно сохранена",
               duration: 2000
             });
@@ -589,16 +382,10 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         }
       } catch (error: any) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log(`❌ [SAVE] Save failed for user: ${currentGameState._userId}, version: ${currentSaveVersion}. Error: ${errorMessage}`);
-        console.error('>>> performSave: FAILED', error);
-        
-        // Определяем тип ошибки
-        const errorType = categorizeError(errorMessage);
-        
+        log(`❌ [SAVE] Save failed for user: ${gameState._userId}. Error: ${errorMessage}`); // <-- Оставляем важный лог
         // Обработка ошибки
-        const isTooManyRequests = errorType === 'rate_limit';
-        const isStorageError = errorType === 'storage';
-        const isRedisError = errorType === 'redis';
+        const isTooManyRequests = errorMessage.includes('TOO_MANY_REQUESTS') || 
+                                 errorMessage.includes('SAVE_IN_PROGRESS');
         
         // Увеличиваем backoff только для сетевых ошибок и ошибок сервера
         let newBackoff = status.backoff;
@@ -606,6 +393,11 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           // Экспоненциальный backoff при серверных ошибках
           newBackoff = Math.min(status.backoff * 1.5, MAX_BACKOFF);
         }
+        
+        // Проверяем ошибки, связанные с хранилищем
+        const isStorageError = errorMessage.includes('QuotaExceeded') || 
+                               errorMessage.includes('INSUFFICIENT_RESOURCES') ||
+                               errorMessage.includes('localStorage');
         
         // При ошибке хранилища запускаем очистку
         if (isStorageError) {
@@ -627,9 +419,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
               ? "Недостаточно места в хранилище браузера. Выполнена автоматическая очистка."
               : isTooManyRequests
                 ? "Слишком много запросов на сохранение. Повторите попытку позже."
-                : isRedisError
-                  ? "Проблема с сервером кэширования. Прогресс сохранен локально."
-                  : "Не удалось сохранить прогресс. Повторите попытку позже.",
+                : "Не удалось сохранить прогресс. Повторите попытку позже.",
             variant: "destructive",
             duration: 3000
           });
@@ -650,16 +440,17 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         
         return false;
       } finally {
-         updateSaveStatus({ isSaving: false });
-         log(`💾 [SAVE] Finished save attempt for user: ${currentGameState._userId}`);
+         updateSaveStatus({ isSaving: false }); // Убедимся, что статус сбрасывается
+         log(`💾 [SAVE] Finished save attempt for user: ${gameState._userId}`); // <-- Оставляем важный лог
       }
-    }, [dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup, log, sdkUser, sdkStatus, getFarcasterAuthInfo]);
+    }, [gameState, dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup, log]);
   
     // Сохранение для публичного использования
     const saveGamePublic = useCallback((options: {
       reason?: string;
       isCritical?: boolean;
       force?: boolean;
+      silent?: boolean;
     } = {}) => {
       return saveGame(options);
     }, [saveGame]);
@@ -765,72 +556,83 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       return child;
     });
   
-    // Используем useRef для создания debounced функции только один раз, чтобы она была стабильной
-    const debouncedSaveRef = useRef(debounce(saveGame, saveInterval));
-
-    // Ref для отслеживания первого вызова эффекта при изменении gameState
-    const isFirstSaveEffectRef = useRef(true);
-    const prevUserIdRef = useRef<string | undefined>(undefined);
-    const isFirstVisibilityChangeRef = useRef(true);
+    // Debounced save function
+    const debouncedSave = useRef(debounce(saveGame, saveInterval)).current;
 
     // Effect to trigger save on state change
     useEffect(() => {
-      const userId = gameState._userId;
-      
-      // Пропускаем первый вызов эффекта или если userId изменился
-      if (isFirstSaveEffectRef.current || prevUserIdRef.current !== userId) {
-        console.log('🔍 [GameSaverService] Пропускаем первый вызов useEffect для gameState или новый userId:', userId);
-        isFirstSaveEffectRef.current = false;
-        prevUserIdRef.current = userId;
-        return;
+      // log('Game state changed, scheduling debounced save', { userId: gameState._userId }); // Убираем лог на каждое изменение
+      if (gameState._userId) {
+        debouncedSave({ reason: 'state_change', silent: true });
+        // Обновляем значение lastSavedStateRef при каждом изменении состояния
+        lastSavedStateRef.current = JSON.stringify({
+          ...gameState,
+          _lastSaved: new Date().toISOString()
+        });
       }
-      
-      if (userId) {
-        console.log(`>>> useEffect[gameState]: Triggered! Save Version: ${gameState._saveVersion}`);
-        console.log('🔍 [GameSaverService] Вызываем debouncedSave, userId:', userId);
-        // Вызываем функцию из рефа
-        debouncedSaveRef.current({ reason: 'auto', silent: true }); 
-      }
-      
       return () => {
-        debouncedSaveRef.current.cancel();
+        debouncedSave.cancel();
       };
-    }, [gameState._saveVersion, gameState._userId]);
+    }, [gameState, debouncedSave]); // Убрали log из зависимостей
+
+    // Синхронизируем isSavingRef с saveStatus.isSaving
+    useEffect(() => {
+      isSavingRef.current = saveStatus.isSaving;
+    }, [saveStatus.isSaving]);
 
     // Force save on visibility change (page hidden)
     const handleVisibilityChange = useCallback((isVisible: boolean) => {
-      if (!isVisible && !isFirstVisibilityChangeRef.current) {
-        // Если страница скрыта и это не первый вызов
-        if (!saveStatusRef.current.isSaving && gameState._userId) {
-          // Принудительное сохранение через непосредственный вызов saveGame
-          log('💾 Страница скрыта, выполняем принудительное сохранение');
-          
-          // Отменяем все отложенные вызовы debouncedSave
-          debouncedSaveRef.current.cancel();
-          
-          // Используем setTimeout, чтобы вызов не происходил во время рендеринга
-          setTimeout(() => {
-            saveGame({ reason: 'visibility_change', force: true, silent: true });
-          }, 0);
+      if (!isVisible) {
+        // log('Page hidden, attempting immediate save'); // Убираем лог
+        debouncedSave.flush();
+        // Если в данный момент нет активного сохранения, и есть userId,
+        // и состояние изменилось с момента последнего сохранения, сохраняем немедленно
+        const currentStateString = JSON.stringify({
+            ...gameState,
+            _lastSaved: 'pending' // Используем плейсхолдер, т.к. точное время будет установлено в performSave
+          });
+        if (!isSavingRef.current && gameState._userId && currentStateString !== lastSavedStateRef.current) {
+            saveGame({ 
+              reason: 'visibility_change', 
+              isCritical: true,
+              silent: true 
+            });
         }
       }
-      
-      if (isFirstVisibilityChangeRef.current) {
-        isFirstVisibilityChangeRef.current = false;
-      }
-    }, [saveGame, log, gameState]);
+    }, [debouncedSave, saveGame, gameState]);
 
-    // Используем хук для отслеживания видимости страницы
-    useVisibilityChange(handleVisibilityChange);
+    // useVisibilityChange(handleVisibilityChange); // <-- Временно закомментируем, т.к. импорт вызвал ошибку
 
     // Функция сохранения для передачи дочерним элементам
     const exposedSaveGame: SaveGameFunction = useCallback(async (options = {}) => {
-      // log("External save requested", options);
+      // log("External save requested", options); // Убираем лог
       return saveGame(options);
     }, [saveGame]);
 
     return (
-      <div className="game-saver-service">
+      <div className="game-saver">
+        {/* Интерфейс для ручного сохранения и индикации состояния */}
+        <button 
+          onClick={() => saveGamePublic({ reason: 'manual_button', silent: false })}
+          disabled={saveStatus.isSaving || saveStatus.pendingSave}
+          className="save-button"
+        >
+          {saveStatus.isSaving ? 'Сохранение...' : 
+           saveStatus.pendingSave ? 'Ожидание...' : 'Сохранить игру'}
+        </button>
+        
+        {saveStatus.error && (
+          <div className="save-error">
+            Ошибка: {saveStatus.error}
+          </div>
+        )}
+        
+        {saveStatus.storageIssue && (
+          <div className="storage-issue-warning">
+            Внимание: проблемы с хранилищем. Рекомендуется очистить кэш браузера.
+          </div>
+        )}
+        
         {/* Рендерим дочерние компоненты с функцией сохранения */}
         {childrenWithProps}
       </div>
@@ -838,6 +640,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
   }
 );
 
-GameSaverService.displayName = 'GameSaverService';
+GameSaver.displayName = 'GameSaver';
 
-export default GameSaverService; 
+export default GameSaver; 

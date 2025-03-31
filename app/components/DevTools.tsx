@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useGameState } from '../contexts/game/hooks/useGameState'
 import { useGameDispatch } from '../contexts/game/hooks/useGameDispatch'
-import { cleanupLocalStorage } from '../services/gameDataService'
+import { cleanupLocalStorage } from '../services/localStorageManager'
 
 // Константы, должны совпадать с теми, что используются в gameDataService.ts
 const BACKUP_METADATA_KEY = 'backup_metadata';

@@ -15,13 +15,17 @@ export default function FarcasterUserInfo({
   showLogout = true,
   className = '',
 }: FarcasterUserInfoProps) {
-  const { user, isLoading, logout } = useFarcaster();
+  const { sdkUser, sdkStatus } = useFarcaster();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  const isLoading = sdkStatus === 'loading';
+  const user = sdkUser; // Для обратной совместимости с остальным кодом
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout();
+      // Функция logout удалена из контекста, поэтому просто загружаем страницу заново
+      window.location.reload();
     } catch (error) {
       console.error('Error logging out:', error);
     } finally {
@@ -45,9 +49,9 @@ export default function FarcasterUserInfo({
   if (compact) {
     return (
       <div className={`flex items-center ${className}`}>
-        {user.avatar ? (
+        {user?.pfp?.url ? (
           <Image
-            src={user.avatar}
+            src={user.pfp.url}
             alt={user.displayName || user.username}
             width={32}
             height={32}
@@ -69,9 +73,9 @@ export default function FarcasterUserInfo({
     <div className={`rounded-lg overflow-hidden shadow-sm border border-gray-200 ${className}`}>
       <div className="flex items-start p-4 bg-white">
         <div className="flex-shrink-0">
-          {user.avatar ? (
+          {user?.pfp?.url ? (
             <Image
-              src={user.avatar}
+              src={user.pfp.url}
               alt={user.displayName || user.username}
               width={48}
               height={48}
