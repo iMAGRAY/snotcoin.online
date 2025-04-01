@@ -27,7 +27,7 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
         className="relative z-30 isolate select-none w-full h-full flex flex-col items-center justify-center"
         style={{ WebkitTapHighlightColor: "transparent" }}
         animate={{ 
-          y: isActive ? -5 : 0,
+          y: isActive ? -16 : -14,
         }}
         transition={{ duration: 0.3 }}
       >
@@ -35,13 +35,14 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
           className="flex-shrink-0 flex items-center justify-center"
           initial={{ scale: 1, filter: "grayscale(100%) brightness(0.8)" }}
           animate={{ 
-            scale: isActive ? 1.35 : 1,
+            scale: isActive ? 1.25 : 1,
             filter: isActive ? "grayscale(0%) brightness(1)" : "grayscale(100%) brightness(0.8)",
           }}
           transition={{ duration: 0.3 }}
           style={{
-            width: isActive ? '3rem' : '2.2rem',
-            height: isActive ? '3rem' : '2.2rem',
+            width: isActive ? '4.5rem' : '4rem',
+            height: isActive ? '4.5rem' : '4rem',
+            marginTop: isActive ? '-0.8rem' : '0',
           }}
         >
           <img 
@@ -51,19 +52,6 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
             style={{ width: '100%', height: '100%' }}
           />
         </motion.div>
-        
-        <motion.span
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: isActive ? 1 : 0, y: isActive ? 0 : 5 }}
-          exit={{ opacity: 0, y: 5 }}
-          className="text-xs font-semibold text-white text-center text-outline z-20 mt-1"
-          style={{
-            textShadow:
-              "-1px -1px 0 rgba(0,0,0,0.7), 1px -1px 0 rgba(0,0,0,0.7), -1px 1px 0 rgba(0,0,0,0.7), 1px 1px 0 rgba(0,0,0,0.7), 0 2px 4px rgba(0,0,0,0.5)",
-          }}
-        >
-          {t(label as keyof TranslationKeys)}
-        </motion.span>
       </motion.button>
     </div>
   )
