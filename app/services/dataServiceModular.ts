@@ -528,7 +528,6 @@ export async function validateGameState(state: GameState): Promise<boolean> {
     }
 
     if (state.container.level < 1 || 
-        state.container.capacity < 0 || 
         state.container.currentAmount < 0) {
       return false;
     }

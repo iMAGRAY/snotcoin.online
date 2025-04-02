@@ -33,7 +33,7 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
   const safeFillingSpeedLevel = isNaN(fillingSpeedLevel) || fillingSpeedLevel <= 0 ? 1 : fillingSpeedLevel;
 
   const statusItems = [
-    { icon: Database, label: "Cap", value: formatSnotValue(safeContainerCapacity, 2), tooltip: t("capacityTooltip") },
+    { icon: Database, label: "Capacity", value: formatSnotValue(safeContainerCapacity, 2), tooltip: t("capacityTooltip") },
     { icon: ArrowUp, label: "Lvl", value: safeContainerLevel, tooltip: t("capacityLevelTooltip") },
     { icon: Zap, label: "Spd", value: safeFillingSpeedLevel, tooltip: t("fillingLevelTooltip") },
     {

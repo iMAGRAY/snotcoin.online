@@ -46,6 +46,11 @@ const Quests = dynamic(() => import("./game/quests/Quests"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Quests..." />,
 })
 
+const Merge = dynamic(() => import("./game/merge/Merge"), {
+  ssr: false,
+  loading: () => <LoadingScreen progress={25} statusMessage="Loading Merge..." />,
+})
+
 const HomeContent: React.FC = () => {
   const dispatch = useGameDispatch();
   const gameState = useGameState();
@@ -55,12 +60,11 @@ const HomeContent: React.FC = () => {
   
   useEffect(() => {
     if (!gameState.isLoading && !readyCalledRef.current) {
-      console.log('[HomeContent] Game state loaded. Calling sdk.actions.ready().');
+      // Только один вызов для SDK Ready
       const callReady = async () => {
         try {
           await sdk.actions.ready();
           readyCalledRef.current = true;
-          console.log('[HomeContent] sdk.actions.ready() called successfully.');
         } catch (error) {
           console.error('[HomeContent] Error calling sdk.actions.ready():', error);
         }
@@ -83,6 +87,8 @@ const HomeContent: React.FC = () => {
 
   const renderActiveTab = useCallback(() => {
     switch (gameState.activeTab) {
+      case "merge":
+        return <Merge />;
       case "storage":
         return <Storage />;
       case "profile":
@@ -95,14 +101,10 @@ const HomeContent: React.FC = () => {
     }
   }, [gameState.activeTab]);
 
-  console.log(`[HomeContent] Rendering. isLoading: ${gameState.isLoading}`);
-
   if (gameState.isLoading) {
-    console.log('[HomeContent] Game state is loading, rendering null.');
     return null;
   }
 
-  console.log('[HomeContent] Game state loaded, rendering main game content.');
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
       <MotionDiv className='main-game-container' style={{ height: viewportHeight }}>

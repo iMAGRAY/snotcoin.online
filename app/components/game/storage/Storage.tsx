@@ -1,17 +1,21 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useCallback, useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useGameState, useGameDispatch } from "../../../contexts"
 import type { Chest } from "../../../types/storage"
-import ChestCarousel from "./ChestCarousel"
+import { ChestCarousel } from "./ChestCarousel"
 import { useTranslation } from "../../../i18n"
 import FallingRewards from "../../effects/FallingRewards"
 import ExplosionEffect from "../../effects/ExplosionEffect"
 import { ICONS } from "../../../constants/uiConstants"
 import { MotionDiv } from "../../motion/MotionWrapper"
 import { OpenButton } from "./OpenButton"
+import { useInventory } from "@/app/hooks/useInventory"
+import { SnotCoinRewardModal } from "./SnotCoinRewardModal"
+import { SwipeButtons } from "./SwipeButtons"
+import BackgroundImage from "@/app/components/common/BackgroundImage"
 
 const chests: Chest[] = [
   {
@@ -44,7 +48,7 @@ const ArrowButton: React.FC<{ direction: "left" | "right"; onClick: () => void }
   ({ direction, onClick }) => (
     <motion.button
       onClick={onClick}
-      className={`absolute top-2/3 -translate-y-1/2 z-10 ${direction === "left" ? "left-2" : "right-2"} w-12 h-16 flex items-center justify-center bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full shadow-lg overflow-hidden border-2 border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50`}
+      className={`absolute top-2/3 -translate-y-1/2 z-30 ${direction === "left" ? "left-2" : "right-2"} w-12 h-16 flex items-center justify-center bg-gradient-to-b from-yellow-400 to-yellow-600 rounded-full shadow-lg overflow-hidden border-2 border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-300 focus:ring-opacity-50`}
       whileHover={{
         boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
       }}
@@ -128,7 +132,7 @@ const OpenChestButton: React.FC<{onClick: () => void, text: string}> = React.mem
   return (
     <motion.button
       onClick={onClick}
-      className="fixed left-0 right-0 mx-auto bottom-20 w-3/5 max-w-sm z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold px-6 rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-2 border-yellow-300 h-16"
+      className="fixed left-0 right-0 mx-auto bottom-28 w-3/5 max-w-sm z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold px-6 rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-2 border-yellow-300 h-16"
       whileHover={{ 
         scale: 1.05,
         boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)"
@@ -146,31 +150,35 @@ const Storage: React.FC = () => {
   const gameState = useGameState()
   const gameDispatch = useGameDispatch()
   const { t } = useTranslation()
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [activeChestIndex, setActiveChestIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   const [isChestOpening, setIsChestOpening] = useState(false)
   const [rewardAmount, setRewardAmount] = useState<number | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
 
-  const handleSwipe = useCallback((newDirection: number) => {
-    setDirection(newDirection)
-    setCurrentIndex((prevIndex) => {
-      const nextIndex = prevIndex + newDirection
-      if (nextIndex < 0) return chests.length - 1
-      if (nextIndex >= chests.length) return 0
-      return nextIndex
-    })
-  }, [])
+  const handleSwipeComplete = useCallback((index: number) => {
+    setActiveChestIndex(index);
+  }, []);
 
   const handleNext = useCallback(() => {
-    handleSwipe(1)
-  }, [handleSwipe])
+    setActiveChestIndex((prevIndex) => {
+      const nextIndex = prevIndex + 1;
+      return nextIndex >= chests.length ? 0 : nextIndex;
+    });
+    setDirection(1);
+  }, []);
 
   const handlePrev = useCallback(() => {
-    handleSwipe(-1)
-  }, [handleSwipe])
+    setActiveChestIndex((prevIndex) => {
+      const nextIndex = prevIndex - 1;
+      return nextIndex < 0 ? chests.length - 1 : nextIndex;
+    });
+    setDirection(-1);
+  }, []);
 
   const handleOpenChest = useCallback(() => {
-    const currentChest = chests[currentIndex]
+    const currentChest = chests[activeChestIndex]
     if (!currentChest) return
 
     if (gameState.inventory.snot >= currentChest.requiredSnot) {
@@ -197,7 +205,7 @@ const Storage: React.FC = () => {
     } else {
       // Недостаточно SNOT для открытия сундука
     }
-  }, [currentIndex, gameState.inventory.snot, gameDispatch])
+  }, [activeChestIndex, gameState.inventory.snot, gameDispatch])
 
   React.useEffect(() => {
     // Сброс состояния при размонтировании
@@ -216,7 +224,7 @@ const Storage: React.FC = () => {
         exit={{ opacity: 0 }}
       >
         <div
-          className="absolute inset-0 z-0"
+          className="fixed inset-0 z-0"
           style={{
             backgroundImage:
               `url('${ICONS.STORAGE.BACKGROUND}')`,
@@ -224,19 +232,29 @@ const Storage: React.FC = () => {
             backgroundSize: "cover",
           }}
         />
-        <div className="absolute inset-0 flex flex-col z-20">
+        
+        {/* Слой с каруселью и сундуками (z-10) */}
+        <div className="fixed inset-0 flex flex-col z-10">
           <div className="flex-grow flex flex-col">
-            <div className="relative w-full max-w-md mx-auto h-full px-8">
+            <div className="relative w-full h-full mx-auto">
+              <ChestCarousel
+                containerRef={containerRef}
+                carouselRef={carouselRef}
+                isOpening={isChestOpening}
+                setActiveChestIndex={setActiveChestIndex}
+                activeChestIndex={activeChestIndex}
+                onSwipeComplete={handleSwipeComplete}
+              />
+            </div>
+          </div>
+        </div>
+        
+        {/* Слой с кнопками перелистывания (z-30) - поверх сундуков */}
+        <div className="fixed inset-0 pointer-events-none z-30">
+          <div className="relative w-full h-full">
+            <div className="pointer-events-auto">
               <ArrowButton direction="left" onClick={handlePrev} />
               <ArrowButton direction="right" onClick={handleNext} />
-              <ChestCarousel
-                currentIndex={currentIndex}
-                direction={direction}
-                chests={chests}
-                onSwipe={handleSwipe}
-                isChestOpening={isChestOpening}
-                setCurrentIndex={setCurrentIndex}
-              />
             </div>
           </div>
         </div>
@@ -248,7 +266,7 @@ const Storage: React.FC = () => {
         />
       </motion.div>
       
-      {/* Кнопка Open Chest - вне всех контейнеров */}
+      {/* Кнопка Open Chest - вне всех контейнеров, z-50 */}
       <OpenChestButton onClick={handleOpenChest} text={t("openChest")} />
     </>
   )

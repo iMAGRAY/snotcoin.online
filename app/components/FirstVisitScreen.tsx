@@ -42,6 +42,7 @@ const FirstVisitScreen: React.FC<FirstVisitScreenProps> = ({ onComplete }) => {
               src={ICONS.COMMON.FIRST_VISIT}
               alt="Welcome"
               fill
+              sizes="(max-width: 768px) 100vw, 16rem"
               style={{ objectFit: "contain" }}
               priority
             />

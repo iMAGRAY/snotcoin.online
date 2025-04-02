@@ -1,8 +1,23 @@
 import { Action, GameState, ExtendedGameState } from "../types/gameTypes"
 import { initialState } from "../constants/gameConstants"
+import { createInitialGameState, FILL_RATES } from "../constants/gameConstants"
 
 // Единое хранилище для данных в памяти
 const inMemoryStore: Record<string, any> = {};
+
+/**
+ * Рассчитывает емкость контейнера на основе уровня
+ * @param level Уровень контейнера
+ * @returns Емкость контейнера
+ */
+function calculateContainerCapacity(level: number): number {
+  // Базовая емкость для первого уровня
+  const baseCapacity = 1;
+  // Увеличение емкости с каждым уровнем
+  const capacityIncrease = 1;
+  // Рассчитываем емкость
+  return baseCapacity + (level - 1) * capacityIncrease;
+}
 
 export function gameReducer(state: ExtendedGameState = initialState as ExtendedGameState, action: Action): ExtendedGameState {
   // Вспомогательная функция для обновления метаданных
@@ -54,17 +69,20 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
 
     case "UPDATE_CONTAINER_LEVEL":
       return withMetadata({
-        inventory: {
-          ...state.inventory,
-          containerCapacity: action.payload,
-        },
+        container: {
+          ...state.container,
+          level: action.payload
+        }
       });
 
     case "UPDATE_CONTAINER_SNOT":
+      // Защита от NaN или неопределенных значений
+      const newContainerSnot = typeof action.payload === 'number' ? action.payload : 0;
+      
       return withMetadata({
         inventory: {
           ...state.inventory,
-          containerSnot: action.payload,
+          containerSnot: newContainerSnot,
         },
       });
 
@@ -76,49 +94,16 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
         },
       });
 
-    case "UPDATE_RESOURCES":
-      // Обновление ресурсов с автоматическим заполнением контейнера
-      const currentTime = Date.now();
-      const lastUpdateTime = state.inventory.lastUpdateTimestamp || currentTime;
-      
-      // Проверяем корректность времени обновления
-      if (lastUpdateTime > currentTime) {
-        // Защита от некорректной даты - используем текущее время
-        return withMetadata({
-          inventory: {
-            ...state.inventory,
-            lastUpdateTimestamp: currentTime
-          }
-        });
-      }
-      
-      const elapsedTime = currentTime - lastUpdateTime;
-      
-      // Предотвращаем аномально большие интервалы времени (более 1 часа)
-      const maxElapsedTime = 60 * 60 * 1000; // 1 час в миллисекундах
-      const safeElapsedTime = Math.min(elapsedTime, maxElapsedTime);
-      
-      // Получаем скорость заполнения и вместимость с проверками
-      const fillingSpeed = Math.max(0.01, state.inventory.fillingSpeed || 0.01);
-      const containerCapacity = Math.max(1, state.inventory.Cap || 100);
-      const currentContainerSnot = Math.max(0, state.inventory.containerSnot || 0);
-      
-      // Рассчитываем прирост в зависимости от скорости наполнения и времени
-      const containerIncrement = (safeElapsedTime / 1000) * fillingSpeed;
-      
-      // Новое количество в контейнере не может превышать вместимость
-      const newContainerSnot = Math.min(
-        currentContainerSnot + containerIncrement,
-        containerCapacity
-      );
+    case "UPDATE_RESOURCES": {
+      const containerCapacity = Math.max(1, state.inventory.containerCapacity || 1);
       
       return withMetadata({
         inventory: {
           ...state.inventory,
-          containerSnot: newContainerSnot,
-          lastUpdateTimestamp: currentTime
+          containerCapacity: containerCapacity
         }
       });
+    }
 
     case "SET_RESOURCE": {
       const { resource, value } = action.payload;
@@ -151,6 +136,7 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       const currentSnot = state.inventory.snot || 0;
       const newSnot = Math.max(0, currentSnot + amount);
       
+      // Сбрасываем состояние контейнера в любом случае
       // Добавляем к общему количеству SNOT и обнуляем контейнер
       return withMetadata({
         inventory: {
@@ -165,25 +151,59 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       return withMetadata({
         inventory: {
           ...state.inventory,
-          fillingSpeed: state.inventory.fillingSpeed * 1.1, // Увеличиваем на 10%
+          fillingSpeed: state.inventory.fillingSpeed * FILL_RATES.FILL_SPEED_MULTIPLIER, // Увеличиваем согласно константе
+          fillingSpeedLevel: state.inventory.fillingSpeedLevel + 1, // Увеличиваем уровень
         },
       });
 
-    case "UPGRADE_CONTAINER_CAPACITY":
-      return withMetadata({
-        inventory: {
-          ...state.inventory,
-          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
-        },
-      });
+    case "UPGRADE_CONTAINER_CAPACITY": {
+      const { cost } = action.payload;
+      // Проверка наличия достаточного количества snotCoins
+      if (state.inventory.snotCoins < cost) {
+        return state;
+      }
 
-    case "INCREMENT_CONTAINER_CAPACITY":
+      // Новый уровень емкости контейнера
+      const newLevel = state.inventory.containerCapacityLevel + 1;
+      // Новая емкость контейнера
+      const newCapacity = calculateContainerCapacity(newLevel);
+
+      // @ts-ignore - игнорируем проблему с типом, так как объединяем существующие поля
       return withMetadata({
+        ...state,
         inventory: {
           ...state.inventory,
-          containerCapacity: state.inventory.containerCapacity * 1.2, // Увеличиваем на 20%
+          containerCapacityLevel: newLevel,
+          containerCapacity: newCapacity,
+          snotCoins: state.inventory.snotCoins - cost
         },
+        container: {
+          ...state.container,
+          level: newLevel
+        }
       });
+    }
+
+    case "INCREMENT_CONTAINER_CAPACITY": {
+      // Новый уровень емкости контейнера
+      const newLevel = (state.inventory.containerCapacityLevel || 1) + 1;
+      // Новая емкость контейнера
+      const newCapacity = calculateContainerCapacity(newLevel);
+
+      // @ts-ignore - игнорируем проблему с типом, так как объединяем существующие поля
+      return withMetadata({
+        ...state,
+        inventory: {
+          ...state.inventory,
+          containerCapacityLevel: newLevel,
+          containerCapacity: newCapacity
+        },
+        container: {
+          ...state.container,
+          level: newLevel
+        }
+      });
+    }
 
     case "INITIALIZE_NEW_USER": {
       // Если передан payload, используем его
@@ -202,99 +222,27 @@ export function gameReducer(state: ExtendedGameState = initialState as ExtendedG
       // Стандартная инициализация для нового пользователя
       const currentUser = state.user;
       
-      const defaultState = {
-        ...state,
+      return {
+        ...createInitialGameState(state._userId || "unknown"),
+        user: currentUser,
         inventory: {
-          ...state.inventory,
           snot: 0,
           snotCoins: 0,
-          containerCapacity: 100,
           containerSnot: 0,
-          fillingSpeed: 1,
+          containerCapacity: 1, // Обновляем значение containerCapacity
           containerCapacityLevel: 1,
+          fillingSpeed: 1,
           fillingSpeedLevel: 1,
           collectionEfficiency: 1,
-          Cap: 100,
-          lastUpdateTimestamp: Date.now()
+          lastUpdateTimestamp: Date.now(),
         },
         container: {
           level: 1,
-          capacity: 100,
           currentAmount: 0,
           fillRate: 1,
           currentFill: 0
-        },
-        upgrades: {
-          containerLevel: 1,
-          fillingSpeedLevel: 1,
-          clickPower: { level: 1, value: 1 },
-          passiveIncome: { level: 1, value: 0.1 },
-          collectionEfficiencyLevel: 1
-        },
-        _saveVersion: 1,
-        _lastSaved: new Date().toISOString(),
-        _userId: '',
-        _lastModified: Date.now(),
-        _createdAt: new Date().toISOString(),
-        _wasRepaired: false,
-        _repairedAt: Date.now(),
-        _repairedFields: [],
-        _tempData: null,
-        _isSavingInProgress: false,
-        _skipSave: false,
-        _lastSaveError: null,
-        _isBeforeUnloadSave: false,
-        _isRestoredFromBackup: false,
-        _isInitialState: true,
-        _lastActionTime: new Date().toISOString(),
-        _lastAction: action.type,
-        logs: [],
-        analytics: null,
-        items: [],
-        achievements: { unlockedAchievements: [] },
-        highestLevel: 1,
-        stats: {
-          clickCount: 0,
-          playTime: 0,
-          startDate: new Date().toISOString(),
-          highestLevel: 1,
-          totalSnot: 0,
-          totalSnotCoins: 0,
-          consecutiveLoginDays: 0
-        },
-        consecutiveLoginDays: 0,
-        settings: {
-          language: 'en',
-          theme: 'light',
-          notifications: true,
-          tutorialCompleted: false,
-          musicEnabled: true,
-          soundEnabled: true,
-          notificationsEnabled: true
-        },
-        soundSettings: {
-          musicVolume: 0.5,
-          soundVolume: 0.5,
-          notificationVolume: 0.5,
-          clickVolume: 0.5,
-          effectsVolume: 0.5,
-          backgroundMusicVolume: 0.5,
-          isMuted: false,
-          isEffectsMuted: false,
-          isBackgroundMusicMuted: false
-        },
-        hideInterface: false,
-        activeTab: 'game',
-        fillingSpeed: 1,
-        containerLevel: 1,
-        isPlaying: false,
-        validationStatus: 'pending',
-        lastValidation: new Date().toISOString(),
-        gameStarted: false,
-        isLoading: false
+        }
       };
-
-      return defaultState;
     }
 
     case "RESET_GAME_STATE":

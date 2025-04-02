@@ -1,3 +1,5 @@
+"use client"
+
 import dynamic from "next/dynamic"
 import LoadingScreen from "./components/LoadingScreen"
 
@@ -16,25 +18,13 @@ const FarcasterFrameHandler = dynamic(
   }
 );
 
-// Компонент-обертка для безопасного рендеринга клиентских компонентов
-function ClientOnly({ children }: { children: React.ReactNode }) {
-  return (
-    <>{children}</>
-  );
-}
-
 export default function Home() {
   return (
     <main>
-      {/* 
-        Безопасный рендеринг FarcasterFrameHandler только на клиенте
-        Используем ClientOnly для дополнительной защиты от проблем с SSR
-      */}
-      <ClientOnly>
-        <FarcasterFrameHandler />
-      </ClientOnly>
+      {/* Обработчик Farcaster фрейма */}
+      <FarcasterFrameHandler />
       
-      {/* Остальной контент страницы */}
+      {/* Основной контент страницы */}
       <HomeContent />
     </main>
   )

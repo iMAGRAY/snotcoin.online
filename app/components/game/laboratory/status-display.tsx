@@ -64,7 +64,7 @@ const StatusDisplay: React.FC<StatusDisplayProps> = React.memo(({
   const statusItems = useMemo(() => [
     {
       icon: Database,
-      label: "Cap",
+      label: "Capacity",
       value: formatSnotValue(validatedParams.containerCapacity, 2),
       tooltip: t("capacityTooltip"),
     },

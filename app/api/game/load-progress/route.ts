@@ -44,14 +44,12 @@ function validateGameState(gameState: any): any {
       gameState.inventory = {
         snot: 0,
         snotCoins: 0,
-        containerCapacity: 100,
+        containerCapacity: 1,
         containerSnot: 0,
         fillingSpeed: 1,
-        containerCapacityLevel: 0,
-        fillingSpeedLevel: 0,
-        collectionEfficiency: 1.0,
-        Cap: 100,
-        lastUpdateTimestamp: Date.now()
+        containerCapacityLevel: 1,
+        fillingSpeedLevel: 1,
+        collectionEfficiency: 1
       };
     }
     
@@ -59,7 +57,7 @@ function validateGameState(gameState: any): any {
       logger.warn('Отсутствует контейнер в состоянии игры', { gameState });
       gameState.container = {
         level: 1,
-        capacity: 100,
+        capacity: 1,
         currentAmount: 0,
         fillRate: 1,
         currentFill: 0

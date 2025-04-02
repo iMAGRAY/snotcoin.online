@@ -1,7 +1,7 @@
 import type React from "react"
 import type { NavigationTranslations, LaboratoryTranslations } from "../../i18n/types/translationTypes"
 
-export type TabId = "laboratory" | "storage" | "quests" | "profile"
+export type TabId = "merge" | "laboratory" | "storage" | "quests" | "profile"
 
 export interface TabInfo {
   id: TabId
@@ -28,6 +28,7 @@ declare module "../../i18n" {
     storage: string;
     quests: string;
     profile: string;
+    merge: string;
   }
 }
 

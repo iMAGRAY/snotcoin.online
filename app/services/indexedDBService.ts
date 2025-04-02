@@ -11,6 +11,12 @@ const STORE_BACKUPS = 'backups';
 
 // Глобальная переменная для хранения соединения с базой данных
 let dbInstance: IDBDatabase | null = null;
+// Флаг инициализации базы данных
+let isDbInitialized = false;
+// Максимальное количество попыток инициализации
+const MAX_INIT_ATTEMPTS = 3;
+// Текущее количество попыток
+let initAttempts = 0;
 
 /**
  * Проверяет доступность IndexedDB
@@ -30,12 +36,15 @@ export const initDatabase = (): Promise<IDBDatabase> => {
     }
 
     // Если соединение уже установлено, возвращаем его
-    if (dbInstance) {
+    if (dbInstance && isDbInitialized) {
       resolve(dbInstance);
       return;
     }
 
-    console.log(`[indexedDBService] Создание/обновление базы данных до версии ${DB_VERSION}`);
+    console.log(`[indexedDBService] Создание/обновление базы данных до версии ${DB_VERSION} (попытка ${initAttempts + 1}/${MAX_INIT_ATTEMPTS})`);
+    
+    // Увеличиваем счетчик попыток
+    initAttempts++;
     
     // Открываем или создаем базу данных
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
@@ -43,7 +52,17 @@ export const initDatabase = (): Promise<IDBDatabase> => {
     request.onerror = (event) => {
       const error = (event.target as IDBRequest).error;
       console.error('[indexedDBService] Ошибка при открытии базы данных:', error);
-      reject(error);
+      
+      // Если достигли максимального количества попыток, отклоняем с ошибкой
+      if (initAttempts >= MAX_INIT_ATTEMPTS) {
+        console.error('[indexedDBService] Превышено максимальное количество попыток инициализации');
+        reject(error);
+      } else {
+        // Иначе запускаем повторную попытку после небольшой задержки
+        setTimeout(() => {
+          initDatabase().then(resolve).catch(reject);
+        }, 500);
+      }
     };
 
     request.onupgradeneeded = (event) => {
@@ -64,6 +83,8 @@ export const initDatabase = (): Promise<IDBDatabase> => {
     request.onsuccess = (event) => {
       const db = (event.target as IDBRequest).result as IDBDatabase;
       dbInstance = db;
+      isDbInitialized = true;
+      initAttempts = 0;
       
       // Обработчик для закрытия соединения при ошибках
       db.onerror = (event) => {
@@ -79,8 +100,20 @@ export const initDatabase = (): Promise<IDBDatabase> => {
  * Возвращает соединение с базой данных, инициализируя его при необходимости
  */
 const getDatabase = async (): Promise<IDBDatabase> => {
-  if (!dbInstance) {
-    return await initDatabase();
+  if (!dbInstance || !isDbInitialized) {
+    try {
+      return await initDatabase();
+    } catch (error) {
+      console.error('[indexedDBService] Не удалось получить соединение с базой данных:', error);
+      // Перехватываем ошибки, связанные с /database
+      if (error instanceof Error && 
+          (error.message.includes('/database') || 
+           error.message.includes('404'))) {
+        console.warn('[indexedDBService] Перехвачена ошибка 404 для /database, используем резервное решение');
+        // Здесь можно реализовать резервное решение, например, использование localStorage
+      }
+      throw error;
+    }
   }
   return dbInstance;
 };

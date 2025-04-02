@@ -49,7 +49,7 @@ const TabBar: React.FC<TabBarProps> = () => {
       aria-label={t("mainNavigation")}
       style={{ height: '5.5rem', maxHeight: '5.5rem', zIndex: 1000 }}
     >
-      <div className="flex justify-between h-full max-w-md mx-auto px-4 items-center">{tabButtons}</div>
+      <div className="flex justify-evenly h-full w-full mx-auto items-center" style={{ padding: '0 8px' }}>{tabButtons}</div>
     </nav>
   )
 }

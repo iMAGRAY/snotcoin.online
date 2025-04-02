@@ -13,10 +13,17 @@ interface OldTranslations {
 export const translations: OldTranslations = {
   ru: {
     // Навигация
+    merge: 'Слияние',
     laboratory: 'Лаборатория', 
     storage: 'Хранилище',
     quests: 'Задания',
     profile: 'Профиль',
+    
+    // Вкладки
+    mergeTab: 'Слияние',
+    laboratoryTab: 'Лаборатория',
+    storageTab: 'Хранилище',
+    questsTab: 'Задания',
     
     // Улучшения
     upgrade: 'Улучшить',
@@ -42,10 +49,17 @@ export const translations: OldTranslations = {
   },
   en: {
     // Навигация
+    merge: 'Merge',
     laboratory: 'Laboratory',
     storage: 'Storage',
     quests: 'Quests',
     profile: 'Profile',
+    
+    // Вкладки
+    mergeTab: 'Merge',
+    laboratoryTab: 'Laboratory',
+    storageTab: 'Storage',
+    questsTab: 'Quests',
     
     // Улучшения
     upgrade: 'Upgrade',

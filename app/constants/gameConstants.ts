@@ -56,14 +56,13 @@ export function createInitialGameState(userId: string): GameState {
       containerCapacityLevel: 0,
       fillingSpeedLevel: 0,
       collectionEfficiency: 1.0,
-      Cap: 100,
       lastUpdateTimestamp: now.getTime()
     },
     
     // Контейнер
     container: {
       level: 1,
-      capacity: 100,
+      capacity: 1,
       currentAmount: 0,
       fillRate: 1,
       currentFill: 0
@@ -173,18 +172,17 @@ export const initialState: GameState = {
   inventory: {
     snot: 0,
     snotCoins: 0,
+    containerSnot: 0,
     containerCapacity: 100,
-    containerSnot: 0, 
-    fillingSpeed: 1,
     containerCapacityLevel: 1,
+    fillingSpeed: 1,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
-    Cap: 100,
     lastUpdateTimestamp: Date.now()
   },
   container: {
     level: 1,
-    capacity: 100,
+    capacity: 1,
     currentAmount: 0,
     fillRate: 1,
     currentFill: 0
@@ -305,7 +303,7 @@ export const UPGRADE_COSTS = {
  * Значения улучшений
  */
 export const UPGRADE_VALUES = {
-  containerCapacity: [100, 150, 250, 400, 600, 1000],
+  containerCapacity: [1, 2, 3, 4, 5, 10],
   fillingSpeed: [1, 1.5, 2, 3, 4, 6],
   collectionEfficiency: [1, 1.2, 1.5, 1.8, 2.2, 3],
   clickPower: [1, 2, 3, 5, 8, 12],
@@ -342,4 +340,33 @@ export const THRESHOLDS = {
   containerAmount: 5
 };
 
-export const MAX_RETRIES = 3; 
+export const MAX_RETRIES = 3;
+
+export const RESOURCES = {
+  DEFAULTS: {
+    MIN_LEVEL: 1,
+    MIN_CAPACITY: 1,
+    MIN_FILLING_SPEED: 1,
+    COLLECTION_EFFICIENCY: 1
+  }
+};
+
+export const DEFAULT_INVENTORY: Inventory = {
+  snot: 0,
+  snotCoins: 0,
+  containerSnot: 0,
+  containerCapacity: 1,
+  containerCapacityLevel: 1,
+  fillingSpeed: 1,
+  fillingSpeedLevel: 1,
+  collectionEfficiency: 1,
+  lastUpdateTimestamp: Date.now()
+};
+
+// Константы для обновления ресурсов
+export const FILL_RATES = {
+  // Базовая скорость заполнения контейнера - 1 snot за 24 часа
+  BASE_CONTAINER_FILL_RATE: 1 / 86400, // снот в секунду
+  // Множитель скорости заполнения за каждый уровень
+  FILL_SPEED_MULTIPLIER: 2
+} 

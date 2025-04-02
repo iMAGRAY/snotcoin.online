@@ -96,6 +96,7 @@ const Achievements: React.FC = () => {
                   src={achievement.icon || "/placeholder.svg"}
                   alt={achievement.name}
                   fill
+                  sizes="7rem"
                   style={{ objectFit: "contain" }}
                   quality={100}
                   className={achievement.condition(gameState) ? "" : "grayscale"}

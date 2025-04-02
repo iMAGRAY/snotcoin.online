@@ -1,0 +1,11 @@
+"inventory": {
+  "snot": 0,
+  "snotCoins": 0,
+  "containerSnot": 0,
+  "containerCapacity": 1,
+  "containerCapacityLevel": 1,
+  "fillingSpeed": 1,
+  "fillingSpeedLevel": 1,
+  "collectionEfficiency": 1.0,
+  "lastUpdateTimestamp": 0
+} 

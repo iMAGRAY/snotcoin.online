@@ -56,13 +56,12 @@ export interface SoundSettings {
 export interface Inventory {
   snot: number;
   snotCoins: number;
-  containerCapacity: number;
   containerSnot: number;
-  fillingSpeed: number;
-  collectionEfficiency: number;
-  Cap: number;
+  containerCapacity: number;
   containerCapacityLevel: number;
+  fillingSpeed: number;
   fillingSpeedLevel: number;
+  collectionEfficiency: number;
   lastUpdateTimestamp?: number;
 }
 
@@ -71,7 +70,6 @@ export interface Inventory {
  */
 export interface Container {
   level: number;
-  capacity: number;
   currentAmount: number;
   fillRate: number;
   currentFill?: number;
@@ -306,16 +304,16 @@ export interface Action {
 
 // Константы для улучшений
 export const CONTAINER_UPGRADES = [
-  { level: 1, capacity: 100, cost: 0, capacityIncrease: 100 },
-  { level: 2, capacity: 200, cost: 100, capacityIncrease: 100 },
-  { level: 3, capacity: 400, cost: 300, capacityIncrease: 200 },
-  { level: 4, capacity: 800, cost: 700, capacityIncrease: 400 },
-  { level: 5, capacity: 1600, cost: 1500, capacityIncrease: 800 },
-  { level: 6, capacity: 3200, cost: 3000, capacityIncrease: 1600 },
-  { level: 7, capacity: 6400, cost: 6000, capacityIncrease: 3200 },
-  { level: 8, capacity: 12800, cost: 12000, capacityIncrease: 6400 },
-  { level: 9, capacity: 25600, cost: 24000, capacityIncrease: 12800 },
-  { level: 10, capacity: 51200, cost: 48000, capacityIncrease: 25600 }
+  { level: 1, capacity: 1, cost: 0, capacityIncrease: 0 },
+  { level: 2, capacity: 2, cost: 100, capacityIncrease: 1 },
+  { level: 3, capacity: 3, cost: 300, capacityIncrease: 1 },
+  { level: 4, capacity: 4, cost: 700, capacityIncrease: 1 },
+  { level: 5, capacity: 5, cost: 1500, capacityIncrease: 1 },
+  { level: 6, capacity: 6, cost: 3000, capacityIncrease: 1 },
+  { level: 7, capacity: 7, cost: 6000, capacityIncrease: 1 },
+  { level: 8, capacity: 8, cost: 12000, capacityIncrease: 1 },
+  { level: 9, capacity: 9, cost: 24000, capacityIncrease: 1 },
+  { level: 10, capacity: 10, cost: 48000, capacityIncrease: 1 }
 ];
 
 export const FILLING_SPEED_UPGRADES = [
@@ -388,18 +386,16 @@ export function createDefaultGameState(): GameState {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
       containerSnot: 0,
+      containerCapacity: 1,
+      containerCapacityLevel: 1,
       fillingSpeed: 1,
-      containerCapacityLevel: 0,
-      fillingSpeedLevel: 0,
+      fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      Cap: 100,
       lastUpdateTimestamp: Date.now()
     },
     container: {
       level: 1,
-      capacity: 100,
       currentAmount: 0,
       fillRate: 1,
       currentFill: 0

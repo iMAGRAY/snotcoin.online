@@ -19,6 +19,9 @@ export const ICONS = {
       UPGRADE: '/images/laboratory/buttons/upgrade-button.webp',
     }
   },
+  MERGE: {
+    MAIN: '/images/merge/merge.webp',
+  },
   STORAGE: {
     MAIN: '/images/storage/Storage.webp',
     BACKGROUND: '/images/storage/background/storage-background.webp',

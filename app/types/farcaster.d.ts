@@ -29,66 +29,57 @@ export const FARCASTER_SDK = {
 } as const;
 
 /**
- * Контекст пользователя Farcaster
+ * Типы для пользователя Farcaster
  */
-export interface FarcasterContext {
-  /** Уникальный идентификатор пользователя */
+export interface FarcasterUser {
   fid: number;
-  /** Имя пользователя */
-  username: string;
-  /** Отображаемое имя */
+  username?: string;
   displayName?: string;
-  /** Аватар пользователя */
   pfp?: {
-    /** URL аватара */
     url: string;
-    /** Флаг верификации аватара */
-    verified: boolean;
+    verified?: boolean;
   };
-  /** Флаг верификации аккаунта */
-  verified?: boolean;
-  /** Данные о custody */
-  custody?: {
-    /** Адрес кошелька */
-    address: string;
-    /** Тип custody */
-    type: string;
-  };
-  /** Массив верификаций */
-  verifications?: string[];
-  /** Домен пользователя */
-  domain?: string;
-  /** URL профиля */
-  url?: string;
 }
 
 /**
- * Опции для публикации каста
+ * Типы для клиента Farcaster
  */
-export interface FarcasterCastOption {
-  /** Текст каста */
-  text: string;
-  /** Вложения */
-  embeds?: {
-    /** URL */
-    url?: string;
-    /** Изображение */
-    image?: {
-      /** URL изображения */
-      url: string;
-    };
-  }[];
-  /** Ответ на каст */
-  replyTo?: {
-    /** Farcaster ID автора */
-    fid: number;
-    /** Хеш каста */
-    hash: string;
+export interface FarcasterClient {
+  clientFid: number;
+  added: boolean;
+  safeAreaInsets?: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
   };
-  /** Упоминания пользователей */
-  mentions?: number[];
-  /** Позиции упоминаний в тексте */
-  mentionsPositions?: number[];
+  notificationDetails?: {
+    url: string;
+    token: string;
+  };
+}
+
+/**
+ * Типы для контекста Farcaster
+ */
+export interface FarcasterContext {
+  user: FarcasterUser;
+  authenticated: boolean;
+  verifiedAddresses?: string[];
+  requireFarcasterAuth: boolean;
+  client: FarcasterClient;
+  location?: any;
+}
+
+/**
+ * Интерфейс для действий SDK
+ */
+export interface FarcasterSDKActions {
+  ready: (options?: { disableNativeGestures?: boolean }) => Promise<void>;
+  signIn: (options: { nonce: string }) => Promise<{ signature: string; message: string }>;
+  viewProfile: (options: { fid: number }) => Promise<void>;
+  openUrl: (options: { url: string }) => Promise<void>;
+  sendNotification: (options: { message: string; receiverFid: number }) => Promise<void>;
 }
 
 /**
@@ -102,9 +93,9 @@ export interface FarcasterSDK {
   /** Получение контекста текущего пользователя */
   getContext: () => Promise<FarcasterContext>;
   /** Получение данных пользователя по FID */
-  fetchUserByFid: (fid: number) => Promise<FarcasterContext>;
+  fetchUserByFid: (fid: number) => Promise<FarcasterUser>;
   /** Публикация каста */
-  publishCast: (text: string | FarcasterCastOption) => Promise<{
+  publishCast: (text: string | any) => Promise<{
     /** Хеш каста */
     hash: string;
     /** Временная метка */
@@ -123,6 +114,10 @@ export interface FarcasterSDK {
     /** Валидация действия фрейма */
     validateFrameAction: (frameData: any) => Promise<boolean>;
   };
+  /** Свойства */
+  context: Promise<FarcasterContext>;
+  /** Actions API */
+  actions: FarcasterSDKActions;
 }
 
 declare global {
@@ -132,4 +127,11 @@ declare global {
   }
 }
 
-export {}; 
+export {};
+
+/**
+ * Тип для контекста React
+ */
+export interface FarcasterContextProviderProps {
+  children: ReactNode;
+} 

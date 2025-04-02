@@ -153,7 +153,7 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
       return [
         {
           icon: Database,
-          label: "Cap",
+          label: "Capacity",
           value: formatSnotValue(containerCapacity, 2),
           tooltip: t("capacityTooltip"),
         },

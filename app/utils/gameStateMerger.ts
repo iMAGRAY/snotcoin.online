@@ -6,7 +6,8 @@ import {
   Inventory, 
   InventoryItem, 
   GameStateStats, 
-  Achievements as GameAchievements 
+  Achievements as GameAchievements,
+  Container 
 } from '../types/gameTypes';
 import { apiLogger as logger } from '../lib/logger';
 
@@ -139,6 +140,13 @@ export function mergeGameStates(
     result.changes.total++;
   }
   
+  // Слияние контейнера
+  if (oldState.container && newState.container) {
+    result.state.container = mergeContainerObjects(oldState.container, newState.container, options);
+    result.changes.fields.push('container');
+    result.changes.total++;
+  }
+  
   // Слияние квестов
   if (oldState.quests && newState.quests) {
     const [mergedQuests, questConflicts] = mergeQuests(oldState.quests, newState.quests, options);
@@ -219,32 +227,34 @@ export function mergeGameStates(
  * Слияние объектов инвентаря
  */
 function mergeInventoryObjects(oldInventory: Inventory, newInventory: Inventory, options: MergeOptions): Inventory {
-  // Создаем новый объект для результата
-  const result: Inventory = { ...oldInventory };
-  
-  // Слияние базовых числовых полей с приоритетом больших значений если указано
-  if (options.preferHigherValues) {
-    result.snot = Math.max(oldInventory.snot, newInventory.snot);
-    result.snotCoins = Math.max(oldInventory.snotCoins, newInventory.snotCoins);
-    result.containerCapacity = Math.max(oldInventory.containerCapacity, newInventory.containerCapacity);
-    result.containerSnot = Math.max(oldInventory.containerSnot, newInventory.containerSnot);
-    result.fillingSpeed = Math.max(oldInventory.fillingSpeed, newInventory.fillingSpeed);
-    result.collectionEfficiency = Math.max(oldInventory.collectionEfficiency, newInventory.collectionEfficiency);
-    result.Cap = Math.max(oldInventory.Cap, newInventory.Cap);
-    result.containerCapacityLevel = Math.max(oldInventory.containerCapacityLevel, newInventory.containerCapacityLevel);
-    result.fillingSpeedLevel = Math.max(oldInventory.fillingSpeedLevel, newInventory.fillingSpeedLevel);
-  } else {
-    // Берем новые значения
-    Object.assign(result, newInventory);
+  // Убедимся, что оба инвентаря определены
+  if (!oldInventory || !newInventory) {
+    return oldInventory || newInventory || {
+      snot: 0,
+      snotCoins: 0,
+      containerSnot: 0,
+      containerCapacity: 1,
+      containerCapacityLevel: 1,
+      fillingSpeed: 1,
+      fillingSpeedLevel: 1,
+      collectionEfficiency: 1,
+      lastUpdateTimestamp: Date.now()
+    };
   }
-  
-  // Обновляем timestamp
-  result.lastUpdateTimestamp = Math.max(
-    oldInventory.lastUpdateTimestamp || 0,
-    newInventory.lastUpdateTimestamp || 0
-  );
-  
-  return result;
+
+  // Создаем новый объект с объединенными значениями
+  return {
+    // Берем максимальные значения для основных полей
+    snot: Math.max(oldInventory.snot || 0, newInventory.snot || 0),
+    snotCoins: Math.max(oldInventory.snotCoins || 0, newInventory.snotCoins || 0),
+    containerSnot: Math.max(oldInventory.containerSnot || 0, newInventory.containerSnot || 0),
+    containerCapacity: Math.max(oldInventory.containerCapacity || 1, newInventory.containerCapacity || 1),
+    fillingSpeed: Math.max(oldInventory.fillingSpeed || 1, newInventory.fillingSpeed || 1),
+    containerCapacityLevel: Math.max(oldInventory.containerCapacityLevel || 1, newInventory.containerCapacityLevel || 1),
+    fillingSpeedLevel: Math.max(oldInventory.fillingSpeedLevel || 1, newInventory.fillingSpeedLevel || 1),
+    collectionEfficiency: Math.max(oldInventory.collectionEfficiency || 1, newInventory.collectionEfficiency || 1),
+    lastUpdateTimestamp: Math.max(oldInventory.lastUpdateTimestamp || 0, newInventory.lastUpdateTimestamp || 0)
+  };
 }
 
 /**
@@ -469,4 +479,26 @@ function mergeAchievementRecords(
   }
   
   return result;
+}
+
+/**
+ * Объединяет два объекта контейнера
+ */
+function mergeContainerObjects(oldContainer: Container, newContainer: Container, options: MergeOptions): Container {
+  if (!oldContainer) {
+    return newContainer;
+  }
+
+  if (!newContainer) {
+    return oldContainer;
+  }
+
+  // Создаем новый объект с объединенными значениями
+  return {
+    // Берем максимальные значения для всех полей
+    level: Math.max(oldContainer.level || 1, newContainer.level || 1),
+    currentAmount: Math.max(oldContainer.currentAmount || 0, newContainer.currentAmount || 0),
+    fillRate: Math.max(oldContainer.fillRate || 1, newContainer.fillRate || 1),
+    currentFill: Math.max(oldContainer.currentFill || 0, newContainer.currentFill || 0)
+  };
 } 

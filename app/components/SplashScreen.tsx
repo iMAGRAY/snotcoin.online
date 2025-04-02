@@ -19,6 +19,7 @@ const SplashScreen: React.FC = () => {
           src={ICONS.COMMON.LOADING}
           alt="SnotCoin Splash Screen"
           fill
+          sizes="100vw"
           style={{ objectFit: "contain" }}
           priority
           loading="eager"

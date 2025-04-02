@@ -322,7 +322,7 @@ export function gameStateToStructured(state: GameState): StructuredGameSave {
       upgrades: state.upgrades,
       container: state.container || {
         level: 1,
-        capacity: 100,
+        capacity: 1,
         currentAmount: 0,
         fillRate: 1
       },

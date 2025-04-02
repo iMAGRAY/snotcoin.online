@@ -6,19 +6,17 @@ import { redisService } from '../app/services/redis';
 const testState: ExtendedGameState = {
   inventory: {
     snot: 100,
-    snotCoins: 0,
-    containerCapacity: 1000,
+    snotCoins: 50,
+    containerSnot: 30,
+    containerCapacity: 1,
     containerCapacityLevel: 1,
     fillingSpeed: 1,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
-    containerSnot: 50,
-    Cap: 1000,
     lastUpdateTimestamp: Date.now()
   },
   container: {
     level: 1,
-    capacity: 1000,
     currentAmount: 50,
     fillRate: 1,
     currentFill: 0
@@ -71,7 +69,6 @@ const testState: ExtendedGameState = {
   highestLevel: 1,
   containerLevel: 1,
   fillingSpeed: 1,
-  containerSnot: 50,
   user: null,
   validationStatus: "pending",
   _userId: 'test_user_123',
@@ -124,7 +121,7 @@ async function testRedisState() {
       const loadedState = loadResult.data as ExtendedGameState;
       const matches = 
         loadedState.inventory.snot === testState.inventory.snot &&
-        loadedState.container.capacity === testState.container.capacity &&
+        loadedState.inventory.containerCapacity === testState.inventory.containerCapacity &&
         loadedState.upgrades.containerLevel === testState.upgrades.containerLevel;
       
       if (matches) {

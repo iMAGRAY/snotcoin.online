@@ -56,18 +56,17 @@ function createDefaultGameState(userId: string): GameState {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
+      containerCapacity: 1,
       containerSnot: 0,
       fillingSpeed: 1,
       containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      Cap: 100,
       lastUpdateTimestamp: Date.now()
     },
     container: {
       level: 1,
-      capacity: 100,
+      capacity: 1,
       currentAmount: 0,
       fillRate: 1
     },
@@ -106,15 +105,17 @@ export function validateGameState(state: any, userId: string): GameState {
       validatedState.inventory = createDefaultGameState(userId).inventory;
     } else {
       // Проверяем типы полей инвентаря
-      validatedState.inventory.snot = Number(validatedState.inventory.snot || 0);
-      validatedState.inventory.snotCoins = Number(validatedState.inventory.snotCoins || 0);
-      validatedState.inventory.containerCapacity = Number(validatedState.inventory.containerCapacity || 100);
-      validatedState.inventory.fillingSpeed = Number(validatedState.inventory.fillingSpeed || 1);
-      validatedState.inventory.containerCapacityLevel = Number(validatedState.inventory.containerCapacityLevel || 1);
-      validatedState.inventory.fillingSpeedLevel = Number(validatedState.inventory.fillingSpeedLevel || 1);
-      validatedState.inventory.collectionEfficiency = Number(validatedState.inventory.collectionEfficiency || 1);
-      validatedState.inventory.Cap = Number(validatedState.inventory.Cap || 100);
-      validatedState.inventory.lastUpdateTimestamp = Number(validatedState.inventory.lastUpdateTimestamp || Date.now());
+      validatedState.inventory = {
+        snot: Number(validatedState.inventory.snot || 0),
+        snotCoins: Number(validatedState.inventory.snotCoins || 0),
+        containerSnot: Number(validatedState.inventory.containerSnot || 0),
+        containerCapacity: Number(validatedState.inventory.containerCapacity || 1),
+        containerCapacityLevel: Number(validatedState.inventory.containerCapacityLevel || 1),
+        fillingSpeed: Number(validatedState.inventory.fillingSpeed || 1),
+        fillingSpeedLevel: Number(validatedState.inventory.fillingSpeedLevel || 1),
+        collectionEfficiency: Number(validatedState.inventory.collectionEfficiency || 1),
+        lastUpdateTimestamp: validatedState.inventory.lastUpdateTimestamp || Date.now()
+      };
     }
     
     if (!validatedState.container || typeof validatedState.container !== 'object') {
@@ -122,7 +123,6 @@ export function validateGameState(state: any, userId: string): GameState {
       validatedState.container = createDefaultGameState(userId).container;
     } else {
        validatedState.container.level = Number(validatedState.container.level || 1);
-       validatedState.container.capacity = Number(validatedState.container.capacity || 100);
        validatedState.container.currentAmount = Number(validatedState.container.currentAmount || 0);
        validatedState.container.fillRate = Number(validatedState.container.fillRate || 1);
     }

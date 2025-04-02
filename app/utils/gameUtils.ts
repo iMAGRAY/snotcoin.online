@@ -55,16 +55,16 @@ export const calculateFillingTime = (
 };
 
 /**
- * Рассчитывает время заполнения контейнера на основе состояния игры
+ * Рассчитывает время заполнения контейнера на основе текущего состояния игры
  * @param state - Состояние игры
  * @returns Время заполнения в секундах
  */
 export const calculateFillingTimeFromState = (state: GameState): number => {
-  if (!state || !state.inventory) {
+  if (!state || !state.inventory || !state.container) {
     return Infinity;
   }
   
-  const { containerCapacity, containerSnot, fillingSpeed } = state.inventory;
+  const { containerSnot, fillingSpeed, containerCapacity } = state.inventory;
   
   return calculateFillingTime(containerSnot, containerCapacity, fillingSpeed);
 };

@@ -28,6 +28,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress = 0, error = nul
           src={ICONS.COMMON.LOADING} 
           alt="Loading" 
           fill
+          sizes="(max-width: 768px) 100vw, 12rem"
           style={{ objectFit: "contain" }}
           className="animate-pulse"
           priority

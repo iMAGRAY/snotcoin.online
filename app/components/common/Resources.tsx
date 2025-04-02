@@ -148,15 +148,11 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       fillingSpeedLevel
     ]);
 
-    const containerClass = activeTab === "profile" 
-      ? UI_CLASSES.PANEL.TRANSPARENT
-      : UI_CLASSES.PANEL.CONTAINER;
-
     // Рендеринг компонента
     return (
       <ErrorBoundary fallback={<div className="text-red-500">Error loading resources</div>}>
         <motion.div
-          className={`${containerClass} w-full`}
+          className={`${UI_CLASSES.PANEL.CONTAINER} w-full`}
           {...ANIMATIONS.RESOURCE_PANEL}
         >
           <div className="flex flex-col w-full">

@@ -241,10 +241,10 @@ export function repairGameState(gameState: ExtendedGameState): {
   // Исправляем контейнер, если он переполнен
   if (repairedState.container && 
       typeof repairedState.container.currentAmount === 'number' && 
-      typeof repairedState.container.capacity === 'number' &&
-      repairedState.container.currentAmount > repairedState.container.capacity) {
-    repairedState.container.currentAmount = repairedState.container.capacity;
-    appliedFixes.push(`Fixed container overflow: capped at ${repairedState.container.capacity}`);
+      typeof repairedState.inventory.containerCapacity === 'number' &&
+      repairedState.container.currentAmount > repairedState.inventory.containerCapacity) {
+    repairedState.container.currentAmount = repairedState.inventory.containerCapacity;
+    appliedFixes.push(`Fixed container overflow: capped at ${repairedState.inventory.containerCapacity}`);
   }
   
   // Расчет контрольной суммы для измененного состояния

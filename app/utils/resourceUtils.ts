@@ -1,72 +1,40 @@
 /**
  * Утилиты для работы с ресурсами и инвентарем
  */
-import { ExtendedGameState } from "../types/gameTypes";
+import { ExtendedGameState, Inventory } from "../types/gameTypes";
 import { RESOURCES } from "../constants/uiConstants";
 import { initialState } from "../constants/gameConstants";
-import { Inventory } from "../types/gameTypes";
 
 /**
- * Безопасно получает инвентарь из состояния
- * @param gameState Состояние игры или объект инвентаря
- * @returns Безопасный объект инвентаря с дефолтными значениями
+ * Безопасно получает объект инвентаря из состояния игры с проверкой корректности полей
+ * @param state Состояние игры или объект с инвентарем
+ * @returns Объект инвентаря с безопасными значениями полей
  */
-export function getSafeInventory(gameState: ExtendedGameState | undefined): Inventory;
-export function getSafeInventory(inventory: Inventory | undefined): Inventory;
-export function getSafeInventory(input: ExtendedGameState | Inventory | undefined): Inventory {
-  // Если передан ExtendedGameState
-  if (input && 'inventory' in input) {
-    const inventory = (input.inventory as any) || {};
-    
-    return {
-      snot: inventory.snot ?? 0,
-      snotCoins: inventory.snotCoins ?? 0,
-      containerSnot: inventory.containerSnot ?? 0,
-      containerCapacity: inventory.containerCapacity ?? RESOURCES.DEFAULTS.MIN_CAPACITY,
-      Cap: inventory.Cap ?? RESOURCES.DEFAULTS.MIN_CAPACITY, // Добавляем Cap для совместимости
-      containerCapacityLevel: inventory.containerCapacityLevel ?? RESOURCES.DEFAULTS.MIN_LEVEL,
-      fillingSpeed: inventory.fillingSpeed ?? RESOURCES.DEFAULTS.MIN_FILLING_SPEED,
-      fillingSpeedLevel: inventory.fillingSpeedLevel ?? RESOURCES.DEFAULTS.MIN_LEVEL,
-      collectionEfficiency: inventory.collectionEfficiency ?? 1, // Добавляем значение по умолчанию
-    };
-  }
+export function getSafeInventory(state: any): any {
+  const inventory = state.inventory || {};
+  const defaultValues = {
+    snot: 0,
+    snotCoins: 0,
+    containerSnot: 0,
+    containerCapacity: 1, // Устанавливаем containerCapacity по умолчанию
+    containerCapacityLevel: 1,
+    fillingSpeed: 1,
+    fillingSpeedLevel: 1,
+    collectionEfficiency: 1,
+    lastUpdateTimestamp: Date.now()
+  };
   
-  // Если передан Inventory или undefined
-  const inventory = input as Inventory | undefined;
-  if (!inventory) {
-    return initialState.inventory;
-  }
-  
-  // Используем деструктуризацию с значениями по умолчанию
-  const {
-    snot = 0,
-    snotCoins = 0,
-    containerCapacity = initialState.inventory.containerCapacity,
-    Cap = containerCapacity, // По умолчанию Cap равен containerCapacity
-    containerSnot = 0,
-    fillingSpeed = initialState.inventory.fillingSpeed,
-    containerCapacityLevel = 1,
-    fillingSpeedLevel = 1,
-    collectionEfficiency = 1,
-  } = inventory;
-  
-  // Убеждаемся, что все значения - корректные числа
-  const validCapacity = isNaN(containerCapacity) || containerCapacity <= 0 ? 
-    initialState.inventory.containerCapacity : containerCapacity;
-    
+  // Безопасно получаем значения или используем значения по умолчанию
   return {
-    ...inventory,
-    snot: isNaN(snot) ? 0 : snot,
-    snotCoins: isNaN(snotCoins) ? 0 : snotCoins,
-    containerCapacity: validCapacity,
-    Cap: validCapacity, // Синхронизируем Cap с containerCapacity
-    containerSnot: isNaN(containerSnot) || containerSnot < 0 ? 0 : 
-      Math.min(containerSnot, validCapacity), // Убеждаемся, что контейнер не переполнен
-    fillingSpeed: isNaN(fillingSpeed) || fillingSpeed <= 0 ? 
-      initialState.inventory.fillingSpeed : fillingSpeed,
-    containerCapacityLevel: isNaN(containerCapacityLevel) || containerCapacityLevel < 1 ? 1 : containerCapacityLevel,
-    fillingSpeedLevel: isNaN(fillingSpeedLevel) || fillingSpeedLevel < 1 ? 1 : fillingSpeedLevel,
-    collectionEfficiency: isNaN(collectionEfficiency) || collectionEfficiency < 0 ? 1 : collectionEfficiency,
+    snot: typeof inventory.snot === 'number' ? inventory.snot : defaultValues.snot,
+    snotCoins: typeof inventory.snotCoins === 'number' ? inventory.snotCoins : defaultValues.snotCoins,
+    containerSnot: typeof inventory.containerSnot === 'number' ? inventory.containerSnot : defaultValues.containerSnot,
+    containerCapacity: typeof inventory.containerCapacity === 'number' ? inventory.containerCapacity : defaultValues.containerCapacity,
+    containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' ? inventory.containerCapacityLevel : defaultValues.containerCapacityLevel,
+    fillingSpeed: typeof inventory.fillingSpeed === 'number' ? inventory.fillingSpeed : defaultValues.fillingSpeed,
+    fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' ? inventory.fillingSpeedLevel : defaultValues.fillingSpeedLevel,
+    collectionEfficiency: typeof inventory.collectionEfficiency === 'number' ? inventory.collectionEfficiency : defaultValues.collectionEfficiency,
+    lastUpdateTimestamp: typeof inventory.lastUpdateTimestamp === 'number' ? inventory.lastUpdateTimestamp : defaultValues.lastUpdateTimestamp
   };
 }
 
@@ -136,13 +104,17 @@ export function getAvailableContainerSpace(containerSnot: number, containerCapac
 
 /**
  * Вычисляет процент заполнения контейнера снотом
- * @param inventory - Объект инвентаря
+ * @param state - Состояние игры или объект инвентаря
  * @returns Процент заполнения от 0 до 100
  */
-export const calculateFillingPercentage = (inventory?: Inventory): number => {
-  if (!inventory) return 0;
+export const calculateFillingPercentage = (state?: ExtendedGameState | any): number => {
+  if (!state) return 0;
   
-  const { containerSnot, containerCapacity } = inventory;
+  // Проверяем, получили ли мы инвентарь напрямую или состояние игры
+  const inventory = state.inventory || state;
+  
+  const containerSnot = inventory.containerSnot;
+  const containerCapacity = inventory.containerCapacity;
   
   // Проверяем наличие и корректность данных
   if (typeof containerSnot !== 'number' || 
@@ -153,19 +125,35 @@ export const calculateFillingPercentage = (inventory?: Inventory): number => {
     return 0;
   }
   
-  // Ограничиваем значение от 0 до 100
-  const percentage = (containerSnot / containerCapacity) * 100;
+  // Убеждаемся, что containerSnot не отрицательный
+  const safeContainerSnot = Math.max(0, containerSnot);
+  
+  // Вычисляем процент заполнения и ограничиваем его от 0 до 100
+  const percentage = (safeContainerSnot / containerCapacity) * 100;
   return Math.min(Math.max(percentage, 0), 100);
 };
 
 /**
  * Вычисляет процент заполнения контейнера
+ * @param current Текущее количество снота
+ * @param max Максимальная ёмкость контейнера
+ * @returns Процент заполнения от 0 до 100
  */
 export const calculateFillPercentage = (current: number, max: number): number => {
-  if (max <= 0) return 0;
+  // Валидация входных данных
+  if (typeof current !== 'number' || isNaN(current)) current = 0;
+  if (typeof max !== 'number' || isNaN(max) || max <= 0) max = 1;
+  
+  // Ограничиваем текущее значение снизу нулем
+  current = Math.max(0, current);
+  
+  // Если контейнер полон или переполнен
   if (current >= max) return 100;
   
+  // Вычисляем процент заполнения
   const percentage = (current / max) * 100;
+  
+  // Ограничиваем результат диапазоном от 0 до 100
   return Math.min(Math.max(percentage, 0), 100);
 };
 
@@ -173,33 +161,41 @@ export const calculateFillPercentage = (current: number, max: number): number =>
  * Обрабатывает ресурсы и инвентарь для отображения в интерфейсе
  */
 export function processResources(gameState: any): any {
-  // Проверяем наличие объекта gameState
-  if (!gameState || typeof gameState !== 'object') {
-    return {
-      inventory: {
-        snot: 0,
-        snotCoins: 0,
-        containerSnot: 0,
-        containerCapacity: RESOURCES.DEFAULTS.MIN_CAPACITY,
-        Cap: RESOURCES.DEFAULTS.MIN_CAPACITY,
-        containerCapacityLevel: RESOURCES.DEFAULTS.MIN_LEVEL,
-        fillingSpeed: RESOURCES.DEFAULTS.MIN_FILLING_SPEED,
-        fillingSpeedLevel: RESOURCES.DEFAULTS.MIN_LEVEL,
-        collectionEfficiency: 1,
-        lastUpdateTimestamp: Date.now()
-      },
-      container: { capacity: RESOURCES.DEFAULTS.MIN_CAPACITY }
-    };
-  }
-
-  // Используем существующую getSafeInventory для безопасного получения инвентаря
-  const inventory = getSafeInventory(gameState);
-
-  // Для совместимости с разными форматами состояния
+  if (!gameState) return null;
+  
+  let inventory = getSafeInventory(gameState);
   const containerObj = gameState.container || {};
-  const containerCapacity = typeof containerObj.capacity === 'number' 
-    ? containerObj.capacity 
-    : inventory.containerCapacity;
+  
+  // Получаем из настроек или устанавливаем минимальные значения
+  const containerLevel = typeof inventory.containerCapacityLevel === 'number' 
+    ? inventory.containerCapacityLevel 
+    : RESOURCES.DEFAULTS.MIN_LEVEL;
+    
+  // Capacity вычисляется из containerCapacityLevel
+  const containerCapacity = inventory.containerCapacity !== undefined
+    ? inventory.containerCapacity
+    : RESOURCES.DEFAULTS.MIN_CAPACITY;
 
-  return { inventory, container: { capacity: containerCapacity } };
+  return {
+    ...gameState,
+    inventory: {
+      ...inventory,
+      containerCapacity // Убеждаемся, что containerCapacity всегда определено
+    }, 
+    container: { 
+      level: containerObj.level || RESOURCES.DEFAULTS.MIN_LEVEL,
+      currentAmount: containerObj.currentAmount || 0,
+      fillRate: containerObj.fillRate || 1,
+      currentFill: containerObj.currentFill || 0
+    } 
+  };
+}
+
+/**
+ * Вычисляет максимальную емкость контейнера
+ * @param inventory Инвентарь
+ * @returns Максимальная емкость контейнера
+ */
+export function getContainerCapacity(inventory: Inventory): number {
+  return inventory.containerCapacity;
 } 

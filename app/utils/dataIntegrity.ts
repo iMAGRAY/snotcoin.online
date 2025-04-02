@@ -65,13 +65,12 @@ function createDefaultRepairState(): ExtendedGameState {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
+      containerCapacity: 1,
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       containerSnot: 0,
-      Cap: 100,
       lastUpdateTimestamp: Date.now()
     },
     
@@ -87,7 +86,7 @@ function createDefaultRepairState(): ExtendedGameState {
     // Контейнер
     container: {
       level: 1,
-      capacity: 100,
+      capacity: 1,
       currentAmount: 0,
       fillRate: 1
     },
@@ -169,6 +168,12 @@ export function validateInventory(inventory: Inventory): { isValid: boolean; mis
     }
   }
   
+  // Устанавливаем значения по умолчанию, если они отсутствуют
+  if (!inventory.containerCapacity) {
+    inventory.containerCapacity = 1;
+    result.missingFields.push('containerCapacity');
+  }
+  
   return result;
 }
 
@@ -188,6 +193,50 @@ export function validateUpgrades(upgrades: Upgrades): { isValid: boolean; missin
   }
   
   return result;
+}
+
+/**
+ * Проверяет соответствие инвентаря и контейнера
+ */
+function validateInventoryContainerConsistency(state: ExtendedGameState): ExtendedGameState {
+  if (!state.inventory || !state.container) {
+    state.inventory = {
+      snot: 0,
+      snotCoins: 0,
+      containerSnot: 0,
+      containerCapacity: 1,
+      containerCapacityLevel: 1,
+      fillingSpeed: 1,
+      fillingSpeedLevel: 1,
+      collectionEfficiency: 1
+    };
+    state.container = {
+      level: 1,
+      currentAmount: 0,
+      fillRate: 1,
+      currentFill: 0
+    };
+  }
+  
+  // Получаем обновленные ссылки на объекты
+  const updatedInventory = state.inventory;
+  const updatedContainer = state.container;
+  
+  // Если containerCapacity отсутствует, устанавливаем значение по умолчанию
+  if (updatedInventory.containerCapacity === undefined) {
+    updatedInventory.containerCapacity = 1;
+    // Добавляем поле в список восстановленных
+    if (!state._repairedFields) state._repairedFields = [];
+    if (!state._repairedFields.includes('inventory.containerCapacity')) {
+      state._repairedFields.push('inventory.containerCapacity');
+    }
+  }
+  
+  // Устанавливаем флаг, что было произведено восстановление
+  state._wasRepaired = true;
+  if (!state._repairedAt) state._repairedAt = Date.now();
+  
+  return state;
 }
 
 /**
@@ -212,13 +261,12 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
     result.state.inventory = {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
+      containerCapacity: 1,
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       containerSnot: 0,
-      Cap: 0,
       lastUpdateTimestamp: Date.now()
     } as unknown as Inventory;
     result.repairedFields.push('inventory');
@@ -230,10 +278,10 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       for (const field of inventoryResult.missingFields) {
         result.errors.push(`Отсутствует ${field} в инвентаре`);
         // Восстанавливаем отсутствующие поля
-        if (field === "snot" || field === "snotCoins" || field === "containerSnot" || field === "Cap") {
+        if (field === "snot" || field === "snotCoins" || field === "containerSnot") {
           (result.state.inventory as any)[field] = 0;
         } else if (field === "containerCapacity") {
-          result.state.inventory.containerCapacity = 100;
+          result.state.inventory.containerCapacity = 1;
         } else if (field === "containerCapacityLevel" || field === "fillingSpeedLevel") {
           (result.state.inventory as any)[field] = 1;
         } else if (field === "fillingSpeed" || field === "collectionEfficiency") {
@@ -284,7 +332,7 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
     result.errors.push("Отсутствует контейнер");
     result.state.container = {
       level: 1,
-      capacity: 100,
+      capacity: 1,
       currentAmount: 0,
       fillRate: 1,
       currentFill: 0
@@ -332,6 +380,19 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
     } as unknown as GameState['soundSettings'];
     result.repairedFields.push('soundSettings');
     result.repaired = true;
+  }
+  
+  // Проверка соответствия инвентаря и контейнера
+  if (state.inventory && state.container) {
+    try {
+      validateInventoryContainerConsistency(state);
+    } catch (error) {
+      result.errors.push(`Ошибка при проверке соответствия инвентаря и контейнера: ${error instanceof Error ? error.message : String(error)}`);
+      result.isValid = false;
+    }
+  } else if (!state.container) {
+    result.errors.push('Отсутствует объект container');
+    result.isValid = false;
   }
   
   return result;
@@ -408,88 +469,115 @@ export function verifyStructuredSaveIntegrity(save: StructuredGameSave): DataInt
 }
 
 /**
- * Проверяет и восстанавливает состояние игры
- * @param state Состояние игры для проверки
+ * Валидирует и исправляет состояние игры
+ * @param state Состояние для проверки и исправления
  * @returns Исправленное состояние
  */
 export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGameState {
-  if (!state) {
-    console.error('[dataIntegrity] Null or undefined game state');
-    return createEmptyGameState();
-  }
+  const result = { ...state };
+  const startTime = Date.now();
   
   try {
-    // Клонируем состояние для безопасности
-    const fixedState = JSON.parse(JSON.stringify(state)) as ExtendedGameState;
-    
-    // Базовые поля
-    fixedState._saveVersion = fixedState._saveVersion || 1;
-    fixedState._lastModified = fixedState._lastModified || Date.now();
-    fixedState._userId = fixedState._userId || 'unknown';
-    
-    // Проверяем и восстанавливаем критические структуры
-    fixedState.inventory = repairInventory(fixedState.inventory);
-    fixedState.container = repairContainer(fixedState.container);
-    fixedState.upgrades = repairUpgrades(fixedState.upgrades);
-    
-    // Проверяем массивы
-    fixedState.items = Array.isArray(fixedState.items) ? fixedState.items : [];
-    
-    // Проверяем объекты
-    fixedState.achievements = fixedState.achievements || { unlockedAchievements: [] };
-    if (!Array.isArray(fixedState.achievements.unlockedAchievements)) {
-      fixedState.achievements.unlockedAchievements = [];
+    // Проверяем, что состояние существует и является объектом
+    if (!result || typeof result !== 'object') {
+      console.error('[validateAndRepairGameState] State is null or not an object');
+      return createDefaultRepairState();
     }
     
-    // Проверяем статистику
-    fixedState.stats = fixedState.stats || {};
-    fixedState.stats.highestLevel = fixedState.stats.highestLevel || 1;
-    fixedState.stats.clickCount = fixedState.stats.clickCount || 0;
-    fixedState.stats.totalSnot = fixedState.stats.totalSnot || 0;
-    fixedState.stats.totalSnotCoins = fixedState.stats.totalSnotCoins || 0;
-    fixedState.stats.playTime = fixedState.stats.playTime || 0;
-    fixedState.stats.startDate = fixedState.stats.startDate || new Date().toISOString();
-    fixedState.stats.consecutiveLoginDays = fixedState.stats.consecutiveLoginDays || 0;
+    // Обязательные метаданные
+    if (!result._wasRepaired) result._wasRepaired = false;
+    if (!result._repairedFields) result._repairedFields = [];
+    if (!result._repairedAt) result._repairedAt = 0;
+
+    // Проверяем и восстанавливаем поля инвентаря
+    if (!result.inventory) {
+      result.inventory = createDefaultRepairState().inventory;
+      result._wasRepaired = true;
+      result._repairedFields.push('inventory');
+      result._repairedAt = Date.now();
+    } else {
+      // Проверяем поля инвентаря
+      const { isValid, missingFields } = validateInventory(result.inventory);
+      if (!isValid) {
+        console.warn(`[validateAndRepairGameState] Missing inventory fields: ${missingFields.join(', ')}`);
+        // Восстанавливаем поля из пустого стейта
+        const defaultInventory = createDefaultRepairState().inventory;
+        
+        // Добавляем отсутствующие поля
+        for (const field of missingFields) {
+          (result.inventory as any)[field] = (defaultInventory as any)[field];
+          result._repairedFields.push(`inventory.${field}`);
+        }
+        
+        result._wasRepaired = true;
+        result._repairedAt = Date.now();
+      }
+    }
     
-    // Настройки
-    fixedState.settings = {
-      language: fixedState.settings?.language || 'en',
-      theme: fixedState.settings?.theme || 'light', 
-      notifications: fixedState.settings?.notifications ?? true,
-      tutorialCompleted: fixedState.settings?.tutorialCompleted ?? false,
-      musicEnabled: fixedState.settings?.musicEnabled ?? true,
-      soundEnabled: fixedState.settings?.soundEnabled ?? true,
-      notificationsEnabled: fixedState.settings?.notificationsEnabled ?? true
-    } as unknown as GameState['settings'];
+    // Проверяем и восстанавливаем поля контейнера
+    if (!result.container) {
+      result.container = createDefaultRepairState().container;
+      result._wasRepaired = true;
+      result._repairedFields.push('container');
+      result._repairedAt = Date.now();
+    } else {
+      // Проверяем обязательные поля контейнера
+      const requiredContainerFields = ['level', 'capacity', 'currentAmount', 'fillRate'];
+      const defaultContainer = createDefaultRepairState().container;
+      
+      for (const field of requiredContainerFields) {
+        if ((result.container as any)[field] === undefined) {
+          (result.container as any)[field] = (defaultContainer as any)[field];
+          result._repairedFields.push(`container.${field}`);
+          result._wasRepaired = true;
+          result._repairedAt = Date.now();
+        }
+      }
+    }
     
-    fixedState.soundSettings = {
-      clickVolume: fixedState.soundSettings?.clickVolume ?? 0.5,
-      effectsVolume: fixedState.soundSettings?.effectsVolume ?? 0.5,
-      backgroundMusicVolume: fixedState.soundSettings?.backgroundMusicVolume ?? 0.3,
-      isMuted: fixedState.soundSettings?.isMuted ?? false,
-      isEffectsMuted: fixedState.soundSettings?.isEffectsMuted ?? false,
-      isBackgroundMusicMuted: fixedState.soundSettings?.isBackgroundMusicMuted ?? false,
-      musicVolume: fixedState.soundSettings?.musicVolume ?? 0.5,
-      soundVolume: fixedState.soundSettings?.soundVolume ?? 0.5,
-      notificationVolume: fixedState.soundSettings?.notificationVolume ?? 0.5
-    } as unknown as GameState['soundSettings'];
+    // Проверяем и восстанавливаем поля улучшений
+    if (!result.upgrades) {
+      result.upgrades = createDefaultRepairState().upgrades;
+      result._wasRepaired = true;
+      result._repairedFields.push('upgrades');
+      result._repairedAt = Date.now();
+    } else {
+      // Проверяем поля улучшений
+      const { isValid, missingFields } = validateUpgrades(result.upgrades);
+      if (!isValid) {
+        console.warn(`[validateAndRepairGameState] Missing upgrades fields: ${missingFields.join(', ')}`);
+        // Восстанавливаем поля из пустого стейта
+        const defaultUpgrades = createDefaultRepairState().upgrades;
+        
+        // Добавляем отсутствующие поля
+        for (const field of missingFields) {
+          (result.upgrades as any)[field] = (defaultUpgrades as any)[field];
+          result._repairedFields.push(`upgrades.${field}`);
+        }
+        
+        result._wasRepaired = true;
+        result._repairedAt = Date.now();
+      }
+    }
     
-    // Интерфейс и состояние игры
-    fixedState.activeTab = fixedState.activeTab || 'laboratory';
-    fixedState.hideInterface = !!fixedState.hideInterface;
-    fixedState.isPlaying = !!fixedState.isPlaying;
-    fixedState.isLoading = !!fixedState.isLoading;
-    fixedState.gameStarted = fixedState.gameStarted !== false;
-    fixedState.highestLevel = fixedState.highestLevel || 1;
-    fixedState.consecutiveLoginDays = fixedState.consecutiveLoginDays || 0;
+    // Проверяем соответствие инвентаря и контейнера
+    validateInventoryContainerConsistency(result);
     
-    // Пользователь
-    fixedState.validationStatus = fixedState.validationStatus || 'pending';
+    // Устанавливаем дополнительные метаданные восстановления
+    if (result._wasRepaired) {
+      (result as any)._lastRepairDuration = Date.now() - startTime;
+    }
     
-    return fixedState;
+    return result;
   } catch (error) {
-    console.error('[dataIntegrity] Error repairing game state:', error);
-    return createEmptyGameState();
+    console.error('[validateAndRepairGameState] Critical error during validation:', error);
+    const defaultState = createDefaultRepairState();
+    defaultState._wasRepaired = true;
+    defaultState._repairedFields = ['all'];
+    defaultState._repairedAt = Date.now();
+    (defaultState as any)._lastRepairDuration = Date.now() - startTime;
+    (defaultState as any)._lastRepairError = error instanceof Error ? error.message : String(error);
+    return defaultState;
   }
 }
 
@@ -519,23 +607,25 @@ function repairInventory(inventory: any): any {
  * @returns Исправленный контейнер
  */
 function repairContainer(container: any): any {
-  if (!container || typeof container !== 'object') {
-    return { level: 1, capacity: 100, currentAmount: 0, fillRate: 1 };
-  }
-  
   const fixedContainer = { ...container };
-  
-  // Проверяем основные значения
-  fixedContainer.level = !isNaN(fixedContainer.level) ? Math.max(1, fixedContainer.level) : 1;
-  fixedContainer.capacity = !isNaN(fixedContainer.capacity) ? Math.max(100, fixedContainer.capacity) : 100;
-  fixedContainer.currentAmount = !isNaN(fixedContainer.currentAmount) ? Math.max(0, fixedContainer.currentAmount) : 0;
-  fixedContainer.fillRate = !isNaN(fixedContainer.fillRate) ? Math.max(1, fixedContainer.fillRate) : 1;
-  
-  // Проверяем корректность значений
-  if (fixedContainer.currentAmount > fixedContainer.capacity) {
-    fixedContainer.currentAmount = fixedContainer.capacity;
+
+  // Проверяем и исправляем базовые поля контейнера
+  if (typeof fixedContainer.level !== 'number' || isNaN(fixedContainer.level) || fixedContainer.level < 1) {
+    fixedContainer.level = 1;
   }
-  
+
+  if (typeof fixedContainer.currentAmount !== 'number' || isNaN(fixedContainer.currentAmount) || fixedContainer.currentAmount < 0) {
+    fixedContainer.currentAmount = 0;
+  }
+
+  if (typeof fixedContainer.fillRate !== 'number' || isNaN(fixedContainer.fillRate) || fixedContainer.fillRate < 0) {
+    fixedContainer.fillRate = 1;
+  }
+
+  if (typeof fixedContainer.currentFill !== 'number' || isNaN(fixedContainer.currentFill)) {
+    fixedContainer.currentFill = 0;
+  }
+
   return fixedContainer;
 }
 
@@ -584,15 +674,14 @@ function createEmptyGameState(): ExtendedGameState {
       snot: 0, 
       snotCoins: 0, 
       containerSnot: 0,
-      containerCapacity: 100,
+      containerCapacity: 1,
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      Cap: 0,
       lastUpdateTimestamp: timestamp
     },
-    container: { level: 1, capacity: 100, currentAmount: 0, fillRate: 1 },
+    container: { level: 1, capacity: 1, currentAmount: 0, fillRate: 1 },
     upgrades: { 
       containerLevel: 1, 
       fillingSpeedLevel: 1,
@@ -701,16 +790,31 @@ export function isValidGameState(state: any): boolean {
   // Проверяем корректность основных полей
   const hasValidInventory = 
     !isNaN(state.inventory.snot) &&
-    !isNaN(state.inventory.snotCoins);
+    !isNaN(state.inventory.snotCoins) &&
+    !isNaN(state.inventory.containerSnot) &&
+    !isNaN(state.inventory.containerCapacity) &&
+    !isNaN(state.inventory.containerCapacityLevel) &&
+    !isNaN(state.inventory.fillingSpeed) &&
+    !isNaN(state.inventory.fillingSpeedLevel) &&
+    !isNaN(state.inventory.collectionEfficiency);
   
   const hasValidContainer = 
     !isNaN(state.container.level) &&
-    !isNaN(state.container.capacity) &&
-    !isNaN(state.container.currentAmount);
+    !isNaN(state.container.currentAmount) &&
+    !isNaN(state.container.fillRate);
   
   const hasValidUpgrades = 
-    !isNaN(state.upgrades.autoClicker) &&
-    !isNaN(state.upgrades.snotMultiplier);
+    typeof state.upgrades.clickPower === 'object' &&
+    state.upgrades.clickPower !== null &&
+    !isNaN(state.upgrades.clickPower.level) &&
+    !isNaN(state.upgrades.clickPower.value) &&
+    typeof state.upgrades.passiveIncome === 'object' &&
+    state.upgrades.passiveIncome !== null &&
+    !isNaN(state.upgrades.passiveIncome.level) &&
+    !isNaN(state.upgrades.passiveIncome.value) &&
+    !isNaN(state.upgrades.collectionEfficiencyLevel) &&
+    !isNaN(state.upgrades.containerLevel) &&
+    !isNaN(state.upgrades.fillingSpeedLevel);
   
   return hasValidInventory && hasValidContainer && hasValidUpgrades;
 }
@@ -748,19 +852,18 @@ export function createStructuredSave(state: ExtendedGameState, userId: string): 
     snot: typeof inventoryObj.snot === 'number' ? inventoryObj.snot : 0, 
     snotCoins: typeof inventoryObj.snotCoins === 'number' ? inventoryObj.snotCoins : 0,
     containerSnot: typeof inventoryObj.containerSnot === 'number' ? inventoryObj.containerSnot : 0,
-    containerCapacity: typeof inventoryObj.containerCapacity === 'number' ? inventoryObj.containerCapacity : 100,
+    containerCapacity: typeof inventoryObj.containerCapacity === 'number' ? inventoryObj.containerCapacity : 1,
     containerCapacityLevel: typeof inventoryObj.containerCapacityLevel === 'number' ? inventoryObj.containerCapacityLevel : 1,
     fillingSpeed: typeof inventoryObj.fillingSpeed === 'number' ? inventoryObj.fillingSpeed : 1,
     fillingSpeedLevel: typeof inventoryObj.fillingSpeedLevel === 'number' ? inventoryObj.fillingSpeedLevel : 1,
     collectionEfficiency: typeof inventoryObj.collectionEfficiency === 'number' ? inventoryObj.collectionEfficiency : 1,
-    Cap: typeof inventoryObj.Cap === 'number' ? inventoryObj.Cap : 100,
     lastUpdateTimestamp: typeof inventoryObj.lastUpdateTimestamp === 'number' ? inventoryObj.lastUpdateTimestamp : Date.now()
   };
   
   // Контейнер
   const container: Container = {
     level: typeof containerObj.level === 'number' ? containerObj.level : 1,
-    capacity: typeof containerObj.capacity === 'number' ? containerObj.capacity : 100,
+    capacity: typeof containerObj.capacity === 'number' ? containerObj.capacity : 1,
     currentAmount: typeof containerObj.currentAmount === 'number' ? containerObj.currentAmount : 0,
     fillRate: typeof containerObj.fillRate === 'number' ? containerObj.fillRate : 1
   };
@@ -865,4 +968,18 @@ export function createStructuredSave(state: ExtendedGameState, userId: string): 
   };
   
   return structuredSave;
+}
+
+export function getDefaultInventoryValues(): Inventory {
+  return {
+    snot: 0,
+    snotCoins: 0,
+    containerSnot: 0,
+    containerCapacity: 1,
+    containerCapacityLevel: 1,
+    fillingSpeed: 1,
+    fillingSpeedLevel: 1,
+    collectionEfficiency: 1,
+    lastUpdateTimestamp: Date.now()
+  };
 } 

@@ -2,11 +2,11 @@ import { TabInfo } from "./types"
 import { ICONS } from "../../constants/uiConstants"
 
 export const tabs: TabInfo[] = [
-  // {
-  //   id: "fusion",
-  //   label: "fusionTab",
-  //   icon: "/images/fusion/fusion.webp",
-  // },
+  {
+    id: "merge",
+    label: "mergeTab",
+    icon: ICONS.MERGE.MAIN,
+  },
   {
     id: "laboratory",
     label: "laboratoryTab",

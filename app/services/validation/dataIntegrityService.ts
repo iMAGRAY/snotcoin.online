@@ -21,30 +21,30 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
       repairedState.inventory = {
         snot: 0,
         snotCoins: 0,
-        containerCapacity: 100,
+        containerSnot: 0,
+        containerCapacity: 1,
         containerCapacityLevel: 1,
         fillingSpeed: 1,
         fillingSpeedLevel: 1,
         collectionEfficiency: 1,
-        containerSnot: 0,
-        Cap: 0
+        lastUpdateTimestamp: Date.now()
       };
       repairedFields.push('inventory');
     } else {
       // Проверяем и восстанавливаем поля инвентаря
-      const inventoryFields = [
+      const validationRules = [
         { field: 'snot', defaultValue: 0 },
         { field: 'snotCoins', defaultValue: 0 },
-        { field: 'containerCapacity', defaultValue: 100 },
+        { field: 'containerSnot', defaultValue: 0 },
+        { field: 'containerCapacity', defaultValue: 1 },
         { field: 'containerCapacityLevel', defaultValue: 1 },
         { field: 'fillingSpeed', defaultValue: 1 },
         { field: 'fillingSpeedLevel', defaultValue: 1 },
         { field: 'collectionEfficiency', defaultValue: 1 },
-        { field: 'containerSnot', defaultValue: 0 },
-        { field: 'Cap', defaultValue: 0 }
+        { field: 'lastUpdateTimestamp', defaultValue: Date.now() }
       ];
       
-      for (const { field, defaultValue } of inventoryFields) {
+      for (const { field, defaultValue } of validationRules) {
         if ((repairedState.inventory as any)[field] === undefined || 
             typeof (repairedState.inventory as any)[field] !== 'number') {
           (repairedState.inventory as any)[field] = defaultValue;
@@ -57,7 +57,7 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
     if (!repairedState.container) {
       repairedState.container = {
         level: 1,
-        capacity: 100,
+        capacity: 1,
         currentAmount: 0,
         fillRate: 1,
         currentFill: 0
@@ -67,7 +67,7 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
       // Проверяем и восстанавливаем поля контейнера
       const containerFields = [
         { field: 'level', defaultValue: 1 },
-        { field: 'capacity', defaultValue: 100 },
+        { field: 'capacity', defaultValue: 1 },
         { field: 'currentAmount', defaultValue: 0 },
         { field: 'fillRate', defaultValue: 1 },
         { field: 'currentFill', defaultValue: 0 }
@@ -336,19 +336,19 @@ export const createDefaultGameState = (userId: string): ExtendedGameState => {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
+      containerSnot: 0,
+      containerCapacity: 1,
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      containerSnot: 0,
-      Cap: 0,
+      lastUpdateTimestamp: Date.now()
     },
     
     // Контейнер
     container: {
       level: 1,
-      capacity: 100,
+      capacity: 1,
       currentAmount: 0,
       fillRate: 1,
       currentFill: 0

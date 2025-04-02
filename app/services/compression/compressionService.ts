@@ -134,26 +134,25 @@ export const decompressGameState = (compressedState: any): ExtendedGameState => 
  */
 export const extractCriticalData = (gameState: ExtendedGameState): any => {
   try {
-    // Создаем объект с самыми важными данными, которые должны 
-    // быть доступны даже без распаковки полного состояния
+    // Извлекаем только критические данные для экономии пространства
     return {
-      // Метаданные
+      // Базовые критические данные
       critical: {
         userId: gameState._userId,
+        lastModified: gameState._lastModified,
         version: gameState._saveVersion,
-        timestamp: gameState._lastModified || Date.now(),
         
-        // Базовые игровые данные
+        // Основные игровые данные
         inventory: {
           snot: gameState.inventory.snot,
           snotCoins: gameState.inventory.snotCoins,
+          containerSnot: gameState.inventory.containerSnot,
           containerCapacity: gameState.inventory.containerCapacity,
           fillingSpeed: gameState.inventory.fillingSpeed
         },
         
         container: {
-          level: gameState.container.level,
-          capacity: gameState.container.capacity
+          level: gameState.container.level
         },
         
         upgrades: {

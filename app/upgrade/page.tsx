@@ -12,7 +12,7 @@ import Image from "next/image"
 import { ICONS } from '../constants/uiConstants'
 
 const calculateContainerCapacity = (level: number): number => {
-  return level
+  return 1 + (level - 1) * 1;
 }
 
 const calculateFillingSpeed = (level: number): number => {
@@ -131,7 +131,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
   const router = useRouter()
   const [showUpgradeEffect, setShowUpgradeEffect] = React.useState(false)
 
-  const capacityCost = useMemo(() => calculateContainerUpgradeCost(gameState.inventory.Cap), [gameState.inventory.Cap])
+  const capacityCost = useMemo(() => calculateContainerUpgradeCost(gameState.inventory.containerCapacity), [gameState.inventory.containerCapacity])
   const speedCost = useMemo(() => calculateFillingSpeedUpgradeCost(gameState.fillingSpeed || 1), [gameState.fillingSpeed])
 
   const handleBack = useCallback(() => {
@@ -199,8 +199,8 @@ const UpgradePageContent: React.FC = React.memo(() => {
               title={t("containerCapacity")}
               description={t("increaseContainerCapacity")}
               currentLevel={gameState.containerLevel || 1}
-              currentEffect={`${gameState.container?.capacity || 100}`}
-              nextEffect={(gameState.containerLevel || 1) + 1}
+              currentEffect={`${gameState.inventory?.containerCapacity || 1}`}
+              nextEffect={calculateContainerCapacity((gameState.containerLevel || 1) + 1)}
               cost={capacityCost}
               onUpgrade={handleCapacityUpgrade}
               canAfford={gameState.inventory?.snotCoins >= capacityCost}

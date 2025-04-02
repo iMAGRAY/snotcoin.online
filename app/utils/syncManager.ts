@@ -714,7 +714,7 @@ export class SyncManager {
       
       // Для уровней прокачки берем максимальный
       mergedState.inventory.containerCapacityLevel = Math.max(
-        localState.inventory.containerCapacityLevel || 0, 
+        localState.inventory.containerCapacityLevel || 0,
         remoteState.inventory.containerCapacityLevel || 0
       );
       
@@ -724,7 +724,6 @@ export class SyncManager {
       );
       
       // Пересчитываем производные значения на основе уровней
-      mergedState.inventory.containerCapacity = mergedState.inventory.containerCapacityLevel * 100; // Примерный расчет
       mergedState.inventory.fillingSpeed = mergedState.inventory.fillingSpeedLevel * 2; // Примерный расчет
     }
     
