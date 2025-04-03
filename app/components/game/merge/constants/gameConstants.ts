@@ -3,7 +3,7 @@ export const DEBUG_PHYSICS = false;
 
 // Константы для шаров разных уровней
 export const MAX_LEVEL = 12;
-export const BASE_BALL_SIZE = 15;
+export const BASE_BALL_SIZE = 13;
 export const BASE_GAME_WIDTH = 360; // Базовая ширина игры для расчета масштаба
 export const BALL_COLORS = [
   0xf94144, // уровень 1 - красный
@@ -56,7 +56,7 @@ export const FIXED_PLAYER_Y = 80; // пикселей от верха
 export const PHYSICS_PLAYER_Y = FIXED_PLAYER_Y / SCALE; // переводим в физические единицы
 
 // Частота проверки слияния шаров
-export const CHECK_MERGE_FREQUENCY = 5; // Уменьшено для более частых проверок
+export const CHECK_MERGE_FREQUENCY = 1; // Каждый кадр проверяем слияние
 
 // Максимальное количество шаров
 export const MAX_BALLS_COUNT = 40; // Оптимизировано для производительности

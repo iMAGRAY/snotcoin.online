@@ -46,4 +46,7 @@ export const preloadScene = (scene: any) => {
   } catch (error) {
     console.error('Ошибка в preloadScene:', error);
   }
-}; 
+};
+
+// Реэкспортируем функции связанные с сценой из разных модулей
+export { createTrajectoryLine, updateTrajectoryLine } from '../physics/trajectoryLine'; 

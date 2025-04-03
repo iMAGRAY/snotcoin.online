@@ -85,7 +85,10 @@ export const usePhysicsWorld = () => {
       }
       
       // Если оба объекта - шары, проверяем их уровни
-      if (dataA && dataB && dataA.level && dataB.level) {
+      if (dataA && dataB && 
+          dataA.isBall && dataB.isBall && 
+          dataA.level !== undefined && dataB.level !== undefined) {
+        
         // Устанавливаем базовое трение для всех шаров
         contact.setFriction(BALL_FRICTION);
         
@@ -93,11 +96,41 @@ export const usePhysicsWorld = () => {
         // независимо от предыдущих меток или времени создания
         if (dataA.level === dataB.level && dataA.level < MAX_LEVEL) {
           // Помечаем шары для немедленного слияния
-          bodyA.setUserData({ ...dataA, shouldMerge: true, mergeWith: bodyB });
-          bodyB.setUserData({ ...dataB, shouldMerge: true, mergeWith: bodyA });
+          const mergeTime = Date.now();
+          bodyA.setUserData({ 
+            ...dataA, 
+            shouldMerge: true, 
+            mergeWith: bodyB,
+            mergeTime 
+          });
+          bodyB.setUserData({ 
+            ...dataB, 
+            shouldMerge: true, 
+            mergeWith: bodyA,
+            mergeTime 
+          });
           
           // Делаем контакт мягче для более естественного взаимодействия
-          contact.setRestitution(BALL_RESTITUTION);
+          contact.setRestitution(BALL_RESTITUTION * 0.5); // Уменьшаем отскок для лучшего слипания
+          
+          // Увеличиваем трение, чтобы шары "прилипали" друг к другу
+          contact.setFriction(BALL_FRICTION * 2.0);
+          
+          console.log(`Pre-solve: помечаем шары уровня ${dataA.level} для слияния`);
+          
+          // Принудительно пробуждаем оба тела
+          bodyA.setAwake(true);
+          bodyB.setAwake(true);
+          
+          // Опционально можно уменьшить скорость, чтобы шары не разлетались
+          bodyA.setLinearVelocity({ 
+            x: bodyA.getLinearVelocity().x * 0.7, 
+            y: bodyA.getLinearVelocity().y * 0.7 
+          });
+          bodyB.setLinearVelocity({ 
+            x: bodyB.getLinearVelocity().x * 0.7, 
+            y: bodyB.getLinearVelocity().y * 0.7 
+          });
         } 
         // Для шаров максимального уровня - специальная физика
         else if (dataA.level === MAX_LEVEL || dataB.level === MAX_LEVEL) {
@@ -143,15 +176,43 @@ export const usePhysicsWorld = () => {
       }
       
       // Если оба объекта - шары, и у них одинаковый уровень, и уровень не максимальный - 
-      // немедленно помечаем их для слияния
-      if (dataA && dataB && dataA.level && dataB.level && 
-          dataA.level === dataB.level && dataA.level < MAX_LEVEL) {
-        bodyA.setUserData({ ...dataA, shouldMerge: true, mergeWith: bodyB });
-        bodyB.setUserData({ ...dataB, shouldMerge: true, mergeWith: bodyA });
+      // немедленно помечаем их для слияния с высоким приоритетом
+      if (dataA && dataB && 
+          dataA.isBall && dataB.isBall && 
+          dataA.level !== undefined && dataB.level !== undefined && 
+          dataA.level === dataB.level && 
+          dataA.level < MAX_LEVEL) {
+        
+        console.log(`Begin-contact: Помечаем шары уровня ${dataA.level} для слияния`);
+        
+        // Помечаем оба шара для слияния с высоким приоритетом
+        bodyA.setUserData({ 
+          ...dataA, 
+          shouldMerge: true, 
+          mergeWith: bodyB,
+          mergeTime: Date.now() // Добавляем метку времени для контроля
+        });
+        bodyB.setUserData({ 
+          ...dataB, 
+          shouldMerge: true, 
+          mergeWith: bodyA,
+          mergeTime: Date.now() // Добавляем метку времени для контроля
+        });
+        
+        // Принудительно пробуждаем оба тела, чтобы быть уверенным, что физика работает
+        bodyA.setAwake(true);
+        bodyB.setAwake(true);
+        
+        // Уменьшаем скорость шаров, чтобы они не разлетались после контакта
+        bodyA.setLinearVelocity({ x: bodyA.getLinearVelocity().x * 0.5, y: bodyA.getLinearVelocity().y * 0.5 });
+        bodyB.setLinearVelocity({ x: bodyB.getLinearVelocity().x * 0.5, y: bodyB.getLinearVelocity().y * 0.5 });
       }
       
       // Применяем слабый импульс для шаров разных уровней, чтобы избежать "прилипания"
-      else if (dataA && dataB && dataA.level && dataB.level && dataA.level !== dataB.level) {
+      else if (dataA && dataB && 
+               dataA.isBall && dataB.isBall && 
+               dataA.level !== undefined && dataB.level !== undefined && 
+               dataA.level !== dataB.level) {
         try {
           // Применяем очень слабый импульс для предотвращения "склеивания" шаров
           const randomImpulse = 0.05;

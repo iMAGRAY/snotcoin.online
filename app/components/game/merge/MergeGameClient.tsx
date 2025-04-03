@@ -39,7 +39,8 @@ import {
   BALL_RESTITUTION,
   BALL_COLORS,
   BULL_COLOR,
-  BOMB_COLOR
+  BOMB_COLOR,
+  MAX_LEVEL
 } from './constants/gameConstants';
 import GameHeader from './components/GameHeader';
 import PauseMenu from './components/PauseMenu';
@@ -49,7 +50,6 @@ import { useGameContext } from '../../../contexts/game/hooks/useGameContext';
 // Импортируем типы из файла типов
 import { Ball, NextBall, TrajectoryRef, MergeGameProps, PhaserType, ExtendedBall, ExtendedNextBall, PhysicsUserData } from './types/index';
 import { generateColorTexture } from './utils/textureUtils';
-import { preloadScene } from './utils/sceneUtils';
 import { createTogglePauseHandler, createResumeGameHandler, createGameCloseHandler } from './handlers/gameHandlers';
 import { 
   createBullBallHandler, 
@@ -59,6 +59,8 @@ import {
 import { checkAndHandleStuckBalls } from './utils/stuckBallsUtils';
 import { removeBall as removeBallUtil, findBottomBalls as findBottomBallsUtil, removeMultipleBalls } from './utils/ballsUtils';
 import { setupSpecialBallsCollisions } from './physics/collisionHandlers';
+// import { preloadScene } from './scene/sceneLifecycle';
+// import type { SceneRefs } from './scene/sceneLifecycle';
 
 // Константа для частоты проверки "зависших" шаров
 const STUCK_CHECK_INTERVAL = 30;
@@ -86,6 +88,84 @@ const isBodyDestroyed = (body: planck.Body): boolean => {
     console.warn('Ошибка при проверке тела, считаем его удаленным:', e);
     return true;
   }
+};
+
+// Функция для настройки обработчиков столкновений шаров
+const setupNormalBallsCollisions = (
+  world: planck.World,
+  ballsRef: React.MutableRefObject<ExtendedBall[]>
+) => {
+  // Создаем набор для хранения уже обработанных пар контактов
+  const processedContacts = new Set<string>();
+  
+  // Регистрируем обработчик начала контакта
+  world.on('begin-contact', (contact: planck.Contact) => {
+    try {
+      const fixtureA = contact.getFixtureA();
+      const fixtureB = contact.getFixtureB();
+      
+      if (!fixtureA || !fixtureB) return;
+      
+      const bodyA = fixtureA.getBody();
+      const bodyB = fixtureB.getBody();
+      
+      if (!bodyA || !bodyB) return;
+      
+      const userDataA = bodyA.getUserData() as PhysicsUserData | null;
+      const userDataB = bodyB.getUserData() as PhysicsUserData | null;
+      
+      // Проверяем, являются ли оба объекта шарами (не специальными)
+      const isBallA = userDataA && userDataA.type === 'ball' && !userDataA.specialType;
+      const isBallB = userDataB && userDataB.type === 'ball' && !userDataB.specialType;
+      
+      // Если оба объекта - шары
+      if (isBallA && isBallB && userDataA && userDataB) {
+        // Проверяем уровни шаров
+        const levelA = userDataA.level ?? 0;
+        const levelB = userDataB.level ?? 0;
+        
+        // Если уровни одинаковые и не максимальные
+        if (levelA === levelB && levelA > 0 && levelA < MAX_LEVEL) {
+          console.log(`Контакт шаров одинакового уровня ${levelA}`);
+          
+          // Создаем уникальный идентификатор для пары контактов
+          const contactId = `${Math.min(userDataA.createdAt || 0, userDataB.createdAt || 0)}-${Math.max(userDataA.createdAt || 0, userDataB.createdAt || 0)}`;
+          
+          // Если этот контакт уже обработан, пропускаем
+          if (processedContacts.has(contactId)) {
+            return;
+          }
+          
+          // Добавляем контакт в набор обработанных
+          processedContacts.add(contactId);
+          
+          // Удаляем контакт из обработанных через время
+          setTimeout(() => {
+            processedContacts.delete(contactId);
+          }, 500);
+          
+          // Помечаем оба шара для слияния
+          bodyA.setUserData({
+            ...userDataA,
+            shouldMerge: true,
+            mergeWith: bodyB,
+            mergeTime: Date.now()
+          });
+          
+          bodyB.setUserData({
+            ...userDataB,
+            shouldMerge: true,
+            mergeWith: bodyA,
+            mergeTime: Date.now()
+          });
+          
+          console.log(`Шары уровня ${levelA} помечены для слияния`);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при обработке контакта нормальных шаров:', error);
+    }
+  });
 };
 
 const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }) => {
@@ -146,6 +226,9 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   
   // Добавляем состояние для отслеживания, был ли использован шар Bull
   const [bullUsed, setBullUsed] = useState<boolean>(false);
+  
+  // Добавляем состояние для режима заморозки
+  const isFreezeModeActive = useRef<boolean>(false);
   
   // Стоимость использования специальных возможностей в % от вместимости
   const specialCosts = {
@@ -239,6 +322,8 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         scene.load.image('10', '/images/merge/Balls/10.webp');
         scene.load.image('11', '/images/merge/Balls/11.webp');
         scene.load.image('12', '/images/merge/Balls/12.webp');
+        // Загрузка бомбы
+        scene.load.image('bomb', '/images/merge/Balls/Bomb.webp');
         
         // Ждем завершения загрузки ресурсов
         scene.load.once('complete', () => {
@@ -277,9 +362,9 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
             
             // Масштабируем размер игрока в зависимости от размера игры
             const scaleFactor = gameWidth / BASE_GAME_WIDTH;
-            const playerSizeScaled = PLAYER_SIZE * 4 * scaleFactor; // Увеличиваем размер для изображения в 4 раза
+            const playerSizeScaled = PLAYER_SIZE * 3.5 * scaleFactor; // Уменьшаем размер с 4 до 3.5
             
-            // Создаем игрока как изображение CoinKing вместо круга
+            // Создаем игрока (изображение CoinKing вместо круга)
             playerSprite = scene.add.image(gameWidth / 2, FIXED_PLAYER_Y, 'coin-king')
               .setOrigin(0.5, 0.5)
               .setDisplaySize(playerSizeScaled, playerSizeScaled)
@@ -322,20 +407,11 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               playerBodyRef.current.setAwake(true);
             }
             
-            // Добавляем инструкцию
-            scene.add.text(
-              gameWidth / 2, 
-              64, 
-              'Перемещайте и нажимайте для броска', 
-              { 
-                fontFamily: 'Arial', 
-                fontSize: '14px', 
-                color: '#ffffff' 
-              }
-            ).setOrigin(0.5, 0.5);
-            
-            // Устанавливаем границы мира Phaser, чтобы они совпадали с физическим миром
-            scene.physics.world.setBounds(0, 0, gameWidth, gameHeight);
+            // Устанавливаем границы мира Phaser, чтобы они совпадались с физическим миром
+            // Добавляем проверку на существование physics и world
+            if (scene.physics && scene.physics.world) {
+              scene.physics.world.setBounds(0, 0, gameWidth, gameHeight);
+            }
             
             setDebugMessage("Инициализация завершена успешно");
             setIsLoading(false);
@@ -350,15 +426,15 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         try {
           // Обработчик движения мыши
           scene.input.on('pointermove', (pointer: any) => {
-            if (!playerBodyRef.current) return;
-          
-            // Если игра на паузе, не обрабатываем движение
-            if (isPaused) return;
+            if (!playerBodyRef.current || isPaused) return;
             
             // Проверяем, что указатель находится в пределах игрового поля
-            if (pointer.x < 0 || pointer.x > scene.sys.game.config.width || 
-                pointer.y < 0 || pointer.y > scene.sys.game.config.height) {
-              return; // Выходим, если указатель вышел за пределы игрового поля
+            const gameWidth = scene.sys.game.config.width;
+            const gameHeight = scene.sys.game.config.height;
+            
+            if (pointer.x < 0 || pointer.x > gameWidth || 
+                pointer.y < 0 || pointer.y > gameHeight) {
+              return;
             }
             
             try {
@@ -383,9 +459,8 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               // Перемещаем шар для броска вместе с игроком
               if (currentBallRef.current && currentBallRef.current.sprite && 
                   currentBallRef.current.sprite.container && !currentBallRef.current.sprite.container.destroyed) {
-                // Используем позицию указателя мыши для более точного позиционирования
                 currentBallRef.current.sprite.container.x = pointer.x;
-                currentBallRef.current.sprite.container.y = FIXED_PLAYER_Y + 24; // Располагаем НИЖЕ игрока
+                currentBallRef.current.sprite.container.y = FIXED_PLAYER_Y + 24;
                 
                 // Обновляем положение пунктирной линии
                 updateTrajectoryLine(
@@ -554,229 +629,50 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
           checkStuckBalls();
         }
         
-        // Безопасное выполнение физического шага
-        try {
-          // Проверяем все контакты перед шагом, удаляя недействительные
-          let contact = worldRef.current.getContactList();
-          while (contact) {
-            const nextContact = contact.getNext(); // Сохраняем следующий контакт перед возможным удалением
-            const fixtureA = contact.getFixtureA();
-            const fixtureB = contact.getFixtureB();
-            
-            // Проверяем, что фикстуры и их тела существуют и действительны
-            if (!fixtureA || !fixtureB || !fixtureA.getBody() || !fixtureB.getBody() ||
-                !fixtureA.getBody().isActive() || !fixtureB.getBody().isActive() ||
-                isBodyDestroyed(fixtureA.getBody()) || isBodyDestroyed(fixtureB.getBody())) {
-              // Если фикстуры или тела недействительны, отключаем контакт
-              contact.setEnabled(false);
-            }
-            
-            contact = nextContact;
+        // Обновляем физический мир с правильными параметрами
+        worldRef.current.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
+        
+        // Обновляем визуальное положение всех шаров
+        for (let i = 0; i < ballsRef.current.length; i++) {
+          const ball = ballsRef.current[i];
+          
+          // Пропускаем недействительные шары или шары без тела
+          if (!ball || !ball.body || isBodyDestroyed(ball.body)) {
+            continue;
           }
           
-          // Выполняем шаг физического мира
+          // Обновляем визуальное представление шара
           try {
-            // Более агрессивная очистка контактов перед шагом
-            let pendingContacts: any[] = [];
-            let contact = worldRef.current.getContactList();
-            
-            // Сначала соберем все контакты для безопасной итерации
-            while (contact) {
-              pendingContacts.push(contact);
-              contact = contact.getNext();
+            const pos = ball.body.getPosition();
+            if (ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
+              ball.sprite.container.x = pos.x * SCALE;
+              ball.sprite.container.y = pos.y * SCALE;
             }
             
-            // Теперь проверяем и отключаем проблемные контакты
-            for (const contact of pendingContacts) {
-              try {
-                const fixtureA = contact.getFixtureA();
-                const fixtureB = contact.getFixtureB();
-                
-                if (!fixtureA || !fixtureB) {
-                  contact.setEnabled(false);
-                  continue;
-                }
-                
-                const bodyA = fixtureA.getBody();
-                const bodyB = fixtureB.getBody();
-                
-                if (!bodyA || !bodyB || !bodyA.isActive() || !bodyB.isActive()) {
-                  contact.setEnabled(false);
-                }
-              } catch (contactError) {
-                // При любой ошибке отключаем контакт
-                try {
-                  contact.setEnabled(false);
-                } catch (e) {
-                  // Игнорируем ошибки при попытке отключить контакт
-                }
-              }
+            // Обновляем вращение, если это необходимо
+            if (ball.sprite.circle) {
+              const angle = ball.body.getAngle() * (180 / Math.PI); // Переводим радианы в градусы
+              ball.sprite.circle.angle = angle;
             }
-            
-            // Прямое обращение к внутренним структурам, чтобы гарантировать удаление проблемных контактов
-            const world = worldRef.current as any;
-            if (world.m_contactManager && world.m_contactManager.m_contactList) {
-              // Принудительно отключаем все проблемные контакты
-              const safeContacts = [];
-              let currentContact = world.m_contactManager.m_contactList;
-              
-              while (currentContact) {
-                safeContacts.push(currentContact);
-                currentContact = currentContact.getNext();
-              }
-              
-              safeContacts.forEach(contact => {
-                try {
-                  if (!contact.getFixtureA() || !contact.getFixtureB()) {
-                    contact.setEnabled(false);
-                  }
-                } catch (e) {
-                  // Ошибка при проверке контакта - отключаем
-                  try { contact.setEnabled(false); } catch (_) {}
-                }
-              });
-            }
-            
-            // Теперь выполняем шаг физики
-            worldRef.current.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
-          } catch (stepError) {
-            console.error('Ошибка при выполнении шага физического мира:', stepError);
-            
-            // Если произошла критическая ошибка, пробуем восстановить мир
-            // путем удаления всех контактов и пробуждения всех тел
-            try {
-              const world = worldRef.current as any;
-              
-              // Отключаем все контакты
-              if (world.m_contactManager) {
-                let currentContact = world.m_contactManager.m_contactList;
-                while (currentContact) {
-                  try {
-                    currentContact.setEnabled(false);
-                  } catch (e) {}
-                  currentContact = currentContact.getNext();
-                }
-              }
-              
-              // Пробуждаем все тела
-              let body = worldRef.current.getBodyList();
-              while (body) {
-                try {
-                  body.setAwake(true);
-                } catch (e) {}
-                body = body.getNext();
-              }
-            } catch (recoveryError) {
-              console.error('Не удалось восстановить физический мир:', recoveryError);
-            }
-          }
-          
-          // Обновляем позицию игрока, если спрайт доступен
-          if (playerBodyRef.current && playerSprite) {
-            const position = playerBodyRef.current.getPosition();
-            playerSprite.x = toPixels(position.x);
-            playerSprite.y = toPixels(position.y);
-            
-            // Делаем принудительный сброс скорости игрока
-            playerBodyRef.current.setLinearVelocity(planck.Vec2(0, 0));
-            playerBodyRef.current.setAwake(true);
-          }
-          
-          // Проверяем на слияния каждые N кадров
-          if (frameCounterRef.current % CHECK_MERGE_FREQUENCY === 0) {
-            if (hasBallsMarkedForMerge(worldRef)) {
-              // Вызываем checkAndMergeBalls с правильными аргументами
-              checkAndMergeBalls(
-                gameInstanceRef.current.scene.scenes[0],
-                worldRef,
-                ballsRef,
-                frameCounterRef.current
-              );
-            }
-          }
-          
-          // Обновляем позиции всех шаров и проверяем их статус
-          if (ballsRef.current.length > 0) {
-            for (let i = 0; i < ballsRef.current.length; i++) {
-              const ball = ballsRef.current[i];
-              
-              // Пропускаем недействительные шары или шары без тела
-              if (!ball || !ball.body || isBodyDestroyed(ball.body)) {
-                continue;
-              }
-              
-              // Обновляем визуальное представление шара
-              try {
-                const pos = ball.body.getPosition();
-                if (ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
-                  ball.sprite.container.x = pos.x * 30;
-                  ball.sprite.container.y = pos.y * 30;
-                }
-                
-                // Обновляем вращение, если это необходимо
-                if (ball.body.getAngle() !== 0 && ball.sprite.circle) {
-                  const angle = ball.body.getAngle() * (180 / Math.PI); // Переводим радианы в градусы
-                  ball.sprite.circle.angle = angle;
-                }
-              } catch (error) {
-                console.warn('Ошибка при обновлении позиции шара:', error);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка при выполнении шага физического мира:', error);
-          // Безопасная очистка недействительных тел при ошибке
-          if (worldRef.current) {
-            try {
-              let body = worldRef.current.getBodyList();
-              let bodiesRemoved = false;
-              
-              while (body) {
-                const nextBody = body.getNext();
-                
-                // Проверяем действительность тела
-                if (isBodyDestroyed(body)) {
-                  // Удаляем тело, если оно недействительно
-                  worldRef.current.destroyBody(body);
-                  bodiesRemoved = true;
-                }
-                
-                body = nextBody;
-              }
-              
-              if (bodiesRemoved) {
-                console.log('Удалены недействительные тела для восстановления работы физического мира');
-              }
-            } catch (cleanupError) {
-              console.error('Ошибка при попытке очистки недействительных тел:', cleanupError);
-            }
+          } catch (error) {
+            console.warn('Ошибка при обновлении позиции шара:', error);
           }
         }
         
-        // Обновляем текущий шар для броска, если он существует
-        if (currentBallRef.current && currentBallRef.current.sprite && 
-            currentBallRef.current.sprite.container && !currentBallRef.current.sprite.container.destroyed &&
-            playerBodyRef.current) {
-          // Получаем позицию игрока
-          const playerPos = playerBodyRef.current.getPosition();
-          
-          // Обновляем позицию шара для броска
-          currentBallRef.current.sprite.container.x = 30 * playerPos.x;
-          currentBallRef.current.sprite.container.y = FIXED_PLAYER_Y + 24;
-          
-          // Обновляем положение пунктирной траектории
-          updateTrajectoryLine(
-            gameInstanceRef.current.scene.scenes[0], 
-            trajectoryLineRef,
-            30 * playerPos.x, 
-            FIXED_PLAYER_Y + 24,
-            isPaused
-          );
+        // Проверяем на слияния каждые N кадров
+        if (frameCounterRef.current % CHECK_MERGE_FREQUENCY === 0) {
+          if (hasBallsMarkedForMerge(worldRef)) {
+            // Вызываем checkAndMergeBalls с правильными аргументами
+            checkAndMergeBalls(
+              gameInstanceRef.current?.scene?.scenes[0],
+              worldRef,
+              ballsRef,
+              frameCounterRef.current
+            );
+          }
         }
       } catch (error) {
-        console.error('Критическая ошибка в updateScene:', error);
-        // Приостанавливаем игру при критической ошибке
-        setIsPaused(true);
+        console.error('Ошибка при обновлении сцены:', error);
       }
     };
     
@@ -896,6 +792,46 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         setDebugMessage(`Размеры игрового контейнера: ${containerWidth}x${containerHeight}, 
                          размеры игры: ${newGameWidth}x${newGameHeight}`);
         
+        // Удаляем ненужные ссылки на объекты сцены
+        // const gameStateRef = React.useRef({
+        //   isPaused,
+        //   isGameOver: false
+        // });
+        
+        // const sceneRefs: SceneRefs = {
+        //   ballsRef,
+        //   worldRef,
+        //   currentBallRef,
+        //   floorRef,
+        //   leftWallRef,
+        //   rightWallRef,
+        //   topWallRef,
+        //   playerBodyRef,
+        //   trajectoryLineRef,
+        //   isFreezeModeActive,
+        //   gameStateRef
+        // };
+        
+        // Удаляем адаптеры для функций из sceneLifecycle
+        // const localCreateScene = (scene: any, phaser: PhaserType, width: number, height: number) => {
+        //   createScene(
+        //     scene, 
+        //     phaser, 
+        //     width, 
+        //     height, 
+        //     sceneRefs, 
+        //     FIXED_PLAYER_Y, 
+        //     PLAYER_SIZE, 
+        //     (newPlayerSprite: any) => {
+        //       playerSprite = newPlayerSprite;
+        //     }
+        //   );
+        // };
+        
+        // const localUpdateScene = () => {
+        //   updateScene(sceneRefs, checkStuckBalls);
+        // };
+        
         // Создаем конфигурацию игры
         const config: Phaser.Types.Core.GameConfig = {
           type: Phaser.AUTO,
@@ -917,11 +853,295 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
             }
           },
           scene: {
+            preload: function(this: any) {
+              try {
+                // Загружаем текстуры
+                this.load.image('trees', '/images/merge/Game/ui/trees.webp');
+                this.load.image('floor', '/images/merge/Game/ui/floor.webp');
+                
+                // Загружаем изображения персонажа
+                this.load.image('coin-king', '/images/merge/Game/ui/CoinKing.webp');
+                this.load.image('coin-king-throw', '/images/merge/Game/ui/CoinKing1.webp');
+                
+                // Загружаем изображения шаров (монет SNOTCOIN)
+                this.load.image('ball1', '/images/merge/Balls/1.webp');
+                this.load.image('ball2', '/images/merge/Balls/2.webp');
+                this.load.image('ball3', '/images/merge/Balls/3.webp');
+                this.load.image('ball4', '/images/merge/Balls/4.webp');
+                this.load.image('ball5', '/images/merge/Balls/5.webp');
+                this.load.image('ball6', '/images/merge/Balls/6.webp');
+                this.load.image('ball7', '/images/merge/Balls/7.webp');
+                this.load.image('ball8', '/images/merge/Balls/8.webp');
+                this.load.image('ball9', '/images/merge/Balls/9.webp');
+                this.load.image('ball10', '/images/merge/Balls/10.webp');
+                this.load.image('ball11', '/images/merge/Balls/11.webp');
+                this.load.image('ball12', '/images/merge/Balls/12.webp');
+                
+                // Специальные шары
+                this.load.image('bull-ball', '/images/merge/Balls/Bull.webp');
+                this.load.image('bomb', '/images/merge/Balls/bomb.webp');
+              } catch (error) {
+                console.error('Ошибка при загрузке ресурсов:', error);
+              }
+            },
             create: function(this: any) {
-              createScene(this, Phaser, newGameWidth, newGameHeight);
+              try {
+                // Настраиваем отладочные опции в консоли
+                console.log('Инициализация физического мира');
+                
+                // Добавляем фон с деревьями
+                const treesImage = this.add.image(newGameWidth / 2, 0, 'trees');
+                treesImage.setOrigin(0.5, 0);
+                treesImage.setDisplaySize(newGameWidth, newGameHeight);
+                
+                // Добавляем пол
+                const floorHeight = 30; // Высота пола в пикселях
+                const floorImage = this.add.image(newGameWidth / 2, newGameHeight - floorHeight / 2, 'floor');
+                floorImage.setDisplaySize(newGameWidth, floorHeight);
+                
+                // Масштабируем размер игрока в зависимости от размера игры
+                const scaleFactor = newGameWidth / BASE_GAME_WIDTH;
+                const playerSizeScaled = PLAYER_SIZE * 3.5 * scaleFactor; // Уменьшаем размер с 4 до 3.5
+                
+                // Создаем игрока как изображение CoinKing вместо круга
+                playerSprite = this.add.image(newGameWidth / 2, FIXED_PLAYER_Y, 'coin-king')
+                  .setOrigin(0.5, 0.5)
+                  .setDisplaySize(playerSizeScaled, playerSizeScaled)
+                  .setDepth(5); // Низкое значение глубины, чтобы отображаться за шарами
+                
+                // Создаем физические объекты с учетом размеров игрового поля
+                createPhysicsWorld(newGameWidth, newGameHeight, physicsRefs);
+                
+                // Настраиваем обработчики столкновений для обычных шаров
+                if (worldRef.current) {
+                  setupNormalBallsCollisions(worldRef.current, ballsRef);
+                }
+                
+                // Сначала генерируем текущий шар (с вероятностями)
+                const currentLevel = generateBallLevel();
+                currentBallRef.current = createNextBall(this, playerBodyRef, currentLevel);
+                
+                // Затем генерируем будущий шар и обновляем интерфейс
+                nextBallLevelRef.current = generateBallLevel();
+                setFutureNextBallLevel(nextBallLevelRef.current);
+                
+                // Создаем пунктирную линию для визуализации траектории
+                if (currentBallRef.current && currentBallRef.current.sprite) {
+                  createTrajectoryLine(
+                    this, 
+                    trajectoryLineRef,
+                    currentBallRef.current.sprite.container.x, 
+                    currentBallRef.current.sprite.container.y
+                  );
+                }
+                
+                // Проверяем и логируем создание шара
+                if (currentBallRef.current) {
+                  console.log('Шар для броска создан', currentBallRef.current);
+                } else {
+                  console.error('Ошибка создания шара для броска');
+                  // Пробуем еще раз с другим уровнем
+                  nextBallLevelRef.current = 1;
+                  currentBallRef.current = createNextBall(this, playerBodyRef, nextBallLevelRef.current);
+                  console.log('Повторная попытка создания шара', { шарСоздан: !!currentBallRef.current });
+                }
+                
+                // Принудительное обновление позиции игрока
+                if (playerBodyRef.current) {
+                  playerBodyRef.current.setAwake(true);
+                }
+                
+                // Устанавливаем границы мира Phaser, чтобы они совпадались с физическим миром
+                // Добавляем проверку на существование physics и world
+                if (this.physics && this.physics.world) {
+                  this.physics.world.setBounds(0, 0, newGameWidth, newGameHeight);
+                }
+                
+                // Регистрируем обработчик движения мыши
+                this.input.on('pointermove', (pointer: any) => {
+                  if (!playerBodyRef.current || isPaused) return;
+                  
+                  // Проверяем, что указатель находится в пределах игрового поля
+                  const gameWidth = this.sys.game.config.width;
+                  const gameHeight = this.sys.game.config.height;
+                  
+                  if (pointer.x < 0 || pointer.x > gameWidth || 
+                      pointer.y < 0 || pointer.y > gameHeight) {
+                    return;
+                  }
+                  
+                  try {
+                    // Преобразуем координаты указателя в физические координаты
+                    const mouseX = pointer.x / 30;
+                    
+                    // Устанавливаем позицию игрока, поддерживая фиксированную высоту
+                    playerBodyRef.current.setPosition(planck.Vec2(mouseX, FIXED_PLAYER_Y / 30));
+                    
+                    // Сбрасываем скорость для предотвращения падения
+                    playerBodyRef.current.setLinearVelocity(planck.Vec2(0, 0));
+                    
+                    // Пробуждаем тело, если оно уснуло
+                    playerBodyRef.current.setAwake(true);
+                    
+                    // Обновляем визуальную позицию игрока
+                    if (playerSprite) {
+                      playerSprite.x = pointer.x;
+                      playerSprite.y = FIXED_PLAYER_Y;
+                    }
+                    
+                    // Перемещаем шар для броска вместе с игроком
+                    if (currentBallRef.current && currentBallRef.current.sprite && 
+                        currentBallRef.current.sprite.container && !currentBallRef.current.sprite.container.destroyed) {
+                      currentBallRef.current.sprite.container.x = pointer.x;
+                      currentBallRef.current.sprite.container.y = FIXED_PLAYER_Y + 24;
+                      
+                      // Обновляем положение пунктирной линии
+                      updateTrajectoryLine(
+                        this, 
+                        trajectoryLineRef,
+                        pointer.x, 
+                        FIXED_PLAYER_Y + 24,
+                        isPaused
+                      );
+                    }
+                  } catch (err) {
+                    console.error('Ошибка при обработке движения мыши:', err);
+                  }
+                });
+                
+                // Обработчик клика мыши для броска шара
+                this.input.on('pointerdown', (pointer: any) => {
+                  if (isPaused) return;
+                  
+                  // Проверяем, что указатель находится в пределах игрового поля
+                  if (pointer.x < 0 || pointer.x > newGameWidth || 
+                      pointer.y < 0 || pointer.y > newGameHeight) {
+                    return;
+                  }
+                  
+                  // Проверяем время с последнего броска
+                  const currentTime = Date.now();
+                  if (currentTime - lastThrowTime < MIN_THROW_INTERVAL) {
+                    console.log(`Слишком частые броски. Подождите ${((MIN_THROW_INTERVAL - (currentTime - lastThrowTime)) / 1000).toFixed(1)} сек.`);
+                    return;
+                  }
+                  
+                  try {
+                    if (!currentBallRef.current) {
+                      console.log('Шар для броска отсутствует, создаем новый');
+                      const newLevel = generateBallLevel();
+                      currentBallRef.current = createNextBall(this, playerBodyRef, newLevel);
+                    }
+                    
+                    if (currentBallRef.current) {
+                      // Изменяем изображение игрока при броске
+                      if (playerSprite) {
+                        playerSprite.setTexture('coin-king-throw');
+                        
+                        // Возвращаем оригинальное изображение через 300 мс
+                        setTimeout(() => {
+                          if (playerSprite) {
+                            playerSprite.setTexture('coin-king');
+                          }
+                        }, 300);
+                      }
+                      
+                      // Обновляем время последнего броска
+                      setLastThrowTime(currentTime);
+                      
+                      throwBall(
+                        this,
+                        currentBallRef,
+                        playerBodyRef,
+                        worldRef,
+                        ballsRef,
+                        nextBallLevelRef,
+                        trajectoryLineRef,
+                        isPaused,
+                        setFutureNextBallLevel
+                      );
+                      
+                      // Генерируем следующий уровень шара
+                      nextBallLevelRef.current = generateBallLevel();
+                      setFutureNextBallLevel(nextBallLevelRef.current);
+                    }
+                  } catch (error) {
+                    console.error('Ошибка при броске шара:', error);
+                  }
+                });
+                
+                setDebugMessage("Инициализация завершена успешно");
+                setIsLoading(false);
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('Ошибка при настройке сцены после загрузки ресурсов:', error);
+                setDebugMessage("Ошибка при настройке сцены: " + errorMessage);
+              }
             },
             update: function() {
-              updateScene();
+              try {
+                // Пропускаем обновление, если игра на паузе
+                if (isPaused || !worldRef.current) {
+                  return;
+                }
+                
+                // Инкрементируем счетчик кадров
+                frameCounterRef.current++;
+                
+                // Увеличиваем счетчик для проверки зависших шаров
+                stuckCheckCounterRef.current++;
+                
+                // Проверяем на потенциально "зависшие" шары каждые N кадров
+                if (stuckCheckCounterRef.current >= STUCK_CHECK_INTERVAL) {
+                  stuckCheckCounterRef.current = 0;
+                  checkStuckBalls();
+                }
+                
+                // Обновляем физический мир с правильными параметрами
+                worldRef.current.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
+                
+                // Обновляем визуальное положение всех шаров
+                for (let i = 0; i < ballsRef.current.length; i++) {
+                  const ball = ballsRef.current[i];
+                  
+                  // Пропускаем недействительные шары или шары без тела
+                  if (!ball || !ball.body || isBodyDestroyed(ball.body)) {
+                    continue;
+                  }
+                  
+                  // Обновляем визуальное представление шара
+                  try {
+                    const pos = ball.body.getPosition();
+                    if (ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
+                      ball.sprite.container.x = pos.x * SCALE;
+                      ball.sprite.container.y = pos.y * SCALE;
+                    }
+                    
+                    // Обновляем вращение, если это необходимо
+                    if (ball.sprite.circle) {
+                      const angle = ball.body.getAngle() * (180 / Math.PI); // Переводим радианы в градусы
+                      ball.sprite.circle.angle = angle;
+                    }
+                  } catch (error) {
+                    console.warn('Ошибка при обновлении позиции шара:', error);
+                  }
+                }
+                
+                // Проверяем на слияния каждые N кадров
+                if (frameCounterRef.current % CHECK_MERGE_FREQUENCY === 0) {
+                  if (hasBallsMarkedForMerge(worldRef)) {
+                    // Вызываем checkAndMergeBalls с правильными аргументами
+                    checkAndMergeBalls(
+                      gameInstanceRef.current?.scene?.scenes[0],
+                      worldRef,
+                      ballsRef,
+                      frameCounterRef.current
+                    );
+                  }
+                }
+              } catch (error) {
+                console.error('Ошибка при обновлении сцены:', error);
+              }
             }
           }
         };
@@ -932,6 +1152,29 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         
         // Настраиваем обнаружение столкновений для Bull после создания физического мира
         // Это должно быть после создания физического мира через createPhysicsWorld
+        if (worldRef.current) {
+          setupSpecialBallsCollisions(
+            worldRef.current,
+            ballsRef,
+            worldRef,
+            floorRef,
+            leftWallRef,
+            rightWallRef,
+            topWallRef,
+            removeBall,
+            dispatch,
+            snotCoins,
+            isBodyDestroyed
+          );
+        }
+        
+        // Настраиваем обработчики столкновений после создания физического мира
+        // Сначала для обычных шаров
+        if (worldRef.current) {
+          setupNormalBallsCollisions(worldRef.current, ballsRef);
+        }
+        
+        // Затем для специальных шаров (Bull и Bomb)
         if (worldRef.current) {
           setupSpecialBallsCollisions(
             worldRef.current,
@@ -1540,49 +1783,6 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     dispatch, 
     onClose
   );
-  
-  // Функция для предзагрузки ресурсов игры
-  const preloadScene = (scene: any) => {
-    try {
-      // Загружаем все необходимые текстуры и изображения
-      console.log('Загрузка текстур и изображений...');
-
-      // Загружаем изображения шаров разных уровней
-      // Добавляем обработку ошибок загрузки для каждого изображения
-      // Шары уровней от 1 до 11 и 12 используют свои изображения
-      for (const level of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
-        scene.load.image(`${level}`, `/images/merge/Balls/${level}.webp`);
-      }
-
-      // Загружаем изображение для Bull шара
-      scene.load.image('bull-ball', '/images/merge/Balls/bull.webp');
-      
-      // Загружаем изображение для Bomb шара
-      scene.load.image('bomb-ball', '/images/merge/Balls/bomb.webp');
-
-      // Загружаем частицы для эффектов
-      scene.load.image('particle', '/images/merge/Balls/particle.webp');
-
-      // Создаем событие для обработки ошибок загрузки
-      scene.load.on('loaderror', (fileObj: any) => {
-        console.warn(`Ошибка загрузки файла: ${fileObj.src}`);
-        
-        // Если ошибка связана с изображением шара, создаем и используем fallback текстуру
-        if (fileObj.key && !isNaN(parseInt(fileObj.key))) {
-          const level = parseInt(fileObj.key);
-          generateColorTexture(scene, level);
-        } else if (fileObj.key === 'bull-ball') {
-          generateColorTexture(scene, 'bull');
-        } else if (fileObj.key === 'bomb-ball') {
-          generateColorTexture(scene, 'bomb');
-        } else if (fileObj.key === 'particle') {
-          generateColorTexture(scene, 'particle');
-        }
-      });
-    } catch (error) {
-      console.error('Ошибка в preloadScene:', error);
-    }
-  };
   
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-90" 

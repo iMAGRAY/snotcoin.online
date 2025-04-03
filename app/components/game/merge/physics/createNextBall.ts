@@ -53,22 +53,11 @@ export const createNextBall = (
         // Добавляем красное свечение
         outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
         
-        // Добавляем специальный текст "BULL"
-        const specialText = scene.add.text(0, ballSize * 0.7, 'BULL', {
-          fontFamily: 'Arial',
-          fontSize: '12px',
-          color: '#ffffff',
-          fontWeight: 'bold',
-          stroke: '#ff0000',
-          strokeThickness: 2
-        }).setOrigin(0.5);
-        
-        // Добавляем все элементы в контейнер
-        container.add([outline, bullImage, specialText]);
+        // Добавляем в контейнер
+        container.add([outline, bullImage]);
         
         // Сохраняем ссылку на изображение
         ballSprite = bullImage;
-        text = specialText;
         
         // Анимация пульсации
         scene.tweens.add({
@@ -98,16 +87,66 @@ export const createNextBall = (
         text = scene.add.text(0, 0, 'BULL', {
           fontFamily: 'Arial',
           fontSize: '14px',
-          color: '#ffffff',
-          fontWeight: 'bold'
+          color: '#ffffff'
         }).setOrigin(0.5);
         
         // Добавляем в контейнер
         container.add([outline, ballSprite, text]);
       }
-    } else if (level >= 1 && level <= 11 || level === 12) {
-      // Для шаров уровней от 1 до 11 и 12 используем изображения
-      const ballTexture = `${level}`;
+    } else if (specialType === 'Bomb') {
+      // Используем изображение для бомбы
+      if (scene.textures.exists('bomb')) {
+        const bombImage = scene.add.image(0, 0, 'bomb');
+        
+        // Масштабируем в соответствии с размером
+        bombImage.setDisplaySize(ballSize * 2.2, ballSize * 2.2);
+        
+        // Добавляем свечение
+        outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
+        
+        // Добавляем в контейнер
+        container.add([outline, bombImage]);
+        
+        // Сохраняем ссылку на изображение
+        ballSprite = bombImage;
+        
+        // Анимация пульсации
+        scene.tweens.add({
+          targets: outline,
+          alpha: { from: 0.3, to: 0.7 },
+          scale: { from: 1, to: 1.2 },
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+        
+        // Анимация вращения
+        scene.tweens.add({
+          targets: bombImage,
+          angle: '+=10',
+          duration: 2000,
+          repeat: -1,
+          ease: 'Linear'
+        });
+      } else {
+        // Если изображение не найдено, создаем чёрный круг
+        ballSprite = scene.add.circle(0, 0, ballSize, 0x000000);
+        outline = scene.add.circle(0, 0, ballSize * 1.2, 0xff0000, 0.3);
+        
+        // Добавляем текст "BOMB"
+        text = scene.add.text(0, 0, 'BOMB', {
+          fontFamily: 'Arial',
+          fontSize: '14px',
+          color: '#ffffff'
+        }).setOrigin(0.5);
+        
+        // Добавляем в контейнер
+        container.add([outline, ballSprite, text]);
+      }
+    } else if (level >= 1 && level <= 12) {
+      // Для шаров уровней от 1 до 12 используем изображения монет SNOTCOIN
+      const ballTexture = `ball${level}`;
       
       // Проверяем, существует ли такая текстура в кэше
       if (scene.textures.exists(ballTexture)) {
@@ -125,6 +164,15 @@ export const createNextBall = (
         
         // Сохраняем ссылку на изображение шара
         ballSprite = ballImage;
+        
+        // Добавляем легкое вращение для монет
+        scene.tweens.add({
+          targets: ballImage,
+          angle: '+=2',
+          duration: 4000,
+          repeat: -1,
+          ease: 'Linear'
+        });
       } else {
         // Если текстура не найдена, создаем обычный круг с текстом
         console.warn(`Текстура для шара уровня ${level} не найдена, создаем круг с цветом`);
@@ -141,8 +189,7 @@ export const createNextBall = (
         text = scene.add.text(0, 0, level.toString(), {
           fontFamily: 'Arial',
           fontSize: `${fontSize}px`,
-          color: '#ffffff',
-          fontWeight: 'bold'
+          color: '#ffffff'
         }).setOrigin(0.5);
         
         // Добавляем элементы в контейнер
