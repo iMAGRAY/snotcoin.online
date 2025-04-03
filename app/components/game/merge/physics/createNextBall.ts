@@ -40,111 +40,114 @@ export const createNextBall = (
     
     let ballSprite, outline, text;
     
-    // Создаем шар в зависимости от специального типа
+    // Определяем визуальное представление в зависимости от типа шара
     if (specialType === 'Bull') {
-      // Заменяем рисованный шар на изображение
-      const bullImage = scene.add.image(0, 0, 'bull-ball');
-      
-      // Масштабируем изображение в соответствии с размером шара, делаем его немного больше
-      bullImage.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
-      
-      // Добавляем легкое свечение вокруг шара, увеличиваем радиус свечения
-      outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
-      
-      // Добавляем в контейнер
-      container.add([outline, bullImage]);
-      
-      // Добавляем анимацию вращения
-      scene.tweens.add({
-        targets: bullImage,
-        angle: '+=5',
-        duration: 3000,
-        repeat: -1,
-        ease: 'Linear'
-      });
-      
-      // Добавляем эффект пульсации свечения для большей привлекательности
-      scene.tweens.add({
-        targets: outline,
-        alpha: { from: 0.3, to: 0.7 },
-        scale: { from: 1, to: 1.2 },
-        duration: 800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
-      });
-      
-      // Устанавливаем глубину отображения
-      container.setDepth(100); // Высокое значение для отображения поверх других элементов
-      
-      // Сохраняем ссылку на изображение шара
-      ballSprite = bullImage;
-    } else if (specialType === 'Bomb') {
-      // Бомба (черный шар с фитилем)
-      ballSprite = scene.add.circle(0, 0, ballSize, 0x000000); // Черный
-      outline = scene.add.circle(0, 0, ballSize + 2, 0xff0000, 0.5); // Красное свечение
-      
-      // Добавляем фитиль
-      const fuse = scene.add.graphics();
-      fuse.lineStyle(2, 0xff8800, 1);
-      fuse.beginPath();
-      fuse.moveTo(0, -ballSize);
-      fuse.lineTo(0, -ballSize*1.5);
-      fuse.lineTo(ballSize/2, -ballSize*1.8);
-      fuse.stroke();
-      
-      // Добавляем огонь на фитиле
-      const flame = scene.add.circle(ballSize/2, -ballSize*1.8, ballSize/4, 0xff4400);
-      
-      // Добавляем блики на бомбе
-      const highlight = scene.add.circle(-ballSize/2.5, -ballSize/2.5, ballSize/6, 0xffffff, 0.6);
-      
-      // Добавляем все элементы в контейнер
-      container.add([outline, ballSprite, fuse, flame, highlight]);
-      
-      // Добавляем текст BOMB
-      text = scene.add.text(0, 0, 'BOMB', {
-        fontFamily: 'Arial',
-        fontSize: `${Math.max(ballSize / 3, 10)}px`,
-        color: '#ffffff',
-        fontWeight: 'bold'
-      }).setOrigin(0.5);
-      container.add(text);
-      
-      // Добавляем анимацию мигания для бомбы
-      scene.tweens.add({
-        targets: outline,
-        alpha: { from: 0.2, to: 0.8 },
-        duration: 400,
-        yoyo: true,
-        repeat: -1
-      });
-      
-      // Анимируем огонь
-      scene.tweens.add({
-        targets: flame,
-        scaleX: { from: 0.8, to: 1.2 },
-        scaleY: { from: 0.8, to: 1.2 },
-        duration: 300,
-        yoyo: true,
-        repeat: -1
-      });
-    } else if (level === 1 || level === 2 || level === 12) {
-      // Для шаров уровней 1, 2 и 12 используем изображения
+      // Используем изображение для шара Bull
+      // Проверяем, есть ли такая текстура
+      if (scene.textures.exists('bull-ball')) {
+        const bullImage = scene.add.image(0, 0, 'bull-ball');
+        
+        // Масштабируем в соответствии с размером
+        bullImage.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
+        
+        // Добавляем красное свечение
+        outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
+        
+        // Добавляем специальный текст "BULL"
+        const specialText = scene.add.text(0, ballSize * 0.7, 'BULL', {
+          fontFamily: 'Arial',
+          fontSize: '12px',
+          color: '#ffffff',
+          fontWeight: 'bold',
+          stroke: '#ff0000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
+        
+        // Добавляем все элементы в контейнер
+        container.add([outline, bullImage, specialText]);
+        
+        // Сохраняем ссылку на изображение
+        ballSprite = bullImage;
+        text = specialText;
+        
+        // Анимация пульсации
+        scene.tweens.add({
+          targets: outline,
+          alpha: { from: 0.3, to: 0.7 },
+          scale: { from: 1, to: 1.2 },
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+        
+        // Анимация вращения
+        scene.tweens.add({
+          targets: bullImage,
+          angle: '+=5',
+          duration: 3000,
+          repeat: -1,
+          ease: 'Linear'
+        });
+      } else {
+        // Если изображение не найдено, создаем красный круг
+        ballSprite = scene.add.circle(0, 0, ballSize, 0xff0000);
+        outline = scene.add.circle(0, 0, ballSize * 1.2, 0xff0000, 0.3);
+        
+        // Добавляем текст "BULL"
+        text = scene.add.text(0, 0, 'BULL', {
+          fontFamily: 'Arial',
+          fontSize: '14px',
+          color: '#ffffff',
+          fontWeight: 'bold'
+        }).setOrigin(0.5);
+        
+        // Добавляем в контейнер
+        container.add([outline, ballSprite, text]);
+      }
+    } else if (level >= 1 && level <= 6 || level === 12) {
+      // Для шаров уровней от 1 до 6 и 12 используем изображения
       const ballTexture = `${level}`;
-      const ballImage = scene.add.image(0, 0, ballTexture);
       
-      // Масштабируем изображение в соответствии с размером шара
-      ballImage.setDisplaySize(ballSize * 2, ballSize * 2);
-      
-      // Добавляем легкое свечение
-      outline = scene.add.circle(0, 0, ballSize * 1.1, 0xffffff, 0.2);
-      
-      // Добавляем в контейнер
-      container.add([outline, ballImage]);
-      
-      // Сохраняем ссылку на изображение шара
-      ballSprite = ballImage;
+      // Проверяем, существует ли такая текстура в кэше
+      if (scene.textures.exists(ballTexture)) {
+        // Используем изображение для текущего уровня
+        const ballImage = scene.add.image(0, 0, ballTexture);
+        
+        // Масштабируем изображение в соответствии с размером шара
+        ballImage.setDisplaySize(ballSize * 2, ballSize * 2);
+        
+        // Добавляем легкое свечение
+        outline = scene.add.circle(0, 0, ballSize * 1.1, 0xffffff, 0.2);
+        
+        // Добавляем в контейнер
+        container.add([outline, ballImage]);
+        
+        // Сохраняем ссылку на изображение шара
+        ballSprite = ballImage;
+      } else {
+        // Если текстура не найдена, создаем обычный круг с текстом
+        console.warn(`Текстура для шара уровня ${level} не найдена, создаем круг с цветом`);
+        
+        const ballColor = BALL_COLORS[(level - 1) % BALL_COLORS.length];
+        ballSprite = scene.add.circle(0, 0, ballSize, ballColor);
+        outline = scene.add.circle(0, 0, ballSize + 2, 0xffffff, 0.3);
+        
+        // Масштабируем размер текста в зависимости от размера игры
+        const scaleFactor = gameWidth / BASE_GAME_WIDTH;
+        const fontSize = Math.max(Math.min(14, 10 + level) * scaleFactor, 8);
+        
+        // Добавляем текст с уровнем
+        text = scene.add.text(0, 0, level.toString(), {
+          fontFamily: 'Arial',
+          fontSize: `${fontSize}px`,
+          color: '#ffffff',
+          fontWeight: 'bold'
+        }).setOrigin(0.5);
+        
+        // Добавляем элементы в контейнер
+        container.add([outline, ballSprite, text]);
+      }
     } else {
       // Обычный шар
       const ballColor = BALL_COLORS[(level - 1) % BALL_COLORS.length];
@@ -180,13 +183,18 @@ export const createNextBall = (
       });
     }
     
+    // Возвращаем объект с шаром
     return {
-      sprite: { container, circle: ballSprite, text, outline },
+      sprite: {
+        container,
+        circle: ballSprite,
+        text
+      },
       level,
       specialType
     };
   } catch (error) {
-    console.error('Ошибка в функции createNextBall:', error);
+    console.error('Ошибка при создании следующего шара:', error);
     return null;
   }
 }; 

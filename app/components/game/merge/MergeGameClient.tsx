@@ -36,7 +36,8 @@ import {
   PLAYER_SIZE,
   BALL_DENSITY,
   BALL_FRICTION,
-  BALL_RESTITUTION
+  BALL_RESTITUTION,
+  BALL_COLORS
 } from './constants/gameConstants';
 import GameHeader from './components/GameHeader';
 import PauseMenu from './components/PauseMenu';
@@ -237,6 +238,10 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         // Добавляем загрузку изображений шаров уровней 1, 2 и 12
         scene.load.image('1', '/images/merge/Balls/1.webp');
         scene.load.image('2', '/images/merge/Balls/2.webp');
+        scene.load.image('3', '/images/merge/Balls/3.webp');
+        scene.load.image('4', '/images/merge/Balls/4.webp');
+        scene.load.image('5', '/images/merge/Balls/5.webp');
+        scene.load.image('6', '/images/merge/Balls/6.webp');
         scene.load.image('12', '/images/merge/Balls/12.webp');
         
         // Ждем завершения загрузки ресурсов
@@ -1927,6 +1932,82 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     
     // Вызываем обработчик onClose из props
     onClose();
+  };
+  
+  // Функция для предзагрузки ресурсов игры
+  const preloadScene = (scene: any) => {
+    try {
+      // Загружаем все необходимые текстуры и изображения
+      console.log('Загрузка текстур и изображений...');
+
+      // Загружаем изображения шаров разных уровней
+      // Добавляем обработку ошибок загрузки для каждого изображения
+      // Шары уровней от 1 до 6 и 12 используют свои изображения
+      for (const level of [1, 2, 3, 4, 5, 6, 12]) {
+        scene.load.image(`${level}`, `/images/merge/Balls/${level}.webp`);
+      }
+
+      // Загружаем изображение для Bull шара
+      scene.load.image('bull-ball', '/images/merge/Balls/bull.webp');
+
+      // Загружаем частицы для эффектов
+      scene.load.image('particle', '/images/merge/Balls/particle.webp');
+
+      // Создаем событие для обработки ошибок загрузки
+      scene.load.on('loaderror', (fileObj: any) => {
+        console.warn(`Ошибка загрузки файла: ${fileObj.src}`);
+        
+        // Если ошибка связана с изображением шара, создаем и используем fallback текстуру
+        if (fileObj.key && !isNaN(parseInt(fileObj.key))) {
+          const level = parseInt(fileObj.key);
+          generateColorTexture(scene, level);
+        } else if (fileObj.key === 'bull-ball') {
+          generateColorTexture(scene, 'bull');
+        } else if (fileObj.key === 'particle') {
+          generateColorTexture(scene, 'particle');
+        }
+      });
+    } catch (error) {
+      console.error('Ошибка в preloadScene:', error);
+    }
+  };
+
+  // Функция для генерации текстуры-заглушки при ошибке загрузки
+  const generateColorTexture = (scene: any, key: number | string) => {
+    try {
+      const size = 128; // Размер текстуры
+      const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+      let color = 0xffffff; // Цвет по умолчанию - белый
+      
+      // Определяем цвет в зависимости от ключа
+      if (key === 'bull') {
+        color = 0xff0000; // Красный для Bull
+      } else if (key === 'particle') {
+        color = 0xffff00; // Желтый для частиц
+      } else if (typeof key === 'number') {
+        // Используем цветовую схему для уровней шаров
+        const colorIndex = (key - 1) % BALL_COLORS.length;
+        color = BALL_COLORS[colorIndex];
+      }
+      
+      // Создаем круглую текстуру с нужным цветом
+      graphics.fillStyle(color, 1);
+      graphics.fillCircle(size / 2, size / 2, size / 2);
+      
+      // Если это шар, добавляем текст с уровнем
+      if (typeof key === 'number') {
+        graphics.setStyle(0xffffff, 1); // Белый контур
+        graphics.lineStyle(2, 0xffffff, 1);
+        graphics.strokeCircle(size / 2, size / 2, size / 2 - 1);
+      }
+      
+      // Создаем текстуру из графики
+      graphics.generateTexture(key.toString(), size, size);
+      
+      console.log(`Создана fallback текстура для: ${key}`);
+    } catch (error) {
+      console.error('Ошибка при создании fallback текстуры:', error);
+    }
   };
   
   return (
