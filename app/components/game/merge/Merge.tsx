@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../../i18n"
-import { useGameState } from "../../../contexts/game/hooks"
+import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import dynamic from "next/dynamic"
 
 // Динамически импортируем игру, чтобы избежать проблем с рендерингом на сервере
@@ -14,6 +14,7 @@ const MergeGame = dynamic(() => import("./MergeGame"), {
 const Merge: React.FC = () => {
   const { t } = useTranslation()
   const gameState = useGameState()
+  const dispatch = useGameDispatch()
   const [isGameActive, setIsGameActive] = useState(false)
 
   const handlePlayClick = () => {
@@ -22,6 +23,11 @@ const Merge: React.FC = () => {
 
   const handleCloseGame = () => {
     setIsGameActive(false)
+    // Явно устанавливаем активную вкладку "merge" при выходе из игры
+    dispatch({
+      type: "SET_ACTIVE_TAB",
+      payload: "merge"
+    })
   }
 
   return (

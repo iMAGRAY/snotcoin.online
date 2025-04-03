@@ -94,5 +94,9 @@ export const ruTranslations: TranslationKeys = {
   retry: 'Повторить',
   close: 'Закрыть',
   comingSoon: 'Скоро будет доступно',
-  tokenomic: 'Токеномика'
+  tokenomic: 'Токеномика',
+  
+  // Подсказки
+  timeToFillTooltip: 'Время до полного заполнения контейнера',
+  fillTimeTooltip: 'Время до полного заполнения контейнера'
 }; 

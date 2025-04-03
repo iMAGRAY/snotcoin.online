@@ -1,6 +1,7 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
 import Image from "next/image"
 import { animated, useSpring } from "react-spring"
+import { ICONS } from "../../../constants/uiConstants"
 
 interface ChestImageProps {
   src: string
@@ -10,13 +11,34 @@ interface ChestImageProps {
 }
 
 export const ChestImage: React.FC<ChestImageProps> = React.memo(({ src, alt, isOpening, chestIndex }) => {
+  const [imageToShow, setImageToShow] = useState(src)
+  
+  useEffect(() => {
+    if (isOpening) {
+      // Определяем какое изображение открытого сундука использовать на основе индекса
+      if (chestIndex === 0) {
+        // Сундук первого уровня
+        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL1_OPEN)
+      } else if (chestIndex === 1) {
+        // Сундук второго уровня
+        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL2_OPEN)
+      } else if (chestIndex === 2) {
+        // Сундук третьего уровня
+        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL3_OPEN)
+      }
+    } else {
+      // В противном случае показываем оригинальное изображение
+      setImageToShow(src)
+    }
+  }, [isOpening, chestIndex, src])
+
   const props = useSpring({
     scale: isOpening ? 1.2 : 1.1,
     rotate: isOpening ? 5 : 0,
     config: { tension: 300, friction: 10 },
   })
 
-  const imageUrl = src || "/placeholder.svg"
+  const imageUrl = imageToShow || "/placeholder.svg"
 
   return (
     <animated.div 

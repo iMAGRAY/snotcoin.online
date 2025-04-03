@@ -51,28 +51,51 @@ export type TimeFormatOptions = {
  * @returns Отформатированное значение времени
  */
 export function formatTime(seconds: number, options?: TimeFormatOptions): string {
-  const { showSeconds = false, maxUnitOnly = false } = options || {};
+  console.log("formatTime input:", { seconds, options });
   
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = Math.floor(seconds % 60)
+  const { showSeconds = true, maxUnitOnly = true } = options || {};
+  
+  // Проверка на некорректные значения
+  if (isNaN(seconds) || seconds === Infinity) {
+    console.log("formatTime: returning infinity symbol");
+    return "∞";
+  }
+  
+  // Если время равно нулю, показываем "0s"
+  if (seconds === 0) {
+    console.log("formatTime: returning 0s");
+    return "0s";
+  }
+  
+  // Расчет времени в различных единицах
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  
+  console.log("formatTime calculation:", { days, hours, minutes, remainingSeconds });
 
   if (maxUnitOnly) {
-    if (hours > 0) return `${hours}h`
-    if (minutes > 0) return `${minutes}m`
-    return `${remainingSeconds}s`
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${remainingSeconds}s`;
   }
 
-  if (hours > 0) {
+  if (days > 0) {
+    return showSeconds 
+      ? `${days}d ${hours}h ${minutes}m ${remainingSeconds}s`
+      : `${days}d ${hours}h ${minutes}m`;
+  } else if (hours > 0) {
     return showSeconds 
       ? `${hours}h ${minutes}m ${remainingSeconds}s`
-      : `${hours}h ${minutes}m`
+      : `${hours}h ${minutes}m`;
   } else if (minutes > 0) {
     return showSeconds 
       ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`
+      : `${minutes}m`;
   } else {
-    return `${remainingSeconds}s`
+    return `${remainingSeconds}s`;
   }
 }
 

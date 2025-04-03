@@ -101,5 +101,9 @@ export const enTranslations: TranslationKeys = {
   // Backward compatibility with old keys
   loading: 'Loading',
   error: 'Error',
-  close: 'Close'
+  close: 'Close',
+  
+  // Tooltips
+  timeToFillTooltip: 'Time until container is full',
+  fillTimeTooltip: 'Time until container is full'
 }; 

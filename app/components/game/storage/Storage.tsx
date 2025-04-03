@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useState, useRef } from "react"
+import React, { useCallback, useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useGameState, useGameDispatch } from "../../../contexts"
@@ -128,11 +128,16 @@ const RewardDisplay: React.FC<{
 RewardDisplay.displayName = "RewardDisplay"
 
 // Open Chest Button - отдельный компонент, не вложенный в другие div
-const OpenChestButton: React.FC<{onClick: () => void, text: string}> = React.memo(({onClick, text}) => {
+const OpenChestButton: React.FC<{
+  onClick: () => void, 
+  text: string, 
+  cost: number,
+  chestIndex: number
+}> = React.memo(({onClick, text, cost, chestIndex}) => {
   return (
     <motion.button
       onClick={onClick}
-      className="fixed left-0 right-0 mx-auto bottom-28 w-3/5 max-w-sm z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold px-6 rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-2 border-yellow-300 h-16"
+      className="fixed left-0 right-0 mx-auto bottom-28 w-3/5 max-w-sm z-50 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold px-6 rounded-2xl shadow-lg flex items-center justify-center flex-col border-2 border-yellow-300 h-16"
       whileHover={{ 
         scale: 1.05,
         boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)"
@@ -140,6 +145,7 @@ const OpenChestButton: React.FC<{onClick: () => void, text: string}> = React.mem
       whileTap={{ scale: 0.95 }}
     >
       <span>{text}</span>
+      <span className="text-xs mt-1">{cost.toFixed(chestIndex === 0 ? 2 : 0)} SNOT</span>
     </motion.button>
   );
 });
@@ -156,6 +162,14 @@ const Storage: React.FC = () => {
   const [rewardAmount, setRewardAmount] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+  
+  // Динамически определяем стоимость сундука 1 уровня (100% от вместимости контейнера)
+  const level1ChestCost = gameState.inventory.containerCapacity || 5;
+  
+  // Обновляем стоимость сундука 1 уровня при изменении вместимости контейнера
+  useEffect(() => {
+    chests[0].requiredSnot = level1ChestCost;
+  }, [level1ChestCost]);
 
   const handleSwipeComplete = useCallback((index: number) => {
     setActiveChestIndex(index);
@@ -267,7 +281,12 @@ const Storage: React.FC = () => {
       </motion.div>
       
       {/* Кнопка Open Chest - вне всех контейнеров, z-50 */}
-      <OpenChestButton onClick={handleOpenChest} text={t("openChest")} />
+      <OpenChestButton 
+        onClick={handleOpenChest} 
+        text={t("openChest")} 
+        cost={chests[activeChestIndex].requiredSnot}
+        chestIndex={activeChestIndex}
+      />
     </>
   )
 }

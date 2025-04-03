@@ -37,7 +37,8 @@ export const createBall = (
   ballsRef: React.MutableRefObject<Ball[]>,
   x: number,
   y: number,
-  level: number
+  level: number,
+  specialType?: string
 ): Ball | null => {
   if (!worldRef.current || !scene) {
     console.error('Не удалось создать шар: нет мира или сцены');
@@ -65,19 +66,33 @@ export const createBall = (
     // Создаем форму круга для физики
     const circleShape = planck.Circle(physicalRadius);
     
+    // Настраиваем физические параметры в зависимости от типа шара
+    let ballDensity = BALL_DENSITY;
+    let ballFriction = BALL_FRICTION;
+    let ballRestitution = BALL_RESTITUTION;
+    
+    // Специальные физические параметры для шара Bull
+    if (specialType === 'Bull') {
+      ballDensity = BALL_DENSITY * 1.5; // Более тяжелый
+      ballFriction = BALL_FRICTION * 0.5; // Меньше трение для лучшего скольжения
+      ballRestitution = BALL_RESTITUTION * 1.2; // Более упругий для лучшего отскока
+    }
+    
     // Создаем фикстуру с правильными параметрами
     const fixture = body.createFixture({
       shape: circleShape,
-      density: BALL_DENSITY,
-      friction: BALL_FRICTION,
-      restitution: BALL_RESTITUTION,
+      density: ballDensity,
+      friction: ballFriction,
+      restitution: ballRestitution,
       filterGroupIndex: 0, // все шары в одной группе столкновений
     });
     
     // Устанавливаем пользовательские данные для тела
     body.setUserData({
+      type: 'ball',
       isBall: true,
       level: level,
+      specialType: specialType, // Добавляем тип специального шара
       createdAt: Date.now(),
       gameWidth: gameWidth, // Сохраняем текущий размер игры
     });
@@ -93,30 +108,90 @@ export const createBall = (
     // Создаем контейнер для шара и текста
     const container = scene.add.container(x, y);
     
-    // Создаем визуальное представление шара
-    const circle = scene.add.circle(0, 0, ballSize, color);
+    let circle, text;
     
-    // Масштабируем размер текста в зависимости от размера шара
-    const scaleFactor = gameWidth / BASE_GAME_WIDTH;
-    const fontSize = Math.max(Math.min(18, 12 + level) * scaleFactor, 8); // Ограничиваем минимальный размер
-    
-    // Добавляем текст с уровнем
-    const textStyle = {
-      fontFamily: 'Arial',
-      fontSize: `${fontSize}px`,
-      color: '#ffffff',
-      fontStyle: 'bold',
-    };
-    
-    const text = scene.add.text(0, 0, level.toString(), textStyle);
-    text.setOrigin(0.5, 0.5);
-    
-    // Добавляем визуальные элементы в контейнер
-    container.add(circle);
-    container.add(text);
-    
-    // Настраиваем глубину отображения, чтобы шары были поверх фона
-    container.setDepth(10 + level);
+    // Проверяем, если это специальный шар Bull
+    if (specialType === 'Bull') {
+      // Используем изображение Bull.webp вместо обычного шара
+      const bullImage = scene.add.image(0, 0, 'bull-ball');
+      
+      // Масштабируем изображение в соответствии с размером шара
+      bullImage.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
+      
+      // Добавляем свечение вокруг шара
+      const outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
+      
+      // Добавляем в контейнер
+      container.add([outline, bullImage]);
+      
+      // Сохраняем ссылку на основной элемент шара
+      circle = bullImage;
+      
+      // Устанавливаем высокую глубину отображения
+      container.setDepth(100); // Высокое значение для отображения поверх других элементов
+      
+      // Добавляем эффект пульсации свечения
+      scene.tweens.add({
+        targets: outline,
+        alpha: { from: 0.3, to: 0.7 },
+        scale: { from: 1, to: 1.2 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+      
+      // Добавляем анимацию вращения
+      scene.tweens.add({
+        targets: bullImage,
+        angle: '+=5',
+        duration: 3000,
+        repeat: -1,
+        ease: 'Linear'
+      });
+    } else if (level === 1 || level === 2 || level === 12) {
+      // Используем изображения для уровней 1, 2 и 12
+      // Загружаем изображение шара соответствующего уровня
+      const ballTexture = `${level}`;
+      const ballImage = scene.add.image(0, 0, ballTexture);
+      
+      // Масштабируем изображение в соответствии с размером шара
+      ballImage.setDisplaySize(ballSize * 2, ballSize * 2);
+      
+      // Добавляем в контейнер
+      container.add(ballImage);
+      
+      // Сохраняем ссылку на основной элемент шара
+      circle = ballImage;
+      
+      // Устанавливаем глубину отображения
+      container.setDepth(10 + level);
+    } else {
+      // Создаем визуальное представление обычного шара
+      circle = scene.add.circle(0, 0, ballSize, color);
+      
+      // Масштабируем размер текста в зависимости от размера шара
+      const scaleFactor = gameWidth / BASE_GAME_WIDTH;
+      const fontSize = Math.max(Math.min(18, 12 + level) * scaleFactor, 8); // Ограничиваем минимальный размер
+      
+      // Добавляем текст с уровнем
+      const textStyle = {
+        fontFamily: 'Arial',
+        fontSize: `${fontSize}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      };
+      
+      text = scene.add.text(0, 0, level.toString(), textStyle);
+      text.setOrigin(0.5, 0.5);
+      
+      // Добавляем визуальные элементы в контейнер
+      container.add(circle);
+      container.add(text);
+      
+      // Настраиваем глубину отображения, чтобы шары были поверх фона
+      container.setDepth(10 + level);
+    }
     
     // Создаем объект шара
     const ball: Ball = {
@@ -128,6 +203,7 @@ export const createBall = (
         text,
       },
       originalGameWidth: gameWidth, // Сохраняем размер игры при создании шара
+      specialType: specialType // Добавляем тип специального шара
     };
     
     // Специальные эффекты для максимального уровня

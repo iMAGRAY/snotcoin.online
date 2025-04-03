@@ -61,14 +61,14 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
           className="flex-shrink-0 flex items-center justify-center"
           initial={{ scale: 1, filter: "grayscale(100%) brightness(0.8)" }}
           animate={{ 
-            scale: isActive ? 1.55 : 1.15,
+            scale: isActive ? 1.45 : 1.15,
             filter: isActive ? "grayscale(0%) brightness(1)" : "grayscale(100%) brightness(0.8)",
           }}
           transition={{ duration: 0.3 }}
           style={{
-            width: isActive ? '5rem' : '4rem',
-            height: isActive ? '5rem' : '4rem',
-            marginTop: isActive ? '-0.6rem' : '0.2rem',
+            width: isActive ? '4.6rem' : '4rem',
+            height: isActive ? '4.6rem' : '4rem',
+            marginTop: isActive ? '-0.5rem' : '0.2rem',
           }}
         >
           <img 

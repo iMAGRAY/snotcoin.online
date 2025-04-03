@@ -2,6 +2,8 @@
  * Вспомогательные функции для игровой механики
  */
 import { GameState } from "../types/gameTypes";
+import { formatTime as formatTimeFromFormatters } from "./formatters";
+import { FILL_RATES } from "../constants/gameConstants";
 
 /**
  * Форматирует значение SNOT для отображения в интерфейсе
@@ -31,27 +33,55 @@ export const calculateFillingTime = (
   containerCapacity: number,
   fillingSpeed: number
 ): number => {
+  // Добавляем логирование входных данных
+  console.log("calculateFillingTime inputs:", { containerSnot, containerCapacity, fillingSpeed });
+  
   // Проверка входных данных на корректность
   if (isNaN(containerSnot) || isNaN(containerCapacity) || isNaN(fillingSpeed)) {
+    console.log("calculateFillingTime: invalid inputs, returning Infinity");
     return Infinity;
   }
   
   // Проверка на деление на ноль
-  if (fillingSpeed <= 0) return Infinity;
+  if (fillingSpeed <= 0) {
+    console.log("calculateFillingTime: fillingSpeed <= 0, returning Infinity");
+    return Infinity;
+  }
   
   // Проверка на некорректные входные данные
-  if (containerCapacity <= 0) return Infinity;
+  if (containerCapacity <= 0) {
+    console.log("calculateFillingTime: containerCapacity <= 0, returning Infinity");
+    return Infinity;
+  }
   
   // Если контейнер полон или переполнен, время заполнения = 0
-  if (containerSnot >= containerCapacity) return 0;
+  if (containerSnot >= containerCapacity) {
+    console.log("calculateFillingTime: container is full, returning 0");
+    return 0;
+  }
   
   // Безопасные значения с обработкой отрицательных чисел
   const safeContainerSnot = Math.max(0, containerSnot);
   const safeContainerCapacity = Math.max(1, containerCapacity);
+  
+  // Используем константу из gameConstants для базовой скорости заполнения
+  const baseIncreasePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE;
   const safeFillingSpeed = Math.max(0.000001, fillingSpeed);
   
   const remainingCapacity = safeContainerCapacity - safeContainerSnot;
-  return remainingCapacity / safeFillingSpeed;
+  const timeToFill = remainingCapacity / (baseIncreasePerSecond * safeFillingSpeed);
+  
+  console.log("calculateFillingTime results:", { 
+    safeContainerSnot, 
+    safeContainerCapacity, 
+    safeFillingSpeed,
+    baseIncreasePerSecond,
+    remainingCapacity, 
+    timeToFill,
+    timeInDays: timeToFill / FILL_RATES.SECONDS_PER_DAY 
+  });
+  
+  return timeToFill;
 };
 
 /**
@@ -90,22 +120,10 @@ export const calculateFillingSpeedUpgradeCost = (currentLevel: number): number =
 };
 
 /**
- * Форматирует время в формат MM:SS или HH:MM:SS
+ * Форматирует время в формат с единицами измерения (ч, м, с)
  * @param seconds - Время в секундах
  * @returns Отформатированная строка времени
  */
 export const formatTime = (seconds: number): string => {
-  if (isNaN(seconds) || seconds === Infinity) {
-    return "00:00";
-  }
-  
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  
-  if (hrs > 0) {
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  } else {
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
+  return formatTimeFromFormatters(seconds);
 }; 

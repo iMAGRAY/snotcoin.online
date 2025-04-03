@@ -29,6 +29,9 @@ export const ICONS = {
       LEVEL1: '/images/storage/levels/level1.webp',
       LEVEL2: '/images/storage/levels/level2.webp',
       LEVEL3: '/images/storage/levels/level3.webp',
+      LEVEL1_OPEN: '/images/storage/levels/level1open.webp',
+      LEVEL2_OPEN: '/images/storage/levels/level2open.webp',
+      LEVEL3_OPEN: '/images/storage/levels/level3open.webp',
     }
   },
   QUESTS: {

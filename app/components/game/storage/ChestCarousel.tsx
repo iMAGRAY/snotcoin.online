@@ -130,6 +130,7 @@ export const ChestCarousel: React.FC<ChestCarouselProps> = ({
               src={chestImages[imageIndex]} 
               alt={`Chest level ${imageIndex + 1}`}
               isOpening={isOpening} 
+              chestIndex={imageIndex}
             />
           </motion.div>
         </AnimatePresence>

@@ -82,9 +82,10 @@ export const throwBall = (
     const x = currentBallRef.current.sprite.container.x;
     const y = currentBallRef.current.sprite.container.y;
     const level = currentBallRef.current.level;
+    const specialType = currentBallRef.current.specialType; // Получаем тип специального шара (например, Bull)
     
     // Безопасное создание шара - единая точка для создания физического шара
-    const ball = createBall(scene, worldRef, ballsRef, x, y, level);
+    const ball = createBall(scene, worldRef, ballsRef, x, y, level, specialType);
     
     if (!ball || !ball.body) {
       console.error('Не удалось создать физический шар');
@@ -110,8 +111,11 @@ export const throwBall = (
     
     // Создаем новый шар для следующего броска
     const nextBallLevel = nextBallLevelRef.current;
-    const specialType = currentBallRef.current.specialType; // Сохраняем тип специального шара, если он был
-    currentBallRef.current = createNextBall(scene, playerBodyRef, nextBallLevel, specialType);
+    
+    // Если текущий шар был Bull, для следующего шара не используем специальный тип
+    const nextSpecialType = specialType === 'Bull' ? undefined : specialType;
+    
+    currentBallRef.current = createNextBall(scene, playerBodyRef, nextBallLevel, nextSpecialType);
     
     // Создаем новую пунктирную линию для нового шара
     if (currentBallRef.current && currentBallRef.current.sprite) {

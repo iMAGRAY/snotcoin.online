@@ -42,37 +42,43 @@ export const createNextBall = (
     
     // Создаем шар в зависимости от специального типа
     if (specialType === 'Bull') {
-      // Бык (красный шар с рогами)
-      ballSprite = scene.add.circle(0, 0, ballSize, 0xff0000); // Ярко-красный
-      outline = scene.add.circle(0, 0, ballSize + 2, 0xffffff, 0.3);
+      // Заменяем рисованный шар на изображение
+      const bullImage = scene.add.image(0, 0, 'bull-ball');
       
-      // Добавляем рога
-      const leftHorn = scene.add.graphics();
-      leftHorn.fillStyle(0x000000, 1);
-      leftHorn.fillTriangle(-ballSize/2, -ballSize/2, -ballSize/1.2, -ballSize*1.3, -ballSize/3, -ballSize/2);
+      // Масштабируем изображение в соответствии с размером шара, делаем его немного больше
+      bullImage.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
       
-      const rightHorn = scene.add.graphics();
-      rightHorn.fillStyle(0x000000, 1);
-      rightHorn.fillTriangle(ballSize/2, -ballSize/2, ballSize/1.2, -ballSize*1.3, ballSize/3, -ballSize/2);
+      // Добавляем легкое свечение вокруг шара, увеличиваем радиус свечения
+      outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
       
-      // Добавляем глаза
-      const leftEye = scene.add.circle(-ballSize/3, -ballSize/4, ballSize/6, 0xffffff);
-      const rightEye = scene.add.circle(ballSize/3, -ballSize/4, ballSize/6, 0xffffff);
-      const leftPupil = scene.add.circle(-ballSize/3, -ballSize/4, ballSize/12, 0x000000);
-      const rightPupil = scene.add.circle(ballSize/3, -ballSize/4, ballSize/12, 0x000000);
+      // Добавляем в контейнер
+      container.add([outline, bullImage]);
       
-      // Добавляем все элементы в контейнер
-      container.add([outline, ballSprite, leftHorn, rightHorn, leftEye, rightEye, leftPupil, rightPupil]);
+      // Добавляем анимацию вращения
+      scene.tweens.add({
+        targets: bullImage,
+        angle: '+=5',
+        duration: 3000,
+        repeat: -1,
+        ease: 'Linear'
+      });
       
-      // Добавляем текст BULL
-      text = scene.add.text(0, 0, 'BULL', {
-        fontFamily: 'Arial',
-        fontSize: `${Math.max(ballSize / 3, 10)}px`,
-        color: '#ffffff',
-        fontWeight: 'bold'
-      }).setOrigin(0.5);
-      container.add(text);
+      // Добавляем эффект пульсации свечения для большей привлекательности
+      scene.tweens.add({
+        targets: outline,
+        alpha: { from: 0.3, to: 0.7 },
+        scale: { from: 1, to: 1.2 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
       
+      // Устанавливаем глубину отображения
+      container.setDepth(100); // Высокое значение для отображения поверх других элементов
+      
+      // Сохраняем ссылку на изображение шара
+      ballSprite = bullImage;
     } else if (specialType === 'Bomb') {
       // Бомба (черный шар с фитилем)
       ballSprite = scene.add.circle(0, 0, ballSize, 0x000000); // Черный
@@ -123,7 +129,22 @@ export const createNextBall = (
         yoyo: true,
         repeat: -1
       });
+    } else if (level === 1 || level === 2 || level === 12) {
+      // Для шаров уровней 1, 2 и 12 используем изображения
+      const ballTexture = `${level}`;
+      const ballImage = scene.add.image(0, 0, ballTexture);
       
+      // Масштабируем изображение в соответствии с размером шара
+      ballImage.setDisplaySize(ballSize * 2, ballSize * 2);
+      
+      // Добавляем легкое свечение
+      outline = scene.add.circle(0, 0, ballSize * 1.1, 0xffffff, 0.2);
+      
+      // Добавляем в контейнер
+      container.add([outline, ballImage]);
+      
+      // Сохраняем ссылку на изображение шара
+      ballSprite = ballImage;
     } else {
       // Обычный шар
       const ballColor = BALL_COLORS[(level - 1) % BALL_COLORS.length];
@@ -146,16 +167,18 @@ export const createNextBall = (
       container.add([outline, ballSprite, text]);
     }
     
-    // Добавляем анимацию пульсации для привлечения внимания (для всех типов шаров)
-    scene.tweens.add({
-      targets: container,
-      scaleX: 1.05,
-      scaleY: 1.05,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
+    // Добавляем анимацию пульсации для привлечения внимания (для всех типов шаров, кроме Bull)
+    if (specialType !== 'Bull') {
+      scene.tweens.add({
+        targets: container,
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+    }
     
     return {
       sprite: { container, circle: ballSprite, text, outline },

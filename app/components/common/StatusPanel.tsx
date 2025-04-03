@@ -40,7 +40,7 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
       icon: Clock,
       label: "Fill",
       value: formatTime(calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed)),
-      tooltip: t("fillTimeTooltip"),
+      tooltip: t("timeToFillTooltip"),
     },
   ]
 

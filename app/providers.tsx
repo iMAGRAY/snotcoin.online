@@ -10,6 +10,12 @@ import { ErrorDisplay } from './components/ErrorBoundary';
 import WarpcastDevMode from './components/DevTools/WarpcastDevMode';
 import { activateFarcasterDevMock, isFarcasterDevMockActive } from './utils/devTools/farcasterDevMock';
 
+// Модифицированная версия WarpcastDevMode без кнопки активации
+const WarpcastDevModeWithoutButton = ({ children }: { children: React.ReactNode }) => {
+  // Просто рендерим детей без кнопки активации
+  return <>{children}</>;
+};
+
 // Обертка для активации режима разработки для обхода проблем с инициализацией
 const DevModeActivator = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
@@ -85,9 +91,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <FarcasterProvider>
         {/* Убираем AuthProvider */}
         <GameProviderWrapper>
-          <WarpcastDevMode>
+          <WarpcastDevModeWithoutButton>
             {children}
-          </WarpcastDevMode>
+          </WarpcastDevModeWithoutButton>
         </GameProviderWrapper>
       </FarcasterProvider>
     </DevModeActivator>

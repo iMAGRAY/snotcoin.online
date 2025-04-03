@@ -6,6 +6,9 @@ export type PhaserType = typeof import('phaser');
 // Пропсы для игры
 export interface MergeGameProps {
   onClose: () => void;
+  gameOptions?: {
+    initialPause?: boolean;
+  };
 }
 
 // Интерфейс для шаров

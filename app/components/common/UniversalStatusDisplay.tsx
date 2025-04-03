@@ -57,6 +57,15 @@ const StatusItem: React.FC<StatusItemProps & { className?: string }> = React.mem
   ({ icon, label, value, tooltip, color = "text-white", className }) => {
     const Icon = typeof icon === "string" ? undefined : icon
     
+    // Добавляем логирование для отладки
+    React.useEffect(() => {
+      console.log(`StatusItem ${label}: ${value}`, { label, value });
+      // Если label === "Fill", логируем более подробно
+      if (label === "Fill") {
+        console.log(`Fill time details:`, { value });
+      }
+    }, [label, value]);
+    
     return (
       <motion.div
         className={cn(
@@ -172,8 +181,18 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
         {
           icon: Clock,
           label: "Fill",
-          value: formatTime(calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed)),
-          tooltip: t("fillTimeTooltip"),
+          value: (() => {
+            console.log("Calculating fill time with params:", {
+              containerSnot,
+              containerCapacity,
+              containerFillingSpeed,
+              fillingSpeedLevel
+            });
+            const fillTime = calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed);
+            console.log("Fill time calculated:", fillTime);
+            return formatTime(fillTime);
+          })(),
+          tooltip: t("timeToFillTooltip"),
         },
       ]
     }
