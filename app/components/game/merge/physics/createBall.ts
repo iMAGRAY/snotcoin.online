@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Ball } from '../types';
+import { Ball } from '../types/index';
 import { BALL_COLORS, BALL_DENSITY, BALL_FRICTION, BALL_RESTITUTION, SCALE, BASE_BALL_SIZE, BASE_GAME_WIDTH } from '../constants/gameConstants';
 
 // Минимальный размер шара для физики

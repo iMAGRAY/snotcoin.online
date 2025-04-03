@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { PhysicsWorldProps } from '../types';
+import { PhysicsWorldProps } from '../types/index';
 import { PLAYER_SIZE, PHYSICS_PLAYER_Y, FIXED_PLAYER_Y, SCALE, FOOTER_HEIGHT, FOOTER_HEIGHT_MOBILE, PHYSICAL_FLOOR_HEIGHT, BASE_GAME_WIDTH } from '../constants/gameConstants';
 import { toPhysics } from '../utils/coordinates';
 

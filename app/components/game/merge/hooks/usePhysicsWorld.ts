@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import * as planck from 'planck';
-import { PhysicsUserData } from '../types';
+import { PhysicsUserData } from '../types/index';
 import { hasUserDataProperty } from '../utils/ballUtils';
 import { 
   MAX_LEVEL, 

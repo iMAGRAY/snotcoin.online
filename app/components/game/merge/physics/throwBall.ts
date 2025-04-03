@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Ball, NextBall, TrajectoryRef } from '../types';
+import { Ball, NextBall, TrajectoryRef } from '../types/index';
 import { createBall } from './createBall';
 import { createNextBall } from './createNextBall';
 import { THROW_X_VARIATION, MAX_BALLS_COUNT, THROW_VELOCITY_Y } from '../constants/gameConstants';

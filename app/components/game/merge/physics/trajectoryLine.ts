@@ -1,4 +1,4 @@
-import { TrajectoryRef } from '../types';
+import { TrajectoryRef } from '../types/index';
 
 // Функция для создания пунктирной линии, показывающей траекторию
 export const createTrajectoryLine = (

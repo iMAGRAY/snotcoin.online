@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Ball, PhysicsUserData } from '../types';
+import { Ball, PhysicsUserData } from '../types/index';
 import { getBallPhysicsSize } from '../utils/ballUtils';
 import { MAX_LEVEL, MAX_BALLS_COUNT, SCALE } from '../constants/gameConstants';
 import { mergeBalls } from './mergeBalls';

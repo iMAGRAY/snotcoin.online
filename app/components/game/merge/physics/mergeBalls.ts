@@ -1,5 +1,5 @@
 import * as planck from 'planck';
-import { Ball } from '../types';
+import { Ball } from '../types/index';
 import { getBallSize } from '../utils/ballUtils';
 import { BALL_COLORS, MAX_LEVEL, SCALE } from '../constants/gameConstants';
 import { createBall } from './createBall';
