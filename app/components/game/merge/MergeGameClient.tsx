@@ -2,63 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import * as planck from 'planck';
-// Объявляем все интерфейсы здесь вместо импорта из './types'
-// Это исправит ошибки линтера
-
-// Интерфейс для шара
-interface Ball {
-  level: number;
-  body: planck.Body | null;
-  sprite: {
-    container: any | null;
-    circle: any | null;
-    text: any | null;
-    effectsContainer?: any | null;
-  };
-  specialType?: string;
-  createdAt: number;
-  isMerging?: boolean;
-  isMerged?: boolean;
-  markedForMerge?: boolean;
-  mergeTimer?: number;
-  markedForRemoval?: boolean;
-}
-
-// Интерфейс для свойств MergeGame
-interface MergeGameProps {
-  onClose: () => void;
-  gameOptions?: {
-    initialPause?: boolean;
-  };
-}
-
-// Тип для Phaser
-type PhaserType = any;
-
-// Интерфейс для следующего шара
-interface NextBall {
-  level: number;
-  specialType?: string | undefined;
-  // Добавляем свойство sprite, которое используется в коде
-  sprite?: {
-    container: any | null;
-    circle: any | null;
-    text: any | null;
-    outline?: any | null;
-    effectsContainer?: any | null;
-  };
-  createdAt?: number;
-}
-
-// Интерфейс для траектории
-interface TrajectoryRef {
-  graphics: any | null;
-  points: { x: number; y: number }[];
-  isVisible: boolean;
-  segments?: any[]; // Добавляем segments, которое используется в оригинальном типе
-  destroy?: () => void; // Добавляем destroy, которое используется в оригинальном типе
-}
-
+// Удаляем дублирующиеся интерфейсы и импортируем их из директории types
 import { usePhysicsWorld } from './hooks/usePhysicsWorld';
 import { useGameState } from './hooks/useGameState';
 import { createPhysicsWorld } from './physics/createPhysicsWorld';
@@ -98,12 +42,62 @@ import GameHeader from './components/GameHeader';
 import PauseMenu from './components/PauseMenu';
 import LoadingScreen from './components/LoadingScreen';
 import { useGameContext } from '../../../contexts/game/hooks/useGameContext';
+// Импортируем типы из файла типов
+import { Ball, NextBall, TrajectoryRef, MergeGameProps, PhaserType } from './types/index';
 
 // Константа для частоты проверки "зависших" шаров
 const STUCK_CHECK_INTERVAL = 30;
 
 // Уменьшаем отступы безопасности до нуля
 const safetyMargin = 0;
+
+// Функция для проверки, удалено ли тело - перемещаем в начало файла
+const isBodyDestroyed = (body: planck.Body): boolean => {
+  // Проверяем несколько признаков, указывающих на то, что тело было удалено
+  try {
+    // 1. Проверяем, активно ли тело
+    if (!body.isActive()) return true;
+    
+    // 2. Проверяем наличие фикстур
+    if (!body.getFixtureList()) return true;
+    
+    // 3. Проверяем, связано ли тело с миром
+    if (!body.getWorld()) return true;
+    
+    // Если все проверки прошли, тело не считается удаленным
+    return false;
+  } catch (e) {
+    // Если при доступе к телу возникла ошибка, считаем его удаленным
+    console.warn('Ошибка при проверке тела, считаем его удаленным:', e);
+    return true;
+  }
+};
+
+// Определяем дополнительные типы, расширяющие импортированные типы
+interface ExtendedBall extends Ball {
+  markedForRemoval?: boolean;
+  isMerging?: boolean;
+  isMerged?: boolean;
+  markedForMerge?: boolean;
+  mergeTimer?: number;
+}
+
+interface ExtendedNextBall extends NextBall {
+  body?: planck.Body; // Добавляем поле body, которое используется в некоторых местах кода
+  createdAt?: number;
+}
+
+// Определяем структуру данных, хранящихся в физических телах
+interface PhysicsUserData {
+  isBall?: boolean;
+  type?: string;
+  specialType?: string;
+  level?: number;
+  createdAt?: number;
+  shouldMerge?: boolean;
+  mergeWith?: planck.Body;
+  [key: string]: any; // Другие возможные поля
+}
 
 const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }) => {
   // Получаем состояние игры из контекста
@@ -114,9 +108,9 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
 
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameInstanceRef = useRef<any>(null);
-  const ballsRef = useRef<Ball[]>([]);
+  const ballsRef = useRef<ExtendedBall[]>([]);
   const nextBallLevelRef = useRef<number>(1);
-  const currentBallRef = useRef<NextBall | null>(null);
+  const currentBallRef = useRef<ExtendedNextBall | null>(null);
   const trajectoryLineRef = useRef<TrajectoryRef | null>(null);
   const frameCounterRef = useRef<number>(0);
   
@@ -124,7 +118,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   const stuckCheckCounterRef = useRef<number>(0);
   
   // Добавляем Map для отслеживания потенциально зависших шаров и их времени
-  const potentiallyStuckBallsRef = useRef<Map<Ball, number>>(new Map());
+  const potentiallyStuckBallsRef = useRef<Map<ExtendedBall, number>>(new Map());
   
   // Используем хуки для состояний с инициализацией паузы из gameOptions
   const {
@@ -736,7 +730,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     };
     
     // Функция для удаления одного шара
-    const removeBall = (ball: Ball) => {
+    const removeBall = (ball: ExtendedBall) => {
       if (!ball) {
         console.warn("Попытка удаления несуществующего шара");
         return;
@@ -852,7 +846,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     };
     
     // Функция для поиска нижних шаров
-    const findBottomBalls = (count: number): Ball[] => {
+    const findBottomBalls = (count: number): ExtendedBall[] => {
       if (!ballsRef.current.length) return [];
       
       // Создаем копию массива шаров и сортируем по Y-координате (самые нижние вначале)
@@ -1328,7 +1322,9 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
                   // проверяем совпадение по положению, если линия существует
                   if (trajectoryLineRef.current) {
                     // Пересоздаем линию траектории при изменении размера окна
-                    trajectoryLineRef.current.destroy();
+                    if (trajectoryLineRef.current.destroy) {
+                      trajectoryLineRef.current.destroy();
+                    }
                     
                     // Пересоздаем траекторию, если есть текущий шар
                     if (currentBallRef.current && currentBallRef.current.sprite) {
@@ -1546,7 +1542,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
       for (const ball of ballsRef.current) {
         if (ball && ball.body && worldRef.current) {
           try {
-            if (!ball.body.m_destroyed) {
+            if (!isBodyDestroyed(ball.body)) {
               ball.body.setUserData(null);
               worldRef.current.destroyBody(ball.body);
             }
@@ -1567,7 +1563,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     }
     
     // Уничтожаем пунктирную линию
-    if (trajectoryLineRef.current) {
+    if (trajectoryLineRef.current && trajectoryLineRef.current.destroy) {
       trajectoryLineRef.current.destroy();
       trajectoryLineRef.current = null;
     }
@@ -1647,7 +1643,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         }
         
         // Безопасное уничтожение пунктирной линии
-        if (trajectoryLineRef.current) {
+        if (trajectoryLineRef.current && trajectoryLineRef.current.destroy) {
           trajectoryLineRef.current.destroy();
           trajectoryLineRef.current = null;
         }
@@ -1689,7 +1685,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               });
               
               // Устанавливаем дополнительные данные для однозначной идентификации
-              const userData = currentBallRef.current.body.getUserData() || {};
+              const userData = currentBallRef.current.body.getUserData() as PhysicsUserData || {};
               userData.isBall = true;
               userData.type = 'ball';
               userData.specialType = 'Bull';
