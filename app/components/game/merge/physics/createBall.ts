@@ -169,8 +169,8 @@ export const createBall = (
         repeat: -1,
         ease: 'Linear'
       });
-    } else if (level >= 1 && level <= 6 || level === 12) {
-      // Используем изображения для шаров уровней от 1 до 6 и 12
+    } else if (level >= 1 && level <= 11 || level === 12) {
+      // Используем изображения для шаров уровней от 1 до 11 и 12
       // Загружаем изображение шара соответствующего уровня
       const ballTexture = `${level}`;
       

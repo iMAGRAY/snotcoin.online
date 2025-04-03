@@ -20,6 +20,10 @@ export const BALL_COLORS = [
   0xf2cc8f  // уровень 12 - золотой
 ];
 
+// Специальные шары
+export const BOMB_COLOR = 0x000000; // Черный для шара Bomb
+export const BULL_COLOR = 0xff0000; // Красный для шара Bull
+
 // Размеры и цвета
 export const PLAYER_SIZE = 25;
 export const PLAYER_COLOR = 0xbbeb25;

@@ -105,8 +105,8 @@ export const createNextBall = (
         // Добавляем в контейнер
         container.add([outline, ballSprite, text]);
       }
-    } else if (level >= 1 && level <= 6 || level === 12) {
-      // Для шаров уровней от 1 до 6 и 12 используем изображения
+    } else if (level >= 1 && level <= 11 || level === 12) {
+      // Для шаров уровней от 1 до 11 и 12 используем изображения
       const ballTexture = `${level}`;
       
       // Проверяем, существует ли такая текстура в кэше
