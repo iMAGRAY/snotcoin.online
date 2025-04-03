@@ -44,9 +44,21 @@ import {
 import GameHeader from './components/GameHeader';
 import PauseMenu from './components/PauseMenu';
 import LoadingScreen from './components/LoadingScreen';
+import FooterButtons from './components/FooterButtons';
 import { useGameContext } from '../../../contexts/game/hooks/useGameContext';
 // Импортируем типы из файла типов
-import { Ball, NextBall, TrajectoryRef, MergeGameProps, PhaserType } from './types/index';
+import { Ball, NextBall, TrajectoryRef, MergeGameProps, PhaserType, ExtendedBall, ExtendedNextBall, PhysicsUserData } from './types/index';
+import { generateColorTexture } from './utils/textureUtils';
+import { preloadScene } from './utils/sceneUtils';
+import { createTogglePauseHandler, createResumeGameHandler, createGameCloseHandler } from './handlers/gameHandlers';
+import { 
+  createBullBallHandler, 
+  createBombBallHandler, 
+  createImpulseJoyEffectHandler 
+} from './handlers/specialBallsHandlers';
+import { checkAndHandleStuckBalls } from './utils/stuckBallsUtils';
+import { removeBall as removeBallUtil, findBottomBalls as findBottomBallsUtil, removeMultipleBalls } from './utils/ballsUtils';
+import { setupSpecialBallsCollisions } from './physics/collisionHandlers';
 
 // Константа для частоты проверки "зависших" шаров
 const STUCK_CHECK_INTERVAL = 30;
@@ -75,32 +87,6 @@ const isBodyDestroyed = (body: planck.Body): boolean => {
     return true;
   }
 };
-
-// Определяем дополнительные типы, расширяющие импортированные типы
-interface ExtendedBall extends Ball {
-  markedForRemoval?: boolean;
-  isMerging?: boolean;
-  isMerged?: boolean;
-  markedForMerge?: boolean;
-  mergeTimer?: number;
-}
-
-interface ExtendedNextBall extends NextBall {
-  body?: planck.Body; // Добавляем поле body, которое используется в некоторых местах кода
-  createdAt?: number;
-}
-
-// Определяем структуру данных, хранящихся в физических телах
-interface PhysicsUserData {
-  isBall?: boolean;
-  type?: string;
-  specialType?: string;
-  level?: number;
-  createdAt?: number;
-  shouldMerge?: boolean;
-  mergeWith?: planck.Body;
-  [key: string]: any; // Другие возможные поля
-}
 
 const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }) => {
   // Получаем состояние игры из контекста
@@ -798,9 +784,6 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
     const checkStuckBalls = () => {
       if (!worldRef.current || !gameInstanceRef.current) return;
       
-      // Текущее время
-      const now = Date.now();
-      
       // Фильтруем массив шаров, оставляя только валидные
       // Используем более эффективный способ с обходом массива с конца
       for (let i = ballsRef.current.length - 1; i >= 0; i--) {
@@ -824,9 +807,16 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
           ballsRef.current.splice(i, 1);
           continue;
         }
-        
-        // Больше не проверяем и не удаляем "застрявшие" шары
       }
+      
+      // Проверяем зависшие шары с помощью утилиты
+      checkAndHandleStuckBalls(
+        ballsRef.current,
+        potentiallyStuckBallsRef.current,
+        STUCK_THRESHOLD_VELOCITY,
+        STUCK_TIME_MS,
+        removeBall
+      );
       
       // Проверяем, не слишком ли много шаров на игровом поле
       if (ballsRef.current.length > MAX_BALLS_COUNT * 0.9) {
@@ -835,368 +825,19 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
       }
     };
     
-    // Функция для удаления одного шара
+    // Функция для удаления одного шара - обертка вокруг утилиты
     const removeBall = (ball: ExtendedBall) => {
-      if (!ball) {
-        console.warn("Попытка удаления несуществующего шара");
-        return;
-      }
-      
-      console.log(`🔥 УДАЛЕНИЕ ШАРА: уровень ${ball.level}, тип ${ball.specialType || 'обычный'}`);
-      
-      // Принудительно фильтруем массив, чтобы сразу исключить шар из будущих обработок
-      ballsRef.current = ballsRef.current.filter(b => b !== ball);
-      
-      // 1. Сначала удаляем все визуальные компоненты шара НЕМЕДЛЕННО
-      if (ball.sprite) {
-        try {
-          // Для шаров с эффектами
-          if (ball.sprite.effectsContainer && !ball.sprite.effectsContainer.destroyed) {
-            console.log(`Удаляем контейнер эффектов шара уровня ${ball.level}`);
-            ball.sprite.effectsContainer.destroy();
-          }
-          
-          // Удаляем основной контейнер
-          if (ball.sprite.container && !ball.sprite.container.destroyed) {
-            console.log(`Удаляем визуальный контейнер шара уровня ${ball.level}`);
-            // Принудительно удаляем все дочерние элементы
-            if (ball.sprite.container.list && Array.isArray(ball.sprite.container.list)) {
-              ball.sprite.container.list.forEach((child: any) => {
-                if (child && !child.destroyed) {
-                  child.destroy();
-                }
-              });
-            }
-            ball.sprite.container.destroy();
-          }
-          
-          // Явно устанавливаем все спрайты в null
-          ball.sprite.container = null;
-          ball.sprite.circle = null;
-          ball.sprite.text = null;
-          if (ball.sprite.effectsContainer) ball.sprite.effectsContainer = null;
-        } catch (e) {
-          console.error(`Ошибка при удалении визуальных элементов шара уровня ${ball.level}:`, e);
-        }
-      }
-      
-      // 2. Затем удаляем физическое тело
-      if (ball.body && worldRef.current) {
-        try {
-          // Проверяем, активно ли еще тело
-          const isBodyActive = ball.body.isActive();
-          
-          // Очищаем пользовательские данные
-          ball.body.setUserData(null);
-          
-          // Останавливаем тело
-          ball.body.setLinearVelocity({ x: 0, y: 0 });
-          ball.body.setAngularVelocity(0);
-          
-          // Отключаем физику
-          ball.body.setActive(false);
-          ball.body.setAwake(false);
-          
-          // Удаляем все фикстуры
-          let fixture = ball.body.getFixtureList();
-          while (fixture) {
-            const nextFixture = fixture.getNext();
-            ball.body.destroyFixture(fixture);
-            fixture = nextFixture;
-          }
-          
-          // Удаляем тело из мира, если оно еще активно
-          if (isBodyActive) {
-            console.log(`Удаляем физическое тело шара уровня ${ball.level}`);
-            try {
-              worldRef.current.destroyBody(ball.body);
-            } catch (e) {
-              console.error(`Ошибка при удалении физического тела: ${e}`);
-            }
-          }
-          
-          // Явное освобождение памяти
-          ball.body = null as any;
-        } catch (e) {
-          console.error(`Ошибка при удалении физического тела шара уровня ${ball.level}:`, e);
-        }
-      }
-      
-      // 3. Очищаем все ссылки в объекте шара
-      Object.keys(ball).forEach(key => {
-        (ball as any)[key] = null;
-      });
-      
-      // 4. Ещё раз убеждаемся, что шар удалён из массива
-      const stillExists = ballsRef.current.some(b => b === ball);
-      if (stillExists) {
-        console.error(`⚠️ ШАР ВСЁ ЕЩЁ СУЩЕСТВУЕТ В МАССИВЕ! Принудительно очищаем...`);
-        ballsRef.current = ballsRef.current.filter(b => b !== ball);
-      }
-      
-      // 5. Проверяем и удаляем все "мёртвые" шары без физических тел
-      const invalidBalls = ballsRef.current.filter(b => !b || !b.body);
-      if (invalidBalls.length > 0) {
-        console.warn(`Найдено ${invalidBalls.length} шаров без физических тел, очищаем...`);
-        ballsRef.current = ballsRef.current.filter(b => b && b.body);
-      }
-      
-      // Пробуем явно вызвать сборщик мусора (если доступен)
-      if (typeof global !== 'undefined' && global.gc) {
-        try {
-          global.gc();
-        } catch (e) {
-          console.warn("Не удалось запустить сборщик мусора:", e);
-        }
-      }
+      removeBallUtil(ball, ballsRef, worldRef);
     };
     
-    // Функция для поиска нижних шаров
+    // Функция для поиска нижних шаров - обертка вокруг утилиты
     const findBottomBalls = (count: number): ExtendedBall[] => {
-      if (!ballsRef.current.length) return [];
-      
-      // Создаем копию массива шаров и сортируем по Y-координате (самые нижние вначале)
-      return [...ballsRef.current]
-        .filter(ball => ball && ball.body)
-        .sort((a, b) => {
-          if (!a.body || !b.body) return 0;
-          return b.body.getPosition().y - a.body.getPosition().y;
-        })
-        .slice(0, count);
+      return findBottomBallsUtil(ballsRef, count);
     };
     
-    // Функция для удаления нижних шаров
+    // Функция для удаления нижних шаров - обертка вокруг утилиты
     const removeBottomBalls = (balls: Ball[]) => {
-      if (!balls.length) return;
-      
-      for (const ball of balls) {
-        if (!ball) continue;
-        
-        // Используем функцию removeBall для единообразного удаления
-        removeBall(ball);
-        
-        // Удаляем шар из списка потенциально зависших
-        potentiallyStuckBallsRef.current.delete(ball);
-      }
-      
-      // Обновляем массив шаров - удаляем все удаленные шары
-      ballsRef.current = ballsRef.current.filter(ball => 
-        ball && balls.indexOf(ball) === -1
-      );
-      
-      // Запускаем явную очистку мусора
-      if (typeof global !== 'undefined' && global.gc) {
-        try {
-          global.gc();
-        } catch (e) {
-          console.warn("Не удалось запустить сборщик мусора:", e);
-        }
-      }
-    };
-    
-    // Функция для настройки обнаружения столкновений специальных шаров (Bull и Bomb)
-    const setupBullCollisionDetection = (world: planck.World) => {
-      // Создаем сет для отслеживания уже обработанных контактов
-      const processedContacts = new Set<string>();
-      
-      // Регистрируем обработчик начала контакта
-      world.on('begin-contact', (contact: planck.Contact) => {
-        try {
-          const fixtureA = contact.getFixtureA();
-          const fixtureB = contact.getFixtureB();
-          
-          if (!fixtureA || !fixtureB) return;
-          
-          const bodyA = fixtureA.getBody();
-          const bodyB = fixtureB.getBody();
-          
-          if (!bodyA || !bodyB) return;
-          
-          const userDataA = bodyA.getUserData() as PhysicsUserData || {};
-          const userDataB = bodyB.getUserData() as PhysicsUserData || {};
-          
-          // Проверяем, является ли один из объектов специальным шаром (Bull или Bomb)
-          const isBullA = userDataA.specialType === 'Bull';
-          const isBullB = userDataB.specialType === 'Bull';
-          const isBombA = userDataA.specialType === 'Bomb';
-          const isBombB = userDataB.specialType === 'Bomb';
-          
-          const isSpecialA = isBullA || isBombA;
-          const isSpecialB = isBullB || isBombB;
-          
-          // Если ни один из объектов не является специальным шаром, пропускаем
-          if (!isSpecialA && !isSpecialB) return;
-          
-          // Определяем, какой из объектов является специальным шаром
-          const specialBody = isSpecialA ? bodyA : bodyB;
-          const otherBody = isSpecialA ? bodyB : bodyA;
-          const specialData = isSpecialA ? userDataA : userDataB;
-          const otherData = isSpecialA ? userDataB : userDataA;
-          const specialType = specialData.specialType || 'unknown';
-          
-          // Создаем уникальный идентификатор контакта
-          const contactId = `${specialData.createdAt || Date.now()}-${otherData.createdAt || Date.now() + 1}`;
-          
-          // Проверяем, был ли этот контакт уже обработан
-          if (processedContacts.has(contactId)) {
-            return; // Пропускаем повторные контакты
-          }
-          
-          // Добавляем контакт в список обработанных
-          processedContacts.add(contactId);
-          
-          // Очищаем список обработанных контактов через 300 мс
-          setTimeout(() => {
-            processedContacts.delete(contactId);
-          }, 300);
-          
-          // Получаем данные для отладки
-          const specialLevel = specialData.level || 'неизвестен';
-          const otherLevel = otherData.level || 'неизвестен';
-          const otherType = otherData.type || 'неизвестен';
-          
-          console.log(`КОНТАКТ: ${specialType} (${specialLevel}) с объектом типа ${otherType}, уровень ${otherLevel}`);
-          
-          // Проверяем, является ли другой объект полом, стеной или другим объектом
-          const isFloor = otherBody === floorRef.current;
-          const isWall = otherBody === leftWallRef.current || 
-                          otherBody === rightWallRef.current ||
-                          otherBody === topWallRef.current;
-          
-          // Если специальный шар касается пола, удаляем его
-          if (isFloor) {
-            const specialBall = ballsRef.current.find(ball => 
-              ball && ball.body === specialBody && ball.specialType === specialType
-            );
-            
-            if (specialBall) {
-              console.log(`${specialType} касается пола, удаляем его`);
-              removeBall(specialBall);
-            }
-            return;
-          }
-          
-          // Если это стена, пропускаем обработку
-          if (isWall) {
-            console.log(`${specialType} столкнулся со стеной, пропускаем`);
-            return;
-          }
-          
-          // Проверяем, является ли другой объект шаром
-          const isBallByUserData = otherData && 
-                              (otherData.isBall === true || 
-                               otherData.type === 'ball' || 
-                               (typeof otherData.level === 'number' && otherData.level > 0));
-          
-          const existsInBallsArray = ballsRef.current.some(ball => ball && ball.body === otherBody);
-          const isNotSelfSpecial = otherData.specialType !== specialType;
-          
-          const isBallObject = (isBallByUserData || existsInBallsArray) && isNotSelfSpecial;
-          
-          if (!isBallObject) {
-            console.log('Объект не является шаром, пропускаем');
-            return;
-          }
-          
-          // Находим шар, который нужно обработать
-          const ballToProcess = ballsRef.current.find(ball => 
-            ball && ball.body === otherBody
-          );
-          
-          if (ballToProcess) {
-            console.log(`${specialType} столкнулся с шаром уровня ${ballToProcess.level}`);
-            
-            // Для Bull шара начисляем очки и удаляем другой шар
-            if (specialType === 'Bull') {
-              const ballLevel = ballToProcess.level || 0;
-              
-              // Начисляем очки
-              dispatch({
-                type: 'UPDATE_INVENTORY',
-                payload: {
-                  snotCoins: snotCoins + ballLevel
-                }
-              });
-              
-              // Удаляем обычный шар
-              removeBall(ballToProcess);
-            } 
-            // Для Bomb шара удаляем и его, и другой шар
-            else if (specialType === 'Bomb') {
-              // Удаляем обычный шар
-              removeBall(ballToProcess);
-              
-              // Находим и удаляем Bomb шар
-              const bombBall = ballsRef.current.find(ball => 
-                ball && ball.body === specialBody && ball.specialType === 'Bomb'
-              );
-              
-              if (bombBall) {
-                console.log('Удаляем шар Bomb после столкновения');
-                removeBall(bombBall);
-              }
-            }
-          } else {
-            console.log(`${specialType} столкнулся с объектом, но шар для обработки не найден`);
-            
-            // Дополнительная проверка: принудительно удаляем потерянное тело
-            if (otherData.level && otherBody && worldRef.current && !isBodyDestroyed(otherBody)) {
-              try {
-                worldRef.current.destroyBody(otherBody);
-                console.log(`Удалено "потерянное" физическое тело с уровнем ${otherData.level}`);
-              } catch (e) {
-                console.error(`Ошибка при удалении "потерянного" тела:`, e);
-              }
-            }
-            
-            // Если это Bomb, убираем и его тоже
-            if (specialType === 'Bomb') {
-              const bombBall = ballsRef.current.find(ball => 
-                ball && ball.body === specialBody && ball.specialType === 'Bomb'
-              );
-              
-              if (bombBall) {
-                console.log('Удаляем шар Bomb после контакта с потерянным объектом');
-                removeBall(bombBall);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка при обработке столкновения:', error);
-        }
-      });
-      
-      // Добавляем обработчик post-solve для корректной обработки контактов
-      world.on('post-solve', (contact: planck.Contact) => {
-        const fixtureA = contact.getFixtureA();
-        const fixtureB = contact.getFixtureB();
-        
-        if (!fixtureA || !fixtureB) return;
-        
-        const bodyA = fixtureA.getBody();
-        const bodyB = fixtureB.getBody();
-        
-        if (!bodyA || !bodyB) return;
-        
-        const userDataA = bodyA.getUserData() as PhysicsUserData || {};
-        const userDataB = bodyB.getUserData() as PhysicsUserData || {};
-        
-        // Проверяем, является ли один из объектов специальным шаром
-        const isSpecialA = userDataA.specialType === 'Bull' || userDataA.specialType === 'Bomb';
-        const isSpecialB = userDataB.specialType === 'Bull' || userDataB.specialType === 'Bomb';
-        
-        // Если один из объектов - специальный шар
-        if (isSpecialA || isSpecialB) {
-          // Устанавливаем контакт как активный
-          contact.setEnabled(true);
-          
-          // Если это Bull, уменьшаем трение для лучшего скольжения
-          const isBull = userDataA.specialType === 'Bull' || userDataB.specialType === 'Bull';
-          if (isBull) {
-            contact.setFriction(0.1);
-          }
-        }
-      });
+      removeMultipleBalls(balls, ballsRef, worldRef, potentiallyStuckBallsRef);
     };
     
     // Динамически импортируем Phaser только на клиенте
@@ -1292,7 +933,19 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         // Настраиваем обнаружение столкновений для Bull после создания физического мира
         // Это должно быть после создания физического мира через createPhysicsWorld
         if (worldRef.current) {
-          setupBullCollisionDetection(worldRef.current);
+          setupSpecialBallsCollisions(
+            worldRef.current,
+            ballsRef,
+            worldRef,
+            floorRef,
+            leftWallRef,
+            rightWallRef,
+            topWallRef,
+            removeBall,
+            dispatch,
+            snotCoins,
+            isBodyDestroyed
+          );
         }
         
         // Устанавливаем стиль для canvas, чтобы масштабирование работало корректно
@@ -1845,240 +1498,48 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   };
   
   // Функция для применения эффекта Joy ко всем шарам
-  const applyJoyEffect = () => {
-    // Проверяем, достаточно ли ресурсов для использования Joy
-    if (!canUseSpecialFeature('Joy')) {
-      const actualCost = (specialCosts.Joy / 100) * containerCapacity;
-      console.log(`Недостаточно SnotCoin для использования Joy. Требуется ${actualCost.toFixed(4)}`);
-      return; // Выходим, если ресурсов недостаточно
-    }
-    
-    // Списываем стоимость использования Joy
-    deductResourceCost('Joy');
-    
-    if (!worldRef.current) return;
-    
-    // Применяем случайный импульс к каждому шару
-    ballsRef.current.forEach(ball => {
-      if (ball && ball.body) {
-        // Генерируем случайный вектор силы
-        const forceX = (Math.random() * 2 - 1) * 0.5; // от -0.5 до 0.5
-        const forceY = (Math.random() * 2 - 1) * 0.5; // от -0.5 до 0.5
-        
-        // Применяем импульс к шару
-        ball.body.applyLinearImpulse(planck.Vec2(forceX, forceY), ball.body.getPosition());
-        ball.body.setAwake(true); // Убеждаемся, что шар активен
-      }
-    });
-  };
+  const applyJoyEffect = createImpulseJoyEffectHandler(
+    canUseSpecialFeature,
+    deductResourceCost,
+    ballsRef,
+    worldRef,
+    containerCapacity,
+    specialCosts
+  );
   
   // Функция для создания специального шара типа "Bull"
-  const handleBullBall = () => {
-    console.log('handleBullBall вызван, проверяем условия...');
-    // Проверяем, можем ли мы использовать эту возможность (хватает ли ресурсов)
-    if (canUseSpecialFeature('Bull') && !bullUsed) {
-      console.log('Условия для Bull выполнены, списываем стоимость и создаем шар Bull');
-      // Списываем стоимость
-      deductResourceCost('Bull');
-      // Меняем тип шара на Bull
-      changeSpecialBall('Bull');
-      // Устанавливаем специальный тип шара
-      setSpecialBallType('Bull');
-      
-      // Добавим проверку и логирование для текущего шара
-      if (currentBallRef.current) {
-        console.log('Шар Bull создан и готов к броску:', {
-          специальныйТип: currentBallRef.current.specialType,
-          уровень: currentBallRef.current.level
-        });
-      } else {
-        console.error('Ошибка: currentBallRef.current is null после создания шара Bull');
-      }
-    } else if (bullUsed) {
-      console.log('Bull уже использован, показываем уведомление о перезарядке');
-      // Показываем уведомление, что Bull уже использован
-      if (gameInstanceRef.current && gameInstanceRef.current.scene && gameInstanceRef.current.scene.scenes[0]) {
-        const scene = gameInstanceRef.current.scene.scenes[0];
-        
-        // Добавляем текст с предупреждением
-        const rechargeText = scene.add.text(
-          scene.cameras.main.width / 2,
-          scene.cameras.main.height / 2,
-          'Перезарядите bull',
-          { 
-            fontFamily: 'Arial', 
-            fontSize: '24px', 
-            color: '#ff0000',
-            stroke: '#000000',
-            strokeThickness: 4,
-            align: 'center'
-          }
-        ).setOrigin(0.5);
-        
-        // Анимируем исчезновение текста
-        scene.tweens.add({
-          targets: rechargeText,
-          alpha: 0,
-          y: scene.cameras.main.height / 2 - 50,
-          duration: 1000,
-          ease: 'Power2',
-          onComplete: () => {
-            rechargeText.destroy();
-          }
-        });
-      }
-    }
-  };
+  const handleBullBall = createBullBallHandler(
+    canUseSpecialFeature,
+    deductResourceCost,
+    setBullUsed,
+    setSpecialBallType,
+    currentBallRef,
+    dispatch
+  );
   
   // Функция для создания специального шара типа "Bomb"
-  const handleBombBall = () => {
-    console.log('handleBombBall вызван, проверяем условия...');
-    // Проверяем, можем ли мы использовать эту возможность (хватает ли ресурсов)
-    if (canUseSpecialFeature('Bomb')) {
-      console.log('Условия для Bomb выполнены, списываем стоимость и создаем шар Bomb');
-      // Списываем стоимость
-      deductResourceCost('Bomb');
-      // Меняем тип шара на Bomb
-      changeSpecialBall('Bomb');
-      // Устанавливаем специальный тип шара
-      setSpecialBallType('Bomb');
-      
-      // Добавим проверку и логирование для текущего шара
-      if (currentBallRef.current) {
-        console.log('Шар Bomb создан и готов к броску:', {
-          специальныйТип: currentBallRef.current.specialType,
-          уровень: currentBallRef.current.level
-        });
-      } else {
-        console.error('Ошибка: currentBallRef.current is null после создания шара Bomb');
-      }
-    }
-  };
-  
-  // Компонент кнопок для футера
-  const FooterButtons = ({
-    onBullClick,
-    onBombClick,
-    onJoyClick
-  }: {
-    onBullClick: () => void;
-    onBombClick: () => void;
-    onJoyClick: () => void;
-  }) => {
-    // Рассчитываем стоимость для каждой способности
-    const bullCost = (specialCosts.Bull / 100) * containerCapacity;
-    const bombCost = (specialCosts.Bomb / 100) * containerCapacity;
-    const joyCost = (specialCosts.Joy / 100) * containerCapacity;
-    
-    // Проверяем, достаточно ли ресурсов для каждой способности
-    const canUseBull = snotCoins >= bullCost && !bullUsed;
-    const canUseBomb = snotCoins >= bombCost;
-    const canUseJoy = snotCoins >= joyCost;
-    
-    return (
-      <div className="absolute bottom-0 left-0 right-0 flex justify-center items-center space-x-4 p-2 bg-black/30 backdrop-blur-sm">
-        {/* Кнопка Bull */}
-        <button
-          onClick={onBullClick}
-          disabled={!canUseBull || bullUsed}
-          className={`relative flex flex-col items-center justify-center px-4 py-2 rounded-lg 
-            ${canUseBull ? 'bg-red-700 hover:bg-red-600' : 'bg-red-900 opacity-50'} 
-            transition-all duration-300`}
-        >
-          <div className="text-xs text-white font-bold">Bull</div>
-          <div className="text-[10px] text-yellow-300">{formatSnotValue(bullCost, 1)} SC</div>
-          {bullUsed && <div className="absolute inset-0 bg-gray-800/70 flex items-center justify-center rounded-lg">
-            <div className="text-xs text-white font-bold">Перезарядка</div>
-          </div>}
-        </button>
-        
-        {/* Кнопка Bomb */}
-        <button
-          onClick={onBombClick}
-          disabled={!canUseBomb}
-          className={`relative flex flex-col items-center justify-center px-4 py-2 rounded-lg 
-            ${canUseBomb ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-900 opacity-50'} 
-            transition-all duration-300`}
-        >
-          <div className="text-xs text-white font-bold">Bomb</div>
-          <div className="text-[10px] text-yellow-300">{formatSnotValue(bombCost, 1)} SC</div>
-        </button>
-        
-        {/* Кнопка Joy */}
-        <button
-          onClick={onJoyClick}
-          disabled={!canUseJoy}
-          className={`relative flex flex-col items-center justify-center px-4 py-2 rounded-lg 
-            ${canUseJoy ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-900 opacity-50'} 
-            transition-all duration-300`}
-        >
-          <div className="text-xs text-white font-bold">Joy</div>
-          <div className="text-[10px] text-yellow-300">{formatSnotValue(joyCost, 1)} SC</div>
-        </button>
-      </div>
-    );
-  };
+  const handleBombBall = createBombBallHandler(
+    canUseSpecialFeature,
+    deductResourceCost,
+    setSpecialBallType,
+    currentBallRef,
+    dispatch
+  );
   
   // Заменим использование togglePause новой функцией, которая также устанавливает флаг userPausedGame
-  const handleTogglePause = () => {
-    const newPauseState = !isPaused;
-    if (newPauseState) {
-      // Устанавливаем флаг пользовательской паузы только при включении паузы
-      setUserPausedGame(true);
-    }
-    // Вызываем оригинальную функцию
-    togglePause();
-  };
+  const handleTogglePause = createTogglePauseHandler(isPaused, setUserPausedGame, togglePause);
   
   // Также модифицируем resumeGame, чтобы сбрасывать флаг пользовательской паузы
-  const handleResumeGame = () => {
-    setUserPausedGame(false);
-    resumeGame();
-  };
+  const handleResumeGame = createResumeGameHandler(setUserPausedGame, resumeGame);
   
   // Модифицируем обработчик закрытия игры, чтобы при выходе переходить на вкладку Merge
-  const handleGameClose = () => {
-    // Логируем закрытие игры для отладки
-    console.log("Закрытие игры MergeGameClient");
-    
-    // Сначала очищаем все ресурсы
-    cleanupResources();
-    
-    // Делаем паузу, чтобы убедиться, что игра остановлена
-    setIsPaused(true);
-    
-    // Явно уничтожаем экземпляр игры Phaser
-    if (gameInstanceRef.current) {
-      try {
-        gameInstanceRef.current.destroy(true);
-        gameInstanceRef.current = null;
-      } catch (error) {
-        console.error('Ошибка при уничтожении Phaser игры:', error);
-      }
-    }
-    
-    // Устанавливаем активную вкладку "merge" при выходе из игры
-    try {
-      dispatch({
-        type: 'SET_ACTIVE_TAB',
-        payload: 'merge'
-      });
-      console.log("Успешно установлена активная вкладка 'merge'");
-    } catch (error) {
-      console.error("Ошибка при установке активной вкладки:", error);
-    }
-    
-    // Небольшая задержка перед закрытием для завершения очистки ресурсов
-    setTimeout(() => {
-      // Вызываем обработчик onClose из props
-      if (typeof onClose === 'function') {
-        console.log("Вызываем onClose коллбэк");
-        onClose();
-      } else {
-        console.error("onClose не является функцией:", onClose);
-      }
-    }, 50);
-  };
+  const handleGameClose = createGameCloseHandler(
+    cleanupResources, 
+    setIsPaused, 
+    gameInstanceRef, 
+    dispatch, 
+    onClose
+  );
   
   // Функция для предзагрузки ресурсов игры
   const preloadScene = (scene: any) => {
@@ -2120,67 +1581,6 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
       });
     } catch (error) {
       console.error('Ошибка в preloadScene:', error);
-    }
-  };
-
-  // Функция для генерации текстуры-заглушки при ошибке загрузки
-  const generateColorTexture = (scene: any, key: number | string) => {
-    try {
-      const size = 128; // Размер текстуры
-      const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-      let color = 0xffffff; // Цвет по умолчанию - белый
-      let textureKey = "fallback";
-      
-      if (typeof key === 'string') {
-        // Для строковых ключей
-        textureKey = key;
-        if (key === 'bull') {
-          color = BULL_COLOR; // Используем константу для Bull
-        } else if (key === 'bomb') {
-          color = BOMB_COLOR; // Используем константу для Bomb
-        } else if (key === 'particle') {
-          color = 0xffff00; // Желтый для частиц
-        }
-      } else if (typeof key === 'number') {
-        // Для числовых ключей
-        textureKey = key.toString();
-        
-        // Проверяем, что массив цветов существует и не пуст
-        if (BALL_COLORS && BALL_COLORS.length > 0) {
-          // Определяем индекс цвета, гарантируя, что он находится в пределах массива
-          let index = 0; // По умолчанию используем первый цвет
-          
-          // Безопасно определяем значение уровня
-          const safeLevel: number = key || 1;
-          
-          // Определяем индекс с защитой от выхода за границы массива
-          if (safeLevel > 0 && safeLevel <= BALL_COLORS.length) {
-            index = safeLevel - 1;
-          } else if (safeLevel > BALL_COLORS.length) {
-            index = BALL_COLORS.length - 1;
-          }
-          
-          // Устанавливаем цвет
-          color = BALL_COLORS[index];
-        }
-      }
-      
-      // Создаем круглую текстуру с нужным цветом
-      graphics.fillStyle(color, 1);
-      graphics.fillCircle(size / 2, size / 2, size / 2);
-      
-      // Для числовых ключей добавляем контур
-      if (typeof key === 'number') {
-        graphics.lineStyle(2, 0xffffff, 1);
-        graphics.strokeCircle(size / 2, size / 2, size / 2 - 1);
-      }
-      
-      // Создаем текстуру из графики
-      graphics.generateTexture(textureKey, size, size);
-      
-      console.log(`Создана fallback текстура для: ${key}`);
-    } catch (error) {
-      console.error('Ошибка при создании fallback текстуры:', error);
     }
   };
   
@@ -2244,6 +1644,10 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               onBullClick={handleBullBall}
               onBombClick={handleBombBall}
               onJoyClick={applyJoyEffect}
+              specialCosts={specialCosts}
+              containerCapacity={containerCapacity}
+              snotCoins={snotCoins}
+              bullUsed={bullUsed}
             />
           </div>
         </div>

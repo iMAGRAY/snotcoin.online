@@ -27,6 +27,15 @@ export interface Ball {
   specialType?: string; // Тип специального шара (Bull, Bomb и т.д.)
 }
 
+// Расширенный интерфейс для шаров с дополнительными свойствами для игровой логики
+export interface ExtendedBall extends Ball {
+  markedForRemoval?: boolean;
+  isMerging?: boolean;
+  isMerged?: boolean;
+  markedForMerge?: boolean;
+  mergeTimer?: number;
+}
+
 // Интерфейс для шара для броска (без физики)
 export interface NextBall {
   sprite: {
@@ -37,6 +46,12 @@ export interface NextBall {
   };
   level: number;
   specialType?: string | undefined; // Тип специального шара (Bull, Bomb и т.д.)
+}
+
+// Расширенный интерфейс для следующего шара
+export interface ExtendedNextBall extends NextBall {
+  body?: planck.Body; // Добавляем поле body, которое используется в некоторых местах кода
+  createdAt?: number;
 }
 
 // Пропсы для компонентов физики
@@ -80,4 +95,9 @@ export interface PhysicsUserData {
   isPlayer?: boolean;
   shouldMerge?: boolean;
   mergeWith?: planck.Body;
+  isBall?: boolean;
+  type?: string;
+  specialType?: string;
+  createdAt?: number;
+  [key: string]: any; // Другие возможные поля
 } 
