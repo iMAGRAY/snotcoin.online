@@ -3,12 +3,18 @@ import { World, Box, Vec2, Circle, Body } from 'planck';
 import { ExtendedBall } from '../types';
 import { BALL_COLORS, BALL_DENSITY, BALL_FRICTION, BALL_RESTITUTION, SCALE, BASE_BALL_SIZE, BASE_GAME_WIDTH } from '../constants/gameConstants';
 import { Scene } from 'phaser';
+import { getBallSize as getBallSizeUtil, getBallPhysicsSize as getBallPhysicsSizeUtil, hasUserDataProperty as hasUserDataPropertyUtil } from '../utils/ballUtils';
 
 // Минимальный размер шара для физики
 const MIN_BALL_RADIUS = 0.3;
 
 // Базовая скорость движения шаров
 const BASE_VELOCITY = 0.4;
+
+// Реэкспортируем функции для обратной совместимости
+export const getBallSize = getBallSizeUtil;
+export const getBallPhysicsSize = getBallPhysicsSizeUtil;
+export const hasUserDataProperty = hasUserDataPropertyUtil;
 
 // Определяем интерфейс для шара в этом файле
 export interface LocalBall {
@@ -31,51 +37,6 @@ export interface LocalBall {
     createdAt: number;
   };
 }
-
-// Функция для расчета размера шара в зависимости от уровня и размера игры
-export const getBallSize = (level: number, gameWidth?: number): number => {
-  // Прогрессивное увеличение размера: шары растут быстрее с увеличением уровня
-  // Начальный размер: 15px для уровня 1
-  // Максимальный размер: ~90px для уровня 12, чтобы в игру помещалось не более двух шаров 12 уровня
-  // Применяем квадратичную прогрессию для более равномерного визуального роста
-  const baseSize = BASE_BALL_SIZE + 4 * (level - 1) + 1.5 * Math.pow(level - 1, 1.5);
-  
-  // Если передан размер игры, масштабируем шар в зависимости от ширины игрового поля
-  if (gameWidth && gameWidth !== BASE_GAME_WIDTH) {
-    // Улучшенный алгоритм масштабирования с пропорциональной адаптацией
-    const scaleFactor = gameWidth / BASE_GAME_WIDTH;
-    
-    // Всегда увеличиваем пропорционально размеру игрового поля
-    return baseSize * scaleFactor;
-  }
-  
-  return baseSize;
-};
-
-// Функция для расчета физического размера шара (в единицах физики)
-export const getBallPhysicsSize = (level: number, gameWidth?: number, specialType?: string): number => {
-  // Получаем базовый размер шара
-  const visualSize = getBallSize(level, gameWidth);
-  
-  // Разные множители для разных типов шаров (для визуального отображения)
-  let visualMultiplier = 1.8; // для обычного шара
-  
-  if (specialType === 'Bull') {
-    visualMultiplier = 2.2; // для Bull шара
-  } else if (specialType === 'Bomb') {
-    visualMultiplier = 2.0; // для Bomb шара
-  }
-  
-  // Коэффициент соответствия физического размера визуальному размеру
-  // Уменьшаем с 0.55 до 0.47, чтобы коллизии точнее соответствовали видимым границам
-  const physicsMultiplier = 0.47;
-  
-  // Рассчитываем физический размер на основе визуального
-  const physicalSize = (visualSize * visualMultiplier) * physicsMultiplier / SCALE;
-  
-  // Убеждаемся, что физический размер не меньше минимально допустимого
-  return Math.max(physicalSize, MIN_BALL_RADIUS);
-};
 
 // Функция для создания шара с правильными физическими свойствами и спрайтом
 export const createBall = (
@@ -165,7 +126,7 @@ export const createBall = (
     
     // Проверяем, если это специальный шар Bull
     if (specialType === 'Bull') {
-      // Используем изображение Bull.webp вместо обычного шара
+      // Используем изображение bull.webp вместо обычного шара
       // Предзагружаем текстуру, если ее еще нет в кэше
       if (!scene.textures.exists('bull-ball')) {
         scene.textures.addBase64('bull-ball', '/images/balls/bull.png');
@@ -621,12 +582,6 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
       // ... existing code ...
     }
   } catch (error) {
-    // Ошибка при создании визуального шара
     console.error('Ошибка при создании визуального шара:', error);
   }
-};
-
-// Проверка наличия свойства в объекте userData
-export const hasUserDataProperty = (userData: any, property: string): boolean => {
-  return userData && userData[property] !== undefined;
 }; 

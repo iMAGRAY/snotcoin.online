@@ -5,37 +5,216 @@ import * as planck from 'planck';
 import { isBodyDestroyed } from '../utils/bodyUtils';
 import { checkAndMergeBalls, hasBallsMarkedForMerge } from '../physics/checkAndMergeBalls';
 import { checkAndHandleStuckBalls } from '../utils/stuckBallsUtils';
-import { removeBall } from '../utils/ballsUtils';
+import { removeBall } from '../utils/ballUtils';
 import { ExtendedBall } from '../types';
 import { TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS, CHECK_MERGE_FREQUENCY, SCALE, STUCK_THRESHOLD_VELOCITY, STUCK_TIME_MS } from '../constants/gameConstants';
 
+// Функция для получения цвета шара по его уровню
+const getBallColor = (level: number): string => {
+  const colors = {
+    1: '#ff0000',  // Красный
+    2: '#00ff00',  // Зеленый
+    3: '#0000ff',  // Синий
+    4: '#ffff00',  // Желтый
+    5: '#ff00ff',  // Фуксия
+    6: '#00ffff',  // Голубой
+    7: '#ff8c00',  // Темно-оранжевый
+    8: '#8a2be2',  // Сине-фиолетовый
+    9: '#32cd32',  // Лайм
+    10: '#fa8072',  // Лососевый
+    11: '#ffd700',  // Золотой
+    12: '#00fa9a',  // Весенне-зеленый
+  };
+  
+  // Если уровень выходит за пределы диапазона, возвращаем случайный цвет
+  if (level < 1 || level > 12) {
+    const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
+    return randomColor;
+  }
+  
+  return colors[level as keyof typeof colors];
+};
+
 interface GamePhysicsProps {
-  isPaused: boolean;
+  isPaused?: boolean;
   worldRef: React.MutableRefObject<planck.World | null>;
   ballsRef: React.MutableRefObject<ExtendedBall[]>;
-  gameInstanceRef: React.MutableRefObject<any>;
-  potentiallyStuckBallsRef: React.MutableRefObject<Map<ExtendedBall, number>>;
+  gameInstanceRef?: React.MutableRefObject<any>;
+  potentiallyStuckBallsRef?: React.MutableRefObject<Map<ExtendedBall, number>>;
+  playerBodyRef?: React.MutableRefObject<planck.Body | null>;
+  leftWallRef?: React.MutableRefObject<planck.Body | null>;
+  rightWallRef?: React.MutableRefObject<planck.Body | null>;
+  topWallRef?: React.MutableRefObject<planck.Body | null>;
+  floorRef?: React.MutableRefObject<planck.Body | null>;
+  debugCanvasRef?: React.MutableRefObject<HTMLCanvasElement | null>;
+  pixelsPerMeter: number;
 }
 
-const STUCK_CHECK_INTERVAL = 30;
+const STUCK_CHECK_INTERVAL = 60; // Проверка зависших шаров каждую секунду при 60 FPS
 
 const GamePhysics: React.FC<GamePhysicsProps> = ({
   isPaused,
   worldRef,
   ballsRef,
   gameInstanceRef,
-  potentiallyStuckBallsRef
+  potentiallyStuckBallsRef,
+  playerBodyRef,
+  leftWallRef,
+  rightWallRef,
+  topWallRef,
+  floorRef,
+  debugCanvasRef,
+  pixelsPerMeter
 }) => {
   const frameCounterRef = useRef<number>(0);
   const stuckCheckCounterRef = useRef<number>(0);
-  // Референс для хранения предыдущих позиций шаров для плавной интерполяции
-  const prevPositionsRef = useRef<Map<string, {x: number, y: number, angle: number}>>(new Map());
-  // Скорость интерполяции (меньшее значение = более плавное движение)
-  const INTERPOLATION_SPEED = 0.7;
+  const prevPositionsRef = useRef<Map<string, { x: number, y: number, angle: number }>>(new Map());
+  
+  // Количество кадров между проверками слияния
+  const CHECK_MERGE_FREQUENCY = 60; // ~1 секунда при 60 FPS
+  
+  // Константы для физического движка
+  const TIME_STEP = 1/60;
+  const VELOCITY_ITERATIONS = 8;
+  const POSITION_ITERATIONS = 3;
+  const STUCK_CHECK_INTERVAL = 60; // Проверка зависших шаров каждую секунду при 60 FPS
+  
+  // Константа для масштабирования физических координат в пиксели
+  const SCALE = pixelsPerMeter; // Используем переданное значение
+  
+  // Эффект для обновления физики на каждом кадре
+  useEffect(() => {
+    let animationFrameId: number | null = null;
+    
+    // Игнорируем все для каждого фрейма в дебаг режиме
+    if (debugCanvasRef && debugCanvasRef.current) {
+      // Функция для рендеринга физического мира
+      const renderPhysics = () => {
+        const canvas = debugCanvasRef?.current;
+        if (!canvas || !worldRef.current) return;
+        
+        // Очистка холста
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        ctx.clearRect(0, 0, width, height);
+        
+        // Устанавливаем масштаб и перевод координат
+        ctx.save();
+        ctx.scale(pixelsPerMeter, pixelsPerMeter); // Масштабирование для физического мира
+        
+        // Рисуем тела
+        if (worldRef.current) {
+          let body = worldRef.current.getBodyList();
+          while (body) {
+            const bodyPos = body.getPosition();
+            
+            // Рисуем контур тела
+            let currentFixture = body.getFixtureList();
+            while (currentFixture) {
+              const shape = currentFixture.getShape();
+              const type = shape.getType();
+              
+              // Определяем тип тела и выбираем цвет
+              let color = '#ffffff'; // По умолчанию белый цвет
+              
+              // Проверяем, это основной игрок
+              if (playerBodyRef?.current && body === playerBodyRef.current) {
+                color = '#00ff00'; // Зеленый цвет для игрока
+              } 
+              // Проверяем, это стена
+              else if (
+                (leftWallRef?.current && body === leftWallRef.current) || 
+                (rightWallRef?.current && body === rightWallRef.current) || 
+                (topWallRef?.current && body === topWallRef.current)
+              ) {
+                color = '#0000ff'; // Синий цвет для стен
+              }
+              // Проверяем, это пол
+              else if (floorRef?.current && body === floorRef.current) {
+                color = '#ff0000'; // Красный цвет для пола
+              }
+              // Проверяем, это шар
+              else {
+                const userData = body.getUserData();
+                if (userData && (userData as any).ballId !== undefined) {
+                  // Это шар, определяем его цвет по уровню
+                  const level = (userData as any).level || 1;
+                  color = getBallColor(level);
+                  
+                  // Если шар потенциально застрял, делаем его более заметным
+                  const stuckBalls = potentiallyStuckBallsRef?.current;
+                  if (stuckBalls && stuckBalls.has(userData as ExtendedBall)) {
+                    color = '#ff00ff'; // Яркий цвет для застрявших шаров
+                  }
+                }
+              }
+              
+              ctx.fillStyle = color;
+              ctx.strokeStyle = color;
+              
+              if (type === 'circle') {
+                // Безопасный доступ к радиусу круга
+                const radius = (shape as any).getRadius ? (shape as any).getRadius() : 1;
+                
+                // Рисуем круг
+                ctx.beginPath();
+                ctx.arc(bodyPos.x, bodyPos.y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+              } else if (type === 'polygon' || type === 'edge') {
+                // Безопасный доступ к вершинам полигона
+                const vertices = (shape as any).getVertices ? (shape as any).getVertices() : [];
+                if (vertices && vertices.length > 0) {
+                  ctx.beginPath();
+                  const firstVert = body.getWorldPoint(vertices[0]);
+                  ctx.moveTo(firstVert.x, firstVert.y);
+                  
+                  for (let i = 1; i < vertices.length; i++) {
+                    const vert = body.getWorldPoint(vertices[i]);
+                    ctx.lineTo(vert.x, vert.y);
+                  }
+                  
+                  ctx.closePath();
+                  ctx.stroke();
+                }
+              }
+              
+              currentFixture = currentFixture.getNext();
+            }
+            
+            body = body.getNext();
+          }
+        }
+        
+        ctx.restore();
+        
+        // Получаем состояние обработки игры
+        const gameInstance = gameInstanceRef?.current;
+        const isGameRunning = !isPaused || (gameInstance && gameInstance.scene?.scenes[0]?.scene?.isActive() === true);
+        
+        // Запускаем следующий кадр только если игра активна
+        if (isGameRunning) {
+          animationFrameId = requestAnimationFrame(renderPhysics);
+        }
+      };
+      
+      // Инициализация масштаба и запуск рендеринга
+      renderPhysics();
+    }
+    
+    return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [worldRef, ballsRef, isPaused, playerBodyRef, leftWallRef, rightWallRef, topWallRef, floorRef, debugCanvasRef, gameInstanceRef, potentiallyStuckBallsRef, pixelsPerMeter]);
 
   // Функция для проверки и обработки зависших шаров
   const checkStuckBalls = () => {
-    if (!worldRef.current || !gameInstanceRef.current) return;
+    if (!worldRef.current || !gameInstanceRef?.current) return;
     
     // Фильтруем массив шаров, оставляя только валидные
     // Используем более эффективный способ с обходом массива с конца
@@ -63,229 +242,22 @@ const GamePhysics: React.FC<GamePhysicsProps> = ({
     }
     
     // Проверяем зависшие шары с помощью утилиты
-    checkAndHandleStuckBalls(
-      ballsRef.current,
-      potentiallyStuckBallsRef.current,
-      STUCK_THRESHOLD_VELOCITY,
-      STUCK_TIME_MS,
-      removeBallHandler
-    );
+    const stuckBallsMap = potentiallyStuckBallsRef?.current;
+    if (stuckBallsMap) {
+      checkAndHandleStuckBalls(
+        ballsRef.current,
+        stuckBallsMap,
+        STUCK_THRESHOLD_VELOCITY,
+        STUCK_TIME_MS,
+        removeBallHandler
+      );
+    }
   };
   
   // Функция для удаления одного шара
   const removeBallHandler = (ball: ExtendedBall) => {
     removeBall(ball, ballsRef, worldRef);
   };
-
-  // Эффект для обновления физики на каждом кадре
-  useEffect(() => {
-    // Функция обновления физики на каждом кадре
-    const updatePhysics = () => {
-      try {
-        if (isPaused || !worldRef.current) return;
-        
-        // Инкрементируем счетчик кадров
-        frameCounterRef.current++;
-        
-        // Увеличиваем счетчик для проверки зависших шаров
-        stuckCheckCounterRef.current++;
-        
-        // Проверяем на потенциально "зависшие" шары каждые N кадров
-        if (stuckCheckCounterRef.current >= STUCK_CHECK_INTERVAL) {
-          stuckCheckCounterRef.current = 0;
-          checkStuckBalls();
-        }
-        
-        // ВАЖНО: Проверяем валидность контактов перед обновлением физики
-        try {
-          // Получаем первый контакт в мире
-          let contact = worldRef.current.getContactList();
-          
-          // Перебираем все контакты, проверяя их на валидность
-          while (contact) {
-            const nextContact = contact.getNext(); // Сохраняем ссылку на следующий контакт
-            
-            // Получаем фикстуры и тела для проверки
-            const fixtureA = contact.getFixtureA();
-            const fixtureB = contact.getFixtureB();
-            
-            // Проверка на null или разрушенные тела
-            if (!fixtureA || !fixtureB) {
-              // Пропускаем невалидный контакт
-              contact = nextContact;
-              continue;
-            }
-            
-            const bodyA = fixtureA.getBody();
-            const bodyB = fixtureB.getBody();
-            
-            if (!bodyA || !bodyB || !bodyA.isActive() || !bodyB.isActive()) {
-              // Если одно из тел не существует или неактивно, уничтожаем контакт
-              // Для этого отключаем его, чтобы физический движок его пропустил
-              contact.setEnabled(false);
-            }
-            
-            // Переходим к следующему контакту
-            contact = nextContact;
-          }
-        } catch (contactError) {
-          // Пытаемся сбросить все контакты для предотвращения дальнейших проблем
-          worldRef.current.clearForces();
-        }
-        
-        // Теперь выполняем обновление физического мира с проверкой на ошибки
-        try {
-          worldRef.current.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
-        } catch (stepError) {
-          // В случае ошибки пытаемся восстановить состояние мира
-          // Сначала пробуем полностью очистить все контакты
-          worldRef.current.clearForces();
-          
-          // Попытка перезапустить мир с минимальным шагом
-          try {
-            worldRef.current.step(0.001, 1, 1);
-          } catch (recoverError) {
-            // Не удалось восстановить мир
-          }
-        }
-        
-        // Кэшируем текущие позиции всех шаров перед обновлением визуальных позиций
-        const currentFramePositions = new Map<string, {x: number, y: number, angle: number}>();
-        
-        // Обновляем визуальное положение всех шаров
-        for (let i = 0; i < ballsRef.current.length; i++) {
-          const ball = ballsRef.current[i];
-          
-          // Пропускаем недействительные шары или шары без тела
-          if (!ball || !ball.body || isBodyDestroyed(ball.body)) {
-            continue;
-          }
-          
-          // Получаем физические данные шара
-          const pos = ball.body.getPosition();
-          const userData = ball.body.getUserData() as any;
-          const ballId = userData?.createdAt || `ball_${i}`;
-          const angle = ball.body.getAngle();
-          
-          // Создаем уникальный идентификатор для шара
-          const ballKey = `${ballId}_${ball.level}`;
-          
-          // Запоминаем текущую физическую позицию
-          currentFramePositions.set(ballKey, {
-            x: pos.x * SCALE, 
-            y: pos.y * SCALE,
-            angle: angle * (180 / Math.PI)
-          });
-          
-          // Обновляем визуальное представление шара с плавной интерполяцией
-          if (ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
-            // Получаем текущие координаты спрайта
-            const currentX = ball.sprite.container.x;
-            const currentY = ball.sprite.container.y;
-            
-            // Получаем предыдущую позицию или используем текущую, если предыдущей нет
-            const prevPos = prevPositionsRef.current.get(ballKey) || {
-              x: currentX,
-              y: currentY,
-              angle: ball.sprite.circle?.angle || 0
-            };
-            
-            // Вычисляем целевые координаты по физическому телу
-            const targetX = pos.x * SCALE;
-            const targetY = pos.y * SCALE;
-            
-            // Проверяем, насколько большое изменение позиции произошло
-            const diffX = Math.abs(targetX - prevPos.x);
-            const diffY = Math.abs(targetY - prevPos.y);
-            
-            // Если изменение слишком большое (телепортация), сразу переместить к новой позиции
-            const teleportThreshold = 20; // Уменьшаем порог для более быстрых переходов
-            const isTeleport = diffX > teleportThreshold || diffY > teleportThreshold;
-            
-            if (isTeleport) {
-              // При телепортации сразу устанавливаем новое положение
-              ball.sprite.container.x = targetX;
-              ball.sprite.container.y = targetY;
-            } else {
-              // Для небольших изменений применяем плавную интерполяцию
-              // Используем адаптивную интерполяцию - быстрее для быстро движущихся объектов
-              const velocity = ball.body.getLinearVelocity();
-              const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-              
-              // Адаптивный коэффициент интерполяции (быстрее для более быстрых объектов)
-              // Увеличиваем базовый коэффициент для более быстрого движения
-              const adaptiveFactor = Math.min(0.7 + speed * 0.08, 0.95);
-              
-              // Минимальный порог для обновления позиции (чтобы избежать микро-колебаний)
-              const movementThreshold = 0.01; // Уменьшаем для более частого обновления
-              
-              if (diffX > movementThreshold || diffY > movementThreshold) {
-                ball.sprite.container.x = prevPos.x + (targetX - prevPos.x) * adaptiveFactor;
-                ball.sprite.container.y = prevPos.y + (targetY - prevPos.y) * adaptiveFactor;
-              }
-              
-              // Обновляем вращение с той же логикой интерполяции
-              if (ball.sprite.circle) {
-                const targetAngle = angle * (180 / Math.PI);
-                const currentAngle = ball.sprite.circle.angle || 0;
-                const diffAngle = Math.abs(targetAngle - currentAngle);
-                
-                if (diffAngle > 0.3) { // Уменьшаем порог для более частого обновления угла
-                  ball.sprite.circle.angle = prevPos.angle + (targetAngle - prevPos.angle) * adaptiveFactor;
-                }
-              }
-            }
-            
-            // Обновляем z-index только при существенных изменениях позиции Y
-            // или периодически для синхронизации
-            if (Math.abs(ball.sprite.container.y - prevPos.y) > 1 || frameCounterRef.current % 30 === 0) {
-              // Установка z-index (depth) на основе позиции Y
-              // Чем больше Y (ниже на экране), тем выше z-index (отображается поверх других)
-              // Добавляем уровень шара как малую компоненту для стабильного порядка отрисовки
-              const depth = ball.sprite.container.y + (ball.level * 0.01);
-              ball.sprite.container.setDepth(depth);
-            }
-          }
-        }
-        
-        // Запоминаем позиции этого кадра для использования в следующем
-        prevPositionsRef.current = currentFramePositions;
-        
-        // Проверяем на слияния каждые N кадров
-        if (frameCounterRef.current % CHECK_MERGE_FREQUENCY === 0) {
-          if (hasBallsMarkedForMerge(worldRef)) {
-            // Вызываем checkAndMergeBalls с правильными аргументами
-            checkAndMergeBalls(
-              gameInstanceRef.current?.scene?.scenes[0],
-              worldRef,
-              ballsRef,
-              frameCounterRef.current
-            );
-          }
-        }
-      } catch (error) {
-        // Ошибка при обновлении физики
-      }
-    };
-
-    // Регистрируем функцию обновления на анимационный кадр
-    let animationFrameId: number;
-    
-    const animate = () => {
-      updatePhysics();
-      animationFrameId = requestAnimationFrame(animate);
-    };
-    
-    // Запускаем анимационный цикл
-    animationFrameId = requestAnimationFrame(animate);
-    
-    // Очистка при размонтировании компонента
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [isPaused, worldRef, ballsRef, gameInstanceRef, potentiallyStuckBallsRef]);
 
   // Компонент не рендерит никакого UI
   return null;

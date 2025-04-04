@@ -140,16 +140,16 @@ export function throwBall(
     const randomXOffset = (Math.random() * 2 - 1) * THROW_X_VARIATION;
     
     // Разные скорости для разных типов шаров
-    let throwVelocityY = THROW_VELOCITY_Y * 1.5; // Увеличиваем базовую скорость на 50%
+    let throwVelocityY = THROW_VELOCITY_Y * 2.0; // Увеличиваем базовую скорость на 100%
     
     // Для Bull шара увеличиваем скорость и делаем более прямую траекторию
     if (specialType === 'Bull') {
-      throwVelocityY = THROW_VELOCITY_Y * 1.8; // На 80% быстрее (было 30%)
+      throwVelocityY = THROW_VELOCITY_Y * 2.5; // На 150% быстрее
       ball.body.setLinearVelocity(planck.Vec2(randomXOffset * 0.5, throwVelocityY)); // Более прямая траектория
     }
     // Для бомбы немного уменьшаем скорость
     else if (specialType === 'Bomb') {
-      throwVelocityY = THROW_VELOCITY_Y * 1.3; // Теперь быстрее (было 0.9)
+      throwVelocityY = THROW_VELOCITY_Y * 1.8; // Увеличиваем скорость
       ball.body.setLinearVelocity(planck.Vec2(randomXOffset, throwVelocityY));
     }
     else {

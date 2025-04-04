@@ -15,6 +15,7 @@ try {
   sslOptions = {
     key: fs.readFileSync('/etc/ssl/snotcoin.online/private.key'),
     cert: fs.readFileSync('/etc/ssl/snotcoin.online/fullchain.crt'),
+    ca: fs.readFileSync('/etc/ssl/snotcoin.online/ca-bundle.crt'),
     minVersion: 'TLSv1.2' // Улучшаем безопасность, требуя минимум TLS 1.2
   };
   console.log('SSL сертификаты успешно загружены');

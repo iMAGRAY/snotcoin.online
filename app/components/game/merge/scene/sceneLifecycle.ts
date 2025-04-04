@@ -28,26 +28,29 @@ export interface SceneRefs {
  * @param scene Сцена Phaser
  */
 export const preloadScene = (scene: any) => {
-  // Загружаем текстуры
-  scene.load.image('trees', '/images/merge/Game/ui/trees.webp');
-  scene.load.image('floor', '/images/merge/Game/ui/floor.webp');
-  scene.load.image('ball1', '/images/merge/Balls/1.webp');
-  scene.load.image('ball2', '/images/merge/Balls/2.webp');
-  scene.load.image('ball3', '/images/merge/Balls/3.webp');
-  scene.load.image('ball4', '/images/merge/Balls/4.webp');
-  scene.load.image('ball5', '/images/merge/Balls/5.webp');
-  scene.load.image('ball6', '/images/merge/Balls/6.webp');
-  scene.load.image('ball7', '/images/merge/Balls/7.webp');
-  scene.load.image('ball8', '/images/merge/Balls/8.webp');
-  scene.load.image('ball9', '/images/merge/Balls/9.webp');
-  scene.load.image('ball10', '/images/merge/Balls/10.webp');
-  scene.load.image('ball11', '/images/merge/Balls/11.webp');
-  scene.load.image('ball12', '/images/merge/Balls/12.webp');
+  // Загружаем текстуры - используем пути с единообразным регистром
+  // Используем lowercase для директорий, чтобы избежать проблем с регистром
+  scene.load.image('trees', '/images/merge/game/ui/trees.webp');
+  scene.load.image('floor', '/images/merge/game/ui/floor.webp');
+  scene.load.image('ball1', '/images/merge/balls/1.webp');
+  scene.load.image('ball2', '/images/merge/balls/2.webp');
+  scene.load.image('ball3', '/images/merge/balls/3.webp');
+  scene.load.image('ball4', '/images/merge/balls/4.webp');
+  scene.load.image('ball5', '/images/merge/balls/5.webp');
+  scene.load.image('ball6', '/images/merge/balls/6.webp');
+  scene.load.image('ball7', '/images/merge/balls/7.webp');
+  scene.load.image('ball8', '/images/merge/balls/8.webp');
+  scene.load.image('ball9', '/images/merge/balls/9.webp');
+  scene.load.image('ball10', '/images/merge/balls/10.webp');
+  scene.load.image('ball11', '/images/merge/balls/11.webp');
+  scene.load.image('ball12', '/images/merge/balls/12.webp');
   
   // Специальные шары
-  scene.load.image('bull', '/images/merge/Balls/Bull.webp');
-  scene.load.image('bomb', '/images/merge/Balls/Bomb.webp');
-  scene.load.image('freeze', '/images/merge/Balls/Freeze.webp');
+  scene.load.image('bull', '/images/merge/balls/bull.webp');
+  scene.load.image('bomb', '/images/merge/balls/bomb.webp');
+  
+  // Добавляем явную загрузку фона игры
+  scene.load.image('background', '/images/merge/game/BackGround.webp');
 };
 
 /**
@@ -91,10 +94,17 @@ export const createScene = (
   const relativeInstructionsY = Math.round(64 * scaleY); // 64px базовая позиция инструкций
   const relativeFreezeTextY = Math.round(80 * scaleY); // 80px базовая позиция текста заморозки
   
-  // Добавляем фон с деревьями
+  // Добавляем основной фон игры (задний план)
+  const bgImage = scene.add.image(gameWidth / 2, gameHeight / 2, 'background');
+  bgImage.setOrigin(0.5, 0.5);
+  bgImage.setDisplaySize(gameWidth, gameHeight);
+  bgImage.setDepth(-20); // Самый нижний слой
+  
+  // Добавляем фон с деревьями (средний план)
   const treesImage = scene.add.image(gameWidth / 2, 0, 'trees');
   treesImage.setOrigin(0.5, 0);
   treesImage.setDisplaySize(gameWidth, gameHeight);
+  treesImage.setDepth(-10); // Выше основного фона, но ниже игровых элементов
   
   // Добавляем пол - его высота пропорциональна размеру игры
   const floorImage = scene.add.image(gameWidth / 2, gameHeight - relativeFloorHeight / 2, 'floor');

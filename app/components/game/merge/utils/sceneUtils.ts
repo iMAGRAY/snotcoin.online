@@ -18,17 +18,22 @@ export const preloadScene = (scene: any) => {
     // Добавляем обработку ошибок загрузки для каждого изображения
     // Шары уровней от 1 до 11 и 12 используют свои изображения
     for (const level of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
-      scene.load.image(`${level}`, `/images/merge/Balls/${level}.webp`);
+      scene.load.image(`${level}`, `/images/merge/balls/${level}.webp`);
     }
 
     // Загружаем изображение для Bull шара
-    scene.load.image('bull-ball', '/images/merge/Balls/bull.webp');
+    scene.load.image('bull-ball', '/images/merge/balls/bull.webp');
     
     // Загружаем изображение для Bomb шара
-    scene.load.image('bomb-ball', '/images/merge/Balls/bomb.webp');
+    scene.load.image('bomb-ball', '/images/merge/balls/bomb.webp');
 
     // Загружаем частицы для эффектов
-    scene.load.image('particle', '/images/merge/Balls/particle.webp');
+    scene.load.image('particle', '/images/merge/balls/particle.webp');
+    
+    // Загружаем фоновые изображения
+    scene.load.image('trees', '/images/merge/game/ui/trees.webp');
+    scene.load.image('floor', '/images/merge/game/ui/floor.webp');
+    scene.load.image('background', '/images/merge/game/BackGround.webp');
 
     // Создаем событие для обработки ошибок загрузки
     scene.load.on('loaderror', (fileObj: any) => {
@@ -45,7 +50,7 @@ export const preloadScene = (scene: any) => {
       }
     });
   } catch (error) {
-    // Ошибка в preloadScene:
+    console.error('Ошибка при предзагрузке ресурсов:', error);
   }
 };
 
@@ -199,6 +204,9 @@ export const updateSceneElements = (
     treesImage.setDisplaySize(gameWidth, gameHeight);
     // Устанавливаем origin для правильного позиционирования
     treesImage.setOrigin(0.5, 0);
+    // Устанавливаем низкий z-index, чтобы деревья были позади всех игровых элементов,
+    // но впереди основного фона
+    treesImage.setDepth(-10);
   }
   
   // Обновляем пол
@@ -288,4 +296,16 @@ export const updateSceneElements = (
       particle.setScale(scaleX, scaleY);
     }
   });
+
+  // Обновляем основной фон игры, если он есть
+  const backgroundImage = scene.children.list.find((child: any) => 
+    child.texture && child.texture.key === 'background'
+  );
+  if (backgroundImage) {
+    backgroundImage.setPosition(gameWidth / 2, gameHeight / 2);
+    backgroundImage.setDisplaySize(gameWidth, gameHeight);
+    backgroundImage.setOrigin(0.5, 0.5);
+    // Устанавливаем самый низкий z-index для основного фона
+    backgroundImage.setDepth(-20);
+  }
 }; 

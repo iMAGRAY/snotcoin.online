@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useContext } from 'react';
 import * as planck from 'planck';
 import Phaser from 'phaser';
-import { createPhysicsWorld } from '../physics/createPhysicsWorld';
+import { createPhysicsWorld } from '../physics/world';
 import { createNextBall } from '../physics/createNextBall';
 import { createTrajectoryLine, updateTrajectoryLine } from '../physics/trajectoryLine';
 import { generateBallLevel } from '../physics/throwBall';
@@ -15,10 +15,7 @@ import { BASE_GAME_WIDTH, FIXED_PLAYER_Y, GAME_ASPECT_RATIO, PLAYER_SIZE, WALL_C
 import { ExtendedBall, ExtendedNextBall, TrajectoryRef } from '../types';
 import { updateBallsOnResize } from '../utils/ballUtils';
 import { updateSceneElements } from '../utils/sceneUtils';
-import { ScaleType, MergeGameProps } from '../types/gameTypes';
 import { useIsMobile } from '@/app/hooks/useIsMobile';
-import { initWorld } from '../physics/world';
-import { createSpecialBall } from '../utils/specialBalls';
 
 // Время последнего броска для ограничения частоты бросков
 let lastThrowTime = 0;
@@ -79,6 +76,7 @@ interface GameInitializerProps {
   dispatch: any;
   snotCoins: number;
   setSpecialBallType?: React.Dispatch<React.SetStateAction<string | null>>;
+  cleanupResourcesRef?: React.MutableRefObject<() => void>;
 }
 
 // Временная функция для обхода проблем с типами
@@ -88,6 +86,13 @@ function isValidNextBall(ball: any): ball is ExtendedNextBall {
          ball.sprite && 
          ball.sprite.container && 
          typeof ball.sprite.container.x === 'number';
+}
+
+// Объявляем тип для window.__PHASER_GAMES__
+declare global {
+  interface Window {
+    __PHASER_GAMES__?: Record<string, any>;
+  }
 }
 
 const GameInitializer: React.FC<GameInitializerProps> = ({
@@ -112,7 +117,8 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
   potentiallyStuckBallsRef,
   dispatch,
   snotCoins,
-  setSpecialBallType
+  setSpecialBallType,
+  cleanupResourcesRef
 }) => {
   // Добавляем состояние для отслеживания, была ли игра инициализирована
   const isInitializedRef = useRef<boolean>(false);
@@ -167,6 +173,13 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
     potentiallyStuckBallsRef.current.clear();
   };
 
+  // Присваиваем функцию cleanupResources в ссылку, если она есть
+  useEffect(() => {
+    if (cleanupResourcesRef) {
+      cleanupResourcesRef.current = cleanupResources;
+    }
+  }, [cleanupResourcesRef]);
+
   // Основной эффект для инициализации игры
   useEffect(() => {
     // Проверяем, что мы на клиенте и есть доступ к window и контейнеру
@@ -186,12 +199,42 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
       try {
         setDebugMessage("Загрузка Phaser...");
         
+        // Обновляем флаг инициализации, чтобы избежать повторных вызовов
+        isInitializedRef.current = true;
+        
         // Динамически импортируем Phaser
         const Phaser = await import('phaser');
         
         if (!isMounted || !gameContainerRef.current) {
           setDebugMessage("Компонент размонтирован или контейнер исчез");
           return;
+        }
+        
+        // Проверяем существование предыдущего экземпляра Phaser игры
+        if (gameInstanceRef.current) {
+          try {
+            console.log('Уничтожаем предыдущий экземпляр игры перед созданием нового');
+            gameInstanceRef.current.destroy(true);
+            gameInstanceRef.current = null;
+          } catch (e: any) {
+            console.error('Ошибка при уничтожении существующей игры:', e.message || String(e));
+          }
+        }
+        
+        // Проверяем существование любых экземпляров Phaser игры в глобальном объекте
+        if (typeof window !== 'undefined' && window.__PHASER_GAMES__) {
+          for (const existingGameId in window.__PHASER_GAMES__) {
+            try {
+              const existingGame = window.__PHASER_GAMES__[existingGameId];
+              if (existingGame && existingGame.destroy) {
+                console.log('Уничтожаем существующий экземпляр Phaser:', existingGameId);
+                existingGame.destroy(true);
+                delete window.__PHASER_GAMES__[existingGameId];
+              }
+            } catch (e: any) {
+              console.error('Ошибка при уничтожении существующей игры:', e.message || String(e));
+            }
+          }
         }
         
         setDebugMessage("Phaser загружен, инициализируем игру...");
@@ -228,7 +271,7 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
           width: newGameWidth,
           height: newGameHeight,
           parent: gameContainerRef.current,
-          backgroundColor: 0x000000,
+          backgroundColor: '#00000000', // Полностью прозрачный фон
           transparent: true,
           canvasStyle: 'display: block; width: 100%; height: 100%; margin: 0; padding: 0; object-fit: contain; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);',
           scale: {
@@ -245,40 +288,32 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
           scene: {
             preload: function(this: CustomScene) {
               try {
-                // Загружаем текстуры и изображения
-                this.load.image('coin-king', '/images/merge/Game/ui/CoinKing.webp');
-                this.load.image('coin-king-throw', '/images/merge/Game/ui/CoinKingThrow.webp');
-                this.load.image('trees', '/images/merge/Game/ui/trees.webp');
-                this.load.image('floor', '/images/merge/Game/ui/floor.webp');
+                // Предзагружаем шары и другие изображения
+                this.load.image('coin-king', '/images/merge/game/ui/CoinKing.webp');
+                this.load.image('coin-king-throw', '/images/merge/game/ui/CoinKingThrow.webp');
+                this.load.image('floor', '/images/merge/game/ui/floor.webp');
+                this.load.image('trees', '/images/merge/game/ui/trees.webp');
                 
-                // Загружаем изображения шаров (монеты разных уровней)
+                // Предзагружаем шары
                 for (let i = 1; i <= 12; i++) {
-                  this.load.image(`${i}`, `/images/merge/Balls/${i}.webp`);
+                  this.load.image(`${i}`, `/images/merge/balls/${i}.webp`);
                 }
                 
-                // Загружаем изображения для специальных шаров
-                this.load.image('bull-ball', '/images/merge/Game/ui/Bull.webp');
-                this.load.image('bomb', '/images/merge/Game/ui/Bomb.webp');
+                // Предзагружаем специальные шары
+                this.load.image('bull-ball', '/images/merge/balls/bull.webp');
+                this.load.image('bomb', '/images/merge/balls/bomb.webp');
                 
-                // Загружаем изображение для частиц
-                this.load.image('particle', '/images/merge/Balls/particle.webp');
-                // Загружаем текстуру particle для эффектов взрыва
-                
-                // Загружаем изображения для эффектов
-                this.load.image('flare', '/images/merge/Game/effects/flare.webp');
-              } catch (error) {
-                // Ошибка при загрузке ресурсов
-                setDebugMessage(`Ошибка при загрузке ресурсов: ${error}`);
+                // Предзагружаем частицы и эффекты
+                this.load.image('particle', '/images/merge/balls/particle.webp');
+                this.load.image('flare', '/images/merge/game/effects/flare.webp');
+              } catch (error: any) {
+                console.error('Ошибка при загрузке ресурсов:', error);
+                setHasError(true);
+                setDebugMessage(`Ошибка загрузки ресурсов: ${error?.message || String(error)}`);
               }
             },
             create: function(this: CustomScene) {
               try {
-                // Добавляем фон с деревьями
-                const treesImage = this.add.image(newGameWidth / 2, 0, 'trees');
-                treesImage.setOrigin(0.5, 0);
-                treesImage.setDisplaySize(newGameWidth, newGameHeight);
-                treesImage.setDepth(100);
-                
                 // Добавляем пол
                 const floorHeight = 30;
                 const floorImage = this.add.image(newGameWidth / 2, newGameHeight - floorHeight / 2, 'floor');
@@ -419,6 +454,44 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                   // Но сохраняем эту функцию для совместимости с существующим кодом
                   return;
                 };
+                
+                // Добавляем таймер для регулярного обновления физического мира
+                this.time.addEvent({
+                  delay: 16, // 60 FPS (1000ms / 60 = 16.67ms)
+                  callback: () => {
+                    // Пропускаем обновление, если игра на паузе
+                    if (isPaused) return;
+                    
+                    // Обновляем физический мир
+                    if (worldRef.current) {
+                      worldRef.current.step(1/60, 8, 3);
+                      
+                      // Синхронизируем визуальные позиции с физическими
+                      ballsRef.current.forEach(ball => {
+                        if (ball && ball.body && ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
+                          try {
+                            // Получаем физическую позицию объекта
+                            const position = ball.body.getPosition();
+                            // Обновляем позицию спрайта
+                            ball.sprite.container.x = position.x * SCALE;
+                            ball.sprite.container.y = position.y * SCALE;
+                            
+                            // Обновляем поворот спрайта, если нужно
+                            ball.sprite.container.rotation = ball.body.getAngle();
+                            
+                            // Пробуждаем тело, если оно спит
+                            if (!ball.body.isAwake()) {
+                              ball.body.setAwake(true);
+                            }
+                          } catch (error) {
+                            console.error('Ошибка при обновлении визуального положения шара:', error);
+                          }
+                        }
+                      });
+                    }
+                  },
+                  loop: true
+                });
                 
                 // Запускаем таймер для уменьшения перегрева со временем и его отображения
                 this.time.addEvent({
@@ -1288,38 +1361,10 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                   this.game.canvas.style.transition = 'width 0.2s ease, height 0.2s ease';
                 }
                 
-                // Получаем сцену игры
-                const gameScene = this.game.scene.scenes[0];
-                
-                // Обновляем интерактивную зону для бросков после изменения размера
-                if (gameScene && gameScene.input) {
-                  // Создаем или обновляем прямоугольную область для обработки бросков
-                  // Используем более простой подход к настройке области ввода
-                  gameScene.input.enabled = true;
-                  
-                  // Устанавливаем обработку только верхнего объекта
-                  gameScene.input.topOnly = true;
-                  
-                  // Создаем невидимую интерактивную зону на весь экран
-                  const fullScreenZone = gameScene.add.zone(newGameWidth/2, newGameHeight/2, newGameWidth, newGameHeight);
-                  fullScreenZone.setInteractive();
-                  fullScreenZone.setOrigin(0.5, 0.5);
-                  // Ставим высокий приоритет, чтобы зона была над другими элементами
-                  fullScreenZone.setDepth(1000);
-
-                  // Обновляем позицию интерактивной зоны и всей сцены
-                  if (gameScene.cameras && gameScene.cameras.main) {
-                    gameScene.cameras.main.setViewport(0, 0, newGameWidth, newGameHeight);
-                    gameScene.cameras.main.setScroll(0, 0);
-                  }
-                }
-                
                 // Возобновляем обработку физики после обновления всех объектов
-                if (game) {
-                  gameInstanceRef.current = game;
-                  
+                if (gameInstanceRef.current) {
                   // Получаем первую сцену
-                  const scene = game.scene.scenes[0];
+                  const scene = gameInstanceRef.current.scene.scenes[0];
                   
                   // @ts-ignore - Игнорируем ошибку типизации, это будет исправлено в будущем
                   scene.dispatch = dispatch;
@@ -1339,245 +1384,18 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                   
                   console.log('Refs и dispatch добавлены в сцену');
                 }
-              } catch (error) {
+              } catch (e: any) {
                 // Ошибка при создании сцены
-                setDebugMessage(`Ошибка при создании сцены: ${error}`);
+                setDebugMessage(`Ошибка при создании сцены: ${e.message || String(e)}`);
                 setHasError(true);
                 setIsLoading(false);
               }
             }
           }
-        };
-        
-        // Создаем экземпляр игры
-        const game = new Phaser.Game(config);
-        gameInstanceRef.current = game;
-        
-        // Устанавливаем стиль для canvas
-        if (game.canvas) {
-          game.canvas.style.width = '100%';
-          game.canvas.style.height = '100%';
-          game.canvas.style.objectFit = 'contain';
-          game.canvas.style.maxWidth = `${newGameWidth}px`;
-          game.canvas.style.maxHeight = `${newGameHeight}px`;
-          game.canvas.style.margin = '0';
-          game.canvas.style.padding = '0';
-          game.canvas.style.position = 'absolute';
-          game.canvas.style.bottom = '0';
-          game.canvas.style.left = '50%';
-          game.canvas.style.transform = 'translateX(-50%)';
         }
-        
-        // Добавляем обработчик изменения размера окна
-        const handleResize = () => {
-          // Проверяем, что игра уже инициализирована
-          if (!game || !game.canvas) {
-            return;
-          }
-          
-          try {
-            const oldGameWidth = game.scale.width;
-            const oldGameHeight = game.scale.height;
-            
-            // Рассчитываем новые размеры игры
-            const containerWidth = gameContainerRef.current?.clientWidth || window.innerWidth;
-            const containerHeight = gameContainerRef.current?.clientHeight || window.innerHeight;
-            
-            // Определяем новые размеры с сохранением пропорций
-            let newGameWidth, newGameHeight;
-            
-            if (containerHeight / aspectRatio > containerWidth) {
-              newGameWidth = containerWidth;
-              newGameHeight = containerWidth / aspectRatio;
-            } else {
-              newGameHeight = containerHeight;
-              newGameWidth = containerHeight * aspectRatio;
-            }
-            
-            // Округляем размеры
-            newGameWidth = Math.floor(newGameWidth);
-            newGameHeight = Math.floor(newGameHeight);
-            
-            const widthScaleFactor = newGameWidth / oldGameWidth;
-            const heightScaleFactor = newGameHeight / oldGameHeight;
-            const baseScaleFactor = newGameWidth / BASE_GAME_WIDTH;
-            
-            console.log(`Масштабирование: widthFactor=${widthScaleFactor.toFixed(2)}, heightFactor=${heightScaleFactor.toFixed(2)}, baseFactor=${baseScaleFactor.toFixed(2)}`);
-            
-            // Получаем сцену игры
-            const phaseScene = game.scene.scenes[0];
-            
-            // Приостанавливаем обработку физики на время изменения размеров
-            if (phaseScene && phaseScene.physics) {
-              phaseScene.physics.pause();
-            }
-            
-            try {
-              // Обновляем шары с учетом нового размера игры
-              updateBallsOnResize(
-                ballsRef,
-                currentBallRef,
-                worldRef,
-                newGameWidth,
-                newGameWidth
-              );
-              
-              // Вызываем updateSceneElements только с 3 параметрами
-              updateSceneElements(phaseScene, newGameWidth, newGameHeight);
-              
-              // Обновляем фоновые изображения
-              if (phaseScene && phaseScene.children && phaseScene.children.list) {
-                phaseScene.children.list.forEach((child: any) => {
-                  if (child.texture) {
-                    // Обновляем положение и размер деревьев
-                    if (child.texture.key === 'trees') {
-                      child.setPosition(newGameWidth / 2, 0);
-                      child.setDisplaySize(newGameWidth, newGameHeight);
-                    }
-                    // Обновляем положение и размер пола
-                    else if (child.texture.key === 'floor') {
-                      const floorHeight = 30 * baseScaleFactor;
-                      child.setPosition(newGameWidth / 2, newGameHeight - floorHeight / 2);
-                      child.setDisplaySize(newGameWidth, floorHeight);
-                    }
-                  }
-                });
-              }
-            } catch (error) {
-              console.error("Ошибка при обновлении объектов:", error);
-            }
-            
-            // Теперь изменяем размер игры
-            game.scale.resize(newGameWidth, newGameHeight);
-            game.scale.refresh();
-
-            // Адаптируем физический мир к новым размерам
-            if (worldRef.current) {
-              // Пересоздаем физические границы для нового размера
-              // Сначала удаляем старые границы
-              if (leftWallRef.current) {
-                worldRef.current.destroyBody(leftWallRef.current);
-                leftWallRef.current = null;
-              }
-              if (rightWallRef.current) {
-                worldRef.current.destroyBody(rightWallRef.current);
-                rightWallRef.current = null;
-              }
-              if (topWallRef.current) {
-                worldRef.current.destroyBody(topWallRef.current);
-                topWallRef.current = null;
-              }
-              if (floorRef.current) {
-                worldRef.current.destroyBody(floorRef.current);
-                floorRef.current = null;
-              }
-              
-              // Создаем новые границы с новыми размерами
-              const wallThickness = 10 / SCALE;
-              const width = newGameWidth / SCALE;
-              const height = newGameHeight / SCALE;
-              const floorHeight = 30;
-              
-              // Левая стена
-              leftWallRef.current = worldRef.current.createBody({
-                type: 'static',
-                position: planck.Vec2(-wallThickness / 2, height / 2),
-              });
-              leftWallRef.current.createFixture({
-                shape: planck.Box(wallThickness / 2, height / 2),
-                friction: 0.3,
-                restitution: 0.2,
-              });
-              
-              // Правая стена
-              rightWallRef.current = worldRef.current.createBody({
-                type: 'static',
-                position: planck.Vec2(width + wallThickness / 2, height / 2),
-              });
-              rightWallRef.current.createFixture({
-                shape: planck.Box(wallThickness / 2, height / 2),
-                friction: 0.3,
-                restitution: 0.2,
-              });
-              
-              // Верхняя стена
-              topWallRef.current = worldRef.current.createBody({
-                type: 'static',
-                position: planck.Vec2(width / 2, -wallThickness / 2),
-              });
-              topWallRef.current.createFixture({
-                shape: planck.Box(width / 2, wallThickness / 2),
-                friction: 0.1,
-                restitution: 0.8
-              });
-              
-              // Пол
-              floorRef.current = worldRef.current.createBody({
-                type: 'static',
-                position: planck.Vec2(width / 2, height + wallThickness / 2),
-              });
-              floorRef.current.createFixture({
-                shape: planck.Box(width / 2, wallThickness / 2),
-                friction: 0.5,
-                restitution: 0.2
-              });
-              floorRef.current.setUserData({ isFloor: true });
-            }
-            
-            // Обновляем стили canvas
-            if (game.canvas) {
-              game.canvas.style.maxWidth = `${newGameWidth}px`;
-              game.canvas.style.maxHeight = `${newGameHeight}px`;
-              game.canvas.style.position = 'absolute';
-              game.canvas.style.bottom = '0';
-              game.canvas.style.left = '50%';
-              game.canvas.style.transform = 'translateX(-50%)';
-              game.canvas.style.margin = '0';
-              
-              // Добавляем плавный переход для предотвращения скачков при изменении размера
-              game.canvas.style.transition = 'width 0.2s ease, height 0.2s ease';
-            }
-            
-            // Получаем сцену игры
-            const gameScene = game.scene.scenes[0];
-            
-            // Возобновляем обработку физики после обновления всех объектов
-            if (gameScene) {
-              gameScene.physics?.resume();
-            }
-          } catch (error) {
-            console.error("Ошибка при изменении размера игры:", error);
-          }
-        };
-        
-        // Добавляем дебаунсинг для предотвращения слишком частых вызовов функции
-        const debounceResize = (func: Function, wait: number) => {
-          let timeout: NodeJS.Timeout | null = null;
-          return function executedFunction() {
-            // сохраняем контекст и аргументы для последующего вызова
-            // @ts-ignore
-            const context = this;
-            const args = arguments;
-            
-            // очищаем предыдущий таймаут
-            if (timeout) clearTimeout(timeout);
-            
-            // устанавливаем новый таймаут
-            timeout = setTimeout(() => {
-              func.apply(context, args);
-            }, wait);
-          };
-        };
-        
-        // Используем дебаунсинг для функции handleResize
-        const debouncedHandleResize = debounceResize(handleResize, 100);
-        
-        // Добавляем слушатель изменения размера окна
-        window.addEventListener('resize', debouncedHandleResize);
-        resizeHandler = debouncedHandleResize;
-      } catch (error) {
+      } catch (error: any) {
         // Ошибка при инициализации Phaser
-        setDebugMessage(`Критическая ошибка: ${error}`);
+        setDebugMessage(`Критическая ошибка: ${error.message || String(error)}`);
         if (isMounted) {
           setHasError(true);
           setIsLoading(false);
@@ -1608,10 +1426,22 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
         try {
           gameInstanceRef.current.destroy(true);
           gameInstanceRef.current = null;
-        } catch (error) {
+        } catch (error: any) {
           // Ошибка при уничтожении Phaser игры
+          console.error('Ошибка при уничтожении Phaser игры:', error.message || String(error));
         }
       }
+      
+      // Сбрасываем флаг запущенного экземпляра в глобальном состоянии
+      if (dispatch) {
+        dispatch({
+          type: 'SET_GAME_INSTANCE_RUNNING',
+          payload: false
+        });
+      }
+      
+      // Сбрасываем флаг инициализации
+      isInitializedRef.current = false;
     };
   }, []);
 

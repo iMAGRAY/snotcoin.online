@@ -190,6 +190,7 @@ export interface GameState {
   fillingSpeed: number;
   containerLevel: number;
   isPlaying: boolean;
+  isGameInstanceRunning: boolean;
   validationStatus: string;
   lastValidation: string;
   gameStarted: boolean;
@@ -295,7 +296,8 @@ export type ActionType =
   | "SET_BACKGROUND_MUSIC_MUTE"
   | "UPDATE_INVENTORY"
   | "UPDATE_CONTAINER"
-  | "UPDATE_UPGRADES";
+  | "UPDATE_UPGRADES"
+  | "SET_GAME_INSTANCE_RUNNING";
 
 export interface Action {
   type: ActionType;
@@ -473,6 +475,7 @@ export function createDefaultGameState(): GameState {
     fillingSpeed: 1,
     containerLevel: 1,
     isPlaying: false,
+    isGameInstanceRunning: false,
     validationStatus: 'pending',
     lastValidation: now,
     gameStarted: false,

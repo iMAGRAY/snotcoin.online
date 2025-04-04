@@ -12,7 +12,7 @@ import {
   PLAYER_SIZE,
   PHYSICS_PLAYER_Y
 } from '../constants/gameConstants';
-import { createPhysicsWorld } from '../physics/createPhysicsWorld';
+import { createPhysicsWorld, resetAndCreateWorld } from '../physics/world';
 
 // Переменная для ограничения проверок коллизий
 const MAX_CONTACT_CHECKS = 10; // Оптимизировано для производительности

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "start:ssl": "sudo node server.js",
+    "start:prod:ssl": "NODE_ENV=production sudo node server.js",
     "start:dev:ssl": "NODE_ENV=development sudo node server.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit"

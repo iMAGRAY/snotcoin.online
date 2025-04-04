@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../../i18n"
 import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
@@ -11,24 +11,66 @@ const MergeGame = dynamic(() => import("./MergeGame"), {
   ssr: false,
 })
 
+// Объявляем тип для window.__PHASER_GAMES__
+declare global {
+  interface Window {
+    __PHASER_GAMES__?: Record<string, any>;
+  }
+}
+
 const Merge: React.FC = () => {
   const { t } = useTranslation()
   const gameState = useGameState()
   const dispatch = useGameDispatch()
   const [isGameActive, setIsGameActive] = useState(false)
 
+  // Функция для очистки существующих игр Phaser
+  const cleanupExistingGames = () => {
+    if (typeof window !== 'undefined' && window.__PHASER_GAMES__) {
+      // Уничтожаем все существующие экземпляры Phaser
+      console.log('Очистка существующих игр перед запуском новой');
+      for (const existingGameId in window.__PHASER_GAMES__) {
+        try {
+          const existingGame = window.__PHASER_GAMES__[existingGameId];
+          if (existingGame && existingGame.destroy) {
+            console.log('Уничтожаем существующий экземпляр Phaser:', existingGameId);
+            existingGame.destroy(true);
+            delete window.__PHASER_GAMES__[existingGameId];
+          }
+        } catch (e) {
+          console.error('Ошибка при уничтожении существующей игры:', e);
+        }
+      }
+    }
+  };
+
   const handlePlayClick = () => {
-    setIsGameActive(true)
+    // Очищаем существующие игры перед запуском новой
+    cleanupExistingGames();
+    setIsGameActive(true);
   }
 
   const handleCloseGame = () => {
-    setIsGameActive(false)
+    setIsGameActive(false);
+    // Очищаем существующие игры после закрытия
+    cleanupExistingGames();
     // Явно устанавливаем активную вкладку "merge" при выходе из игры
     dispatch({
       type: "SET_ACTIVE_TAB",
       payload: "merge"
-    })
+    });
   }
+
+  // Очищаем игры при монтировании и размонтировании компонента
+  useEffect(() => {
+    // Очищаем при монтировании
+    cleanupExistingGames();
+    
+    // Очищаем при размонтировании
+    return () => {
+      cleanupExistingGames();
+    };
+  }, []);
 
   return (
     <motion.div
