@@ -7,14 +7,24 @@ import { logAuthInfo, AuthStep, AuthLogType, logAuth } from '@/app/utils/auth-lo
 import type { FarcasterContext, FarcasterSDK } from '@/app/types/farcaster';
 import { FARCASTER_SDK } from '@/app/types/farcaster';
 
+// Проверяем, включен ли режим имитации продакшена
+const isProductionMode = process.env.USE_PRODUCTION_MODE === 'true' || process.env.NODE_ENV === 'production';
+
 // Интерфейс для данных пользователя
 interface UserData {
   user: {
     id: string;
     fid?: number;
     username?: string;
+    displayName?: string;
+    avatar?: string;
   };
   token?: string;
+  gameState?: {
+    exists: boolean;
+    lastSaved?: string;
+    version?: number;
+  };
 }
 
 // Интерфейс пропсов компонента
@@ -46,14 +56,15 @@ const checkBrowserSupport = (): boolean => {
 };
 
 export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) {
-  // Используем только статус и ошибку SDK из контекста
-  const { sdkStatus, sdkError } = useFarcaster(); 
+  // Используем контекст Farcaster
+  const { sdkUser, sdkStatus, sdkError } = useFarcaster(); 
   
   // Локальное состояние для отслеживания процесса авторизации
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
-  // Функция для проверки наличия SDK (упрощенная)
+  // Функция для проверки наличия SDK
   const checkFarcasterSDK = (): boolean => {
     return typeof window !== 'undefined' && typeof window.farcaster?.ready === 'function';
   };
@@ -63,12 +74,13 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
     // Проверяем статус SDK перед началом
     if (sdkStatus !== 'ready') {
       console.warn('[WarpcastAuth] Попытка авторизации при SDK не в статусе ready.');
-      setAuthError('Farcaster SDK не готов. Пожалуйста, подождите.');
+      setAuthError('Farcaster SDK не готов. Пожалуйста, подождите или обновите страницу.');
       return;
     }
 
     setIsAuthorizing(true);
     setAuthError(null);
+    setDebugInfo(null);
 
     const authTimeoutId = setTimeout(() => {
       setIsAuthorizing(false);
@@ -81,7 +93,7 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       
       // SDK уже должен быть готов
       if (!checkFarcasterSDK()) {
-        throw new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED); // Маловероятно, но проверяем
+        throw new Error(FARCASTER_SDK.ERROR_CODES.SDK_NOT_LOADED);
       }
       
       const farcaster = window.farcaster as FarcasterSDK;
@@ -89,6 +101,15 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       // Получаем данные пользователя из SDK
       const userData = await farcaster.getContext() as FarcasterContext;
       
+      // Сохраняем данные для отладки
+      if (!isProductionMode) {
+        setDebugInfo({
+          sdkContext: { ...userData },
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // Проверяем наличие обязательных данных пользователя
       if (!userData || !userData.user?.fid) {
          throw new Error('Некорректные данные пользователя от Farcaster');
       }
@@ -109,62 +130,104 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         body: JSON.stringify(userData)
       });
       
-      console.log(`[WarpcastAuth] Получен ответ с кодом: ${response.status}`);
+      if (!isProductionMode) {
+        console.log(`[WarpcastAuth] Получен ответ с кодом: ${response.status}`);
+      }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `Ошибка HTTP: ${response.status}` }));
-        console.error('[WarpcastAuth] Ошибка от API:', errorData);
-        throw new Error(errorData.message || 'Ошибка авторизации на сервере');
+        if (!isProductionMode) {
+          console.error('[WarpcastAuth] Ошибка от API:', errorData);
+          // Добавляем в отладочную информацию
+          setDebugInfo((prev: Record<string, any> | null) => ({
+            ...(prev || {}),
+            apiError: errorData,
+            status: response.status
+          }));
+        }
+        throw new Error(errorData.message || `Ошибка авторизации на сервере (${response.status})`);
       }
       
       const authResult = await response.json();
       
       if (!authResult.success) {
-        console.error('[WarpcastAuth] Неуспешный результат авторизации:', authResult);
+        if (!isProductionMode) {
+          console.error('[WarpcastAuth] Неуспешный результат авторизации:', authResult);
+          // Добавляем в отладочную информацию
+          setDebugInfo((prev: Record<string, any> | null) => ({
+            ...(prev || {}),
+            authResult
+          }));
+        }
         throw new Error(authResult.message || 'Ошибка валидации на сервере');
       }
       
       // Проверяем наличие токена и сохраняем его
       if (!authResult.token) {
-        console.error('[WarpcastAuth] В ответе отсутствует токен авторизации:', authResult);
+        if (!isProductionMode) {
+          console.error('[WarpcastAuth] В ответе отсутствует токен авторизации:', authResult);
+        }
         throw new Error('Токен авторизации отсутствует в ответе сервера');
       }
       
       // Сохраняем токен в localStorage напрямую и через authService
       try {
         localStorage.setItem('auth_token', authResult.token);
-        console.log('[WarpcastAuth] Токен авторизации успешно сохранен в localStorage');
+        if (!isProductionMode) {
+          console.log('[WarpcastAuth] Токен авторизации успешно сохранен в localStorage');
+        }
         
         // Также сохраняем через authService для дублирования
         authService.saveToken(authResult.token);
       } catch (storageError) {
-        console.error('[WarpcastAuth] Ошибка при сохранении токена:', storageError);
+        if (!isProductionMode) {
+          console.error('[WarpcastAuth] Ошибка при сохранении токена:', storageError);
+        }
         // Продолжаем, так как основное сохранение в localStorage уже произошло
       }
       
       // Сохраняем данные пользователя
       try {
-        // Формируем user_id из provider и id
-        const userId = `farcaster_${authResult.user.id}`;
+        // Формируем user_id из FID пользователя
+        const userId = authResult.user.id;
         
         // Синхронизируем user_id и game_id
         authService.syncUserAndGameIds(userId);
-        console.log(`[WarpcastAuth] Синхронизирован user_id и game_id: ${userId}`);
+        if (!isProductionMode) {
+          console.log(`[WarpcastAuth] Синхронизирован user_id и game_id: ${userId}`);
+        }
         
         // Сохраняем данные пользователя через authService
         authService.saveUserData(authResult.user);
         
         // Устанавливаем флаг авторизации
         authService.setAuthenticated(true);
+        
+        // Если есть информация о состоянии игры, логируем ее
+        if (authResult.gameState) {
+          logAuth(
+            AuthStep.AUTH_COMPLETE,
+            AuthLogType.INFO,
+            `Информация о прогрессе игры: ${authResult.gameState.exists ? 'найдена' : 'не найдена'}`,
+            {
+              userId,
+              gameExists: authResult.gameState.exists,
+              lastSaved: authResult.gameState.lastSaved,
+              version: authResult.gameState.version
+            }
+          );
+        }
       } catch (userError) {
-        console.error('[WarpcastAuth] Ошибка при сохранении данных пользователя:', userError);
+        if (!isProductionMode) {
+          console.error('[WarpcastAuth] Ошибка при сохранении данных пользователя:', userError);
+        }
       }
       
       logAuth(
         AuthStep.AUTH_COMPLETE, 
         AuthLogType.INFO, 
         'Авторизация через Farcaster успешно завершена', 
-        { userId: authResult.user?.id }
+        { userId: authResult.user?.id, fid: authResult.user?.fid }
       );
       
       clearTimeout(authTimeoutId);
@@ -173,13 +236,18 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
         user: {
           id: authResult.user.id,
           fid: authResult.user.fid,
-          username: authResult.user.username
+          username: authResult.user.username,
+          displayName: authResult.user.displayName,
+          avatar: authResult.user.avatar
         },
-        token: authResult.token
+        token: authResult.token,
+        gameState: authResult.gameState
       });
     } catch (error) {
       clearTimeout(authTimeoutId);
-      console.error('Ошибка авторизации через Farcaster:', error);
+      if (!isProductionMode) {
+        console.error('Ошибка авторизации через Farcaster:', error);
+      }
       
       let specificAuthError = 'Неизвестная ошибка авторизации';
       if (error instanceof Error) {
@@ -209,6 +277,19 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       }
       
       setAuthError(specificAuthError); // Используем локальное состояние ошибки
+      
+      // Сохраняем информацию об ошибке для отладки
+      if (!isProductionMode) {
+        setDebugInfo((prev: Record<string, any> | null) => ({
+          ...(prev || {}),
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            name: error instanceof Error ? error.name : undefined
+          }
+        }));
+      }
+      
       logAuth(
         AuthStep.AUTH_ERROR, 
         AuthLogType.ERROR, 
@@ -223,7 +304,14 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
          setIsAuthorizing(false);
       }
     }
-  }, [sdkStatus, onSuccess, onError]); // Удаляем refreshUserData из зависимостей
+  }, [sdkStatus, onSuccess, onError]);
+
+  // Автоматическая авторизация, если пользователь уже получен через SDK
+  useEffect(() => {
+    if (sdkStatus === 'ready' && sdkUser && sdkUser.fid && !isAuthorizing && !authError) {
+      handleFarcasterAuth();
+    }
+  }, [sdkStatus, sdkUser, handleFarcasterAuth, isAuthorizing, authError]);
 
   // Рендер компонента (обновляем условия)
   return (
@@ -240,47 +328,57 @@ export default function WarpcastAuth({ onSuccess, onError }: WarpcastAuthProps) 
       ) : (sdkStatus === 'error' || authError) ? (
         <div className="bg-red-900/30 p-4 rounded-lg w-full">
           <p className="text-red-400 text-sm">{sdkError || authError}</p>
-          {/* Кнопка Попробовать снова должна сбрасывать authError и вызывать handleFarcasterAuth 
-              (но только если sdkStatus === 'ready') */} 
           <button 
             onClick={() => {
               setAuthError(null);
               if (sdkStatus === 'ready') {
                  handleFarcasterAuth();
               }
-              // Если ошибка была в SDK, перезагрузка страницы может быть лучшим вариантом
-              else if (sdkStatus === 'error') {
-                 window.location.reload(); 
-              }
             }}
-            className="mt-2 bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm"
+            disabled={sdkStatus !== 'ready'}
+            className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium transition"
           >
             Попробовать снова
           </button>
+          
+          {/* Отображаем отладочную информацию только в режиме разработки */}
+          {!isProductionMode && debugInfo && (
+            <div className="mt-4 p-2 bg-black/40 rounded text-xs text-gray-400 overflow-auto max-h-40">
+              <details>
+                <summary className="cursor-pointer">Отладочная информация</summary>
+                <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+              </details>
+            </div>
+          )}
         </div>
-      /* Показываем кнопку входа, если SDK готов и нет ошибок */
-      ) : sdkStatus === 'ready' ? (
+      /* Показываем кнопку авторизации, если SDK готов */
+      ) : (
         <button
           onClick={handleFarcasterAuth}
-          disabled={isAuthorizing} // Блокируем кнопку во время авторизации
-          className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-colors bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
+          className="w-full flex items-center justify-center px-4 py-3 font-medium rounded-xl bg-gradient-to-r from-purple-700 to-violet-800 hover:from-purple-600 hover:to-violet-700 transition-all duration-300 text-white"
         >
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="currentColor" 
-            className="w-5 h-5 mr-2"
-          >
-            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1.24 14.779h2.48v-5.439l3.76 5.439h2.84l-4.35-6 4.35-5.96h-2.72l-3.88 5.37V4.82h-2.48v11.959z"/>
-          </svg>
-          <span>Войти через Farcaster</span>
+          <img 
+            src="/images/farcaster-logo.svg" 
+            alt="Farcaster" 
+            className="w-5 h-5 mr-2" 
+          />
+          Войти через Farcaster
         </button>
-      /* Состояние idle или непредвиденное */
-      ) : null}
+      )}
       
-      <p className="text-xs text-gray-500 text-center">
-        Требуется аккаунт Farcaster. <a href="https://warpcast.com/download" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">Скачать Warpcast</a>
-      </p>
+      {/* Отображаем состояние SDK только в режиме разработки */}
+      {!isProductionMode && (
+        <div className="text-xs text-gray-500 mt-2">
+          <details>
+            <summary className="cursor-pointer">SDK статус: {sdkStatus}</summary>
+            {sdkUser && (
+              <pre className="mt-2 p-2 bg-black/40 rounded overflow-auto max-h-40">
+                {JSON.stringify(sdkUser, null, 2)}
+              </pre>
+            )}
+          </details>
+        </div>
+      )}
     </div>
   );
 } 

@@ -22,6 +22,39 @@ export interface TokenPayload {
 }
 
 /**
+ * Синхронно проверяет JWT токен и возвращает декодированный payload или null при ошибке
+ * Используется в middleware для быстрой проверки
+ * @param token JWT токен для проверки
+ * @returns Декодированный payload или null при ошибке
+ */
+export function verify(token: string): TokenPayload | null {
+  try {
+    if (!token) {
+      return null;
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[JWT] Отсутствует JWT_SECRET в переменных окружения');
+      return null;
+    }
+
+    // Верифицируем токен синхронно
+    const payload = jwt.verify(token, jwtSecret) as TokenPayload;
+    
+    // Проверяем наличие userId в payload
+    if (!payload || !payload.userId) {
+      return null;
+    }
+
+    return payload;
+  } catch (error) {
+    // При любой ошибке возвращаем null
+    return null;
+  }
+}
+
+/**
  * Проверяет JWT токен и возвращает информацию о его валидности
  * @param token JWT токен для проверки
  * @returns Объект с результатами проверки

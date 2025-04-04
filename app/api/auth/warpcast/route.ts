@@ -125,8 +125,21 @@ export async function POST(request: NextRequest) {
       maxAge: 30 * 24 * 60 * 60 // 30 дней в секундах
     });
     
+    // Устанавливаем куки сессии с JWT токеном
+    cookies().set({
+      name: 'session',
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 60 * 60 // 1 час в секундах
+    });
+    
     // Загружаем прогресс игры
     let gameState = null;
+    let progressExists = false;
+    
     try {
       // Загружаем прогресс из БД напрямую
       const progress = await prisma.progress.findUnique({
@@ -134,12 +147,28 @@ export async function POST(request: NextRequest) {
       });
       
       if (progress && progress.game_state) {
+        progressExists = true;
+        
         // Если game_state - строка, преобразуем в объект
         if (typeof progress.game_state === 'string') {
           gameState = JSON.parse(progress.game_state);
         } else {
           gameState = progress.game_state;
         }
+        
+        logAuth(
+          AuthStep.AUTH_COMPLETE, 
+          AuthLogType.INFO, 
+          'Загружен существующий прогресс игры', 
+          { userId, progressVersion: progress.version }
+        );
+      } else {
+        logAuth(
+          AuthStep.AUTH_COMPLETE, 
+          AuthLogType.INFO, 
+          'Прогресс игры не найден, будет создан новый', 
+          { userId }
+        );
       }
     } catch (error) {
       logAuth(
@@ -155,7 +184,7 @@ export async function POST(request: NextRequest) {
       AuthStep.AUTH_COMPLETE, 
       AuthLogType.INFO, 
       'Авторизация через Warpcast успешно завершена', 
-      { userId }
+      { userId, fid: fid.toString() }
     );
     
     // Возвращаем успешный ответ
@@ -167,7 +196,7 @@ export async function POST(request: NextRequest) {
         fid: Number(fid),
         username: saveResult.user.username,
         displayName: saveResult.user.displayName || saveResult.user.username,
-        avatar: saveResult.user.pfpUrl,
+        avatar: saveResult.user.avatar || saveResult.user.pfpUrl,
         verified: saveResult.user.verified
       },
       gameState: gameState ? {
@@ -201,9 +230,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Получаем токен из cookies или заголовка
-    const authCookie = cookies().get('refresh_token');
-    const bearerToken = request.headers.get('authorization')?.split(' ')[1];
-    const token = bearerToken || authCookie?.value;
+    const sessionCookie = cookies().get('session');
+    const authHeader = request.headers.get('authorization');
+    const bearerToken = authHeader ? authHeader.split(' ')[1] : null;
+    const token = bearerToken || sessionCookie?.value;
     
     if (!token) {
       return NextResponse.json({ 
@@ -213,7 +243,7 @@ export async function GET(request: NextRequest) {
     }
     
     try {
-      // Примитивная проверка токена - в реальном приложении здесь должна быть полная верификация
+      // Примитивная проверка токена - декодируем без верификации
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3 || !tokenParts[1]) {
         throw new Error('Invalid token format');
@@ -245,35 +275,49 @@ export async function GET(request: NextRequest) {
         });
       }
       
+      // Проверка валидности FID (должен соответствовать записи в БД)
+      if (user.farcaster_fid !== String(decoded.fid)) {
+        return NextResponse.json({
+          authenticated: false,
+          message: 'FID mismatch'
+        });
+      }
+      
       return NextResponse.json({
         authenticated: true,
         user: {
           id: user.id,
           fid: Number(user.farcaster_fid),
-          username: user.farcaster_username,
-          displayName: user.farcaster_displayname,
-          avatar: user.farcaster_pfp,
+          username: user.farcaster_username || `user_${user.farcaster_fid}`,
+          displayName: user.farcaster_displayname || user.farcaster_username || `User ${user.farcaster_fid}`,
+          avatar: user.farcaster_pfp || 'https://snotcoin.online/images/profile/avatar/default.webp',
         }
       });
-    } catch (error) {
+    } catch (tokenError) {
+      console.error('Token validation error:', tokenError);
+      
+      const refreshTokenCookie = cookies().get('refresh_token');
+      
+      if (refreshTokenCookie) {
+        // Информируем клиент о возможности обновления токена
+        return NextResponse.json({
+          authenticated: false,
+          refreshable: true,
+          message: 'Invalid token, but can be refreshed'
+        });
+      }
+      
       return NextResponse.json({ 
         authenticated: false,
-        message: 'Invalid token' 
+        message: 'Invalid token'
       });
     }
   } catch (error) {
-    logAuth(
-      AuthStep.AUTH_ERROR, 
-      AuthLogType.ERROR, 
-      'Ошибка при проверке сессии', 
-      {},
-      error
-    );
+    console.error('Authentication check error:', error);
     
-    return NextResponse.json({
+    return NextResponse.json({ 
       authenticated: false,
-      error: 'INTERNAL_ERROR',
-      message: 'Внутренняя ошибка сервера'
+      message: 'Authentication check failed'
     }, { status: 500 });
   }
 } 

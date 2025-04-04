@@ -5,8 +5,8 @@ import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 // Ключи и конфигурация Neynar API
-const NEYNAR_API_KEY = '7678CEC2-9724-4CD9-B3AA-787932510E24';
-const NEYNAR_CLIENT_ID = 'd14e5c4b-22a2-4b30-a2f4-0471a147a9b2';
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || '7678CEC2-9724-4CD9-B3AA-787932510E24';
+const NEYNAR_CLIENT_ID = process.env.NEYNAR_CLIENT_ID || 'd14e5c4b-22a2-4b30-a2f4-0471a147a9b2';
 const NEYNAR_API_URL = 'https://api.neynar.com';
 const NEYNAR_HUB_URL = 'hub-grpc-api.neynar.com';
 
@@ -91,10 +91,11 @@ export class NeynarService {
       let neynarData;
       try {
         neynarData = await fetchWithRetry(async () => {
-          const response = await fetch(`${NEYNAR_API_URL}/v1/farcaster/user?fid=${userContext.fid}`, {
+          const response = await fetch(`${NEYNAR_API_URL}/v2/user?fid=${userContext.fid}`, {
             headers: {
               'Accept': 'application/json',
-              'api_key': NEYNAR_API_KEY
+              'api_key': NEYNAR_API_KEY,
+              'X-Client-ID': NEYNAR_CLIENT_ID
             },
             // Добавляем тайм-аут для запроса через контроллер
             signal: createTimeoutSignal(API_TIMEOUT)
@@ -123,18 +124,18 @@ export class NeynarService {
         };
       }
 
-      // В API v1 данные находятся в поле result.user
-      if (!neynarData || !neynarData.result || !neynarData.result.user) {
+      // В API v2 данные находятся в поле result.user
+      const user = neynarData?.result?.user || neynarData?.user;
+      
+      if (!user) {
         logAuth(
           AuthStep.VALIDATE_ERROR,
           AuthLogType.ERROR,
           'Neynar API вернул пустой ответ или нет пользователя',
-          { fid: userContext.fid }
+          { fid: userContext.fid, response: JSON.stringify(neynarData).substring(0, 200) }
         );
-        return { isValid: false, error: 'No user data found' };
+        return { isValid: false, error: 'No user data found in Neynar response' };
       }
-
-      const user = neynarData.result.user;
 
       // Проверяем, что данные с клиента соответствуют данным от Neynar
       if (user.fid !== userContext.fid) {
@@ -144,25 +145,25 @@ export class NeynarService {
           'Несоответствие FID',
           { clientFid: userContext.fid, neynarFid: user.fid }
         );
-        return { isValid: false, error: 'FID mismatch' };
+        return { isValid: false, error: 'FID mismatch between client and Neynar' };
       }
 
       // Нормализация данных пользователя
       const normalizedUser: UserData = {
-        id: userContext.fid.toString(),
-        username: user.username || userContext.username,
+        id: String(userContext.fid), // Используем FID как основной идентификатор
+        username: user.username || userContext.username || `user_${userContext.fid}`,
         fid: userContext.fid,
-        displayName: user.displayName || userContext.displayName,
+        displayName: user.displayName || userContext.displayName || user.username || `User ${userContext.fid}`,
         avatar: user.pfp?.url || userContext.pfp?.url,
-        verified: user.verifications?.length > 0 || false,
+        verified: Boolean(user.verifications?.length) || false,
         metadata: {
-          custody: user.custodyAddress,
+          custody: user.custodyAddress || null,
           verifications: user.verifications || [],
-          followerCount: user.followerCount,
-          followingCount: user.followingCount,
+          followerCount: user.followerCount || 0,
+          followingCount: user.followingCount || 0,
           profile: {
-            bio: user.profile?.bio?.text,
-            location: user.profile?.location
+            bio: user.profile?.bio?.text || user.bio?.text || '',
+            location: user.profile?.location || ''
           }
         }
       };
@@ -250,72 +251,125 @@ export class NeynarService {
       try {
         if (existingUser) {
           // Обновляем существующего пользователя
+          logAuth(
+            AuthStep.USER_SAVE,
+            AuthLogType.INFO,
+            'Обновление существующего пользователя',
+            { userId: existingUser.id, fid: userData.fid }
+          );
+          
           updatedUser = await prisma.user.update({
             where: { id: existingUser.id },
             data: userDataToSave
           });
-
-          logAuth(
-            AuthStep.USER_SAVE,
-            AuthLogType.INFO,
-            'Пользователь успешно обновлен в БД',
-            { userId: updatedUser.id, fid: userData.fid }
-          );
+          
+          // Проверка наличия прогресса игры
+          const progress = await prisma.progress.findUnique({
+            where: { user_id: existingUser.id }
+          });
+          
+          // Если прогресса нет, создаем его с начальным состоянием
+          if (!progress) {
+            logAuth(
+              AuthStep.USER_SAVE,
+              AuthLogType.INFO,
+              'Создание нового прогресса для существующего пользователя',
+              { userId: existingUser.id, fid: userData.fid }
+            );
+            
+            await prisma.progress.create({
+              data: {
+                user_id: existingUser.id,
+                game_state: {
+                  _saveVersion: 1,
+                  _savedAt: new Date().toISOString(),
+                  level: 1,
+                  score: 0,
+                  inventory: [],
+                  achievements: [],
+                  tutorials_seen: []
+                },
+                version: 1
+              }
+            });
+          }
         } else {
           // Создаем нового пользователя
-          updatedUser = await prisma.user.create({
-            data: userDataToSave
-          });
-
           logAuth(
             AuthStep.USER_SAVE,
             AuthLogType.INFO,
-            'Новый пользователь успешно создан в БД',
-            { userId: updatedUser.id, fid: userData.fid }
+            'Создание нового пользователя',
+            { fid: userData.fid }
+          );
+          
+          // Генерируем стабильный ID на основе FID
+          const stableUserId = `user_${userData.fid}_${Date.now()}`;
+          
+          // Создаем пользователя с указанным ID
+          updatedUser = await prisma.user.create({
+            data: {
+              id: stableUserId,
+              ...userDataToSave,
+              progress: {
+                create: {
+                  game_state: {
+                    _saveVersion: 1,
+                    _savedAt: new Date().toISOString(),
+                    level: 1,
+                    score: 0,
+                    inventory: [],
+                    achievements: [],
+                    tutorials_seen: []
+                  },
+                  version: 1
+                }
+              }
+            }
+          });
+          
+          logAuth(
+            AuthStep.USER_SAVE,
+            AuthLogType.INFO,
+            'Создан новый пользователь с прогрессом',
+            { userId: stableUserId, fid: userData.fid }
           );
         }
-      } catch (saveError) {
+      } catch (dbSaveError) {
         logAuth(
           AuthStep.USER_SAVE,
           AuthLogType.ERROR,
           'Ошибка при сохранении пользователя в БД',
           { fid: userData.fid },
-          saveError
+          dbSaveError
         );
-        
-        // Обработка известных ошибок Prisma
-        const prismaError = saveError as Error;
-        if (prismaError.name === 'PrismaClientKnownRequestError' && 
-            'code' in prismaError && 
-            prismaError.code === 'P2002') {
-          return {
-            success: false,
-            error: 'Duplicate user record'
-          };
-        }
-        
         return {
           success: false,
-          error: 'Database error during user save'
+          error: dbSaveError instanceof Error ? 
+            dbSaveError.message : 
+            'Database error during user save/update'
         };
       }
 
+      // Возвращаем успешный результат
       return {
         success: true,
         user: {
-          ...userData,
-          id: updatedUser.id
+          id: updatedUser.id,
+          fid: Number(updatedUser.farcaster_fid),
+          username: updatedUser.farcaster_username || `user_${updatedUser.farcaster_fid}`,
+          displayName: updatedUser.farcaster_displayname || updatedUser.farcaster_username || `User ${updatedUser.farcaster_fid}`,
+          avatar: updatedUser.farcaster_pfp,
+          verified: userData.verified || false
         }
       };
     } catch (error) {
       logAuth(
         AuthStep.USER_SAVE,
         AuthLogType.ERROR,
-        'Непредвиденная ошибка при сохранении пользователя',
+        'Общая ошибка при сохранении пользователя',
         { fid: userData.fid },
         error
       );
-
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during user save'

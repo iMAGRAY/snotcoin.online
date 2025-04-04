@@ -16,7 +16,38 @@ export enum AuthLogType {
 }
 
 /**
- * Шаги процесса авторизации
+ * Класс для удобного логирования авторизации
+ */
+export class AuthLogger {
+  private component: string;
+  
+  constructor(component: string) {
+    this.component = component;
+  }
+  
+  info(message: string, data?: any): AuthLogEntry {
+    return logAuthInfo(this.component as any, message, data);
+  }
+  
+  warning(message: string, data?: any): AuthLogEntry {
+    return logAuthWarning(this.component as any, message, data);
+  }
+  
+  error(message: string, error?: any, data?: any): AuthLogEntry {
+    return logAuthError(this.component as any, message, error, data);
+  }
+  
+  debug(message: string, data?: any): AuthLogEntry {
+    return logAuthDebug(this.component as any, message, data);
+  }
+  
+  security(message: string, data?: any): AuthLogEntry {
+    return logAuthSecurity(this.component as any, message, data);
+  }
+}
+
+/**
+ * Этапы процесса авторизации
  */
 export enum AuthStep {
   /** Инициализация */
@@ -55,8 +86,42 @@ export enum AuthStep {
   STORAGE_READ = 'STORAGE_READ',
   /** Ошибка хранилища */
   STORAGE_ERROR = 'STORAGE_ERROR',
+  /** Обновление токена */
+  TOKEN_REFRESH = 'TOKEN_REFRESH',
   /** Ошибка обновления токена */
-  TOKEN_REFRESH_ERROR = 'TOKEN_REFRESH_ERROR'
+  TOKEN_REFRESH_ERROR = 'TOKEN_REFRESH_ERROR',
+  /** Начало попытки авторизации */
+  LOGIN_ATTEMPT = 'LOGIN_ATTEMPT',
+  /** Успешная авторизация */
+  LOGIN_SUCCESS = 'LOGIN_SUCCESS',
+  /** Неуспешная авторизация */
+  LOGIN_FAILED = 'LOGIN_FAILED',
+  /** Выход из системы */
+  LOGOUT = 'LOGOUT',
+  /** Проверка сессии */
+  SESSION_CHECK = 'SESSION_CHECK',
+  /** Регистрация нового пользователя */
+  REGISTER = 'REGISTER',
+  /** Сброс пароля */
+  PASSWORD_RESET = 'PASSWORD_RESET',
+  /** Подтверждение электронной почты */
+  EMAIL_VERIFICATION = 'EMAIL_VERIFICATION',
+  /** Обновление профиля пользователя */
+  PROFILE_UPDATE = 'PROFILE_UPDATE',
+  /** Подтверждение авторизации через Farcaster */
+  FARCASTER_CALLBACK = 'FARCASTER_CALLBACK',
+  /** Верификация авторизации через Farcaster */
+  FARCASTER_VERIFY = 'FARCASTER_VERIFY',
+  /** Создание сессии */
+  SESSION_CREATE = 'SESSION_CREATE',
+  /** Уничтожение сессии */
+  SESSION_DESTROY = 'SESSION_DESTROY',
+  /** Подтверждение авторизации через Farcaster */
+  JWT_VERIFY = 'JWT_VERIFY',
+  /** Middleware */
+  MIDDLEWARE = 'MIDDLEWARE',
+  /** JWT Sign */
+  JWT_SIGN = 'JWT_SIGN'
 }
 
 // Интерфейс записи лога
@@ -402,4 +467,18 @@ export function getAuthSummary(logs: AuthLogEntry[]): string {
   summary += `Длительность: ${Math.round(duration / 1000)} секунд\n`;
 
   return summary;
+}
+
+/**
+ * Генерирует случайный токен авторизации
+ */
+export function generateAuthToken(length = 32): string {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  
+  for (let i = 0; i < length; i++) {
+    result += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  
+  return result;
 } 

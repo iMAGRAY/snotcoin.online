@@ -129,7 +129,15 @@ const ProfilePage: React.FC = () => {
                 >
                   {getUserDisplayName()}
                 </motion.h2>
-                <motion.div className="flex items-center justify-between" layout>
+                {(gameState.user?.farcaster_username || gameState.user?.username) && (
+                  <motion.p
+                    className="text-[#a8c7e1] text-base mb-2"
+                    layout
+                  >
+                    @{gameState.user.farcaster_username || gameState.user.username}
+                  </motion.p>
+                )}
+                <motion.div className="flex items-center justify-between mb-2" layout>
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sign, verify } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
-import { UserModel } from '../../../utils/models';
-import { authService } from '../../../services/auth/authService';
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '@/app/lib/prisma';
+import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
 
 /**
  * Указываем Next.js, что этот маршрут должен быть динамическим
@@ -24,56 +23,169 @@ const REFRESH_EXPIRY = '30d';
  */
 export async function POST(request: NextRequest) {
   try {
-    // Получаем refresh_token из запроса
-    const data = await request.json();
-    const { refresh_token } = data;
-
-    if (!refresh_token) {
-      return NextResponse.json({ success: false, error: 'Refresh token is required' }, { status: 400 });
-    }
-
-    // Проверяем refresh_token в базе данных
-    const user = await prisma.user.findFirst({
-      where: { refresh_token },
-    });
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Invalid refresh token' }, { status: 401 });
-    }
-
-    // Получаем текущий токен авторизации
-    const currentToken = user.jwt_token || '';
+    logAuth(AuthStep.TOKEN_REFRESH, AuthLogType.INFO, 'Начало обновления токена');
     
-    // Обновляем токен через authService
-    const refreshSuccess = await authService.refreshToken();
-    if (!refreshSuccess) {
-      return NextResponse.json({ success: false, error: 'Failed to refresh token' }, { status: 500 });
-    }
+    // Получаем refresh_token из cookies или запроса
+    const cookieStore = cookies();
+    const refreshCookie = cookieStore.get('refresh_token');
     
-    // Получаем новый токен из authService
-    const newToken = authService.getToken();
-    if (!newToken) {
-      return NextResponse.json({ success: false, error: 'Failed to retrieve new token' }, { status: 500 });
+    let refreshToken: string | undefined;
+    
+    // Если токен не в cookies, пробуем получить из body запроса
+    if (!refreshCookie?.value) {
+      const data = await request.json().catch(() => ({}));
+      refreshToken = data.refresh_token;
+      
+      if (!refreshToken) {
+        logAuth(
+          AuthStep.TOKEN_REFRESH, 
+          AuthLogType.ERROR, 
+          'Токен обновления не найден ни в cookies, ни в теле запроса'
+        );
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Refresh token is required' 
+        }, { status: 400 });
+      }
+    } else {
+      refreshToken = refreshCookie.value;
     }
 
-    // Обновляем токен в базе данных
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        jwt_token: newToken,
-        token_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      token: newToken,
-    });
+    // Декодируем refresh токен для получения fid пользователя
+    try {
+      const decoded = verify(refreshToken, REFRESH_SECRET) as { fid?: string; userId?: string };
+      
+      if (!decoded.fid && !decoded.userId) {
+        logAuth(
+          AuthStep.TOKEN_REFRESH, 
+          AuthLogType.ERROR, 
+          'Токен обновления не содержит fid или userId'
+        );
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid refresh token format' 
+        }, { status: 401 });
+      }
+      
+      // Ищем пользователя по fid или userId
+      const user = await prisma.user.findFirst({
+        where: decoded.fid 
+          ? { farcaster_fid: decoded.fid } 
+          : { id: decoded.userId }
+      });
+      
+      if (!user) {
+        logAuth(
+          AuthStep.TOKEN_REFRESH, 
+          AuthLogType.ERROR, 
+          'Пользователь не найден по данным из токена обновления',
+          { fid: decoded.fid, userId: decoded.userId }
+        );
+        return NextResponse.json({ 
+          success: false, 
+          error: 'User not found' 
+        }, { status: 401 });
+      }
+      
+      // Генерируем новый JWT токен
+      const newToken = sign(
+        {
+          userId: user.id,
+          fid: user.farcaster_fid,
+          username: user.farcaster_username,
+          displayName: user.farcaster_displayname,
+          provider: 'farcaster'
+        },
+        JWT_SECRET,
+        { expiresIn: TOKEN_EXPIRY }
+      );
+      
+      // Генерируем новый refresh токен
+      const newRefreshToken = sign(
+        {
+          userId: user.id,
+          fid: user.farcaster_fid,
+          provider: 'farcaster'
+        },
+        REFRESH_SECRET,
+        { expiresIn: REFRESH_EXPIRY }
+      );
+      
+      // Обновляем токены в cookies
+      cookieStore.set({
+        name: 'session',
+        value: newToken,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 60 * 60 // 1 час в секундах
+      });
+      
+      cookieStore.set({
+        name: 'refresh_token',
+        value: newRefreshToken,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 // 30 дней в секундах
+      });
+      
+      // Обновляем токены в базе данных
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          jwt_token: newToken,
+          refresh_token: newRefreshToken,
+          token_expires_at: new Date(Date.now() + 60 * 60 * 1000) // 1 час
+        }
+      });
+      
+      logAuth(
+        AuthStep.TOKEN_REFRESH, 
+        AuthLogType.INFO, 
+        'Токен успешно обновлен',
+        { userId: user.id, fid: user.farcaster_fid }
+      );
+      
+      return NextResponse.json({
+        success: true,
+        token: newToken,
+        user: {
+          id: user.id,
+          fid: user.farcaster_fid ? Number(user.farcaster_fid) : undefined,
+          username: user.farcaster_username,
+          displayName: user.farcaster_displayname || user.farcaster_username,
+          avatar: user.farcaster_pfp
+        }
+      });
+    } catch (tokenError) {
+      logAuth(
+        AuthStep.TOKEN_REFRESH, 
+        AuthLogType.ERROR, 
+        'Ошибка при проверке токена обновления',
+        {},
+        tokenError
+      );
+      
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Invalid refresh token' 
+      }, { status: 401 });
+    }
   } catch (error) {
-    console.error('Error refreshing token:', error);
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
-  } finally {
-    // Отключаемся от базы данных
-    await prisma.$disconnect();
+    logAuth(
+      AuthStep.TOKEN_REFRESH, 
+      AuthLogType.ERROR, 
+      'Внутренняя ошибка при обновлении токена',
+      {},
+      error
+    );
+    
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Internal server error' 
+    }, { status: 500 });
   }
 } 

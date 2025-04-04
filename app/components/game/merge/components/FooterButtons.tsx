@@ -36,8 +36,8 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
     return snotCoins >= calculateCost(type);
   };
   
-  // Определяем размер кнопок
-  const buttonSize = 48;
+  // Определяем размер кнопок (увеличен)
+  const buttonSize = 64;
   
   // Проверяем, доступна ли способность Bull
   const isBullAvailable = !bullUsed && canUse('Bull');
@@ -58,10 +58,11 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
         }}
       >
         <Image 
-          src="/images/merge/Game/ui/buttons/bull.webp"
+          src="/images/merge/Game/ui/Bull.webp"
           width={buttonSize}
           height={buttonSize}
           alt="Bull"
+          className="drop-shadow-lg"
         />
         <div className="cost">
           {cost.toFixed(2)} SC
@@ -91,10 +92,11 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
         }}
       >
         <Image 
-          src="/images/merge/Game/ui/buttons/bomb.webp"
+          src="/images/merge/Game/ui/Bomb.webp"
           width={buttonSize}
           height={buttonSize}
           alt="Bomb"
+          className="drop-shadow-lg"
         />
         <div className="cost">
           {cost.toFixed(2)} SC
@@ -109,7 +111,7 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
   };
   
   return (
-    <div className="w-full h-full flex items-center justify-between px-8 sm:px-12">
+    <div className="w-full h-full flex items-center justify-between px-8 sm:px-12 pb-4 -mt-2">
       {/* Bull Button - Левая сторона */}
       <button
         onClick={onBullClick}
@@ -121,10 +123,14 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
           filter: bullUsed ? 'grayscale(100%)' : 'none'
         }}
       >
-        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black bg-opacity-50 border-2 border-yellow-400 flex items-center justify-center overflow-hidden">
-          <img src="/images/merge/Balls/Bull.webp" alt="Bull" className="w-10 h-10 sm:w-12 sm:h-12" />
+        <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center overflow-hidden">
+          <img 
+            src="/images/merge/Game/ui/Bull.webp" 
+            alt="Bull" 
+            className="w-14 h-14 sm:w-18 sm:h-18 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)]" 
+          />
         </div>
-        <span className="text-xs sm:text-sm text-yellow-400 mt-1 font-semibold tracking-wider">
+        <span className="text-xs sm:text-sm text-yellow-400 mt-1 font-semibold tracking-wider drop-shadow-md">
           {calculateCost('Bull').toFixed(2)} SC
         </span>
         {bullUsed && (
@@ -154,10 +160,14 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
             filter: bombUsed ? 'grayscale(100%)' : 'none'
           }}
         >
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black bg-opacity-50 border-2 border-red-500 flex items-center justify-center overflow-hidden">
-            <img src="/images/merge/Balls/Bomb.webp" alt="Bomb" className="w-10 h-10 sm:w-12 sm:h-12" />
+          <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center overflow-hidden">
+            <img 
+              src="/images/merge/Game/ui/Bomb.webp" 
+              alt="Bomb" 
+              className="w-14 h-14 sm:w-18 sm:h-18 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)]" 
+            />
           </div>
-          <span className="text-xs sm:text-sm text-red-400 mt-1 font-semibold tracking-wider">
+          <span className="text-xs sm:text-sm text-red-400 mt-1 font-semibold tracking-wider drop-shadow-md">
             {calculateCost('Bomb').toFixed(2)} SC
           </span>
           {bombUsed && (
@@ -177,10 +187,14 @@ const FooterButtons: React.FC<FooterButtonsProps> = ({
             canUse('Joy') ? 'opacity-100' : 'opacity-50'
           }`}
         >
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black bg-opacity-50 border-2 border-blue-500 flex items-center justify-center overflow-hidden">
-            <img src="/images/merge/Game/ui/Joy.webp" alt="Joy" className="w-10 h-10 sm:w-12 sm:h-12" />
+          <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center overflow-hidden">
+            <img 
+              src="/images/merge/Game/ui/joy.webp" 
+              alt="Joy" 
+              className="w-14 h-14 sm:w-18 sm:h-18 drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)]" 
+            />
           </div>
-          <span className="text-xs sm:text-sm text-blue-400 mt-1 font-semibold tracking-wider">
+          <span className="text-xs sm:text-sm text-blue-400 mt-1 font-semibold tracking-wider drop-shadow-md">
             {calculateCost('Joy').toFixed(2)} SC
           </span>
         </button>

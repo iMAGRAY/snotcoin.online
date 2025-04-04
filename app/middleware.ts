@@ -4,6 +4,14 @@ import { authService } from '@/app/services/auth/authService';
 import { verifyJWT } from './utils/auth';
 import { ENV, disableRedis } from './lib/env';
 import { redisService } from './services/redis';
+import { verify } from "./utils/jwt";
+import { AuthLogger } from "./utils/auth-logger";
+import { AuthStep } from "./utils/auth-logger";
+
+const logger = new AuthLogger(AuthStep.MIDDLEWARE);
+
+// Проверяем, включен ли режим имитации продакшена
+const isProductionMode = process.env.USE_PRODUCTION_MODE === 'true' || process.env.NODE_ENV === 'production';
 
 /**
  * Пути, которые не требуют аутентификации
@@ -13,6 +21,7 @@ const publicPaths = [
   '/api/frame',
   '/api/auth/logout',
   '/api/auth/refresh',
+  '/api/auth/warpcast',
   '/api/health',
   '/'
 ];
@@ -48,135 +57,73 @@ const isProtectedApiPath = (pathname: string) => {
 };
 
 /**
+ * Маршруты, защищенные авторизацией
+ */
+const protectedRoutes = [
+  "/profile",
+  "/profile/edit",
+  "/favorites",
+];
+
+// Маршруты для перенаправления авторизованных пользователей
+const authRoutes = [
+  "/login",
+  "/register",
+];
+
+/**
  * Middleware для проверки авторизации
  */
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
   
-  // Пропускаем публичные пути без проверки
-  if (isPublicPath(pathname)) {
-    const response = NextResponse.next();
-    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
-    response.headers.set(
-      'Content-Security-Policy',
-      process.env.NODE_ENV === 'production'
-        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
-        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-    );
-    return response;
+  // Проверка, включен ли режим имитации продакшена в разработке
+  const useProductionMode = process.env.USE_PRODUCTION_MODE === "true";
+  const isDev = process.env.NODE_ENV === "development";
+  
+  // Если это API маршрут, пропускаем проверку авторизации
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
   }
+
+  // Получаем токен из куки
+  const token = request.cookies.get("token")?.value || null;
   
-  // Проверяем, требует ли API путь аутентификации
-  const isProtectedApi = isApiRequest(pathname) && isProtectedApiPath(pathname);
-  
-  // Если это не защищенный API, пропускаем
-  if (isApiRequest(pathname) && !isProtectedApi) {
-    const response = NextResponse.next();
-    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
-    response.headers.set(
-      'Content-Security-Policy',
-      process.env.NODE_ENV === 'production'
-        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
-        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-    );
-    return response;
-  }
-  
-  // Получаем токен сессии из куки
-  const sessionCookie = cookies().get('session');
-  
-  // Если токена нет, перенаправляем на главную страницу или возвращаем ошибку
-  if (!sessionCookie) {
-    if (isApiRequest(pathname)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Требуется авторизация'
-      }, { status: 401 });
-    } else {
-      // Для обычных маршрутов перенаправляем на главную страницу
-      const url = new URL('/', request.url);
-      return NextResponse.redirect(url);
+  logger.debug(`Path: ${pathname}, Token: ${token ? "exists" : "none"}`);
+
+  // Проверяем токен
+  let isAuthenticated = false;
+  if (token) {
+    try {
+      const decodedToken = verify(token);
+      isAuthenticated = decodedToken !== null;
+      logger.debug(`Token verification: ${isAuthenticated ? "successful" : "failed"}`);
+    } catch (error) {
+      logger.error(`Token verification error: ${error instanceof Error ? error.message : String(error)}`);
+      isAuthenticated = false;
     }
   }
-  
-  try {
-    // Проверяем JWT токен
-    const token = sessionCookie.value;
-    const isValid = authService.validateTokenExpiration(token);
-    
-    // Получаем данные пользователя из токена
-    const userData = authService.decodeToken(token);
-    const userId = userData?.id;
-    
-    if (!isValid || !userId) {
-      // Пробуем получить refresh token
-      const refreshTokenCookie = cookies().get('refresh_token');
-      
-      if (refreshTokenCookie) {
-        // Если есть refresh token, перенаправляем на главную страницу
-        // или возвращаем специальный ответ для API
-        if (isApiRequest(pathname)) {
-          return NextResponse.json({
-            success: false,
-            message: 'Токен истек',
-            requiresRefresh: true
-          }, { status: 401 });
-        } else {
-          // Перенаправляем на главную страницу
-          const url = new URL('/', request.url);
-          return NextResponse.redirect(url);
-        }
-      }
-      
-      // Если нет refresh token, удаляем куки сессии
-      cookies().delete('session');
-      
-      // Возвращаем ошибку для API или перенаправляем на главную страницу
-      if (isApiRequest(pathname)) {
-        return NextResponse.json({
-          success: false,
-          message: 'Требуется авторизация',
-          error: 'Недействительный токен'
-        }, { status: 401 });
-      } else {
-        const url = new URL('/', request.url);
-        return NextResponse.redirect(url);
-      }
-    }
-    
-    // Токен валиден, продолжаем запрос
-    const response = NextResponse.next();
-    
-    // Добавляем идентификатор пользователя в заголовки запроса
-    // для использования в API обработчиках
-    response.headers.set('X-User-ID', userId);
-    
-    // Добавляем заголовок Content-Security-Policy с директивой frame-ancestors
-    response.headers.set(
-      'Content-Security-Policy',
-      process.env.NODE_ENV === 'production'
-        ? "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io;"
-        : "frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://fc-polls.com https://www.yup.io; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
-    );
-    
-    return response;
-  } catch (error) {
-    console.error('Auth middleware error:', error);
-    
-    // В случае ошибки удаляем куки сессии
-    cookies().delete('session');
-    
-    if (isApiRequest(pathname)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Ошибка аутентификации',
-        error: String(error)
-      }, { status: 500 });
-    } else {
-      const url = new URL('/', request.url);
-      return NextResponse.redirect(url);
-    }
+
+  // Если мы в режиме разработки и не используем режим имитации продакшена,
+  // пропускаем защищенные маршруты даже без авторизации
+  if (isDev && !useProductionMode && protectedRoutes.some(route => pathname.startsWith(route))) {
+    logger.debug("Development mode: bypassing authentication for protected routes");
+    return NextResponse.next();
   }
+
+  // Перенаправление для неавторизованных пользователей с защищенных маршрутов
+  if (!isAuthenticated && protectedRoutes.some(route => pathname.startsWith(route))) {
+    logger.info(`Redirecting unauthenticated user from protected route: ${pathname} to /login`);
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Перенаправление для авторизованных пользователей с авторизационных маршрутов
+  if (isAuthenticated && authRoutes.some(route => pathname.startsWith(route))) {
+    logger.info(`Redirecting authenticated user from auth route: ${pathname} to /profile`);
+    return NextResponse.redirect(new URL("/profile", request.url));
+  }
+
+  return NextResponse.next();
 }
 
 /**
@@ -185,11 +132,12 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Матчим все маршруты, кроме:
-     * - Файлов статики (изображения, шрифты, иконки и т.д.)
-     * - Путей по умолчанию Next.js (_next)
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
      */
-    '/((?!_next/static|_next/image|favicon.ico|logo.png|images/|fonts/).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
 
