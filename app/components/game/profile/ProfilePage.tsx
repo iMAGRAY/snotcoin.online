@@ -14,6 +14,7 @@ import { authService } from '../../../services/auth/authService'
 import { ICONS } from "../../../constants/uiConstants"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs"
 import { FaChartLine, FaStore, FaTrophy } from "react-icons/fa"
+import { useFarcaster } from "../../../contexts/FarcasterContext"
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -32,6 +33,8 @@ const ProfilePage: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const router = useRouter()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const { sdkUser } = useFarcaster()
+  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
@@ -46,7 +49,17 @@ const ProfilePage: React.FC = () => {
     }
   }, [])
 
+  useEffect(() => {
+    // Отладочная информация о данных пользователя
+    console.log('🚀 UserData в профиле:', gameState.user)
+    if (gameState.user?.metadata) {
+      console.log('🚀 Metadata пользователя:', JSON.stringify(gameState.user.metadata, null, 2))
+    }
+    console.log('🚀 SDK User Data:', sdkUser)
+  }, [gameState.user, sdkUser])
+
   const getUserDisplayName = () => {
+    if (sdkUser?.displayName) return sdkUser.displayName
     if (!gameState.user) return "Player"
 
     const { displayName, username, farcaster_displayname, farcaster_username } = gameState.user
@@ -54,6 +67,57 @@ const ProfilePage: React.FC = () => {
       return displayName || farcaster_displayname || ""
     }
     return username || farcaster_username || "Player"
+  }
+
+  const getUserUsername = () => {
+    if (sdkUser?.username) return sdkUser.username
+    if (!gameState.user) return ""
+    return gameState.user?.farcaster_username || gameState.user?.username || ""
+  }
+
+  const getUserFid = () => {
+    if (sdkUser?.fid) return sdkUser.fid
+    if (!gameState.user) return "N/A"
+    return gameState.user?.farcaster_fid || gameState.user?.fid || "N/A"
+  }
+
+  const getUserProfileImage = () => {
+    // Если уже была ошибка загрузки, возвращаем локальное изображение
+    if (imageError) return "/images/profile/background/avatar/default.webp"
+    
+    // Проверяем данные в разных местах
+    if (sdkUser?.pfpUrl) return sdkUser.pfpUrl
+    if (!gameState.user) return ""
+    return gameState.user?.pfp || gameState.user?.farcaster_pfp || ""
+  }
+
+  const getUserBio = () => {
+    // Проверяем данные в разных местах
+    if (sdkUser?.bio) return sdkUser.bio
+    if (!gameState.user?.metadata) return null
+    
+    const metadata = gameState.user.metadata
+    
+    // Проверяем все возможные места, где может быть биография
+    return metadata.profile?.bio?.text || 
+           metadata.profile?.bio || 
+           metadata.bio || 
+           null
+  }
+
+  const getUserLocation = () => {
+    // Проверяем данные в разных местах
+    if (sdkUser?.location?.description) return sdkUser.location.description
+    if (!gameState.user?.metadata) return null
+    
+    const metadata = gameState.user.metadata
+    
+    // Проверяем все возможные места, где может быть местоположение
+    if (typeof metadata.profile?.location === 'string') return metadata.profile.location
+    if (typeof metadata.location === 'string') return metadata.location
+    return metadata.profile?.location?.description || 
+           metadata.location?.description || 
+           null
   }
 
   const handleLogout = useCallback(() => {
@@ -70,6 +134,11 @@ const ProfilePage: React.FC = () => {
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true)
+  }
+
+  const handleImageError = () => {
+    console.log("Ошибка загрузки изображения профиля, использую запасное изображение")
+    setImageError(true)
   }
 
   const profileSectionsData: ProfileSection[] = [
@@ -100,21 +169,24 @@ const ProfilePage: React.FC = () => {
             layout
           >
             {/* Profile Header */}
-            <motion.div className="flex items-center mb-6" layout>
+            <motion.div className="flex flex-col sm:flex-row items-center mb-6" layout>
               <motion.div
-                className="w-20 h-20 rounded-full overflow-hidden mr-4 border-4 border-emerald-500 shadow-lg flex-shrink-0 bg-gray-700 flex items-center justify-center"
+                className="w-24 h-24 rounded-full overflow-hidden mr-4 border-4 border-emerald-500 shadow-lg flex-shrink-0 bg-gray-700 flex items-center justify-center mb-4 sm:mb-0"
                 whileHover={{ scale: 1.05, rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
                 layout
               >
-                {gameState.user?.pfp || gameState.user?.farcaster_pfp ? (
+                {getUserProfileImage() ? (
                   <Image
-                    src={gameState.user.pfp || gameState.user.farcaster_pfp || ""}
+                    src={getUserProfileImage()}
                     alt="Profile"
-                    width={80}
-                    height={80}
+                    width={96}
+                    height={96}
                     style={{ objectFit: "cover" }}
                     className="w-full h-full"
+                    onError={handleImageError}
+                    unoptimized={imageError}
+                    loading="eager"
                   />
                 ) : (
                   <div className="text-4xl font-bold text-white">
@@ -122,30 +194,30 @@ const ProfilePage: React.FC = () => {
                   </div>
                 )}
               </motion.div>
-              <motion.div className="flex-grow" layout>
+              <motion.div className="flex-grow text-center sm:text-left" layout>
                 <motion.h2
                   className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-2"
                   layout
                 >
                   {getUserDisplayName()}
                 </motion.h2>
-                {(gameState.user?.farcaster_username || gameState.user?.username) && (
+                {getUserUsername() && (
                   <motion.p
                     className="text-[#a8c7e1] text-base mb-2"
                     layout
                   >
-                    @{gameState.user.farcaster_username || gameState.user.username}
+                    @{getUserUsername()}
                   </motion.p>
                 )}
-                <motion.div className="flex items-center justify-between mb-2" layout>
+                <motion.div className="flex items-center justify-center sm:justify-start mb-2" layout>
                   <div className="flex items-center">
                     <Star className="w-5 h-5 text-yellow-400 mr-2" />
                     <motion.p className="text-[#6899be] text-lg font-semibold" layout>
-                      FID: {gameState.user?.farcaster_fid || gameState.user?.fid || "N/A"}
+                      FID: {getUserFid()}
                     </motion.p>
                   </div>
                 </motion.div>
-                <motion.div className="flex items-center mt-2" layout>
+                <motion.div className="flex items-center justify-center sm:justify-start mt-2" layout>
                   <Calendar className="w-5 h-5 text-emerald-400 mr-2" />
                   <motion.p className="text-[#6899be] text-lg font-semibold" layout>
                     {t("consecutiveLoginDays")}: {gameState.consecutiveLoginDays}
@@ -153,6 +225,63 @@ const ProfilePage: React.FC = () => {
                 </motion.div>
               </motion.div>
             </motion.div>
+            
+            {/* Farcaster Data Details */}
+            {(getUserFid() !== "N/A" || sdkUser) && (
+              <motion.div 
+                className="mt-4 pt-4 border-t border-[#5889ae]/30"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
+              >
+                <div className="grid grid-cols-1 gap-2 text-[#a8c7e1]">
+                  {/* Биография пользователя */}
+                  {getUserBio() && (
+                    <div className="flex flex-col">
+                      <span className="text-sm text-[#6899be]">{t("bio")}</span>
+                      <p className="text-[#a8c7e1]">{getUserBio()}</p>
+                    </div>
+                  )}
+                  
+                  {/* Местоположение */}
+                  {getUserLocation() && (
+                    <div className="flex flex-col">
+                      <span className="text-sm text-[#6899be]">{t("location")}</span>
+                      <p className="text-[#a8c7e1]">{getUserLocation()}</p>
+                    </div>
+                  )}
+                  
+                  {/* Подписчики */}
+                  {(gameState.user?.metadata?.followerCount > 0 || gameState.user?.metadata?.profile?.followerCount > 0) && (
+                    <div className="flex flex-col">
+                      <span className="text-sm text-[#6899be]">{t("followers")}</span>
+                      <p className="text-[#a8c7e1]">{gameState.user?.metadata?.followerCount || gameState.user?.metadata?.profile?.followerCount}</p>
+                    </div>
+                  )}
+                  
+                  {/* Подписки */}
+                  {(gameState.user?.metadata?.followingCount > 0 || gameState.user?.metadata?.profile?.followingCount > 0) && (
+                    <div className="flex flex-col">
+                      <span className="text-sm text-[#6899be]">{t("following")}</span>
+                      <p className="text-[#a8c7e1]">{gameState.user?.metadata?.followingCount || gameState.user?.metadata?.profile?.followingCount}</p>
+                    </div>
+                  )}
+                  
+                  {/* Верификация */}
+                  {(gameState.user?.verified || 
+                   (gameState.user?.metadata?.verifications && gameState.user.metadata.verifications.length > 0)) && (
+                    <div className="flex items-center mt-1">
+                      <div className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-sm flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        {t("verified")}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Buttons */}

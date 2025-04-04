@@ -9,8 +9,8 @@ export const ruTranslations: TranslationKeys = {
     home: 'Главная',
     game: 'Игра',
     shop: 'Магазин',
-    faq: 'FAQ',
-    about: 'О проекте'
+    faq: 'Вопросы',
+    about: 'О нас'
   },
   // Лаборатория
   laboratory: {
@@ -23,10 +23,10 @@ export const ruTranslations: TranslationKeys = {
     title: 'Улучшения',
     buy: 'Купить',
     level: 'Уровень {level}',
-    maxLevel: 'Максимальный уровень',
+    maxLevel: 'Макс. уровень',
     cost: 'Стоимость: {cost}'
   },
-  // Общие
+  // Общие элементы
   common: {
     loading: 'Загрузка...',
     save: 'Сохранить',
@@ -58,45 +58,64 @@ export const ruTranslations: TranslationKeys = {
     start: 'Начать игру',
     pause: 'Пауза',
     resume: 'Продолжить',
-    restart: 'Перезапустить',
-    quit: 'Выйти',
-    score: 'Счет: {score}',
+    restart: 'Рестарт',
+    quit: 'Выход',
+    score: 'Очки: {score}',
     level: 'Уровень: {level}',
     time: 'Время: {time}',
     gameOver: 'Игра окончена',
     victory: 'Победа!',
     newHighScore: 'Новый рекорд!'
   },
-  // Обратная совместимость со старыми ключами
+  
+  // Типы для навигационной панели
   storage: 'Хранилище',
   quests: 'Задания',
   profile: 'Профиль',
-  upgrade: 'Улучшение',
+  
+  // Типы для улучшений
+  upgrade: 'Улучшить',
   currentLevel: 'Текущий уровень',
   upgradeCost: 'Стоимость улучшения',
   currentEffect: 'Текущий эффект',
   nextEffect: 'Следующий эффект',
   upgradeButton: 'Улучшить',
-  containerCapacity: 'Ёмкость контейнера',
-  increaseContainerCapacity: 'Увеличить ёмкость контейнера',
+  containerCapacity: 'Вместимость контейнера',
+  increaseContainerCapacity: 'Увеличивает вместимость контейнера',
   fillingSpeedUpgrade: 'Скорость наполнения',
   fillingSpeedDescription: 'Увеличивает скорость наполнения контейнера',
-  back: 'Назад',
   snotCoinImage: 'Изображение монеты',
-  upgradeSuccess: 'Улучшение выполнено',
+  upgradeSuccess: 'Улучшение выполнено успешно',
+  
+  // Хранилище
   open: 'Открыть',
   openChest: 'Открыть сундук',
   commonChestDescription: 'Обычный сундук с ресурсами',
   rareChestDescription: 'Редкий сундук с улучшенными ресурсами',
   legendaryChestDescription: 'Легендарный сундук с эксклюзивными предметами',
-  loading: 'Загрузка',
-  error: 'Ошибка',
+  
+  // Типы для общих элементов
   retry: 'Повторить',
-  close: 'Закрыть',
   comingSoon: 'Скоро будет доступно',
   tokenomic: 'Токеномика',
   
+  // Для обратной совместимости со старыми ключами
+  loading: 'Загрузка',
+  error: 'Ошибка',
+  close: 'Закрыть',
+  
   // Подсказки
   timeToFillTooltip: 'Время до полного заполнения контейнера',
-  fillTimeTooltip: 'Время до полного заполнения контейнера'
+  fillTimeTooltip: 'Время до полного заполнения контейнера',
+  
+  // Профиль и аутентификация
+  connectFarcaster: 'Подключить Farcaster',
+  logout: 'Выйти',
+  farcasterInfo: 'Информация Farcaster',
+  bio: 'О себе',
+  followers: 'Подписчики',
+  following: 'Подписки',
+  verified: 'Подтвержден',
+  location: 'Местоположение',
+  consecutiveLoginDays: 'Дней подряд'
 }; 

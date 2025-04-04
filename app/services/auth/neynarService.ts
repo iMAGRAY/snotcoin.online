@@ -244,7 +244,8 @@ export class NeynarService {
         farcaster_fid: userData.fid.toString(),
         farcaster_username: userData.username || '',
         farcaster_displayname: userData.displayName || null,
-        farcaster_pfp: userData.avatar || null
+        farcaster_pfp: userData.avatar || null,
+        metadata: userData.metadata || {}
       };
 
       let updatedUser;
@@ -359,7 +360,8 @@ export class NeynarService {
           username: updatedUser.farcaster_username || `user_${updatedUser.farcaster_fid}`,
           displayName: updatedUser.farcaster_displayname || updatedUser.farcaster_username || `User ${updatedUser.farcaster_fid}`,
           avatar: updatedUser.farcaster_pfp,
-          verified: userData.verified || false
+          verified: userData.verified || false,
+          metadata: updatedUser.metadata || userData.metadata || {}
         }
       };
     } catch (error) {

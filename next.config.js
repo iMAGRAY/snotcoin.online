@@ -5,6 +5,7 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    domains: ['imagedelivery.net', 'warpcast.com', 'i.imgur.com', 'img.farcaster.xyz'],
   },
   // Эти опции не поддерживаются в Next.js 14.2.26
   // experimental: {

@@ -105,5 +105,15 @@ export const enTranslations: TranslationKeys = {
   
   // Tooltips
   timeToFillTooltip: 'Time until container is full',
-  fillTimeTooltip: 'Time until container is full'
+  fillTimeTooltip: 'Time until container is full',
+  
+  // Profile and authentication
+  connectFarcaster: 'Connect with Farcaster',
+  logout: 'Logout',
+  farcasterInfo: 'Farcaster Information',
+  bio: 'Bio',
+  followers: 'Followers',
+  following: 'Following',
+  verified: 'Verified',
+  consecutiveLoginDays: 'Consecutive Days'
 }; 

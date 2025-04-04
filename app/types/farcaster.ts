@@ -74,6 +74,11 @@ export interface FarcasterUser {
   pfpUrl?: string;
   /** Биография пользователя (альтернатива для profile.bio.text) */
   bio?: string;
+  /** Информация о местоположении пользователя */
+  location?: {
+    placeId?: string;
+    description?: string;
+  };
 }
 
 /**
