@@ -1,8 +1,7 @@
 'use client'
 
 import React from 'react';
-import Image from 'next/image';
-import { BALL_COLORS, HEADER_HEIGHT, HEADER_HEIGHT_MOBILE } from '../constants/gameConstants';
+import { formatSnotValue } from '../../../../utils/formatters';
 
 interface GameHeaderProps {
   togglePause: () => void;
@@ -17,73 +16,38 @@ const GameHeader: React.FC<GameHeaderProps> = ({
   snotCoinValue, 
   snotValue 
 }) => {
-  // Определяем цвет для следующего шара с гарантированным значением по умолчанию
-  const ballColorIndex = Math.max(0, Math.min((futureNextBallLevel - 1), BALL_COLORS.length - 1));
-  const nextBallColor = BALL_COLORS[ballColorIndex] || 0xf94144; // Красный цвет по умолчанию
-  
-  // Преобразуем цвет в строку для CSS
-  const colorHex = `#${nextBallColor.toString(16).padStart(6, '0')}`;
-  
-  // Форматируем snotCoinValue с 4 цифрами после точки
-  const formattedSnotCoin = typeof snotCoinValue === 'number' 
-    ? snotCoinValue.toFixed(4) 
-    : '0.0000';
-  
   return (
-    <div className="relative w-full">
-      {/* Фоновое изображение хедера */}
-      <div 
-        className="w-full h-[64px] sm:h-[80px] relative"
-        style={{
-          backgroundImage: 'url("/images/merge/Game/ui/Header.webp")',
-          backgroundSize: 'auto 100%',
-          backgroundRepeat: 'repeat-x',
-          backgroundPosition: 'center'
-        }}
+    <div className="relative bg-transparent w-full py-3 px-4 flex items-center justify-between z-20"
+         style={{
+           backgroundImage: 'url("/images/merge/Game/ui/Header.webp")',
+           backgroundSize: 'auto 100%',
+           backgroundRepeat: 'repeat-x',
+           backgroundPosition: 'center',
+           boxShadow: 'inset 0 -3px 10px rgba(0,0,0,0.2)',
+           imageRendering: 'crisp-edges'
+         }}>
+      {/* Кнопка паузы (слева) */}
+      <button 
+        onClick={togglePause}
+        className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-700 bg-gray-800 hover:bg-gray-700"
       >
-      </div>
-
-      {/* Контент поверх изображения */}
-      <div className="absolute top-0 left-0 right-0 h-full flex justify-between items-center px-4 sm:px-6">
-        {/* Кнопка паузы */}
-        <button 
-          onClick={togglePause}
-          className="text-white font-bold flex items-center"
-          aria-label="Pause game"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" className="mr-2">
-            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-          </svg>
-          <span className="hidden sm:inline">Пауза</span>
-        </button>
-        
-        {/* Отображение ресурсов и следующего шара по центру */}
-        <div className="flex items-center space-x-4">
-          {/* SnotCoin */}
-          <div className="flex items-center bg-gray-800 px-2 py-1 rounded-lg">
-            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-yellow-400 mr-2"></div>
-            <span className="text-white text-xs sm:text-sm font-bold">{formattedSnotCoin}</span>
-          </div>
-          
-          {/* Snot */}
-          <div className="flex items-center bg-gray-800 px-2 py-1 rounded-lg">
-            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-green-500 mr-2"></div>
-            <span className="text-white text-xs sm:text-sm font-bold">{snotValue}</span>
-          </div>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+        </svg>
+      </button>
+      
+      {/* Информация о валюте (справа) */}
+      <div className="flex items-center space-x-4">
+        {/* SnotCoin */}
+        <div className="flex items-center">
+          <img src="/images/currency/snotcoin-icon.webp" alt="SnotCoin" className="w-5 h-5 mr-1" />
+          <span className="text-white text-sm font-medium">{formatSnotValue(snotCoinValue)}</span>
         </div>
         
-        {/* Отображение следующего шара для броска */}
+        {/* Snot */}
         <div className="flex items-center">
-          <span className="text-white mr-2 text-xs sm:text-sm">Следующий:</span>
-          <div 
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center" 
-            style={{ 
-              backgroundColor: colorHex,
-              boxShadow: '0 0 8px rgba(255, 255, 255, 0.5)'
-            }}
-          >
-            <span className="text-white font-bold text-xs sm:text-sm">{futureNextBallLevel}</span>
-          </div>
+          <img src="/images/currency/snot-icon.webp" alt="Snot" className="w-5 h-5 mr-1" />
+          <span className="text-green-400 text-sm font-medium">{formatSnotValue(snotValue)}</span>
         </div>
       </div>
     </div>

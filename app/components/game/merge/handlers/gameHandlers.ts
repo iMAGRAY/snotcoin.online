@@ -5,24 +5,29 @@
  */
 
 /**
- * Обработчик переключения паузы
+ * Создает обработчик для включения/выключения паузы в игре
  */
-export const createTogglePauseHandler = (isPaused: boolean, setUserPausedGame: (state: boolean) => void, togglePause: () => void) => {
+export const createTogglePauseHandler = (
+  isPaused: boolean,
+  setUserPausedGame: React.Dispatch<React.SetStateAction<boolean>>,
+  togglePause: () => void
+) => {
   return () => {
-    const newPauseState = !isPaused;
-    if (newPauseState) {
-      // Устанавливаем флаг пользовательской паузы только при включении паузы
+    // Если игра была приостановлена, отмечаем, что это сделал пользователь
+    if (!isPaused) {
       setUserPausedGame(true);
     }
-    // Вызываем оригинальную функцию
     togglePause();
   };
 };
 
 /**
- * Обработчик возобновления игры
+ * Создает обработчик для возобновления игры
  */
-export const createResumeGameHandler = (setUserPausedGame: (state: boolean) => void, resumeGame: () => void) => {
+export const createResumeGameHandler = (
+  setUserPausedGame: React.Dispatch<React.SetStateAction<boolean>>,
+  resumeGame: () => void
+) => {
   return () => {
     setUserPausedGame(false);
     resumeGame();
@@ -30,55 +35,39 @@ export const createResumeGameHandler = (setUserPausedGame: (state: boolean) => v
 };
 
 /**
- * Обработчик закрытия игры
+ * Создает обработчик для закрытия игры
  */
 export const createGameCloseHandler = (
-  cleanupResources: () => void, 
-  setIsPaused: (state: boolean) => void, 
-  gameInstanceRef: React.MutableRefObject<any>, 
-  dispatch: any, 
+  cleanupResources: () => void,
+  setIsPaused: React.Dispatch<React.SetStateAction<boolean>>,
+  gameInstanceRef: React.MutableRefObject<any>,
+  dispatch: any,
   onClose: () => void
 ) => {
   return () => {
-    // Логируем закрытие игры для отладки
-    console.log("Закрытие игры MergeGameClient");
-    
-    // Сначала очищаем все ресурсы
-    cleanupResources();
-    
-    // Делаем паузу, чтобы убедиться, что игра остановлена
+    // Останавливаем игру перед закрытием
     setIsPaused(true);
     
-    // Явно уничтожаем экземпляр игры Phaser
+    // Очищаем ресурсы
+    cleanupResources();
+    
+    // Уничтожаем экземпляр игры Phaser
     if (gameInstanceRef.current) {
       try {
         gameInstanceRef.current.destroy(true);
         gameInstanceRef.current = null;
       } catch (error) {
-        console.error('Ошибка при уничтожении Phaser игры:', error);
+        console.error('Ошибка при уничтожении Phaser игры в handleGameClose:', error);
       }
     }
     
-    // Устанавливаем активную вкладку "merge" при выходе из игры
-    try {
-      dispatch({
-        type: 'SET_ACTIVE_TAB',
-        payload: 'merge'
-      });
-      console.log("Успешно установлена активная вкладка 'merge'");
-    } catch (error) {
-      console.error("Ошибка при установке активной вкладки:", error);
-    }
+    // Возвращаемся в главное меню с правильным активным табом
+    dispatch({
+      type: 'SET_ACTIVE_TAB',
+      payload: { activeTab: 'merge' }
+    });
     
-    // Небольшая задержка перед закрытием для завершения очистки ресурсов
-    setTimeout(() => {
-      // Вызываем обработчик onClose из props
-      if (typeof onClose === 'function') {
-        console.log("Вызываем onClose коллбэк");
-        onClose();
-      } else {
-        console.error("onClose не является функцией:", onClose);
-      }
-    }, 50);
+    // Вызываем колбэк закрытия
+    onClose();
   };
 }; 

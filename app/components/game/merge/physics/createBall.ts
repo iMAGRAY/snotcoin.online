@@ -224,8 +224,8 @@ export const createBall = (
       });
     } else if (level >= 1 && level <= 12) {
       // Используем изображения для шаров уровней от 1 до 12 (монеты SNOTCOIN)
-      // Загружаем изображение монеты соответствующего уровня
-      const ballTexture = `ball${level}`;
+      // Используем ключ, который соответствует имени файла (1.webp, 2.webp и т.д.)
+      const ballTexture = `${level}`; // Используем прямое имя файла без префикса 'ball'
       
       // Проверяем, существует ли такая текстура в кэше
       if (scene.textures.exists(ballTexture)) {
@@ -520,4 +520,9 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
   } catch (error) {
     console.error('Ошибка при создании визуального шара:', error);
   }
+};
+
+// Проверка наличия свойства в объекте userData
+export const hasUserDataProperty = (userData: any, property: string): boolean => {
+  return userData && userData[property] !== undefined;
 }; 

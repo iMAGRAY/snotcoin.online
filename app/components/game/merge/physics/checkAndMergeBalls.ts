@@ -1,10 +1,9 @@
 import * as planck from 'planck';
-import { Ball, ExtendedBall, PhysicsUserData } from '../types/index';
-import { getBallPhysicsSize } from './createBall';
+import { Ball, PhysicsUserData } from '../types/index';
+import { getBallPhysicsSize, hasUserDataProperty } from './createBall';
 import { MAX_LEVEL, MAX_BALLS_COUNT, SCALE } from '../constants/gameConstants';
 import { mergeBalls } from './mergeBalls';
 import { createBall } from './createBall';
-import { hasUserDataProperty } from '../utils/ballsUtils';
 
 // Функция для проверки, есть ли шары, помеченные для слияния
 export const hasBallsMarkedForMerge = (worldRef: React.MutableRefObject<planck.World | null>): boolean => {

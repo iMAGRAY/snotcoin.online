@@ -1,140 +1,72 @@
 'use client'
 
-import planck from 'planck';
-import { ExtendedBall, ExtendedNextBall } from '../types/index';
+import { ExtendedBall } from '../types';
+import * as planck from 'planck';
 
 /**
- * Создает обработчик для применения Bull шара
+ * Создает обработчик для шара типа "Bull"
  */
 export const createBullBallHandler = (
   canUseSpecialFeature: (type: string) => boolean,
   deductResourceCost: (type: string) => void,
-  setBullUsed: (state: boolean) => void,
-  setSpecialBallType: (type: string | null) => void,
-  currentBallRef: React.MutableRefObject<ExtendedNextBall | null>,
+  setBullUsed: React.Dispatch<React.SetStateAction<boolean>>,
+  setSpecialBallType: React.Dispatch<React.SetStateAction<string | null>>,
+  currentBallRef: React.MutableRefObject<any>,
   dispatch: any
 ) => {
   return () => {
-    // Проверяем, можно ли использовать способность
-    if (!canUseSpecialFeature('Bull')) {
-      console.log('Недостаточно ресурсов для использования способности Bull');
+    const type = 'Bull';
+    
+    // Проверяем, достаточно ли ресурсов
+    if (!canUseSpecialFeature(type)) {
+      console.log(`Недостаточно ресурсов для использования ${type}`);
       return;
     }
     
     // Списываем стоимость
-    deductResourceCost('Bull');
+    deductResourceCost(type);
     
-    // Отмечаем Bull как использованный (до следующего перезапуска игры)
-    setBullUsed(true);
+    // Устанавливаем флаг использования Bull
+    setBullUsed(false);
     
     // Устанавливаем тип специального шара
-    setSpecialBallType('Bull');
+    setSpecialBallType(type);
     
-    // Если шар уже создан, устанавливаем его тип как Bull
-    if (currentBallRef.current) {
-      // Сохраняем уровень текущего шара, который меняем на Bull
-      dispatch({
-        type: 'LOG_SPECIAL_BALL_USE',
-        payload: {
-          тип: 'Bull',
-          уровень: currentBallRef.current.level
-        }
-      });
-    } else {
-      console.error('Ошибка: currentBallRef.current is null после создания шара Bull');
-    }
+    console.log(`Специальный шар ${type} активирован`);
   };
 };
 
 /**
- * Создает обработчик для применения Bomb шара
+ * Создает обработчик для шара типа "Bomb"
  */
 export const createBombBallHandler = (
   canUseSpecialFeature: (type: string) => boolean,
   deductResourceCost: (type: string) => void,
-  setSpecialBallType: (type: string | null) => void,
-  currentBallRef: React.MutableRefObject<ExtendedNextBall | null>,
+  setSpecialBallType: React.Dispatch<React.SetStateAction<string | null>>,
+  currentBallRef: React.MutableRefObject<any>,
   dispatch: any
 ) => {
   return () => {
-    // Проверяем, можно ли использовать способность
-    if (!canUseSpecialFeature('Bomb')) {
-      console.log('Недостаточно ресурсов для использования способности Bomb');
+    const type = 'Bomb';
+    
+    // Проверяем, достаточно ли ресурсов
+    if (!canUseSpecialFeature(type)) {
+      console.log(`Недостаточно ресурсов для использования ${type}`);
       return;
     }
     
     // Списываем стоимость
-    deductResourceCost('Bomb');
+    deductResourceCost(type);
     
     // Устанавливаем тип специального шара
-    setSpecialBallType('Bomb');
+    setSpecialBallType(type);
     
-    // Если шар уже создан, устанавливаем его тип как Bomb
-    if (currentBallRef.current) {
-      // Сохраняем уровень текущего шара, который меняем на Bomb
-      dispatch({
-        type: 'LOG_SPECIAL_BALL_USE',
-        payload: {
-          тип: 'Bomb',
-          уровень: currentBallRef.current.level
-        }
-      });
-    } else {
-      console.error('Ошибка: currentBallRef.current is null после создания шара Bomb');
-    }
+    console.log(`Специальный шар ${type} активирован`);
   };
 };
 
 /**
- * Создает обработчик для применения эффекта Joy (радости)
- */
-export const createJoyEffectHandler = (
-  canUseSpecialFeature: (type: string) => boolean,
-  deductResourceCost: (type: string) => void,
-  findBottomBalls: (count: number) => ExtendedBall[],
-  removeBottomBalls: (balls: ExtendedBall[]) => void,
-  dispatch: any
-) => {
-  return () => {
-    // Проверяем, можно ли использовать способность
-    if (!canUseSpecialFeature('Joy')) {
-      console.log('Недостаточно ресурсов для использования способности Joy');
-      return;
-    }
-    
-    // Списываем стоимость
-    deductResourceCost('Joy');
-    
-    // Находим нижние шары (до 3) для удаления
-    const ballsToRemove = findBottomBalls(3);
-    
-    // Если найдены шары для удаления
-    if (ballsToRemove.length > 0) {
-      // Сохраняем уровни удаляемых шаров
-      const removedLevels = ballsToRemove.map(ball => 
-        ball.level || 0
-      ).filter(level => level > 0);
-      
-      // Логируем информацию об использовании Joy
-      dispatch({
-        type: 'LOG_SPECIAL_BALL_USE',
-        payload: {
-          тип: 'Joy',
-          удалено: removedLevels.length,
-          уровни: removedLevels
-        }
-      });
-      
-      // Удаляем эти шары
-      removeBottomBalls(ballsToRemove);
-    } else {
-      console.log('Не найдены шары для удаления с помощью Joy');
-    }
-  };
-};
-
-/**
- * Создает обработчик для применения эффекта Joy через импульсы
+ * Создает обработчик для эффекта "Joy" (радость), который придает случайный импульс всем шарам
  */
 export const createImpulseJoyEffectHandler = (
   canUseSpecialFeature: (type: string) => boolean,
@@ -142,32 +74,46 @@ export const createImpulseJoyEffectHandler = (
   ballsRef: React.MutableRefObject<ExtendedBall[]>,
   worldRef: React.MutableRefObject<planck.World | null>,
   containerCapacity: number,
-  specialCosts: { [key: string]: number }
+  specialCosts: Record<string, number>
 ) => {
   return () => {
-    // Проверяем, достаточно ли ресурсов для использования Joy
-    if (!canUseSpecialFeature('Joy')) {
-      const joyPercentage = specialCosts.Joy || 0;
-      const actualCost = (joyPercentage / 100) * containerCapacity;
-      console.log(`Недостаточно SnotCoin для использования Joy. Требуется ${actualCost.toFixed(4)}`);
-      return; // Выходим, если ресурсов недостаточно
+    const type = 'Joy';
+    
+    // Проверяем, достаточно ли ресурсов
+    if (!canUseSpecialFeature(type)) {
+      console.log(`Недостаточно ресурсов для использования эффекта Joy`);
+      return;
     }
     
-    // Списываем стоимость использования Joy
-    deductResourceCost('Joy');
+    // Проверяем наличие шаров
+    if (ballsRef.current.length === 0) {
+      console.log('Нет шаров для применения эффекта Joy');
+      return;
+    }
     
-    if (!worldRef.current) return;
+    // Списываем стоимость
+    deductResourceCost(type);
     
-    // Применяем случайный импульс к каждому шару
+    console.log('Применяем эффект Joy ко всем шарам');
+    
+    // Применяем случайный импульс ко всем шарам
     ballsRef.current.forEach(ball => {
-      if (ball && ball.body) {
-        // Генерируем случайный вектор силы
-        const forceX = (Math.random() * 2 - 1) * 0.5; // от -0.5 до 0.5
-        const forceY = (Math.random() * 2 - 1) * 0.5; // от -0.5 до 0.5
+      if (ball && ball.body && ball.body.isActive()) {
+        // Генерируем случайный импульс
+        const randomAngle = Math.random() * Math.PI * 2; // Случайный угол в радианах
+        const randomMagnitude = 0.5 + Math.random() * 1.5; // Случайная сила импульса
         
-        // Применяем импульс к шару
-        ball.body.applyLinearImpulse(planck.Vec2(forceX, forceY), ball.body.getPosition());
-        ball.body.setAwake(true); // Убеждаемся, что шар активен
+        const impulseX = Math.cos(randomAngle) * randomMagnitude;
+        const impulseY = Math.sin(randomAngle) * randomMagnitude;
+        
+        // Применяем импульс к центру шара
+        ball.body.applyLinearImpulse(
+          planck.Vec2(impulseX, impulseY),
+          ball.body.getWorldCenter()
+        );
+        
+        // Пробуждаем тело, если оно спало
+        ball.body.setAwake(true);
       }
     });
   };
