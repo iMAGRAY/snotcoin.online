@@ -9,6 +9,7 @@ import { throwBall, generateBallLevel } from './physics/throwBall';
 import { updateTrajectoryLine } from './physics/trajectoryLine';
 import { formatSnotValue } from '../../../utils/formatters';
 import { FIXED_PLAYER_Y } from './constants/gameConstants';
+import { createNextBall } from './physics/createNextBall';
 
 // Импортируем компоненты
 import GameHeader from './components/GameHeader';
@@ -76,6 +77,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   const [userPausedGame, setUserPausedGame] = useState<boolean>(false);
   const [lastThrowTime, setLastThrowTime] = useState<number>(0);
   const [bullUsed, setBullUsed] = useState<boolean>(false);
+  const [bombUsed, setBombUsed] = useState<boolean>(false);
   const isFreezeModeActive = useRef<boolean>(false);
   
   // Стоимость использования специальных возможностей в % от вместимости
@@ -104,7 +106,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
       }
     });
     
-    console.log(`Использована способность ${type}, списано ${cost.toFixed(4)} SC. Осталось: ${(snotCoins - cost).toFixed(4)} SC`);
+    // Использована способность, списано SC. Осталось: SC
   };
   
   // Вспомогательные функции для работы с шарами
@@ -127,52 +129,52 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   
   // Функция для изменения типа шара для броска
   const changeSpecialBall = (type: string) => {
-    console.log(`changeSpecialBall вызван с типом: ${type}`);
+    // changeSpecialBall вызван с типом
     
     // Проверяем, достаточно ли ресурсов для использования специальной возможности
     if (!canUseSpecialFeature(type)) {
       const cost = specialCosts[type as keyof typeof specialCosts] || 0;
       const actualCost = (cost / 100) * containerCapacity;
-      console.log(`Недостаточно SnotCoin для использования ${type}. Требуется ${actualCost.toFixed(4)}`);
+      // Недостаточно SnotCoin для использования. Требуется
       return; // Выходим, если ресурсов недостаточно
     }
     
     // Для шара Bull проверяем, не был ли он уже использован
     if (type === 'Bull' && bullUsed) {
-      console.log('Шар Bull уже был использован. Перезарядите способность.');
+      // Шар Bull уже был использован. Перезарядите способность
       
       // Добавляем визуальное уведомление о необходимости перезарядки
-      if (gameInstanceRef.current && gameInstanceRef.current.scene && gameInstanceRef.current.scene.scenes[0]) {
-        const scene = gameInstanceRef.current.scene.scenes[0];
+              if (gameInstanceRef.current && gameInstanceRef.current.scene && gameInstanceRef.current.scene.scenes[0]) {
+                const scene = gameInstanceRef.current.scene.scenes[0];
         
-        // Добавляем текст с предупреждением
+                // Добавляем текст с предупреждением
         const rechargeText = scene.add.text(
-          scene.cameras.main.width / 2,
-          scene.cameras.main.height / 2,
+                  scene.cameras.main.width / 2,
+                  scene.cameras.main.height / 2,
           'Перезарядите bull',
-          { 
-            fontFamily: 'Arial', 
-            fontSize: '24px', 
-            color: '#ff0000',
-            stroke: '#000000',
-            strokeThickness: 4,
-            align: 'center'
-          }
-        ).setOrigin(0.5);
-        
-        // Анимируем исчезновение текста
-        scene.tweens.add({
+                  { 
+                    fontFamily: 'Arial', 
+                    fontSize: '24px', 
+                    color: '#ff0000',
+                    stroke: '#000000',
+                    strokeThickness: 4,
+                    align: 'center'
+                  }
+                ).setOrigin(0.5);
+                
+                // Анимируем исчезновение текста
+                scene.tweens.add({
           targets: rechargeText,
-          alpha: 0,
-          y: scene.cameras.main.height / 2 - 50,
-          duration: 1000,
-          ease: 'Power2',
-          onComplete: () => {
+                  alpha: 0,
+                  y: scene.cameras.main.height / 2 - 50,
+                  duration: 1000,
+                  ease: 'Power2',
+                  onComplete: () => {
             rechargeText.destroy();
-          }
-        });
-      }
-      
+                  }
+                });
+              }
+              
       return; // Выходим, если Bull уже был использован
     }
     
@@ -207,12 +209,12 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         // Создаем новый шар выбранного типа через функции из основного компонента
         // Обработчик будет использовать объект сцены для создания нового шара через currentBallRef
         
-        console.log(`Создан специальный шар ${type}:`, currentBallRef.current);
-      } catch (error) {
-        console.error('Ошибка при создании специального шара:', error);
+        // Создан специальный шар
+          } catch (error) {
+        // Ошибка при создании специального шара
       }
     } else {
-      console.log('Невозможно создать специальный шар: currentBallRef.current или gameInstanceRef.current не существует');
+      // Невозможно создать специальный шар: currentBallRef.current или gameInstanceRef.current не существует
     }
   };
   
@@ -220,28 +222,381 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
   const applyJoyEffect = createImpulseJoyEffectHandler(
     canUseSpecialFeature,
     deductResourceCost,
-    ballsRef,
+              ballsRef,
     worldRef,
     containerCapacity,
     specialCosts
   );
   
-  const handleBullBall = createBullBallHandler(
-    canUseSpecialFeature,
-    deductResourceCost,
-    setBullUsed,
-    setSpecialBallType,
-    currentBallRef,
-    dispatch
-  );
+  const handleBullBall = () => {
+    const type = 'Bull';
+    
+    // Диагностическая информация
+    // Bull button clicked
+    
+    // Проверяем, достаточно ли ресурсов
+    if (!canUseSpecialFeature(type)) {
+      // Недостаточно ресурсов для использования
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Недостаточно SnotCoin для использования Bull',
+          type: 'error',
+          duration: 2000
+        }
+      });
+      return;
+    }
+    
+    // Проверяем, был ли уже использован Bull в этой игре
+    if (bullUsed) {
+      // Bull уже был использован в этой игре
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Bull уже был использован в этой игре',
+          type: 'warning',
+          duration: 2000
+        }
+      });
+          return;
+        }
+        
+    // Списываем стоимость
+    deductResourceCost(type);
+    
+    // Устанавливаем флаг использования Bull
+    setBullUsed(true);
+    
+    // Устанавливаем тип специального шара
+    setSpecialBallType(type);
+    
+    // Получаем сцену из gameInstanceRef
+    if (gameInstanceRef.current && gameInstanceRef.current.scene && gameInstanceRef.current.scene.scenes && gameInstanceRef.current.scene.scenes[0]) {
+      try {
+        const scene = gameInstanceRef.current.scene.scenes[0];
+        // Got scene from gameInstanceRef
+        
+        // Сохраняем текущую позицию игрока, если она есть
+        let playerX = scene.cameras.main.width / 2; // Позиция по умолчанию (центр)
+        let playerY = FIXED_PLAYER_Y; // Позиция Y игрока
+        
+                if (playerBodyRef.current) {
+          const pos = playerBodyRef.current.getPosition();
+          playerX = pos.x * 30; // Преобразуем физические координаты в пиксели
+        }
+        
+        // Создаём ссылку на физическое тело игрока
+        const playerRef = { current: scene.playerBodyRef?.current || null };
+        
+        // Уничтожаем текущий шар, если он есть
+                    if (currentBallRef.current && currentBallRef.current.sprite && 
+                        currentBallRef.current.sprite.container && !currentBallRef.current.sprite.container.destroyed) {
+          currentBallRef.current.sprite.container.destroy();
+        }
+        
+        // Создаем шар Bull напрямую (без использования createNextBall)
+        // Начинаем создание шара Bull напрямую
+        
+        // Получаем размер шара
+        const ballSize = 15;
+        
+        // Создаем контейнер для шара
+        const container = scene.add.container(playerX, playerY + 24);
+        container.setDepth(30); // Высокий z-index для отображения поверх других элементов
+        
+        let bullImage;
+        let outline;
+        
+        // Проверяем существование текстуры
+        if (scene.textures.exists('bull-ball')) {
+          // Используем текстуру bull-ball для создания шара Bull
+          bullImage = scene.add.image(0, 0, 'bull-ball');
+          bullImage.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
+          
+          // Добавляем красное свечение
+          outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
+          
+          // Добавляем в контейнер
+          container.add([outline, bullImage]);
+          
+          // Анимация пульсации
+          scene.tweens.add({
+            targets: outline,
+            alpha: { from: 0.3, to: 0.7 },
+            scale: { from: 1, to: 1.2 },
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+          
+          // Анимация вращения
+          scene.tweens.add({
+            targets: bullImage,
+            angle: '+=5',
+            duration: 3000,
+            repeat: -1,
+            ease: 'Linear'
+          });
+        } else {
+          // Текстура bull-ball не найдена, используется fallback вариант
+          // Загружаем текстуру
+          scene.load.image('bull-ball', '/images/merge/Balls/Bull.webp');
+          scene.load.start();
+          
+          // Если изображение не найдено, создаем красный круг
+          bullImage = scene.add.circle(0, 0, ballSize, 0xff0000);
+          outline = scene.add.circle(0, 0, ballSize * 1.2, 0xff0000, 0.3);
+          
+          // Добавляем текст "BULL"
+          const text = scene.add.text(0, 0, 'BULL', {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#ffffff'
+          }).setOrigin(0.5);
+          
+          // Добавляем в контейнер
+          container.add([outline, bullImage, text]);
+        }
+        
+        // Сохраняем созданный шар в currentBallRef
+        currentBallRef.current = {
+          sprite: {
+            container,
+            circle: bullImage
+          },
+          level: 1,
+          specialType: 'Bull'
+        };
+        
+        // Шар Bull успешно создан: currentBallRef.current
+        
+        // Обновляем пунктирную линию для нового шара
+        if (trajectoryLineRef.current && trajectoryLineRef.current.destroy) {
+          trajectoryLineRef.current.destroy();
+        }
+        
+        // Импортируем функцию создания траектории
+        const { createTrajectoryLine } = require('./physics/trajectoryLine');
+        createTrajectoryLine(scene, trajectoryLineRef, playerX, playerY + 24);
+        
+        dispatch({
+          type: 'SHOW_NOTIFICATION' as any,
+          payload: {
+            message: 'Bull активирован! Бросьте чтобы использовать',
+            type: 'success',
+            duration: 2000
+          }
+        });
+                  } catch (error) {
+        // Ошибка при создании Bull шара
+        dispatch({
+          type: 'SHOW_NOTIFICATION' as any,
+          payload: {
+            message: 'Ошибка при активации Bull',
+            type: 'error',
+            duration: 2000
+          }
+        });
+      }
+    } else {
+      // Невозможно создать Bull: не найдена сцена в gameInstanceRef
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Ошибка при активации Bull: сцена не найдена',
+          type: 'error',
+          duration: 2000
+        }
+      });
+    }
+  };
   
-  const handleBombBall = createBombBallHandler(
-    canUseSpecialFeature,
-    deductResourceCost,
-    setSpecialBallType,
-    currentBallRef,
-    dispatch
-  );
+  const handleBombBall = () => {
+    const type = 'Bomb';
+    
+    // Диагностическая информация
+    // Bomb button clicked
+    
+    // Проверяем, достаточно ли ресурсов
+    if (!canUseSpecialFeature(type)) {
+      // Недостаточно ресурсов для использования
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Недостаточно SnotCoin для использования Bomb',
+          type: 'error',
+          duration: 2000
+        }
+      });
+      return;
+    }
+    
+    // Проверяем, был ли уже использован Bomb в этой игре
+    if (bombUsed) {
+      // Bomb уже был использован в этой игре
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Bomb уже был использован в этой игре',
+          type: 'warning',
+          duration: 2000
+        }
+      });
+      return;
+    }
+    
+    // Списываем стоимость
+    deductResourceCost(type);
+    
+    // Устанавливаем флаг использования Bomb
+    setBombUsed(true);
+    
+    // Устанавливаем тип специального шара
+    setSpecialBallType(type);
+    
+    // Получаем сцену из gameInstanceRef
+    if (gameInstanceRef.current && gameInstanceRef.current.scene && gameInstanceRef.current.scene.scenes && gameInstanceRef.current.scene.scenes[0]) {
+      try {
+              const scene = gameInstanceRef.current.scene.scenes[0];
+        // Got scene from gameInstanceRef
+        
+        // Сохраняем текущую позицию игрока, если она есть
+        let playerX = scene.cameras.main.width / 2; // Позиция по умолчанию (центр)
+        let playerY = FIXED_PLAYER_Y; // Позиция Y игрока
+        
+                  if (playerBodyRef.current) {
+          const pos = playerBodyRef.current.getPosition();
+          playerX = pos.x * 30; // Преобразуем физические координаты в пиксели
+                  }
+              
+        // Создаём ссылку на физическое тело игрока
+        const playerRef = { current: scene.playerBodyRef?.current || null };
+        
+        // Уничтожаем текущий шар, если он есть
+              if (currentBallRef.current && currentBallRef.current.sprite && 
+                  currentBallRef.current.sprite.container && !currentBallRef.current.sprite.container.destroyed) {
+          currentBallRef.current.sprite.container.destroy();
+        }
+        
+        // Создаем шар Bomb напрямую (без использования createNextBall)
+        // Начинаем создание шара Bomb напрямую
+        
+        // Получаем размер шара
+        const ballSize = 15;
+        
+        // Создаем контейнер для шара
+        const container = scene.add.container(playerX, playerY + 24);
+        container.setDepth(30); // Высокий z-index для отображения поверх других элементов
+        
+        let bombImage;
+        let outline;
+        
+        // Проверяем существование текстуры
+        if (scene.textures.exists('bomb')) {
+          // Используем текстуру bomb для создания шара Bomb
+          bombImage = scene.add.image(0, 0, 'bomb');
+          bombImage.setDisplaySize(ballSize * 2.2, ballSize * 2.2);
+          
+          // Добавляем свечение
+          outline = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
+          
+          // Добавляем в контейнер
+          container.add([outline, bombImage]);
+          
+          // Анимация пульсации
+          scene.tweens.add({
+            targets: outline,
+            alpha: { from: 0.3, to: 0.7 },
+            scale: { from: 1, to: 1.2 },
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+          
+          // Анимация вращения
+        scene.tweens.add({
+            targets: bombImage,
+            angle: '+=10',
+            duration: 2000,
+            repeat: -1,
+            ease: 'Linear'
+          });
+        } else {
+          console.warn('Текстура bomb не найдена, используется fallback вариант');
+          // Загружаем текстуру
+          scene.load.image('bomb', '/images/merge/Balls/Bomb.webp');
+          scene.load.start();
+          
+          // Если изображение не найдено, создаем чёрный круг
+          bombImage = scene.add.circle(0, 0, ballSize, 0x000000);
+          outline = scene.add.circle(0, 0, ballSize * 1.2, 0xff0000, 0.3);
+          
+          // Добавляем текст "BOMB"
+          const text = scene.add.text(0, 0, 'BOMB', {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#ffffff'
+          }).setOrigin(0.5);
+          
+          // Добавляем в контейнер
+          container.add([outline, bombImage, text]);
+        }
+        
+        // Сохраняем созданный шар в currentBallRef
+        currentBallRef.current = {
+          sprite: {
+            container,
+            circle: bombImage
+          },
+          level: 1,
+          specialType: 'Bomb'
+        };
+        
+        console.log('Шар Bomb успешно создан:', currentBallRef.current);
+        
+        // Обновляем пунктирную линию для нового шара
+    if (trajectoryLineRef.current && trajectoryLineRef.current.destroy) {
+      trajectoryLineRef.current.destroy();
+        }
+        
+        // Импортируем функцию создания траектории
+        const { createTrajectoryLine } = require('./physics/trajectoryLine');
+        createTrajectoryLine(scene, trajectoryLineRef, playerX, playerY + 24);
+        
+        dispatch({
+          type: 'SHOW_NOTIFICATION' as any,
+          payload: {
+            message: 'Bomb активирована! Бросьте чтобы использовать',
+            type: 'success',
+            duration: 2000
+          }
+        });
+          } catch (error) {
+        console.error('Ошибка при создании Bomb шара:', error);
+        dispatch({
+          type: 'SHOW_NOTIFICATION' as any,
+          payload: {
+            message: 'Ошибка при активации Bomb',
+            type: 'error',
+            duration: 2000
+          }
+        });
+      }
+    } else {
+      console.error('Невозможно создать Bomb: не найдена сцена в gameInstanceRef');
+      dispatch({
+        type: 'SHOW_NOTIFICATION' as any,
+        payload: {
+          message: 'Ошибка при активации Bomb: сцена не найдена',
+          type: 'error',
+          duration: 2000
+        }
+      });
+    }
+  };
   
   // Обработчики для управления игрой
   const handleTogglePause = createTogglePauseHandler(isPaused, setUserPausedGame, togglePause);
@@ -320,6 +675,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
             potentiallyStuckBallsRef={potentiallyStuckBallsRef}
             dispatch={dispatch}
             snotCoins={snotCoins}
+            setSpecialBallType={setSpecialBallType}
           />
           
           <GamePhysics
@@ -334,7 +690,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         {/* Прозрачный футер (пол игровой зоны) */}
         <div className="flex-shrink-0 w-full relative z-10">
           <div 
-            className="w-full h-[64px] sm:h-[96px]"
+            className="w-full h-[64px] sm:h-[96px] relative"
             style={{
               backgroundImage: 'url("/images/merge/Game/ui/Footer.webp")',
               backgroundSize: '100% 100%', 
@@ -343,6 +699,8 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               boxShadow: 'inset 0 3px 10px rgba(0,0,0,0.2)'
             }}
           >
+            {/* Кнопки способностей (приподнятые) */}
+            <div className="absolute top-0 left-0 right-0 w-full transform -translate-y-10 sm:-translate-y-12">
             <FooterButtons
               onBullClick={handleBullBall}
               onBombClick={handleBombBall}
@@ -351,7 +709,9 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               containerCapacity={containerCapacity}
               snotCoins={snotCoins}
               bullUsed={bullUsed}
+                bombUsed={bombUsed}
             />
+            </div>
           </div>
         </div>
       </div>

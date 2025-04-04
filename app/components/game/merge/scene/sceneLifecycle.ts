@@ -3,6 +3,7 @@
 import planck from 'planck';
 import { PhaserType, ExtendedBall, NextBall } from '../types/index';
 import { createTrajectoryLine, updateTrajectoryLine } from '../utils/sceneUtils';
+import { BASE_GAME_WIDTH } from '../constants/gameConstants';
 
 // Типы для параметров сцены
 export interface SceneRefs {
@@ -78,42 +79,52 @@ export const createScene = (
     gameStateRef 
   } = sceneRefs;
   
+  // Рассчитываем масштаб относительно базового размера
+  const scaleX = gameWidth / BASE_GAME_WIDTH;
+  const scaleY = gameHeight / (BASE_GAME_WIDTH * 1.5); // Соотношение сторон 2:3
+  
+  console.log(`Создание сцены с масштабом: scaleX=${scaleX}, scaleY=${scaleY}`);
+  
   // Добавляем фон с деревьями
   const treesImage = scene.add.image(gameWidth / 2, 0, 'trees');
   treesImage.setOrigin(0.5, 0);
   treesImage.setDisplaySize(gameWidth, gameHeight);
   
   // Добавляем пол
-  const floorHeight = 30; // Высота пола в пикселях
+  const floorHeight = 30 * scaleY; // Масштабируем высоту пола
   const floorImage = scene.add.image(gameWidth / 2, gameHeight - floorHeight / 2, 'floor');
   floorImage.setDisplaySize(gameWidth, floorHeight);
+  floorImage.setOrigin(0.5, 0.5);
   
   // Добавляем инструкции для игрока
+  const fontSize = Math.max(16 * scaleX, 10); // Минимальный размер шрифта 10px
   const instructions = scene.add.text(
     gameWidth / 2, 
-    64,
+    64 * scaleY,
     "Наведите и нажмите, чтобы бросить",
     { 
       fontFamily: 'Arial', 
-      fontSize: '16px', 
+      fontSize: `${fontSize}px`, 
       color: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: Math.max(3 * scaleX, 1),
       align: 'center'
     }
   );
   instructions.setOrigin(0.5, 0.5);
   
   // Создаем игрока (круг в нижней части экрана)
-  const playerSprite = scene.add.circle(gameWidth / 2, FIXED_PLAYER_Y, PLAYER_SIZE, 0x00ff00);
+  const scaledPlayerSize = PLAYER_SIZE * scaleX; // Масштабируем размер игрока
+  const playerSprite = scene.add.circle(gameWidth / 2, FIXED_PLAYER_Y, scaledPlayerSize, 0x00ff00);
   onSetPlayerSprite(playerSprite);
   
-  // Создаем пунктирную линию траектории
+  // Создаем пунктирную линию траектории с учетом масштаба
   createTrajectoryLine(
     scene, 
     trajectoryLineRef, 
     gameWidth / 2, 
     FIXED_PLAYER_Y,
+    scaleX // Передаем масштаб для правильной толщины линии
   );
   
   // Скрываем линию траектории если игра на паузе
@@ -123,20 +134,20 @@ export const createScene = (
     }
   }
   
-  // Добавляем обработку ввода
+  // Добавляем обработку ввода для обновления траектории
   scene.input.on('pointermove', (pointer: any) => {
     // Пропускаем обработку, если игра на паузе или окончена
     if (gameStateRef.current.isPaused || gameStateRef.current.isGameOver) return;
     
     // Обновляем линию в зависимости от положения указателя
     if (trajectoryLineRef.current) {
-      const angle = Math.atan2(pointer.y - FIXED_PLAYER_Y, pointer.x - gameWidth / 2);
       updateTrajectoryLine(
         scene, 
         trajectoryLineRef, 
         gameWidth / 2, 
         FIXED_PLAYER_Y,
-        gameStateRef.current.isPaused
+        gameStateRef.current.isPaused,
+        scaleX // Передаем масштаб для корректного обновления
       );
     }
   });
@@ -153,17 +164,18 @@ export const createScene = (
       0.2
     );
     
-    // Добавляем текст об активации заморозки
+    // Добавляем текст об активации заморозки с масштабированием
+    const freezeFontSize = Math.max(20 * scaleX, 12);
     const freezeText = scene.add.text(
       gameWidth / 2,
-      80,
+      80 * scaleY,
       "ЗАМОРОЗКА АКТИВНА",
       {
         fontFamily: 'Arial',
-        fontSize: '20px',
+        fontSize: `${freezeFontSize}px`,
         color: '#ffffff',
         stroke: '#0088ff',
-        strokeThickness: 4,
+        strokeThickness: Math.max(4 * scaleX, 2),
         align: 'center'
       }
     );

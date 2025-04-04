@@ -13,29 +13,29 @@ export const mergeBalls = (
   ballsRef: React.MutableRefObject<Ball[]>
 ): Ball | null => {
   if (!ballA || !ballB || !ballA.body || !ballB.body) {
-    console.warn('Не удалось слить шары: отсутствует тело шара');
+    // console.warn('Не удалось слить шары: отсутствует тело шара');
     return null;
   }
   if (!worldRef.current) {
-    console.warn('Не удалось слить шары: отсутствует физический мир');
+    // console.warn('Не удалось слить шары: отсутствует физический мир');
     return null;
   }
   
   try {
-    console.log(`Пытаемся слить шары уровня ${ballA.level} и ${ballB.level}`);
+    // console.log(`Пытаемся слить шары уровня ${ballA.level} и ${ballB.level}`);
     
     // Проверяем уровни еще раз для безопасности
     if (ballA.level !== ballB.level) {
-      console.warn(`Отмена слияния: уровни шаров не совпадают (${ballA.level} и ${ballB.level})`);
+      // console.warn(`Отмена слияния: уровни шаров не совпадают (${ballA.level} и ${ballB.level})`);
       return null;
     }
     
     if (ballA.level >= MAX_LEVEL) {
-      console.warn(`Отмена слияния: достигнут максимальный уровень ${MAX_LEVEL}`);
+      // console.warn(`Отмена слияния: достигнут максимальный уровень ${MAX_LEVEL}`);
       return null;
     }
     
-    console.log(`Выполняем слияние шаров уровня ${ballA.level}`);
+    // console.log(`Выполняем слияние шаров уровня ${ballA.level}`);
     
     // Получаем позиции для создания нового шара
     const posA = ballA.body.getPosition();
@@ -51,10 +51,10 @@ export const mergeBalls = (
         ballA.body.setUserData(null);
         worldRef.current.destroyBody(ballA.body);
         ballA.body = null as any;
-        console.log('Уничтожено тело первого шара');
+        // console.log('Уничтожено тело первого шара');
       }
     } catch (e) {
-      console.error('Ошибка при уничтожении тела первого шара:', e);
+      // console.error('Ошибка при уничтожении тела первого шара:', e);
     }
     
     try {
@@ -62,37 +62,37 @@ export const mergeBalls = (
         ballB.body.setUserData(null);
         worldRef.current.destroyBody(ballB.body);
         ballB.body = null as any;
-        console.log('Уничтожено тело второго шара');
+        // console.log('Уничтожено тело второго шара');
       }
     } catch (e) {
-      console.error('Ошибка при уничтожении тела второго шара:', e);
+      // console.error('Ошибка при уничтожении тела второго шара:', e);
     }
     
     // Уничтожаем спрайты в безопасном режиме
     try {
       if (ballA.sprite && ballA.sprite.container && !ballA.sprite.container.destroyed) {
         ballA.sprite.container.destroy();
-        console.log('Уничтожен спрайт первого шара');
+        // console.log('Уничтожен спрайт первого шара');
         
         if (ballA.level === MAX_LEVEL && ballA.sprite.effectsContainer && !ballA.sprite.effectsContainer.destroyed) {
           ballA.sprite.effectsContainer.destroy();
         }
       }
     } catch (e) {
-      console.error('Ошибка при уничтожении спрайта первого шара:', e);
+      // console.error('Ошибка при уничтожении спрайта первого шара:', e);
     }
     
     try {
       if (ballB.sprite && ballB.sprite.container && !ballB.sprite.container.destroyed) {
         ballB.sprite.container.destroy();
-        console.log('Уничтожен спрайт второго шара');
+        // console.log('Уничтожен спрайт второго шара');
         
         if (ballB.level === MAX_LEVEL && ballB.sprite.effectsContainer && !ballB.sprite.effectsContainer.destroyed) {
           ballB.sprite.effectsContainer.destroy();
         }
       }
     } catch (e) {
-      console.error('Ошибка при уничтожении спрайта второго шара:', e);
+      // console.error('Ошибка при уничтожении спрайта второго шара:', e);
     }
     
     // Удаляем шары из массива
@@ -100,11 +100,11 @@ export const mergeBalls = (
     ballsRef.current = ballsRef.current.filter(ball => 
       ball && ball !== ballA && ball !== ballB && ball.body !== null
     );
-    console.log(`Удалено ${initialLength - ballsRef.current.length} шаров из массива`);
+    // console.log(`Удалено ${initialLength - ballsRef.current.length} шаров из массива`);
     
     // Создаем новый шар следующего уровня
     const newLevel = ballA.level + 1;
-    console.log(`Создаем новый шар уровня ${newLevel}`);
+    // console.log(`Создаем новый шар уровня ${newLevel}`);
     
     const newBall = createBall(
       scene, 
@@ -116,7 +116,7 @@ export const mergeBalls = (
     );
     
     if (newBall) {
-      console.log(`Новый шар уровня ${newLevel} успешно создан`);
+      // console.log(`Новый шар уровня ${newLevel} успешно создан`);
       
       // Добавляем небольшой импульс вверх при создании нового шара
       if (newBall.body) {
@@ -146,12 +146,12 @@ export const mergeBalls = (
         });
       }
     } else {
-      console.error(`Не удалось создать новый шар уровня ${newLevel}`);
+      // console.error(`Не удалось создать новый шар уровня ${newLevel}`);
     }
     
     return newBall;
   } catch (error) {
-    console.error('Ошибка при объединении шаров:', error);
+    // console.error('Ошибка при объединении шаров:', error);
     return null;
   }
 }; 

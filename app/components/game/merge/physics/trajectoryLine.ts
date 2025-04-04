@@ -5,7 +5,8 @@ export const createTrajectoryLine = (
   scene: any,
   trajectoryLineRef: React.MutableRefObject<TrajectoryRef | null>,
   x: number,
-  y: number
+  y: number,
+  scale: number = 1.0 // Добавляем параметр масштаба с значением по умолчанию
 ) => {
   try {
     // Проверяем, инициализирована ли игра
@@ -22,7 +23,9 @@ export const createTrajectoryLine = (
     
     // Создаем графический объект для пунктирной линии
     const graphics = scene.add.graphics();
-    graphics.lineStyle(2, 0xffffff, 0.5); // Белая полупрозрачная линия
+    // Масштабируем толщину линии в зависимости от размера игры
+    const lineWidth = Math.max(2 * scale, 1); // Минимальная толщина 1px
+    graphics.lineStyle(lineWidth, 0xffffff, 0.5); // Белая полупрозрачная линия
     
     // Рисуем пунктирную линию от шара до пола
     graphics.beginPath();
@@ -31,7 +34,7 @@ export const createTrajectoryLine = (
     graphics.moveTo(x, y); // Начинаем от центра шара
     
     // Конечная точка - пол (с небольшим отступом)
-    graphics.lineTo(x, gameHeight - 32); // 32 - высота пола
+    graphics.lineTo(x, gameHeight - 32 * scale); // Масштабируем высоту пола
     
     // Завершаем рисование линии
     graphics.strokePath();
@@ -41,14 +44,17 @@ export const createTrajectoryLine = (
     mask.fillStyle(0xffffff);
     
     // Создаем пунктирный эффект, рисуя небольшие прямоугольники вдоль линии
-    const lineLength = gameHeight - y - 32;
-    const segmentLength = 5; // Длина сегмента пунктира
-    const gap = 5; // Длина пробела между сегментами
+    const lineLength = gameHeight - y - 32 * scale;
+    // Масштабируем длину сегментов пунктира и промежутков
+    const segmentLength = 5 * scale; // Длина сегмента пунктира
+    const gap = 5 * scale; // Длина пробела между сегментами
     
     // Рисуем сегменты только в видимой области - оптимизация
     let i = 0;
     while (i < lineLength && i < 1000) { // Ограничиваем количество сегментов для безопасности
-      mask.fillRect(x - 1, y + i, 2, segmentLength);
+      // Масштабируем ширину пунктира
+      const dashWidth = 2 * scale;
+      mask.fillRect(x - dashWidth/2, y + i, dashWidth, segmentLength);
       i += segmentLength + gap;
     }
     
@@ -80,14 +86,15 @@ export const updateTrajectoryLine = (
   trajectoryLineRef: React.MutableRefObject<TrajectoryRef | null>,
   x: number,
   y: number,
-  isPaused: boolean
+  isPaused: boolean,
+  scale: number = 1.0 // Добавляем параметр масштаба с значением по умолчанию
 ) => {
   try {
     // Проверяем, инициализирована ли игра и не находится ли она в паузе
     if (!scene || isPaused) return;
     
-    // Просто пересоздаем линию в новой позиции - более эффективно для этого случая
-    createTrajectoryLine(scene, trajectoryLineRef, x, y);
+    // Просто пересоздаем линию в новой позиции с учетом масштаба
+    createTrajectoryLine(scene, trajectoryLineRef, x, y, scale);
   } catch (error) {
     console.error('Ошибка при обновлении пунктирной линии:', error);
   }

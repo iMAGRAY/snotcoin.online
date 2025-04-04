@@ -9,8 +9,6 @@ import { generateColorTexture } from './textureUtils';
 export const preloadScene = (scene: any) => {
   try {
     // Загружаем все необходимые текстуры и изображения
-    console.log('Загрузка текстур и изображений...');
-
     // Загружаем изображения шаров разных уровней
     // Добавляем обработку ошибок загрузки для каждого изображения
     // Шары уровней от 1 до 11 и 12 используют свои изображения
@@ -29,8 +27,6 @@ export const preloadScene = (scene: any) => {
 
     // Создаем событие для обработки ошибок загрузки
     scene.load.on('loaderror', (fileObj: any) => {
-      console.warn(`Ошибка загрузки файла: ${fileObj.src}`);
-      
       // Если ошибка связана с изображением шара, создаем и используем fallback текстуру
       if (fileObj.key && !isNaN(parseInt(fileObj.key))) {
         const level = parseInt(fileObj.key);
@@ -44,7 +40,35 @@ export const preloadScene = (scene: any) => {
       }
     });
   } catch (error) {
-    console.error('Ошибка в preloadScene:', error);
+    // Ошибка в preloadScene:
+  }
+};
+
+// Загружает текстуры для шаров разных уровней
+export const loadBallTextures = (scene: Phaser.Scene, maxLevel: number): void => {
+  try {
+    // Загружаем текстуры для обычных шаров всех уровней
+    for (let i = 1; i <= maxLevel; i++) {
+      const textureKey = i.toString();
+      
+      // Формируем путь к текстуре
+      const texturePath = `/images/balls/level${i}.png`;
+      
+      // Загружаем текстуру в сцену
+      scene.load.image(textureKey, texturePath);
+    }
+    
+    // Загружаем текстуры для специальных шаров
+    
+    // Бомба
+    scene.load.image('bomb', '/images/balls/bomb.png');
+    
+    // Бык
+    scene.load.image('bull', '/images/balls/bull.png');
+    
+    // Текстуры загружены успешно
+  } catch (error) {
+    // Ошибка при загрузке текстур шаров
   }
 };
 

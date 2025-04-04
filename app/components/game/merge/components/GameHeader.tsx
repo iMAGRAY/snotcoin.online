@@ -29,25 +29,39 @@ const GameHeader: React.FC<GameHeaderProps> = ({
       {/* Кнопка паузы (слева) */}
       <button 
         onClick={togglePause}
-        className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-700 bg-gray-800 hover:bg-gray-700"
+        className="w-12 h-12 flex items-center justify-center rounded-full border border-gray-700 bg-gray-800 hover:bg-gray-700 p-1.5"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-white">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-        </svg>
+        <img 
+          src="/images/merge/Game/ui/pause.webp" 
+          alt="Пауза" 
+          className="w-full h-full object-cover"
+        />
       </button>
       
       {/* Информация о валюте (справа) */}
       <div className="flex items-center space-x-4">
-        {/* SnotCoin */}
-        <div className="flex items-center">
-          <img src="/images/currency/snotcoin-icon.webp" alt="SnotCoin" className="w-5 h-5 mr-1" />
-          <span className="text-white text-sm font-medium">{formatSnotValue(snotCoinValue)}</span>
+        {/* SnotCoin с деревянным фоном */}
+        <div className="flex items-center px-3 py-1.5 rounded-full" 
+             style={{
+               backgroundColor: '#8B4513',
+               border: '2px solid #5D3A1F',
+               boxShadow: 'inset 0 0 5px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3)',
+               backgroundImage: 'linear-gradient(to bottom, #9e5f2f, #8B4513, #723a10)'
+             }}>
+          <img src="/images/common/icons/snotcoin.webp" alt="SnotCoin" className="w-6 h-6 mr-1.5 drop-shadow-md" />
+          <span className="text-white text-sm font-medium drop-shadow-md">{snotCoinValue.toFixed(2)}</span>
         </div>
         
-        {/* Snot */}
-        <div className="flex items-center">
-          <img src="/images/currency/snot-icon.webp" alt="Snot" className="w-5 h-5 mr-1" />
-          <span className="text-green-400 text-sm font-medium">{formatSnotValue(snotValue)}</span>
+        {/* Snot с деревянным фоном */}
+        <div className="flex items-center px-3 py-1.5 rounded-full"
+             style={{
+               backgroundColor: '#8B4513',
+               border: '2px solid #5D3A1F',
+               boxShadow: 'inset 0 0 5px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3)',
+               backgroundImage: 'linear-gradient(to bottom, #9e5f2f, #8B4513, #723a10)'
+             }}>
+          <img src="/images/common/icons/snot.webp" alt="Snot" className="w-6 h-6 mr-1.5 drop-shadow-md" />
+          <span className="text-green-400 text-sm font-medium drop-shadow-md">{snotValue.toFixed(2)}</span>
         </div>
       </div>
     </div>

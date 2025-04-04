@@ -6,14 +6,35 @@ import {
   MAX_LEVEL, 
   BALL_RESTITUTION, 
   BALL_FRICTION, 
-  GRAVITY_Y 
+  GRAVITY_Y,
+  SCALE,
+  BASE_GAME_WIDTH,
+  PLAYER_SIZE,
+  PHYSICS_PLAYER_Y
 } from '../constants/gameConstants';
+import { createPhysicsWorld } from '../physics/createPhysicsWorld';
 
 // Переменная для ограничения проверок коллизий
 const MAX_CONTACT_CHECKS = 10; // Оптимизировано для производительности
 
-// Хук для создания и управления физическим миром
-export const usePhysicsWorld = () => {
+// Тип интерфейса для результата хука
+export interface PhysicsRefs {
+  worldRef: React.MutableRefObject<planck.World | null>;
+  playerBodyRef: React.MutableRefObject<planck.Body | null>;
+  leftWallRef: React.MutableRefObject<planck.Body | null>;
+  rightWallRef: React.MutableRefObject<planck.Body | null>;
+  topWallRef: React.MutableRefObject<planck.Body | null>;
+  floorRef: React.MutableRefObject<planck.Body | null>;
+  createWalls: (gameWidth: number, gameHeight: number) => void;
+  resetWorld: () => void;
+}
+
+/**
+ * Хук для создания и управления физическим миром planck.js
+ * @returns Объект с ссылками на физический мир и тела
+ */
+export const usePhysicsWorld = (): PhysicsRefs => {
+  // Создаем ссылки на физический мир и тела
   const worldRef = useRef<planck.World | null>(null);
   const playerBodyRef = useRef<planck.Body | null>(null);
   const leftWallRef = useRef<planck.Body | null>(null);
@@ -27,252 +48,230 @@ export const usePhysicsWorld = () => {
   // Время последней проверки коллизий
   const lastContactCheckRef = useRef<number>(0);
 
-  // Создаем мир при первом рендере
-  useEffect(() => {
-    // Создаем мир планк для физики с гравитацией по оси Y
-    const world = planck.World({
-      gravity: planck.Vec2(0, GRAVITY_Y)  // Используем константу GRAVITY_Y
+  // Размеры игры по умолчанию
+  const defaultWidth = BASE_GAME_WIDTH;
+  const defaultHeight = defaultWidth * 1.5; // соотношение сторон 2:3
+  
+  /**
+   * Создает границы игрового мира (стены и пол)
+   * @param gameWidth Ширина игрового мира в пикселях
+   * @param gameHeight Высота игрового мира в пикселях
+   */
+  const createWalls = (gameWidth: number = defaultWidth, gameHeight: number = defaultHeight) => {
+    if (!worldRef.current) return;
+    
+    console.log(`Создание физических границ для размера: ${gameWidth}x${gameHeight}`);
+    
+    const world = worldRef.current;
+    
+    // Удаляем старые стены, если они существуют
+    if (leftWallRef.current) {
+      try {
+        world.destroyBody(leftWallRef.current);
+      } catch (e) {
+        // Ошибка при удалении тела
+      }
+    }
+    
+    if (rightWallRef.current) {
+      try {
+        world.destroyBody(rightWallRef.current);
+      } catch (e) {
+        // Ошибка при удалении тела
+      }
+    }
+    
+    if (topWallRef.current) {
+      try {
+        world.destroyBody(topWallRef.current);
+      } catch (e) {
+        // Ошибка при удалении тела
+      }
+    }
+    
+    if (floorRef.current) {
+      try {
+        world.destroyBody(floorRef.current);
+      } catch (e) {
+        // Ошибка при удалении тела
+      }
+    }
+      
+    // Конвертируем размеры из пикселей в физические единицы
+    const width = gameWidth / SCALE;
+    const height = gameHeight / SCALE;
+    
+    // Толщина стенок - масштабируем в зависимости от размера игры
+    const wallThickness = Math.max(10 / SCALE, 0.2);
+        
+    // Создаем левую стену
+    leftWallRef.current = world.createBody({
+      type: 'static',
+      position: planck.Vec2(-wallThickness / 2, height / 2),
+      userData: { type: 'wall', isWall: true }
+          });
+          
+    // Создаем форму для левой стены
+    const leftWallShape = planck.Box(wallThickness / 2, height / 2);
+    
+    // Добавляем фикстуру к телу левой стены
+    leftWallRef.current.createFixture({
+      shape: leftWallShape,
+      friction: 0.3,
+      restitution: 0.4
+    });
+          
+    // Создаем правую стену
+    rightWallRef.current = world.createBody({
+      type: 'static',
+      position: planck.Vec2(width + wallThickness / 2, height / 2),
+      userData: { type: 'wall', isWall: true }
     });
     
-    // Настраиваем дополнительные параметры для лучшего соскальзывания
-    world.setSubStepping(false); // Отключаем субшаги для лучшей производительности
+    // Создаем форму для правой стены
+    const rightWallShape = planck.Box(wallThickness / 2, height / 2);
     
-    // Добавляем обработчик предварительных коллизий для игнорирования столкновений между игроком и шарами
-    world.on('pre-solve', (contact) => {
-      // Проверяем, не слишком ли часто происходят проверки
-      const now = Date.now();
-      if (now - lastContactCheckRef.current < 16) { // ~60fps
-        contact.setEnabled(true); // Разрешаем контакт по умолчанию
-        return;
-      }
-      lastContactCheckRef.current = now;
-      
-      // Ограничиваем количество проверок за кадр
-      contactCountRef.current++;
-      if (contactCountRef.current > MAX_CONTACT_CHECKS) {
-        // После определенного количества проверок сбрасываем счетчик и выходим
-        if (contactCountRef.current > 100) {
-          contactCountRef.current = 0;
-        }
-        // Разрешаем контакт по умолчанию без проверок
-        return;
-      }
-      
-      const fixtureA = contact.getFixtureA();
-      const fixtureB = contact.getFixtureB();
-      
-      if (!fixtureA || !fixtureB) {
-        contact.setEnabled(false);
-        return;
-      }
-      
-      const bodyA = fixtureA.getBody();
-      const bodyB = fixtureB.getBody();
-      
-      // Пропускаем дальнейшие проверки, если любое из тел неактивно или недействительно
-      if (!bodyA || !bodyB || !bodyA.isActive() || !bodyB.isActive()) {
-        contact.setEnabled(false);
-        return;
-      }
-      
-      const dataA = bodyA.getUserData() as PhysicsUserData | null;
-      const dataB = bodyB.getUserData() as PhysicsUserData | null;
-      
-      // Если один из объектов - игрок, а другой - шар, отключаем контакт
-      if ((dataA && dataA.isPlayer) || (dataB && dataB.isPlayer)) {
-        contact.setEnabled(false);
-        return; // Выходим, чтобы не выполнять лишние проверки
-      }
-      
-      // Если оба объекта - шары, проверяем их уровни
-      if (dataA && dataB && 
-          dataA.isBall && dataB.isBall && 
-          dataA.level !== undefined && dataB.level !== undefined) {
-        
-        // Устанавливаем базовое трение для всех шаров
-        contact.setFriction(BALL_FRICTION);
-        
-        // Если шары ТОЧНО одинакового уровня и не максимального - ВСЕГДА помечаем их для слияния,
-        // независимо от предыдущих меток или времени создания
-        if (dataA.level === dataB.level && dataA.level < MAX_LEVEL) {
-          // Помечаем шары для немедленного слияния
-          const mergeTime = Date.now();
-          bodyA.setUserData({ 
-            ...dataA, 
-            shouldMerge: true, 
-            mergeWith: bodyB,
-            mergeTime 
-          });
-          bodyB.setUserData({ 
-            ...dataB, 
-            shouldMerge: true, 
-            mergeWith: bodyA,
-            mergeTime 
-          });
-          
-          // Делаем контакт мягче для более естественного взаимодействия
-          contact.setRestitution(BALL_RESTITUTION * 0.5); // Уменьшаем отскок для лучшего слипания
-          
-          // Увеличиваем трение, чтобы шары "прилипали" друг к другу
-          contact.setFriction(BALL_FRICTION * 2.0);
-          
-          console.log(`Pre-solve: помечаем шары уровня ${dataA.level} для слияния`);
-          
-          // Принудительно пробуждаем оба тела
-          bodyA.setAwake(true);
-          bodyB.setAwake(true);
-          
-          // Опционально можно уменьшить скорость, чтобы шары не разлетались
-          bodyA.setLinearVelocity({ 
-            x: bodyA.getLinearVelocity().x * 0.7, 
-            y: bodyA.getLinearVelocity().y * 0.7 
-          });
-          bodyB.setLinearVelocity({ 
-            x: bodyB.getLinearVelocity().x * 0.7, 
-            y: bodyB.getLinearVelocity().y * 0.7 
-          });
-        } 
-        // Для шаров максимального уровня - специальная физика
-        else if (dataA.level === MAX_LEVEL || dataB.level === MAX_LEVEL) {
-          // Шары максимального уровня имеют больше отскока и меньше трения
-          contact.setRestitution(0.6); // Больше упругость для максимальных шаров
-          contact.setFriction(0.05);  // Минимальное трение для лучшего соскальзывания
-        }
-        // Для шаров разных уровней - стандартная физика без слияния
-        else {
-          contact.setRestitution(BALL_RESTITUTION * 0.8); // Чуть меньше отскок для разных шаров
-          contact.setFriction(BALL_FRICTION * 1.2);       // Чуть больше трение
-        }
-      }
+    // Добавляем фикстуру к телу правой стены
+    rightWallRef.current.createFixture({
+      shape: rightWallShape,
+      friction: 0.3,
+      restitution: 0.4
     });
     
-    // Добавляем обработчик для начала контакта между шарами
-    world.on('begin-contact', (contact) => {
-      // Ограничиваем количество проверок за кадр
-      contactCountRef.current++;
-      if (contactCountRef.current > MAX_CONTACT_CHECKS / 2) { // Ещё более жесткое ограничение
-        return;
-      }
+    // Создаем верхнюю стену
+    topWallRef.current = world.createBody({
+      type: 'static',
+      position: planck.Vec2(width / 2, -wallThickness / 2),
+      userData: { type: 'top_wall', isWall: true }
+    });
+    
+    // Создаем форму для верхней стены
+    const topWallShape = planck.Box(width / 2, wallThickness / 2);
+    
+    // Добавляем фикстуру к телу верхней стены
+    topWallRef.current.createFixture({
+      shape: topWallShape,
+      friction: 0.1,
+      restitution: 0.8
+    });
       
-      const fixtureA = contact.getFixtureA();
-      const fixtureB = contact.getFixtureB();
+    // Создаем пол
+    floorRef.current = world.createBody({
+      type: 'static',
+      position: planck.Vec2(width / 2, height + wallThickness / 2),
+      userData: { type: 'floor', isFloor: true }
+    });
       
-      if (!fixtureA || !fixtureB) return;
-      
-      const bodyA = fixtureA.getBody();
-      const bodyB = fixtureB.getBody();
-      
-      // Пропускаем дальнейшие проверки, если любое из тел неактивно
-      if (!bodyA || !bodyB || !bodyA.isActive() || !bodyB.isActive()) {
-        return;
-      }
-      
-      const dataA = bodyA.getUserData() as PhysicsUserData | null;
-      const dataB = bodyB.getUserData() as PhysicsUserData | null;
-      
-      // Игнорируем контакт с игроком
-      if ((dataA && dataA.isPlayer) || (dataB && dataB.isPlayer)) {
-        return;
-      }
-      
-      // Если оба объекта - шары, и у них одинаковый уровень, и уровень не максимальный - 
-      // немедленно помечаем их для слияния с высоким приоритетом
-      if (dataA && dataB && 
-          dataA.isBall && dataB.isBall && 
-          dataA.level !== undefined && dataB.level !== undefined && 
-          dataA.level === dataB.level && 
-          dataA.level < MAX_LEVEL) {
+    // Создаем форму для пола
+    const floorShape = planck.Box(width / 2, wallThickness / 2);
+    
+    // Добавляем фикстуру к телу пола
+    floorRef.current.createFixture({
+      shape: floorShape,
+      friction: 0.5,
+      restitution: 0.2
+    });
         
-        console.log(`Begin-contact: Помечаем шары уровня ${dataA.level} для слияния`);
-        
-        // Помечаем оба шара для слияния с высоким приоритетом
-        bodyA.setUserData({ 
-          ...dataA, 
-          shouldMerge: true, 
-          mergeWith: bodyB,
-          mergeTime: Date.now() // Добавляем метку времени для контроля
-        });
-        bodyB.setUserData({ 
-          ...dataB, 
-          shouldMerge: true, 
-          mergeWith: bodyA,
-          mergeTime: Date.now() // Добавляем метку времени для контроля
-        });
-        
-        // Принудительно пробуждаем оба тела, чтобы быть уверенным, что физика работает
-        bodyA.setAwake(true);
-        bodyB.setAwake(true);
-        
-        // Уменьшаем скорость шаров, чтобы они не разлетались после контакта
-        bodyA.setLinearVelocity({ x: bodyA.getLinearVelocity().x * 0.5, y: bodyA.getLinearVelocity().y * 0.5 });
-        bodyB.setLinearVelocity({ x: bodyB.getLinearVelocity().x * 0.5, y: bodyB.getLinearVelocity().y * 0.5 });
+    // Создаем тело игрока (для броска шаров)
+    const playerSize = PLAYER_SIZE / SCALE;
+    
+    // Если тело игрока уже существует, удаляем его
+    if (playerBodyRef.current) {
+      try {
+        world.destroyBody(playerBodyRef.current);
+      } catch (e) {
+        // Ошибка при удалении тела игрока
       }
-      
-      // Применяем слабый импульс для шаров разных уровней, чтобы избежать "прилипания"
-      else if (dataA && dataB && 
-               dataA.isBall && dataB.isBall && 
-               dataA.level !== undefined && dataB.level !== undefined && 
-               dataA.level !== dataB.level) {
+    }
+    
+    // Создаем новое тело игрока с правильной позицией
+    playerBodyRef.current = world.createBody({
+      type: 'static',
+      position: planck.Vec2(width / 2, PHYSICS_PLAYER_Y),
+      userData: { type: 'player', isPlayer: true }
+    });
+    
+    // Создаем форму для тела игрока
+    const playerShape = planck.Circle(playerSize / 2);
+    
+    // Добавляем фикстуру к телу игрока
+    playerBodyRef.current.createFixture({
+      shape: playerShape,
+      friction: 0.3,
+      restitution: 0.5
+    });
+    
+    console.log(`Физические границы созданы успешно: ${width}x${height} (в физических единицах)`);
+  };
+  
+  /**
+   * Сбрасывает физический мир, удаляя все тела и пересоздавая мир
+   */
+  const resetWorld = () => {
         try {
-          // Применяем очень слабый импульс для предотвращения "склеивания" шаров
-          const randomImpulse = 0.05;
-          bodyA.applyAngularImpulse(randomImpulse * (Math.random() > 0.5 ? 1 : -1));
-          bodyB.applyAngularImpulse(randomImpulse * (Math.random() > 0.5 ? 1 : -1));
-        } catch (e) {
-          // Игнорируем ошибки при применении импульса
-        }
-      }
-    });
-    
-    // Добавляем обработчик конца шага физики, чтобы сбросить счетчик контактов
-    world.on('post-solve', () => {
-      // Сбрасываем счетчик контактов
-      contactCountRef.current = 0;
-    });
-    
-    worldRef.current = world;
-    
-    // Очистка при размонтировании
-    return () => {
-      // Очищаем физический мир
+      // Очищаем все тела
       if (worldRef.current) {
-        try {
-          worldRef.current.clearForces();
+        let body = worldRef.current.getBodyList();
+        while (body) {
+          const next = body.getNext();
+          try {
+            worldRef.current.destroyBody(body);
+        } catch (e) {
+            // Ошибка при удалении тела
+        }
+          body = next;
+      }
+      }
+      
+      // Пересоздаем мир
+      worldRef.current = createPhysicsWorld(GRAVITY_Y);
+    
+      // Создаем стены для нового мира
+      createWalls();
+    } catch (e) {
+      // Ошибка при очистке физического мира
+    }
+  };
+  
+  // Инициализируем физический мир при монтировании компонента
+  useEffect(() => {
+    // Создаем физический мир
+    worldRef.current = createPhysicsWorld(GRAVITY_Y);
+    
+    // Создаем стены для мира по умолчанию
+    createWalls();
+    
+    // Очищаем ресурсы при размонтировании компонента
+    return () => {
+      if (worldRef.current) {
+        let body = worldRef.current.getBodyList();
           
-          // Удаляем все тела
-          let body = worldRef.current.getBodyList();
+        // Удаляем все тела из мира
           while (body) {
-            const nextBody = body.getNext(); // Сохраняем ссылку на следующее тело
+          const next = body.getNext();
             try {
-              body.setUserData(null); // Очищаем пользовательские данные
               worldRef.current.destroyBody(body);
             } catch (e) {
-              console.warn("Ошибка при удалении тела во время размонтирования:", e);
+            // Ошибка при удалении тела во время размонтирования
             }
-            body = nextBody;
+          body = next;
           }
           
+        // Освобождаем ссылку на мир
           worldRef.current = null;
-        } catch (e) {
-          console.error("Ошибка при очистке физического мира:", e);
-        }
       }
-      
-      // Очищаем ссылки на тела
-      playerBodyRef.current = null;
-      leftWallRef.current = null;
-      rightWallRef.current = null;
-      topWallRef.current = null;
-      floorRef.current = null;
     };
   }, []);
 
+  // Возвращаем объект с ссылками на физический мир и тела
   return {
     worldRef,
     playerBodyRef,
     leftWallRef,
     rightWallRef,
     topWallRef,
-    floorRef
+    floorRef,
+    createWalls,
+    resetWorld
   };
 }; 

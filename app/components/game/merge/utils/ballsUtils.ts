@@ -15,106 +15,20 @@ export const removeBall = (
   worldRef: React.MutableRefObject<planck.World | null>,
 ) => {
   if (!ball) {
-    console.warn("Попытка удаления несуществующего шара");
+    // Шар не существует, возвращаем исходный массив
     return;
   }
   
-  console.log(`🔥 УДАЛЕНИЕ ШАРА: уровень ${ball.level}, тип ${ball.specialType || 'обычный'}`);
+  // Очищаем ресурсы шара перед удалением
+  cleanupBall(ball, worldRef.current);
   
-  // Принудительно фильтруем массив, чтобы сразу исключить шар из будущих обработок
-  ballsRef.current = ballsRef.current.filter(b => b !== ball);
+  // Возвращаем новый массив без удаленного шара
+  ballsRef.current = ballsRef.current.filter((b) => b !== ball);
   
-  // 1. Сначала удаляем все визуальные компоненты шара НЕМЕДЛЕННО
-  if (ball.sprite) {
-    try {
-      // Для шаров с эффектами
-      if (ball.sprite.effectsContainer && !ball.sprite.effectsContainer.destroyed) {
-        console.log(`Удаляем контейнер эффектов шара уровня ${ball.level}`);
-        ball.sprite.effectsContainer.destroy();
-      }
-      
-      // Удаляем основной контейнер
-      if (ball.sprite.container && !ball.sprite.container.destroyed) {
-        console.log(`Удаляем визуальный контейнер шара уровня ${ball.level}`);
-        // Принудительно удаляем все дочерние элементы
-        if (ball.sprite.container.list && Array.isArray(ball.sprite.container.list)) {
-          ball.sprite.container.list.forEach((child: any) => {
-            if (child && !child.destroyed) {
-              child.destroy();
-            }
-          });
-        }
-        ball.sprite.container.destroy();
-      }
-      
-      // Явно устанавливаем все спрайты в null
-      ball.sprite.container = null;
-      ball.sprite.circle = null;
-      ball.sprite.text = null;
-      if (ball.sprite.effectsContainer) ball.sprite.effectsContainer = null;
-    } catch (e) {
-      console.error(`Ошибка при удалении визуальных элементов шара уровня ${ball.level}:`, e);
-    }
-  }
-  
-  // 2. Затем удаляем физическое тело
-  if (ball.body && worldRef.current) {
-    try {
-      // Проверяем, активно ли еще тело
-      const isBodyActive = ball.body.isActive();
-      
-      // Очищаем пользовательские данные
-      ball.body.setUserData(null);
-      
-      // Останавливаем тело
-      ball.body.setLinearVelocity({ x: 0, y: 0 });
-      ball.body.setAngularVelocity(0);
-      
-      // Отключаем физику
-      ball.body.setActive(false);
-      ball.body.setAwake(false);
-      
-      // Удаляем все фикстуры
-      let fixture = ball.body.getFixtureList();
-      while (fixture) {
-        const nextFixture = fixture.getNext();
-        ball.body.destroyFixture(fixture);
-        fixture = nextFixture;
-      }
-      
-      // Удаляем тело из мира, если оно еще активно
-      if (isBodyActive) {
-        console.log(`Удаляем физическое тело шара уровня ${ball.level}`);
-        try {
-          worldRef.current.destroyBody(ball.body);
-        } catch (e) {
-          console.error(`Ошибка при удалении физического тела: ${e}`);
-        }
-      }
-      
-      // Явное освобождение памяти
-      ball.body = null as any;
-    } catch (e) {
-      console.error(`Ошибка при удалении физического тела шара уровня ${ball.level}:`, e);
-    }
-  }
-  
-  // 3. Очищаем все ссылки в объекте шара
-  Object.keys(ball).forEach(key => {
-    (ball as any)[key] = null;
-  });
-  
-  // 4. Ещё раз убеждаемся, что шар удалён из массива
-  const stillExists = ballsRef.current.some(b => b === ball);
-  if (stillExists) {
-    console.error(`⚠️ ШАР ВСЁ ЕЩЁ СУЩЕСТВУЕТ В МАССИВЕ! Принудительно очищаем...`);
-    ballsRef.current = ballsRef.current.filter(b => b !== ball);
-  }
-  
-  // 5. Проверяем и удаляем все "мёртвые" шары без физических тел
+  // Проверяем и удаляем все "мёртвые" шары без физических тел
   const invalidBalls = ballsRef.current.filter(b => !b || !b.body);
   if (invalidBalls.length > 0) {
-    console.warn(`Найдено ${invalidBalls.length} шаров без физических тел, очищаем...`);
+    // Найдено несколько шаров без физических тел, очищаем...
     ballsRef.current = ballsRef.current.filter(b => b && b.body);
   }
   
@@ -123,7 +37,7 @@ export const removeBall = (
     try {
       global.gc();
     } catch (e) {
-      console.warn("Не удалось запустить сборщик мусора:", e);
+      // Не удалось запустить сборщик мусора:
     }
   }
 };
@@ -185,7 +99,50 @@ export const removeMultipleBalls = (
     try {
       global.gc();
     } catch (e) {
-      console.warn("Не удалось запустить сборщик мусора:", e);
+      // Не удалось запустить сборщик мусора:
     }
+  }
+};
+
+// Удаляет объект шара и связанные с ним ресурсы
+export const cleanupBall = (ball: ExtendedBall | null, world: planck.World | null): void => {
+  if (!ball) {
+    // Шар не существует
+    return;
+  }
+
+  try {
+    // Удаляем физическое тело шара, если оно существует
+    if (ball.body && world) {
+      try {
+        world.destroyBody(ball.body);
+        ball.body = null as any;
+        // Физическое тело шара уничтожено
+      } catch (e) {
+        // Ошибка при уничтожении физического тела шара
+      }
+    }
+
+    // Удаляем спрайт шара и связанные с ним объекты
+    if (ball.sprite && ball.sprite.container && !ball.sprite.container.destroyed) {
+      try {
+        ball.sprite.container.destroy();
+        // Контейнер спрайта шара уничтожен
+      } catch (e) {
+        // Ошибка при уничтожении контейнера спрайта
+      }
+    }
+
+    // Удаляем контейнер эффектов, если он существует
+    if (ball.sprite && ball.sprite.effectsContainer && !ball.sprite.effectsContainer.destroyed) {
+      try {
+        ball.sprite.effectsContainer.destroy();
+        // Контейнер эффектов шара уничтожен
+      } catch (e) {
+        // Ошибка при уничтожении контейнера эффектов
+      }
+    }
+  } catch (e) {
+    // Критическая ошибка при очистке ресурсов шара
   }
 }; 

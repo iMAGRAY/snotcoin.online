@@ -68,17 +68,22 @@ export const createNextBall = (
     const y = FIXED_PLAYER_Y + 24; // Опускаем шар на 24 пикселя НИЖЕ игрока
     
     // Получаем текущую ширину игры для масштабирования
+    // Важная часть - использовать актуальную ширину игры, а не константу по умолчанию
     const gameWidth = scene.sys.game?.config?.width || BASE_GAME_WIDTH;
     
     // Получаем размер шара с учетом масштабирования
     let ballSize: number = 15; // Значение по умолчанию
     try {
+      // Явно передаем текущую ширину игры для правильного масштабирования
       ballSize = specialType === 'Bull' || specialType === 'Bomb' 
         ? getBallSize(1, gameWidth)  // Для шаров Bull и Bomb используем размер шара 1 уровня
         : getBallSize(level, gameWidth);
     } catch (error) {
       console.error('Ошибка при получении размера шара:', error);
       // Используем значение по умолчанию, уже установленное
+      // Рассчитываем приблизительный размер даже при ошибке
+      const scaleFactor = gameWidth / BASE_GAME_WIDTH;
+      ballSize = (15 + (level - 1) * 5) * scaleFactor;
     }
     
     // Контейнер для шара и всех его элементов
@@ -133,6 +138,7 @@ export const createNextBall = (
             ease: 'Linear'
           });
         } else {
+          console.warn('Текстура bull-ball не найдена, используется fallback вариант');
           // Если изображение не найдено, создаем красный круг
           ballSprite = scene.add.circle(0, 0, ballSize, 0xff0000);
           outline = scene.add.circle(0, 0, ballSize * 1.2, 0xff0000, 0.3);
@@ -140,7 +146,7 @@ export const createNextBall = (
           // Добавляем текст "BULL"
           text = scene.add.text(0, 0, 'BULL', {
             fontFamily: 'Arial',
-            fontSize: '14px',
+            fontSize: `${Math.max(14 * gameWidth / BASE_GAME_WIDTH, 10)}px`,
             color: '#ffffff'
           }).setOrigin(0.5);
           
@@ -191,7 +197,7 @@ export const createNextBall = (
           // Добавляем текст "BOMB"
           text = scene.add.text(0, 0, 'BOMB', {
             fontFamily: 'Arial',
-            fontSize: '14px',
+            fontSize: `${Math.max(14 * gameWidth / BASE_GAME_WIDTH, 10)}px`,
             color: '#ffffff'
           }).setOrigin(0.5);
           
@@ -217,7 +223,7 @@ export const createNextBall = (
             const ballImage = scene.add.image(0, 0, ballTexture);
             
             // Масштабируем изображение в соответствии с размером шара
-            ballImage.setDisplaySize(ballSize * 2, ballSize * 2);
+            ballImage.setDisplaySize(ballSize * 1.8, ballSize * 1.8);
             
             // Добавляем легкое свечение
             outline = scene.add.circle(0, 0, ballSize * 1.1, 0xffffff, 0.2);
@@ -246,28 +252,30 @@ export const createNextBall = (
           }
         } else {
           // Если текстура не найдена, создаем запасной вариант
-          console.warn(`Текстура для шара уровня ${level} не найдена, создаем круг с цветом`);
+          console.warn(`Текстура ${ballTexture} не найдена, создается резервный вариант`);
           const fallback = createFallbackBall(scene, container, ballSize, level, gameWidth);
           ballSprite = fallback.ballSprite;
           text = fallback.text;
           outline = fallback.outline;
         }
       } else {
-        // Обычный шар (запасной вариант)
+        // Для неизвестных уровней создаем запасной вариант
+        console.warn(`Неизвестный уровень ${level}, создается резервный вариант`);
         const fallback = createFallbackBall(scene, container, ballSize, level, gameWidth);
         ballSprite = fallback.ballSprite;
         text = fallback.text;
         outline = fallback.outline;
       }
-    } catch (renderError) {
-      console.error('Ошибка при создании визуального представления шара:', renderError);
-      // Создаем простейший круг в случае любой ошибки
+    } catch (error) {
+      console.error('Ошибка при создании визуального представления шара:', error);
+      
+      // Создаем простейший резервный вариант при ошибке
       try {
-        ballSprite = scene.add.circle(0, 0, ballSize, 0xffffff);
+        ballSprite = scene.add.circle(0, 0, ballSize, 0x00ff00);
         container.add(ballSprite);
       } catch (e) {
-        console.error('Невозможно создать даже простейший круг:', e);
-        return null; // Полный провал, невозможно создать шар
+        console.error('Критическая ошибка при создании резервного шара:', e);
+        return null;
       }
     }
     
@@ -304,16 +312,24 @@ export const createNextBall = (
     
     // Возвращаем объект с шаром
     return {
+      body: {
+        getPosition: () => ({ x: x / 30, y: y / 30 })
+      },
+      level,
       sprite: {
         container,
         circle: ballSprite,
         text
       },
-      level,
-      specialType
+      specialType,
+      originalGameWidth: gameWidth, // Сохраняем текущую ширину игры для последующего масштабирования
+      userData: {
+        level,
+        specialType
+      }
     };
   } catch (error) {
-    console.error('Ошибка при создании следующего шара:', error);
+    console.error('Критическая ошибка при создании шара для броска:', error);
     return null;
   }
 }; 

@@ -81,6 +81,47 @@ export const checkAndHandleStuckBalls = (
   });
   
   if (stuckBallsFound) {
-    console.log("Обнаружены и удалены зависшие шары");
+    // Обнаружены и удалены зависшие шары
+  }
+};
+
+// Ищет застрявшие шары и удаляет их
+export const findAndRemoveStuckBalls = (
+  balls: ExtendedBall[],
+  removeBallFunc: (ball: ExtendedBall) => void,
+  stuckTimeout: number = 5000 // Время в мс, через которое шар считается застрявшим
+): void => {
+  // Текущее время
+  const now = Date.now();
+  
+  // Находим все шары, которые не двигались слишком долго
+  const stuckBalls = balls.filter(ball => {
+    if (!ball || !ball.body) return false;
+    
+    const userData = ball.body.getUserData() as any;
+    if (!userData) return false;
+    
+    // Проверяем время последнего движения шара
+    const lastMoved = userData.lastMoved || 0;
+    const timeSinceLastMovement = now - lastMoved;
+    
+    // Проверяем текущую скорость шара
+    const vel = ball.body.getLinearVelocity();
+    const speed = Math.abs(vel.x) + Math.abs(vel.y);
+    
+    // Шар считается застрявшим, если он не двигался давно, но должен двигаться
+    const isStuck = timeSinceLastMovement > stuckTimeout && speed < 0.1;
+    
+    return isStuck;
+  });
+  
+  // Если найдены застрявшие шары, удаляем их
+  if (stuckBalls.length > 0) {
+    // Найдено [X] застрявших шаров, удаляем их...
+    
+    // Удаляем каждый застрявший шар
+    stuckBalls.forEach(ball => {
+      removeBallFunc(ball);
+    });
   }
 }; 

@@ -52,6 +52,8 @@ export interface NextBall {
 export interface ExtendedNextBall extends NextBall {
   body?: planck.Body; // Добавляем поле body, которое используется в некоторых местах кода
   createdAt?: number;
+  userData?: any;
+  originalGameWidth?: number;
 }
 
 // Пропсы для компонентов физики

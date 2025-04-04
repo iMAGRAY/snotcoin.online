@@ -2,26 +2,18 @@ import * as planck from 'planck';
 import { PhysicsUserData, ExtendedBall } from '../types';
 
 /**
- * Проверяет, было ли удалено тело из физического мира
+ * Проверяет, было ли уничтожено физическое тело
  */
 export const isBodyDestroyed = (body: planck.Body): boolean => {
-  // Проверяем несколько признаков, указывающих на то, что тело было удалено
   try {
-    // 1. Проверяем, активно ли тело
-    if (!body.isActive()) return true;
-    
-    // 2. Проверяем наличие фикстур
-    if (!body.getFixtureList()) return true;
-    
-    // 3. Проверяем, связано ли тело с миром
-    if (!body.getWorld()) return true;
-    
-    // Если все проверки прошли, тело не считается удаленным
-    return false;
+    // Проверяем три условия, которые указывают на то, что тело может быть уничтожено
+    return !body || // Тело не существует
+           !body.isActive() || // Тело не активно
+           !body.getFixtureList() || // У тела нет фикстур
+           !body.getWorld(); // Тело не привязано к миру
   } catch (e) {
-    // Если при доступе к телу возникла ошибка, считаем его удаленным
-    console.warn('Ошибка при проверке тела, считаем его удаленным:', e);
-    return true;
+    // Ошибка при проверке тела, считаем его удаленным
+    return true; // При ошибке считаем, что тело уничтожено
   }
 };
 
@@ -66,8 +58,6 @@ export const setupNormalBallsCollisions = (
         
         // Если уровни одинаковые и не максимальные
         if (levelA === levelB && levelA > 0 && levelA < MAX_LEVEL) {
-          console.log(`Контакт шаров одинакового уровня ${levelA}`);
-          
           // Создаем уникальный идентификатор для пары контактов
           const contactId = `${Math.min(userDataA.createdAt || 0, userDataB.createdAt || 0)}-${Math.max(userDataA.createdAt || 0, userDataB.createdAt || 0)}`;
           
@@ -98,12 +88,72 @@ export const setupNormalBallsCollisions = (
             mergeWith: bodyA,
             mergeTime: Date.now()
           });
-          
-          console.log(`Шары уровня ${levelA} помечены для слияния`);
         }
       }
     } catch (error) {
-      console.error('Ошибка при обработке контакта нормальных шаров:', error);
+      // Ошибка при обработке контакта нормальных шаров
     }
   });
+};
+
+// Обработчик контакта для шаров одинакового уровня
+export const processContactBetweenSameLevelBalls = (
+  contact: planck.Contact,
+  bodyA: planck.Body,
+  bodyB: planck.Body,
+  userDataA: any,
+  userDataB: any,
+  levelA: number,
+  levelB: number,
+  timeKey: string,
+  mergeContactTime: Set<string>
+): boolean => {
+  try {
+    if (levelA === levelB && (userDataA.type === 'ball' && userDataB.type === 'ball')) {
+      // Шары одного уровня коснулись друг друга
+      // Контакт шаров одинакового уровня
+      
+      // Создаем уникальный ключ для контакта
+      const contactKey = `${userDataA.createdAt}-${userDataB.createdAt}-${timeKey}`;
+      const reverseContactKey = `${userDataB.createdAt}-${userDataA.createdAt}-${timeKey}`;
+      
+      // Проверяем, не был ли этот контакт уже обработан
+      if (mergeContactTime.has(contactKey) || mergeContactTime.has(reverseContactKey)) {
+        return true; // Этот контакт уже обрабатывался, пропускаем
+      }
+      
+      // Если шары ещё не были помечены для слияния
+      if (!userDataA.shouldMerge && !userDataB.shouldMerge) {
+        // Проверяем скорость шаров — слитком быстрые шары не сливаем сразу
+        const velocityThreshold = 6.0; // Пороговое значение скорости для проверки
+        const velA = bodyA.getLinearVelocity();
+        const velB = bodyB.getLinearVelocity();
+        const speedA = Math.sqrt(velA.x * velA.x + velA.y * velA.y);
+        const speedB = Math.sqrt(velB.x * velB.x + velB.y * velB.y);
+        
+        if (speedA < velocityThreshold && speedB < velocityThreshold) {
+          // Помечаем шары для слияния
+          userDataA.shouldMerge = true;
+          userDataA.mergeWith = bodyB;
+          userDataB.shouldMerge = true;
+          userDataB.mergeWith = bodyA;
+          
+          // Обновляем данные шаров
+          bodyA.setUserData(userDataA);
+          bodyB.setUserData(userDataB);
+          
+          // Добавляем контакт в набор обработанных
+          mergeContactTime.add(contactKey);
+          
+          // Шары уровня помечены для слияния
+          
+          return true; // Контакт обработан
+        }
+      }
+    }
+    return true; // Продолжаем обработку контакта
+  } catch (error) {
+    // Ошибка при обработке контакта нормальных шаров
+    return true; // В случае ошибки разрешаем контакт
+  }
 }; 

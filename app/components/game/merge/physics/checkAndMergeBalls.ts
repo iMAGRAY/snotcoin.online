@@ -24,10 +24,10 @@ export const hasBallsMarkedForMerge = (worldRef: React.MutableRefObject<planck.W
       hasMarkedBalls = true;
       markedCount++;
       
-      console.log(`Найден шар, помеченный для слияния:`, userData);
+      // Найден шар, помеченный для слияния
       
       if (markedCount >= 10) {
-        console.log("Найдено 10+ шаров, прекращаем поиск");
+        // Найдено 10+ шаров, прекращаем поиск
         break;
       }
     }
@@ -36,7 +36,7 @@ export const hasBallsMarkedForMerge = (worldRef: React.MutableRefObject<planck.W
   }
   
   if (markedCount > 0) {
-    console.log(`Всего найдено ${markedCount} шаров, помеченных для слияния`);
+    // Всего найдено {markedCount} шаров, помеченных для слияния
   }
   
   return hasMarkedBalls;
@@ -57,12 +57,12 @@ export const checkAndMergeBalls = (
     return;
   }
   
-  console.log("Запускаем процесс слияния помеченных шаров");
+  // Запускаем процесс слияния помеченных шаров
   
   // Принудительная проверка всех пар шаров в мире каждые 30 кадров (около 0.5 секунды)
   const forceFullCheck = frameCount % 30 === 0;
   if (forceFullCheck) {
-    console.log("Выполняем принудительную проверку всех шаров в мире");
+    // Выполняем принудительную проверку всех шаров в мире
     forceCheckAllBalls(scene, worldRef, ballsRef);
   }
   
@@ -137,7 +137,7 @@ export const checkAndMergeBalls = (
         continue;
       }
       
-      console.log(`Сливаем шары уровня ${ballA.level}`);
+      // Сливаем шары уровня [ballA.level]
       
       // Выполняем слияние шаров
       const newBall = mergeBalls(scene, ballA, ballB, worldRef, ballsRef);
@@ -153,7 +153,7 @@ export const checkAndMergeBalls = (
       
       // Если обработано больше 5 слияний за один вызов, завершаем
       if (mergeCounter >= 5) {
-        console.log(`Обработано максимальное количество слияний (${mergeCounter}), завершаем`);
+        // Обработано максимальное количество слияний (mergeCounter), завершаем
         break;
       }
     }
@@ -162,7 +162,7 @@ export const checkAndMergeBalls = (
   }
   
   if (mergeCounter > 0) {
-    console.log(`Выполнено ${mergeCounter} слияний шаров`);
+    // Выполнено [mergeCounter] слияний шаров
   }
 };
 
@@ -175,7 +175,7 @@ const forceCheckAllBalls = (
   if (!worldRef.current) return;
   
   const balls = ballsRef.current.filter(ball => ball && ball.body);
-  console.log(`Проверяем ${balls.length} шаров на возможные слияния (force check)`);
+  // Проверяем [balls.length] шаров на возможные слияния (force check)
   
   // Проверяем каждую пару шаров
   for (let i = 0; i < balls.length; i++) {
@@ -213,7 +213,7 @@ const forceCheckAllBalls = (
             }
           }
         } catch (e) {
-          console.error('Ошибка при получении размеров шаров:', e);
+          // Ошибка при получении размеров шаров
           // Используем резервное значение
           radiusSum = 2.0;
         }
@@ -227,7 +227,7 @@ const forceCheckAllBalls = (
         const mergeDistance = radiusSum * 1.2;
         
         if (distance < mergeDistance) {
-          console.log(`Force-check: Шары уровня ${ballA.level} находятся близко (${distance.toFixed(2)} < ${mergeDistance.toFixed(2)}), помечаем для слияния`);
+          // Force-check: Шары уровня [ballA.level] находятся близко, помечаем для слияния
           
           // Получаем данные шаров
           const dataA = ballA.body.getUserData() as PhysicsUserData | null;
@@ -270,12 +270,18 @@ const forceCheckAllBalls = (
   }
 };
 
-// Функция для проверки и обработки старых пометок слияния
+// Функция для проверки шаров, которые были помечены для слияния, но не слились
 const checkStaleMergeMarks = (worldRef: React.MutableRefObject<planck.World | null>) => {
   if (!worldRef.current) return;
   
-  let staleCount = 0;
+  // Текущее время
+  const now = Date.now();
+  
+  // Максимальное время ожидания слияния
+  const MERGE_TIMEOUT = 3000; // 3 секунды
+  
   let body = worldRef.current.getBodyList();
+  let staleCount = 0;
   
   while (body) {
     const userData = body.getUserData() as PhysicsUserData | null;
@@ -284,27 +290,35 @@ const checkStaleMergeMarks = (worldRef: React.MutableRefObject<planck.World | nu
         hasUserDataProperty(userData, 'shouldMerge') && 
         userData.shouldMerge === true && 
         hasUserDataProperty(userData, 'mergeWith') &&
-        hasUserDataProperty(userData, 'mergeTime') &&
-        userData.mergeTime !== undefined &&
-        userData.mergeTime < Date.now() - 1000) {
+        hasUserDataProperty(userData, 'mergeTime')) {
       
-      staleCount++;
+      // Проверяем, сколько времени прошло с момента пометки для слияния
+      const timeSinceMark = now - (userData.mergeTime || 0);
       
-      console.log(`Найден старый шар, помеченный для слияния:`, userData);
-      
-      if (staleCount >= 10) {
-        console.log("Найдено 10+ старых шаров, прекращаем поиск");
-        break;
+      if (timeSinceMark > MERGE_TIMEOUT) {
+        // Если прошло больше времени чем таймаут, убираем метку
+        body.setUserData({ 
+          ...userData, 
+          shouldMerge: false, 
+          mergeWith: null,
+          mergeTime: undefined
+        });
+        
+        staleCount++;
+        
+        // Найден старый шар, помеченный для слияния
+        
+        if (staleCount >= 10) {
+          // Найдено 10+ старых шаров, прекращаем поиск
+          break;
+        }
       }
-      
-      // Убираем метку слияния
-      body.setUserData({ ...userData, shouldMerge: false, mergeWith: null });
     }
     
     body = body.getNext();
   }
   
   if (staleCount > 0) {
-    console.log(`Всего найдено ${staleCount} старых шаров, помеченных для слияния`);
+    // Всего найдено [staleCount] старых шаров, помеченных для слияния
   }
 }; 
