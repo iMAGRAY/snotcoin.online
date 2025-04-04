@@ -359,9 +359,9 @@ export class NeynarService {
           fid: Number(updatedUser.farcaster_fid),
           username: updatedUser.farcaster_username || `user_${updatedUser.farcaster_fid}`,
           displayName: updatedUser.farcaster_displayname || updatedUser.farcaster_username || `User ${updatedUser.farcaster_fid}`,
-          avatar: updatedUser.farcaster_pfp,
+          avatar: updatedUser.farcaster_pfp || undefined,
           verified: userData.verified || false,
-          metadata: updatedUser.metadata || userData.metadata || {}
+          metadata: userData.metadata || {}
         }
       };
     } catch (error) {

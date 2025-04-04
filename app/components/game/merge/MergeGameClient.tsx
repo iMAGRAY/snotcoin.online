@@ -18,6 +18,7 @@ import LoadingScreen from './components/LoadingScreen';
 import FooterButtons from './components/FooterButtons';
 import GamePhysics from './components/GamePhysics';
 import GameInitializer from './components/GameInitializer';
+import { handleResize } from './utils/sceneUtils';
 
 import { useGameContext } from '../../../contexts/game/hooks/useGameContext';
 import { MergeGameProps, ExtendedBall, Ball } from './types/index';
@@ -342,7 +343,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         } else {
           // Текстура bull-ball не найдена, используется fallback вариант
           // Загружаем текстуру
-          scene.load.image('bull-ball', '/images/merge/Balls/Bull.webp');
+          scene.load.image('bull-ball', '/images/merge/Game/ui/Bull.webp');
           scene.load.start();
           
           // Если изображение не найдено, создаем красный круг
@@ -527,7 +528,7 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
         } else {
           console.warn('Текстура bomb не найдена, используется fallback вариант');
           // Загружаем текстуру
-          scene.load.image('bomb', '/images/merge/Balls/Bomb.webp');
+          scene.load.image('bomb', '/images/merge/Game/ui/Bomb.webp');
           scene.load.start();
           
           // Если изображение не найдено, создаем чёрный круг

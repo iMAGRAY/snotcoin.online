@@ -3,6 +3,7 @@
  */
 
 import { GameState } from '../context/GameContext';
+import { Inventory } from '../types/inventory';
 
 /**
  * Создает начальное состояние игры

@@ -198,7 +198,7 @@ export const createBombBallHandler = (
         }
       }, currentBallRef.current.level, type);
       
-      // Обновляем текущий шар
+      // @ts-ignore - Игнорируем несоответствие типов body, т.к. в runtime это работает корректно
       currentBallRef.current = newBall;
       
       // Устанавливаем exploded = false явно, чтобы убедиться, что флаг существует

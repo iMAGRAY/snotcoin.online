@@ -168,7 +168,9 @@ const Storage: React.FC = () => {
   
   // Обновляем стоимость сундука 1 уровня при изменении вместимости контейнера
   useEffect(() => {
-    chests[0].requiredSnot = level1ChestCost;
+    if (chests && chests[0]) {
+      chests[0].requiredSnot = level1ChestCost;
+    }
   }, [level1ChestCost]);
 
   const handleSwipeComplete = useCallback((index: number) => {
@@ -258,6 +260,7 @@ const Storage: React.FC = () => {
                 setActiveChestIndex={setActiveChestIndex}
                 activeChestIndex={activeChestIndex}
                 onSwipeComplete={handleSwipeComplete}
+                onChestSelect={handleSwipeComplete}
               />
             </div>
           </div>
@@ -284,7 +287,7 @@ const Storage: React.FC = () => {
       <OpenChestButton 
         onClick={handleOpenChest} 
         text={t("openChest")} 
-        cost={chests[activeChestIndex].requiredSnot}
+        cost={chests && chests[activeChestIndex] ? chests[activeChestIndex].requiredSnot : 0}
         chestIndex={activeChestIndex}
       />
     </>

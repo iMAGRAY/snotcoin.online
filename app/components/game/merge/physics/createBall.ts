@@ -1,28 +1,35 @@
 import * as planck from 'planck';
 import { World, Box, Vec2, Circle, Body } from 'planck';
-import { Ball } from '../types/index';
+import { ExtendedBall } from '../types';
 import { BALL_COLORS, BALL_DENSITY, BALL_FRICTION, BALL_RESTITUTION, SCALE, BASE_BALL_SIZE, BASE_GAME_WIDTH } from '../constants/gameConstants';
 import { Scene } from 'phaser';
 
 // Минимальный размер шара для физики
 const MIN_BALL_RADIUS = 0.3;
 
-// Расширенный интерфейс Ball с опциональным полем specialType
-export interface Ball {
-  body: Body;
+// Базовая скорость движения шаров
+const BASE_VELOCITY = 0.4;
+
+// Определяем интерфейс для шара в этом файле
+export interface LocalBall {
+  body: planck.Body;
   level: number;
   sprite: {
     container: any;
-    circle: any;
+    circle: any; 
     text: any;
+    effectsContainer?: any;
+    glow?: any;
+    stars?: any[];
   };
-  originalGameWidth: any;
-  specialType: string | undefined;
-}
-
-// Интерфейс для совместимости с существующим кодом
-export interface ExtendedBall extends Ball {
-  specialType?: string;
+  originalGameWidth: number;
+  specialType?: string | undefined;
+  userData?: {
+    isBall: boolean;
+    level: number;
+    specialType?: string;
+    createdAt: number;
+  };
 }
 
 // Функция для расчета размера шара в зависимости от уровня и размера игры
@@ -74,12 +81,12 @@ export const getBallPhysicsSize = (level: number, gameWidth?: number, specialTyp
 export const createBall = (
   scene: any,
   worldRef: React.MutableRefObject<planck.World | null>,
-  ballsRef: React.MutableRefObject<Ball[]>,
+  ballsRef: React.MutableRefObject<LocalBall[]>,
   x: number,
   y: number,
   level: number,
   specialType?: string
-): Ball | null => {
+): LocalBall | null => {
   if (!worldRef.current || !scene) {
     return null;
   }
@@ -260,8 +267,9 @@ export const createBall = (
           fontFamily: 'Arial',
           fontSize: `${fontSize}px`,
           color: '#ffffff',
-          fontStyle: 'bold',
-        });
+          stroke: '#000000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
         text.setOrigin(0.5, 0.5);
         
         // Добавляем визуальные элементы в контейнер
@@ -284,7 +292,8 @@ export const createBall = (
         fontFamily: 'Arial',
         fontSize: `${fontSize}px`,
         color: '#ffffff',
-        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2
       };
       
       text = scene.add.text(0, 0, level.toString(), textStyle);
@@ -299,7 +308,7 @@ export const createBall = (
     }
     
     // Создаем объект шара
-    const ball: Ball = {
+    const ball: LocalBall = {
       body,
       level,
       sprite: {
@@ -318,28 +327,42 @@ export const createBall = (
         const effectsContainer = scene.add.container(x, y);
         effectsContainer.setDepth(100); // Высокая глубина для эффектов над другими объектами
         
-        // Парвтикл-эффект
-        const particles = scene.add.particles('particle');
-        
-        // Настраиваем эмиттер
-        const emitter = particles.createEmitter({
-          speed: { min: 50, max: 100 },
-          scale: { start: 0.3, end: 0 },
-          alpha: { start: 1, end: 0 },
-          lifespan: 1000,
-          blendMode: 'ADD',
-          frequency: 100,
-          rotate: { min: 0, max: 360 },
-          radial: true,
-          angle: { min: 0, max: 360 },
-          gravityY: 0
-        });
-        
-        // Привязываем эмиттер к шару
-        emitter.startFollow(container);
-        
-        // Добавляем эмиттер в контейнер эффектов
-        effectsContainer.add(particles);
+        // Проверяем наличие текстуры частиц
+        if (scene.textures.exists('particle')) {
+          // Создаем более простой эффект частиц без использования сложного API
+          const particlesContainer = scene.add.container(0, 0);
+          
+          // Добавляем простые частицы как спрайты
+          for (let i = 0; i < 10; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * ballSize * 2;
+            const particle = scene.add.circle(
+              Math.cos(angle) * distance,
+              Math.sin(angle) * distance,
+              ballSize * 0.1,
+              0xffd700,
+              0.7
+            );
+            
+            particlesContainer.add(particle);
+            
+            // Анимируем частицы
+            scene.tweens.add({
+              targets: particle,
+              alpha: 0,
+              scale: 0,
+              x: particle.x * 1.5,
+              y: particle.y * 1.5,
+              duration: 1000 + Math.random() * 1000,
+              repeat: -1,
+              yoyo: false,
+              repeatDelay: Math.random() * 500
+            });
+          }
+          
+          // Добавляем контейнер с частицами в контейнер эффектов
+          effectsContainer.add(particlesContainer);
+        }
         
         // Добавляем свечение
         const glow = scene.add.image(0, 0, 'flare');
@@ -439,7 +462,19 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
     let ballSprite, text;
 
     const pos = ball.getPosition();
-    const radius = ball.getCircle().r;
+    
+    // Исправляем получение радиуса - используем фикстуру
+    let radius = 0;
+    const fixture = ball.getFixtureList();
+    if (fixture) {
+      const shape = fixture.getShape();
+      if (shape.getType() === 'circle') {
+        // Безопасное приведение типа
+        const circleShape = shape as any;
+        radius = circleShape.getRadius();
+      }
+    }
+    
     const ballSize = radius * 30; // Переводим из физического размера в пиксели
 
     // Создаем контейнер для шара и всех его элементов
@@ -459,15 +494,16 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
         const glow = scene.add.circle(0, 0, ballSize * 1.3, 0xff0000, 0.3);
         container.add([glow, bullImage]);
 
-        // Добавляем текст "BULL" на шаре
+        // Добавляем текст "BULL" на шаре с исправленными стилями
         const specialText = scene.add.text(0, ballSize * 0.7, 'BULL', {
           fontFamily: 'Arial',
           fontSize: '12px',
           color: '#ffffff',
-          fontWeight: 'bold',
           stroke: '#ff0000',
-          strokeThickness: 2
+          strokeThickness: 2,
+          fontStyle: 'bold'
         }).setOrigin(0.5);
+        
         container.add(specialText);
 
         // Анимация вращения
@@ -499,7 +535,7 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
           fontFamily: 'Arial',
           fontSize: '14px',
           color: '#ffffff',
-          fontWeight: 'bold'
+          fontStyle: 'bold'
         }).setOrigin(0.5);
         container.add([glow, ballSprite, text]);
       }
@@ -519,36 +555,46 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
         
         // Для максимального уровня (12) добавляем особые эффекты
         if (level === 12) {
-          // Добавляем более сильное свечение для уровня 12
-          const maxLevelGlow = scene.add.circle(0, 0, ballSize * 1.4, 0xffff00, 0.5);
-          container.add(maxLevelGlow);
-          container.sendToBack(maxLevelGlow);
+          // Используем более простой способ создания частиц
+          try {
+            // Создаем контейнер для частиц
+            const particlesContainer = scene.add.container(0, 0);
+            
+            // Добавляем простые частицы как спрайты
+            for (let i = 0; i < 10; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const distance = Math.random() * ballSize * 2;
+              const particle = scene.add.circle(
+                Math.cos(angle) * distance,
+                Math.sin(angle) * distance,
+                ballSize * 0.1, 
+                0xffd700,
+                0.7
+              );
+              
+              particlesContainer.add(particle);
+              
+              // Анимируем частицы
+              scene.tweens.add({
+                targets: particle,
+                alpha: 0,
+                scale: 0,
+                x: particle.x * 1.5,
+                y: particle.y * 1.5,
+                duration: 1000 + Math.random() * 1000,
+                repeat: -1,
+                yoyo: false,
+                repeatDelay: Math.random() * 500
+              });
+            }
+            
+            // Привязываем контейнер с частицами к контейнеру шара
+            container.add(particlesContainer);
+          } catch (error) {
+            console.error('Ошибка при создании частиц для максимального уровня:', error);
+          }
           
-          // Добавляем анимацию пульсации свечения
-          scene.tweens.add({
-            targets: maxLevelGlow,
-            alpha: { from: 0.3, to: 0.7 },
-            scale: { from: 1, to: 1.2 },
-            duration: 1000,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-          });
-          
-          // Добавляем частицы вокруг шара
-          const particles = scene.add.particles('particle');
-          const emitter = particles.createEmitter({
-            speed: 50,
-            scale: { start: 0.2, end: 0 },
-            blendMode: 'ADD',
-            lifespan: 1000,
-            frequency: 200,
-            tint: 0xffd700
-          });
-          emitter.startFollow(container);
-          
-          // Установка частиц под шаром в иерархии отображения
-          container.sendToBack(particles);
+          ballSprite = ballImage;
         }
         
         ballSprite = ballImage;
@@ -565,7 +611,8 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
           fontFamily: 'Arial',
           fontSize: `${fontSize}px`,
           color: '#ffffff',
-          fontWeight: 'bold'
+          stroke: '#000000',
+          strokeThickness: 2
         }).setOrigin(0.5);
         
         container.add([glow, ballSprite, text]);
@@ -575,6 +622,7 @@ const createVisualBall = (bodyRef: any, ballDetails: ExtendedBall, scene: Scene,
     }
   } catch (error) {
     // Ошибка при создании визуального шара
+    console.error('Ошибка при создании визуального шара:', error);
   }
 };
 

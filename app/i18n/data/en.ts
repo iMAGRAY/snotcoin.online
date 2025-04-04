@@ -71,6 +71,7 @@ export const enTranslations: TranslationKeys = {
   storage: 'Storage',
   quests: 'Quests',
   profile: 'Profile',
+  merge: 'Merge',
   
   // Типы для улучшений
   upgrade: 'Upgrade',

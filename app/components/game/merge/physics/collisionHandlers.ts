@@ -543,12 +543,12 @@ export const setupSpecialBallsCollisions = (
         
         // Удаляем шары в обратном порядке индексов
         for (let j = ballsToRemove.length - 1; j >= 0; j--) {
-          const index = ballsToRemove[j];
-          if (index >= 0 && index < ballsRef.current.length) {
-            const ball = ballsRef.current[index];
+          const indexToRemove = ballsToRemove[j];
+          if (indexToRemove !== undefined && indexToRemove >= 0 && indexToRemove < ballsRef.current.length) {
+            const ball = ballsRef.current[indexToRemove];
             
             // Удаляем шар из массива шаров
-            ballsRef.current.splice(index, 1);
+            ballsRef.current.splice(indexToRemove, 1);
             
             // Удаляем физическое тело из мира
             if (worldRef.current && ball && ball.body) {
@@ -567,7 +567,7 @@ export const setupSpecialBallsCollisions = (
                 
                 // Очищаем ссылку на тело
                 ball.body = null as any;
-          } catch (e) {
+              } catch (e) {
                 // Ошибка при удалении тела шара
               }
             }

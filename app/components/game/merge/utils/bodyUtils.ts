@@ -56,7 +56,7 @@ export const setupNormalBallsCollisions = (
         const levelA = userDataA.level ?? 0;
         const levelB = userDataB.level ?? 0;
         
-        // Если уровни одинаковые и не максимальные
+        // Если уровни одинаковые и не максимальные (добавлена явная проверка, чтобы шары 12 уровня не сливались)
         if (levelA === levelB && levelA > 0 && levelA < MAX_LEVEL) {
           // Создаем уникальный идентификатор для пары контактов
           const contactId = `${Math.min(userDataA.createdAt || 0, userDataB.createdAt || 0)}-${Math.max(userDataA.createdAt || 0, userDataB.createdAt || 0)}`;
@@ -109,7 +109,8 @@ export const processContactBetweenSameLevelBalls = (
   mergeContactTime: Set<string>
 ): boolean => {
   try {
-    if (levelA === levelB && (userDataA.type === 'ball' && userDataB.type === 'ball')) {
+    // Проверяем, что шары одного уровня, оба являются шарами и уровень не максимальный
+    if (levelA === levelB && levelA < MAX_LEVEL && (userDataA.type === 'ball' && userDataB.type === 'ball')) {
       // Шары одного уровня коснулись друг друга
       // Контакт шаров одинакового уровня
       

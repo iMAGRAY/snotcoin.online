@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import Image from "next/image"
 import { animated, useSpring } from "react-spring"
-import { ICONS } from "../../../constants/uiConstants"
+import { CHEST_IMAGES } from "../../../constants/storageConstants"
 
 interface ChestImageProps {
   src: string
@@ -11,20 +11,20 @@ interface ChestImageProps {
 }
 
 export const ChestImage: React.FC<ChestImageProps> = React.memo(({ src, alt, isOpening, chestIndex }) => {
-  const [imageToShow, setImageToShow] = useState(src)
+  const [imageToShow, setImageToShow] = useState<string>(src)
   
   useEffect(() => {
     if (isOpening) {
       // Определяем какое изображение открытого сундука использовать на основе индекса
       if (chestIndex === 0) {
         // Сундук первого уровня
-        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL1_OPEN)
+        setImageToShow(CHEST_IMAGES.LEVEL1_OPEN)
       } else if (chestIndex === 1) {
         // Сундук второго уровня
-        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL2_OPEN)
+        setImageToShow(CHEST_IMAGES.LEVEL2_OPEN)
       } else if (chestIndex === 2) {
         // Сундук третьего уровня
-        setImageToShow(ICONS.STORAGE.LEVELS.LEVEL3_OPEN)
+        setImageToShow(CHEST_IMAGES.LEVEL3_OPEN)
       }
     } else {
       // В противном случае показываем оригинальное изображение
@@ -38,8 +38,6 @@ export const ChestImage: React.FC<ChestImageProps> = React.memo(({ src, alt, isO
     config: { tension: 300, friction: 10 },
   })
 
-  const imageUrl = imageToShow || "/placeholder.svg"
-
   return (
     <animated.div 
       className="fixed inset-0 flex items-center justify-center z-5" 
@@ -50,8 +48,8 @@ export const ChestImage: React.FC<ChestImageProps> = React.memo(({ src, alt, isO
     >
       <div className="w-full h-full relative">
         <Image 
-          src={imageUrl}
-          alt={alt || "Chest"}
+          src={imageToShow}
+          alt={alt}
           fill
           sizes="100vw"
           style={{ 

@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       const user = await prisma.user.findFirst({
         where: decoded.fid 
           ? { farcaster_fid: decoded.fid } 
-          : { id: decoded.userId }
+          : decoded.userId ? { id: decoded.userId } : {}
       });
       
       if (!user) {

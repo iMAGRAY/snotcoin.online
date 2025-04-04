@@ -72,6 +72,7 @@ export const ruTranslations: TranslationKeys = {
   storage: 'Хранилище',
   quests: 'Задания',
   profile: 'Профиль',
+  merge: 'Слияние',
   
   // Типы для улучшений
   upgrade: 'Улучшить',

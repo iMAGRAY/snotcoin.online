@@ -1,17 +1,18 @@
 "use client"
 
-import React, { useState, RefObject, useEffect } from "react"
-import { AnimatePresence, motion } from "framer-motion"
+import React, { useState, useRef, useEffect } from "react"
+import { motion, PanInfo } from "framer-motion"
 import { ChestImage } from "./ChestImage"
-import { ICONS } from "../../../constants/uiConstants"
+import { CHEST_IMAGES_ARRAY } from "../../../constants/storageConstants"
 
 interface ChestCarouselProps {
-  onSwipeComplete?: (index: number) => void;
-  carouselRef?: RefObject<HTMLDivElement>;
-  containerRef?: RefObject<HTMLDivElement>;
+  onChestSelect: (index: number) => void;
+  containerRef?: React.RefObject<HTMLDivElement>;
+  carouselRef?: React.RefObject<HTMLDivElement>;
   isOpening: boolean;
-  setActiveChestIndex: (index: number) => void;
+  setActiveChestIndex: React.Dispatch<React.SetStateAction<number>>;
   activeChestIndex: number;
+  onSwipeComplete: (index: number) => void;
 }
 
 const variants = {
@@ -41,99 +42,96 @@ const wrap = (min: number, max: number, v: number) => {
   return ((((v - min) % rangeSize) + rangeSize) % rangeSize) + min;
 };
 
-const chestImages = [
-  ICONS.STORAGE.LEVELS.LEVEL1,
-  ICONS.STORAGE.LEVELS.LEVEL2,
-  ICONS.STORAGE.LEVELS.LEVEL3,
-];
-
-export const ChestCarousel: React.FC<ChestCarouselProps> = ({
-  onSwipeComplete,
-  carouselRef,
-  containerRef,
-  isOpening,
-  setActiveChestIndex,
-  activeChestIndex
+export const ChestCarousel: React.FC<ChestCarouselProps> = ({ 
+  onChestSelect, 
+  containerRef, 
+  carouselRef, 
+  isOpening, 
+  setActiveChestIndex, 
+  activeChestIndex, 
+  onSwipeComplete 
 }) => {
   const [[page, direction], setPage] = useState([0, 0]);
-  const imageIndex = wrap(0, chestImages.length, page);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = useRef<number | null>(null);
   
-  // Синхронизация внешнего activeChestIndex с внутренним page
+  // Используем переданный activeChestIndex вместо локального imageIndex
+  const safeImageIndex = Math.abs(activeChestIndex % CHEST_IMAGES_ARRAY.length);
+
   useEffect(() => {
-    if (imageIndex !== activeChestIndex) {
-      // Определяем направление смены для анимации
-      const newDirection = activeChestIndex > imageIndex ? 1 : -1;
-      setPage([activeChestIndex, newDirection]);
-    }
-  }, [activeChestIndex, imageIndex]);
+    onChestSelect(safeImageIndex);
+  }, [safeImageIndex, onChestSelect]);
 
   const paginate = (newDirection: number) => {
     const newPage = page + newDirection;
-    const newIndex = wrap(0, chestImages.length, newPage);
-    setPage([newPage, newDirection]);
-    setActiveChestIndex(newIndex);
-    if (onSwipeComplete) {
-      onSwipeComplete(newIndex);
+    // Обеспечиваем цикличность (если достигли конца, переходим в начало и наоборот)
+    const adjustedPage = ((newPage % CHEST_IMAGES_ARRAY.length) + CHEST_IMAGES_ARRAY.length) % CHEST_IMAGES_ARRAY.length;
+    setPage([adjustedPage, newDirection]);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches && e.touches.length > 0) {
+      const touch = e.touches[0];
+      if (touch) {
+        startX.current = touch.clientX;
+      }
     }
   };
 
-  const handleSwipeLeft = () => paginate(1);
-  const handleSwipeRight = () => paginate(-1);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (startX.current === null) return;
+    
+    const changedTouch = e.changedTouches?.[0];
+    if (!changedTouch) return;
+    
+    const endX = changedTouch.clientX;
+    const diff = startX.current - endX;
 
+    if (Math.abs(diff) > 50) { // Пороговое значение для свайпа
+      if (diff > 0) {
+        handleSwipeLeft();
+      } else {
+        handleSwipeRight();
+      }
+    }
+    startX.current = null;
+  };
+
+  const handleSwipeLeft = () => {
+    paginate(1);
+  };
+
+  const handleSwipeRight = () => {
+    paginate(-1);
+  };
+
+  // Гарантируем, что элемент массива всегда будет строкой
+  const currentImageSrc: string = CHEST_IMAGES_ARRAY[safeImageIndex] || '';
+  
   return (
-    <div 
-      className="fixed inset-0 overflow-hidden z-10"
+    <div
+      className="w-full h-full relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       ref={containerRef}
-      onTouchStart={(e) => {
-        const touchStart = e.touches[0].clientX;
-        const handleTouchEnd = (e: TouchEvent) => {
-          const touchEnd = e.changedTouches[0].clientX;
-          if (touchEnd < touchStart - 50) {
-            handleSwipeLeft();
-          } else if (touchEnd > touchStart + 50) {
-            handleSwipeRight();
-          }
-          document.removeEventListener('touchend', handleTouchEnd);
-        };
-        document.addEventListener('touchend', handleTouchEnd);
-      }}
-      onMouseDown={(e) => {
-        const mouseStart = e.clientX;
-        const handleMouseUp = (e: MouseEvent) => {
-          const mouseEnd = e.clientX;
-          if (mouseEnd < mouseStart - 50) {
-            handleSwipeLeft();
-          } else if (mouseEnd > mouseStart + 50) {
-            handleSwipeRight();
-          }
-          document.removeEventListener('mouseup', handleMouseUp);
-        };
-        document.addEventListener('mouseup', handleMouseUp);
-      }}
     >
-      <motion.div className="w-full h-full" ref={carouselRef}>
-        <AnimatePresence initial={false} custom={direction}>
-          <motion.div
-            key={page}
-            custom={direction}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{
-              x: { type: "spring", stiffness: 300, damping: 30 },
-              opacity: { duration: 0.2 }
-            }}
-            className="absolute inset-0 w-full h-full flex justify-center items-center"
-          >
-            <ChestImage 
-              src={chestImages[imageIndex]} 
-              alt={`Chest level ${imageIndex + 1}`}
-              isOpening={isOpening} 
-              chestIndex={imageIndex}
-            />
-          </motion.div>
-        </AnimatePresence>
+      <motion.div
+        className="w-full h-full flex items-center justify-center"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.1}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={() => {
+          setIsDragging(false);
+        }}
+        ref={carouselRef}
+      >
+        <ChestImage
+          src={currentImageSrc}
+          alt={`Chest ${safeImageIndex + 1}`}
+          isOpening={isOpening}
+          chestIndex={safeImageIndex}
+        />
       </motion.div>
     </div>
   );

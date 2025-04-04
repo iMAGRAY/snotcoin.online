@@ -56,31 +56,25 @@ function createDefaultGameState(userId: string): GameState {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 1,
+      containerCapacity: 5, // Начальная вместимость контейнера
       containerSnot: 0,
-      fillingSpeed: 1,
-      containerCapacityLevel: 1,
-      fillingSpeedLevel: 1,
-      collectionEfficiency: 1,
+      fillingSpeed: 0.01, // Начальная скорость наполнения
+      containerCapacityLevel: 1, // Начальный уровень вместимости
+      fillingSpeedLevel: 1, // Начальный уровень скорости наполнения
+      collectionEfficiency: 1, // Начальная эффективность сбора
       lastUpdateTimestamp: Date.now()
     },
-    container: {
-      level: 1,
-      capacity: 1,
-      currentAmount: 0,
-      fillRate: 1
+    containers: [],
+    resources: {
+      water: 0,
+      energy: 0
     },
-    upgrades: {
-      containerLevel: 1,
-      fillingSpeedLevel: 1,
-      clickPower: { level: 1, value: 1 },
-      passiveIncome: { level: 1, value: 0.1 },
-      collectionEfficiencyLevel: 1
+    stats: {
+      totalSnot: 0,
+      totalSnotCoins: 0
     },
-    _skipSave: false,
-    _lastSaved: new Date().toISOString(),
     _saveVersion: 1
-  } as GameState;
+  } as unknown as GameState;
 }
 
 /**

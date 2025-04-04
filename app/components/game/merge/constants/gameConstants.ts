@@ -25,7 +25,7 @@ export const BOMB_COLOR = 0x000000; // Черный для шара Bomb
 export const BULL_COLOR = 0xff0000; // Красный для шара Bull
 
 // Размеры и цвета
-export const PLAYER_SIZE = 25;
+export const PLAYER_SIZE = 20;
 export const PLAYER_COLOR = 0xbbeb25;
 export const FLOOR_COLOR = 0x2a3b4d;
 export const WALL_COLOR = 0x4a7a9e;
@@ -52,7 +52,7 @@ export const POSITION_ITERATIONS = 8; // Возвращаю к прежнему 
 export const GRAVITY_Y = 5.0; // Максимально увеличиваю гравитацию для сверхбыстрого падения
 
 // Константа для позиции шара по вертикали
-export const FIXED_PLAYER_Y = 80; // пикселей от верха
+export const FIXED_PLAYER_Y = 45; // пикселей от верха (изменено с 60 на 45)
 export const PHYSICS_PLAYER_Y = FIXED_PLAYER_Y / SCALE; // переводим в физические единицы
 
 // Частота проверки слияния шаров

@@ -1,5 +1,6 @@
 import type { ExtendedGameState, GameState } from '../../types/gameTypes';
 import { createInitialGameState } from "../../constants/gameConstants";
+import { Container } from '../../types/container';
 
 /**
  * Сервис для проверки и валидации целостности данных
@@ -61,7 +62,7 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
         currentAmount: 0,
         fillRate: 1,
         currentFill: 0
-      };
+      } as Container;
       repairedFields.push('container');
     } else {
       // Проверяем и восстанавливаем поля контейнера
