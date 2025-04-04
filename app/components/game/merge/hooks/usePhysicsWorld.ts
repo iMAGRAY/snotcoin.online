@@ -50,7 +50,7 @@ export const usePhysicsWorld = (): PhysicsRefs => {
 
   // Размеры игры по умолчанию
   const defaultWidth = BASE_GAME_WIDTH;
-  const defaultHeight = defaultWidth * 1.5; // соотношение сторон 2:3
+  const defaultHeight = defaultWidth * 1.335; // соотношение сторон 2:2.67
   
   /**
    * Создает границы игрового мира (стены и пол)

@@ -10,7 +10,6 @@ const LoadingScreen = dynamic(() => import("./LoadingScreen"), {
   ssr: false,
 })
 import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
-import DevTools from './DevTools'
 
 // Импортируем SDK для Mini Apps
 import { sdk } from '@farcaster/frame-sdk'
@@ -121,7 +120,6 @@ const HomeContent: React.FC = () => {
         />
         {renderActiveTab()} 
         {!gameState.hideInterface && <TabBar />}
-        {process.env.NODE_ENV === 'development' && <DevTools />}
       </MotionDiv>
     </ErrorBoundary>
   );

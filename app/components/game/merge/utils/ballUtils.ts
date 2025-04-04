@@ -4,39 +4,62 @@ import * as planck from 'planck';
 // Минимальный размер шара для физики
 const MIN_BALL_RADIUS = 0.45;
 
-// Функция для расчета размера шара на основе уровня и размера игры
-export const getBallSize = (level: number, gameWidth?: number): number => {
-  // Базовый размер шара с прогрессивным увеличением в зависимости от уровня
-  const baseSize = BASE_BALL_SIZE + (level - 1) * 5; // увеличиваем размер на 5 пикселей для каждого уровня
+/**
+ * Получает размер шара в пикселях для определенного уровня шара с учетом размера игры
+ * @param level - Уровень шара
+ * @param gameWidth - Текущая ширина игровой зоны
+ * @returns Радиус шара в пикселях
+ */
+export const getBallSize = (level: number, gameWidth: number = BASE_GAME_WIDTH): number => {
+  // Базовый радиус для шаров относительно ширины игры
+  // Размер шара 1 уровня (маленький)
+  const minSizeRatio = 0.05; // 5% от ширины игры для шара 1 уровня
   
-  // Если передан размер игры, масштабируем шар в зависимости от ширины игрового поля
-  if (gameWidth && gameWidth !== BASE_GAME_WIDTH) {
-    const scaleFactor = gameWidth / BASE_GAME_WIDTH;
-    // Правильное масштабирование: шары должны увеличиваться при увеличении игровой зоны
-    return baseSize * scaleFactor;
-  }
+  // Размер шара 12 уровня (максимально большой - примерно половина ширины)
+  const maxSizeRatio = 0.24; // 24% от ширины игры для шара 12 уровня
   
-  return baseSize;
+  // Вычисляем шаг увеличения размера для каждого уровня
+  const levelStep = (maxSizeRatio - minSizeRatio) / (12 - 1);
+  
+  // Определяем коэффициент размера для текущего уровня
+  const sizeRatio = minSizeRatio + (level - 1) * levelStep;
+  
+  // Вычисляем итоговый размер в пикселях
+  return Math.round(gameWidth * sizeRatio);
 };
 
-// Функция для расчета физического размера шара с учетом масштабирования
-export const getBallPhysicsSize = (level: number, gameWidth?: number, specialType?: string): number => {
-  // Используем MIN_BALL_RADIUS, чтобы предотвратить проникновение шаров друг в друга
+/**
+ * Получает физический размер шара для коллизий
+ * @param level - Уровень шара
+ * @param gameWidth - Текущая ширина игровой зоны
+ * @param specialType - Опциональный тип специального шара
+ * @returns Физический радиус шара в единицах физического мира
+ */
+export const getBallPhysicsSize = (level: number, gameWidth: number = BASE_GAME_WIDTH, specialType?: string): number => {
+  // Получаем визуальный размер в пикселях
   const visualSize = getBallSize(level, gameWidth);
   
-  // Физический размер шара (масштабируем визуальный размер)
-  const physicalSize = visualSize / SCALE;
+  // Для физики используем немного меньший размер (85% от визуального)
+  // чтобы предотвратить слишком раннее обнаружение коллизий
+  let physicsSize = visualSize * 0.85 / SCALE;
   
-  // Применяем модификаторы для специальных типов шаров
-  let sizeMultiplier = 1.0;
-  
-  if (specialType === 'Bull') {
-    sizeMultiplier = 1.2; // Bull шары немного больше
-  } else if (specialType === 'Bomb') {
-    sizeMultiplier = 1.1; // Bomb шары тоже больше
+  // Для больших шаров (уровень > 8) физическая модель должна быть еще меньше визуальной,
+  // чтобы избежать проблем с застреванием
+  if (level > 8) {
+    physicsSize *= 0.95 - (level - 8) * 0.01; // Уменьшаем физический размер на 1% за каждый уровень выше 8
   }
   
-  return Math.max(physicalSize * sizeMultiplier, MIN_BALL_RADIUS);
+  // Для специальных шаров делаем соответствующие корректировки
+  if (specialType === 'Bull') {
+    // Бык имеет немного больший физический объем для лучшего эффекта "тарана"
+    physicsSize *= 1.1;
+  } else if (specialType === 'Bomb') {
+    // У бомбы физический размер чуть меньше визуального
+    physicsSize *= 0.95;
+  }
+  
+  // Убедимся, что физический размер не меньше минимально допустимого
+  return Math.max(physicsSize, MIN_BALL_RADIUS);
 };
 
 // Функция для обновления размеров и позиций шаров при изменении размера игры
@@ -45,15 +68,18 @@ export const updateBallsOnResize = (
   currentBallRef: any,
   worldRef: any,
   newGameWidth: number,
-  oldGameWidth: number
+  oldGameWidth: number,
+  baseScaleFactor?: number
 ) => {
   if (!ballsRef.current || !worldRef.current) return;
   
   // Рассчитываем коэффициенты масштабирования
   const widthScaleFactor = newGameWidth / oldGameWidth;
-  const baseSizeFactor = newGameWidth / BASE_GAME_WIDTH;
+  // Если передан baseScaleFactor, то используем его для расчета размеров
+  // иначе вычисляем относительно базовой ширины
+  const sizeFactor = baseScaleFactor || (newGameWidth / BASE_GAME_WIDTH);
   
-  console.log(`Масштабирование шаров: widthScaleFactor=${widthScaleFactor}, baseSizeFactor=${baseSizeFactor}`);
+  console.log(`Масштабирование шаров: widthScaleFactor=${widthScaleFactor.toFixed(3)}, sizeFactor=${sizeFactor.toFixed(3)}`);
   
   try {
     // Сначала обновляем все визуальные элементы шаров, чтобы они оставались видимыми
@@ -80,44 +106,50 @@ export const updateBallsOnResize = (
             // Получаем новый размер шара с явным указанием текущей ширины игры
             const ballSize = getBallSize(ball.level, newGameWidth);
             
+            // Используем относительный размер, чтобы шары занимали одинаковую долю от экрана
+            const relativeBallSize = Math.round(ballSize);
+            
             // Обновляем размер визуального представления в зависимости от типа шара
             if (ball.specialType === 'Bull' && ball.sprite.circle) {
               // Используем точные множители для каждого типа шара
-              ball.sprite.circle.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
+              ball.sprite.circle.setDisplaySize(relativeBallSize * 2.3, relativeBallSize * 2.3);
               
               // Если есть свечение или дополнительные эффекты, обновляем их тоже
               const outline = ball.sprite.container.list?.find((child: any) => 
                 child.type === 'Arc' && child.fillColor === 0xff0000
               );
               if (outline) {
-                outline.setRadius(ballSize * 1.3);
+                outline.setRadius(relativeBallSize * 1.25);
               }
             } else if (ball.specialType === 'Bomb' && ball.sprite.circle) {
-              ball.sprite.circle.setDisplaySize(ballSize * 2.2, ballSize * 2.2);
+              ball.sprite.circle.setDisplaySize(relativeBallSize * 2.0, relativeBallSize * 2.0);
               
               // Обновляем эффекты бомбы
               const outline = ball.sprite.container.list?.find((child: any) => 
                 child.type === 'Arc' && child.fillColor === 0xff0000
               );
               if (outline) {
-                outline.setRadius(ballSize * 1.2);
+                outline.setRadius(relativeBallSize * 1.2);
               }
             } else if (ball.sprite.circle && typeof ball.sprite.circle.setDisplaySize === 'function') {
-              // Обычные шары
-              ball.sprite.circle.setDisplaySize(ballSize * 1.8, ballSize * 1.8);
+              // Постепенно уменьшаем множитель для больших шаров, чтобы изображение не было слишком большим
+              const displayMultiplier = ball.level > 8 ? 1.7 - (ball.level - 8) * 0.05 : 1.7;
+              ball.sprite.circle.setDisplaySize(relativeBallSize * displayMultiplier, relativeBallSize * displayMultiplier);
               
               // Обновляем контур обычного шара, если он есть
               const outline = ball.sprite.container.list?.find((child: any) => 
                 child.type === 'Arc' && child.fillColor === 0xffffff
               );
               if (outline) {
-                outline.setRadius(ballSize * 1.1);
+                outline.setRadius(relativeBallSize * 1.1);
               }
             }
             
             // Обновляем размер текста на шаре, если он есть
             if (ball.sprite.text) {
-              const fontSize = Math.max(Math.min(18, 12 + ball.level) * baseSizeFactor, 10);
+              // Размер шрифта должен быть пропорционален размеру шара
+              // и зависеть от уровня шара
+              const fontSize = Math.max(Math.min(18, 12 + ball.level) * sizeFactor, 10);
               ball.sprite.text.setFontSize(fontSize);
               // Центрируем текст
               ball.sprite.text.setOrigin(0.5, 0.5);
@@ -225,42 +257,48 @@ export const updateBallsOnResize = (
       // Получаем новый размер шара с учетом текущей ширины игры
       const ballSize = getBallSize(currentBall.level, newGameWidth);
       
+      // Относительный размер шара
+      const relativeBallSize = Math.round(ballSize);
+      
       // Обновляем размер визуального представления в зависимости от типа шара
       if (currentBall.specialType === 'Bull' && currentBall.sprite.circle) {
-        currentBall.sprite.circle.setDisplaySize(ballSize * 2.5, ballSize * 2.5);
+        currentBall.sprite.circle.setDisplaySize(relativeBallSize * 2.3, relativeBallSize * 2.3);
         
         // Обновляем эффекты, если они есть
         const outline = currentBall.sprite.container.list?.find((child: any) => 
           child.type === 'Arc' && child.fillColor === 0xff0000
         );
         if (outline) {
-          outline.setRadius(ballSize * 1.3);
+          outline.setRadius(relativeBallSize * 1.25);
         }
       } else if (currentBall.specialType === 'Bomb' && currentBall.sprite.circle) {
-        currentBall.sprite.circle.setDisplaySize(ballSize * 2.2, ballSize * 2.2);
+        currentBall.sprite.circle.setDisplaySize(relativeBallSize * 2.0, relativeBallSize * 2.0);
         
         // Обновляем эффекты, если они есть
         const outline = currentBall.sprite.container.list?.find((child: any) => 
           child.type === 'Arc' && child.fillColor === 0xff0000
         );
         if (outline) {
-          outline.setRadius(ballSize * 1.3);
+          outline.setRadius(relativeBallSize * 1.2);
         }
       } else if (currentBall.sprite.circle && typeof currentBall.sprite.circle.setDisplaySize === 'function') {
-        currentBall.sprite.circle.setDisplaySize(ballSize * 1.8, ballSize * 1.8);
+        // Постепенно уменьшаем множитель для больших шаров, чтобы изображение не было слишком большим
+        const displayMultiplier = currentBall.level > 8 ? 1.7 - (currentBall.level - 8) * 0.05 : 1.7;
+        currentBall.sprite.circle.setDisplaySize(relativeBallSize * displayMultiplier, relativeBallSize * displayMultiplier);
         
         // Обновляем эффекты, если они есть
         const outline = currentBall.sprite.container.list?.find((child: any) => 
           child.type === 'Arc' && child.fillColor === 0xffffff
         );
         if (outline) {
-          outline.setRadius(ballSize * 1.1);
+          outline.setRadius(relativeBallSize * 1.1);
         }
       }
       
       // Обновляем размер текста, если он есть
       if (currentBall.sprite.text) {
-        const fontSize = Math.max(Math.min(14, 10 + currentBall.level) * baseSizeFactor, 10);
+        // Размер текста пропорционален размеру шара
+        const fontSize = Math.max(Math.min(14, 10 + currentBall.level) * sizeFactor, 10);
         currentBall.sprite.text.setFontSize(fontSize);
         // Центрируем текст
         currentBall.sprite.text.setOrigin(0.5, 0.5);
@@ -270,7 +308,7 @@ export const updateBallsOnResize = (
       currentBall.originalGameWidth = newGameWidth;
       
       // Добавляем логирование для диагностики
-      console.log(`Обновлен шар для броска: уровень ${currentBall.level}, размер ${ballSize}px, ширина игры ${newGameWidth}px`);
+      console.log(`Обновлен шар для броска: уровень ${currentBall.level}, размер ${relativeBallSize}px, ширина игры ${newGameWidth}px`);
     } catch (error) {
       console.error("Ошибка при обновлении текущего шара:", error);
     }

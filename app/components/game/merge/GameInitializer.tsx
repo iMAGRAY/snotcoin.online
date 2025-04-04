@@ -14,7 +14,7 @@ handleResize = () => {
   const availableHeight = parentHeight - headerHeight - footerHeight;
   
   // Применяем соотношение сторон для расчета ширины
-  // Поле должно быть выше, чем шире (соотношение 2:3)
+  // Поле должно быть выше, чем шире (соотношение 2:2.67)
   let newWidth = availableHeight * GAME_ASPECT_RATIO;
   let newHeight = availableHeight;
   
@@ -87,7 +87,7 @@ export const updateSceneElements = (
   
   // Рассчитываем масштаб относительно базового размера
   const scaleX = gameWidth / BASE_GAME_WIDTH;
-  const scaleY = gameHeight / (BASE_GAME_WIDTH * 1.5); // Используем базовое соотношение сторон 2:3
+  const scaleY = gameHeight / (BASE_GAME_WIDTH * 1.335); // Используем базовое соотношение сторон 2:2.67
   
   // Обновляем масштаб камеры, если это возможно
   if (scene.cameras && scene.cameras.main) {

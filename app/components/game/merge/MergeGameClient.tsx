@@ -627,23 +627,18 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
           />
         </div>
         
-        {/* Игровой контейнер с прозрачным фоном */}
+        {/* Игровой контейнер */}
         <div 
           ref={gameContainerRef} 
-            className="flex-grow overflow-hidden flex items-end justify-center"
-            style={{ 
-              touchAction: 'none', 
-              backgroundColor: 'transparent',
-              position: 'relative',
-              zIndex: 1,
-              display: 'flex',
-              alignItems: 'flex-end',
-              justifyContent: 'center',
-              width: '100%',
-              height: '100%',
-              padding: 0,
-              margin: 0
-            }}
+          className="flex-grow overflow-hidden relative"
+          style={{ 
+            touchAction: 'none', 
+            backgroundColor: 'transparent',
+            position: 'relative',
+            zIndex: 1,
+            width: '100%',
+            height: '100%'
+          }}
         >
           {/* Экран загрузки или ошибки */}
           <LoadingScreen 
@@ -687,20 +682,19 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
           />
         </div>
         
-        {/* Прозрачный футер (пол игровой зоны) */}
-        <div className="flex-shrink-0 w-full relative z-10">
-          <div 
-            className="w-full h-[64px] sm:h-[96px] relative"
-            style={{
-              backgroundImage: 'url("/images/merge/Game/ui/Footer.webp")',
-              backgroundSize: '100% 100%', 
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'bottom center',
-              boxShadow: 'inset 0 3px 10px rgba(0,0,0,0.2)'
-            }}
-          >
-            {/* Кнопки способностей (приподнятые) */}
-            <div className="absolute top-0 left-0 right-0 w-full transform -translate-y-10 sm:-translate-y-12">
+        {/* Нижняя панель */}
+        <div 
+          className="flex-shrink-0 w-full h-[64px] sm:h-[96px] relative z-10"
+          style={{
+            backgroundImage: 'url("/images/merge/Game/ui/Footer.webp")',
+            backgroundSize: '100% 100%', 
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'bottom center',
+            boxShadow: 'inset 0 3px 10px rgba(0,0,0,0.2)'
+          }}
+        >
+          {/* Кнопки способностей (внутри нижней панели) */}
+          <div className="w-full h-full flex items-center justify-center">
             <FooterButtons
               onBullClick={handleBullBall}
               onBombClick={handleBombBall}
@@ -709,9 +703,8 @@ const MergeGameClient: React.FC<MergeGameProps> = ({ onClose, gameOptions = {} }
               containerCapacity={containerCapacity}
               snotCoins={snotCoins}
               bullUsed={bullUsed}
-                bombUsed={bombUsed}
+              bombUsed={bombUsed}
             />
-            </div>
           </div>
         </div>
       </div>

@@ -14,6 +14,11 @@ import { checkAndMergeBalls } from '../physics/checkAndMergeBalls';
 import { BASE_GAME_WIDTH, FIXED_PLAYER_Y, GAME_ASPECT_RATIO, PLAYER_SIZE, WALL_COLOR, GRAVITY_Y, SCALE, PHYSICS_PLAYER_Y } from '../constants/gameConstants';
 import { ExtendedBall, ExtendedNextBall, TrajectoryRef } from '../types';
 import { updateBallsOnResize } from '../utils/ballUtils';
+import { updateSceneElements } from '../utils/sceneUtils';
+import { ScaleType, MergeGameProps } from '../types/gameTypes';
+import { useIsMobile } from '@/app/hooks/useIsMobile';
+import { initWorld } from '../physics/world';
+import { createSpecialBall } from '../utils/specialBalls';
 
 // Время последнего броска для ограничения частоты бросков
 let lastThrowTime = 0;
@@ -27,6 +32,10 @@ const OVERHEAT_COOLDOWN_TIME = 3000; // 3 секунды охлаждения п
 let isOverheated = false; // Флаг состояния перегрева
 let overheatBarGraphics: any = null; // Графический элемент для отображения бара перегрева
 let nextBallIndicator: any = null; // Графический элемент для отображения следующего шара
+
+// Константы для размеров игры по умолчанию
+const DEFAULT_WIDTH = 390;
+const DEFAULT_HEIGHT = 800;
 
 interface GameInitializerProps {
   gameContainerRef: React.RefObject<HTMLDivElement>;
@@ -217,7 +226,6 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
             preload: function(this: any) {
               try {
                 // Загружаем текстуры и изображения
-                this.load.image('background', '/images/merge/Game/BackGround.webp');
                 this.load.image('coin-king', '/images/merge/Game/ui/CoinKing.webp');
                 this.load.image('coin-king-throw', '/images/merge/Game/ui/CoinKingThrow.webp');
                 this.load.image('trees', '/images/merge/Game/ui/trees.webp');
@@ -277,7 +285,7 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                 // Создаем вертикальный бар перегрева с закругленными углами
                 const barWidth = 20;
                 const barHeight = 120;
-                const barX = 30;
+                const barX = 10;
                 const barY = 50;
                 const cornerRadius = 6; // Радиус скругления углов
                 
@@ -371,118 +379,25 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                 
                 // Создаем индикатор следующего шара
                 const createNextBallIndicator = () => {
-                  // Создаем контейнер с той же глубиной что и индикатор перегрева
+                  // Не создаем индикатор, так как он теперь отображается в хедере
+                  // Создаем пустой контейнер только для совместимости с существующим кодом
                   nextBallIndicator = this.add.container(0, 0);
-                  nextBallIndicator.setDepth(150);
+                  nextBallIndicator.setDepth(0);
+                  nextBallIndicator.setVisible(false); // Скрываем индикатор
                   
-                  // Размеры и положение индикатора (без большой рамки)
-                  const indicatorSize = 60; // Уменьшаем размер
-                  const indicatorX = newGameWidth - indicatorSize - 10; // Размещаем ближе к краю экрана
-                  const indicatorY = 50; // Тот же отступ сверху, что и у индикатора перегрева
-                  
-                  // Добавляем небольшую метку "СЛЕД." вместо большого заголовка
-                  const titleText = this.add.text(indicatorX + indicatorSize / 2, indicatorY - 15, "СЛЕД.", {
-                    fontFamily: 'Arial',
-                    fontSize: '12px',
-                    color: '#ffffff',
-                    fontWeight: 'bold'
-                  }).setOrigin(0.5);
-                  
-                  // Добавляем метку в контейнер
-                  nextBallIndicator.add(titleText);
-                  
-                  // Сохраняем свойства для обновления
-                  nextBallIndicator.centerX = indicatorX;
-                  nextBallIndicator.centerY = indicatorY + indicatorSize / 2;
-                  nextBallIndicator.size = indicatorSize; // Размер шара
+                  // Устанавливаем необходимые свойства для совместимости
+                  nextBallIndicator.centerX = 0;
+                  nextBallIndicator.centerY = 0;
+                  nextBallIndicator.size = 0;
                   
                   return nextBallIndicator;
                 };
                 
                 // Функция для обновления индикатора следующего шара
                 const updateNextBallIndicator = (level: number) => {
-                  if (!nextBallIndicator) return;
-                  
-                  // Удаляем предыдущий шар, если он есть (кроме метки)
-                  while (nextBallIndicator.list.length > 1) {
-                    const item = nextBallIndicator.list[nextBallIndicator.list.length - 1];
-                    nextBallIndicator.remove(item);
-                    item.destroy();
-                  }
-                  
-                  // Создаем временную сцену для получения контейнера следующего шара
-                  try {
-                    // Используем уменьшенный масштаб для шара в индикаторе
-                    const scaleFactor = 0.7;
-                    
-                    // Имитируем тело игрока для создания шара
-                    const tempPlayerBody = {
-                      getPosition: () => ({ x: nextBallIndicator.centerX / 30, y: 0 })
-                    };
-                    
-                    const tempPlayerBodyRef = { current: tempPlayerBody };
-                    
-                    // Создаем шар того же уровня, что будет следующим
-                    const nextBall = createNextBall(
-                      this, 
-                      tempPlayerBodyRef, 
-                      level
-                    );
-                    
-                    if (nextBall && nextBall.sprite && nextBall.sprite.container) {
-                      // Получаем контейнер шара
-                      const ballContainer = nextBall.sprite.container;
-                      
-                      // Устанавливаем позицию шара в центр индикатора
-                      ballContainer.x = nextBallIndicator.centerX;
-                      ballContainer.y = nextBallIndicator.centerY;
-                      
-                      // Масштабируем шар для компактного отображения
-                      ballContainer.setScale(scaleFactor, scaleFactor);
-                      
-                      // Останавливаем все твины и анимации для индикатора
-                      try {
-                        // Останавливаем все анимации контейнера
-                        this.tweens.killTweensOf(ballContainer);
-                        
-                        // Останавливаем все анимации вращения или пульсации внутри
-                        if (ballContainer.getAll) {
-                          const children = ballContainer.getAll();
-                          children.forEach((child: any) => {
-                            if (child) {
-                              this.tweens.killTweensOf(child);
-                            }
-                          });
-                        }
-                      } catch (e) {
-                        // Не удалось полностью остановить анимации индикатора
-                      }
-                      
-                      // Определяем размер шара для создания круглой рамки
-                      // Получаем фактический размер шара в зависимости от уровня
-                      const baseRadius = level <= 3 ? 20 : level <= 6 ? 22 : level <= 9 ? 24 : 26;
-                      const ballRadius = baseRadius * scaleFactor;
-                      
-                      // Создаем круглую рамку вокруг шара
-                      const circleFrame = this.add.graphics();
-                      circleFrame.lineStyle(2, 0xffffff, 0.8); // Белая рамка с прозрачностью
-                      circleFrame.strokeCircle(0, 0, ballRadius + 3); // Чуть больше радиуса шара
-                      
-                      // Убедимся, что рамка находится под шаром в контейнере, но над фоном
-                      if (ballContainer.list && ballContainer.list.length > 0) {
-                        // Вставляем рамку в начало списка дочерних элементов контейнера
-                        ballContainer.addAt(circleFrame, 0);
-                      } else {
-                        // Добавляем рамку в контейнер шара
-                        ballContainer.add(circleFrame);
-                      }
-                      
-                      // Добавляем шар в индикатор
-                      nextBallIndicator.add(ballContainer);
-                    }
-                  } catch (error) {
-                    // Ошибка при обновлении индикатора следующего шара
-                  }
+                  // Ничего не делаем, так как индикатор теперь отображается в хедере
+                  // Но сохраняем эту функцию для совместимости с существующим кодом
+                  return;
                 };
                 
                 // Запускаем таймер для уменьшения перегрева со временем и его отображения
@@ -962,7 +877,7 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                 
                 // Обновляем изображения игровой зоны
                 try {
-                  const scene = this.scene.scenes[0];
+                  const scene = this.game.scene.scenes[0];
                   if (scene) {
                     // Находим и обновляем изображение деревьев
                     scene.children.each((child: any) => {
@@ -1071,6 +986,76 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
                   });
                   floorRef.current.setUserData({ isFloor: true });
                 }
+
+                // Обновляем стили canvas
+                if (this.game.canvas) {
+                  this.game.canvas.style.maxWidth = `${newGameWidth}px`;
+                  this.game.canvas.style.maxHeight = `${newGameHeight}px`;
+                  this.game.canvas.style.position = 'absolute';
+                  this.game.canvas.style.bottom = '0';
+                  this.game.canvas.style.left = '50%';
+                  this.game.canvas.style.transform = 'translateX(-50%)';
+                  this.game.canvas.style.margin = '0';
+                  
+                  // Добавляем плавный переход для предотвращения скачков при изменении размера
+                  this.game.canvas.style.transition = 'width 0.2s ease, height 0.2s ease';
+                }
+                
+                // Получаем сцену игры
+                const gameScene = this.game.scene.scenes[0];
+                
+                // Обновляем интерактивную зону для бросков после изменения размера
+                if (gameScene && gameScene.input) {
+                  // Создаем или обновляем прямоугольную область для обработки бросков
+                  // Используем более простой подход к настройке области ввода
+                  gameScene.input.enabled = true;
+                  
+                  // Устанавливаем обработку только верхнего объекта
+                  gameScene.input.topOnly = true;
+                  
+                  // Создаем невидимую интерактивную зону на весь экран
+                  const fullScreenZone = gameScene.add.zone(newGameWidth/2, newGameHeight/2, newGameWidth, newGameHeight);
+                  fullScreenZone.setInteractive();
+                  fullScreenZone.setOrigin(0.5, 0.5);
+                  // Ставим высокий приоритет, чтобы зона была над другими элементами
+                  fullScreenZone.setDepth(1000);
+
+                  // Обновляем позицию интерактивной зоны и всей сцены
+                  if (gameScene.cameras && gameScene.cameras.main) {
+                    gameScene.cameras.main.setViewport(0, 0, newGameWidth, newGameHeight);
+                    gameScene.cameras.main.setScroll(0, 0);
+                  }
+                }
+                
+                // Возобновляем обработку физики после обновления всех объектов
+                if (gameScene) {
+                  gameScene.physics?.resume();
+                }
+
+                // Сохраняем игровой экземпляр для будущего использования
+                if (game) {
+                  gameInstanceRef.current = game;
+                  
+                  // Получаем первую сцену
+                  const scene = game.scene.scenes[0];
+                  
+                  if (scene) {
+                    // Добавляем dispatch в сцену для возможности вызова действий Redux
+                    scene.dispatch = dispatch;
+                    
+                    // Добавляем ссылку на состояние игры в сцену
+                    scene.state = { inventory: { containerCapacity: snotCoins } };
+                    
+                    // Добавляем ссылки на refs в сцену
+                    scene.playerBodyRef = playerBodyRef;
+                    scene.ballsRef = ballsRef;
+                    scene.currentBallRef = currentBallRef;
+                    scene.trajectoryLineRef = trajectoryLineRef;
+                    scene.nextBallLevelRef = nextBallLevelRef;
+                    
+                    console.log('Refs и dispatch добавлены в сцену');
+                  }
+                }
               } catch (error) {
                 // Ошибка при создании сцены
                 setDebugMessage(`Ошибка при создании сцены: ${error}`);
@@ -1102,207 +1087,184 @@ const GameInitializer: React.FC<GameInitializerProps> = ({
         
         // Добавляем обработчик изменения размера окна
         const handleResize = () => {
-          if (!gameContainerRef.current || !game) return;
-          
-          const newContainerRect = gameContainerRef.current.getBoundingClientRect();
-          const newContainerWidth = newContainerRect.width;
-          const newContainerHeight = newContainerRect.height;
-          
-          // Определяем новые размеры с сохранением пропорций
-          let newGameWidth, newGameHeight;
-          
-          if (newContainerHeight / aspectRatio > newContainerWidth) {
-            newGameWidth = newContainerWidth;
-            newGameHeight = newContainerWidth / aspectRatio;
-          } else {
-            newGameHeight = newContainerHeight;
-            newGameWidth = newContainerHeight * aspectRatio;
-          }
-          
-          // Округляем размеры
-          newGameWidth = Math.floor(newGameWidth);
-          newGameHeight = Math.floor(newGameHeight);
-          
-          // Сохраняем предыдущие размеры для вычисления коэффициента масштабирования
-          const oldGameWidth = game.scale.width;
-          const oldGameHeight = game.scale.height;
-          
-          // Проверяем, достаточно ли изменился размер для перерисовки
-          const minResizeThreshold = 5;
-          if (Math.abs(newGameWidth - oldGameWidth) < minResizeThreshold && 
-              Math.abs(newGameHeight - oldGameHeight) < minResizeThreshold) {
+          // Проверяем, что игра уже инициализирована
+          if (!game || !game.canvas) {
             return;
           }
           
-          // Отключаем обработку обновления физики до полного обновления всех объектов
-          // чтобы избежать визуальных артефактов
-          const scene = game.scene.scenes[0];
-          if (scene) {
-            scene.physics?.pause();
-          }
-          
-          // ВАЖНО: Сначала обновляем позиции шаров, затем изменяем размер игры
-          // Это предотвращает "мигание" шаров
-          
-          // Вычисляем коэффициенты масштабирования
-          const widthScaleFactor = newGameWidth / oldGameWidth;
-          const heightScaleFactor = newGameHeight / oldGameHeight;
-          
           try {
-            // Сначала обновляем шары, чтобы они не исчезали при изменении размера
-            updateBallsOnResize(
-              ballsRef,
-              currentBallRef,
-              worldRef,
-              newGameWidth,
-              oldGameWidth
-            );
+            const oldGameWidth = game.scale.width;
+            const oldGameHeight = game.scale.height;
+            
+            // Рассчитываем новые размеры игры
+            const containerWidth = gameContainerRef.current?.clientWidth || window.innerWidth;
+            const containerHeight = gameContainerRef.current?.clientHeight || window.innerHeight;
+            
+            // Определяем новые размеры с сохранением пропорций
+            let newGameWidth, newGameHeight;
+            
+            if (containerHeight / aspectRatio > containerWidth) {
+              newGameWidth = containerWidth;
+              newGameHeight = containerWidth / aspectRatio;
+            } else {
+              newGameHeight = containerHeight;
+              newGameWidth = containerHeight * aspectRatio;
+            }
+            
+            // Округляем размеры
+            newGameWidth = Math.floor(newGameWidth);
+            newGameHeight = Math.floor(newGameHeight);
+            
+            const widthScaleFactor = newGameWidth / oldGameWidth;
+            const heightScaleFactor = newGameHeight / oldGameHeight;
+            const baseScaleFactor = newGameWidth / BASE_GAME_WIDTH;
+            
+            console.log(`Масштабирование: widthFactor=${widthScaleFactor.toFixed(2)}, heightFactor=${heightScaleFactor.toFixed(2)}, baseFactor=${baseScaleFactor.toFixed(2)}`);
+            
+            // Получаем сцену игры
+            const phaseScene = game.scene.scenes[0];
+            
+            // Приостанавливаем обработку физики на время изменения размеров
+            if (phaseScene && phaseScene.physics) {
+              phaseScene.physics.pause();
+            }
+            
+            try {
+              // Обновляем шары с учетом нового размера игры
+              updateBallsOnResize(
+                ballsRef,
+                currentBallRef,
+                worldRef,
+                newGameWidth,
+                oldGameWidth,
+                baseScaleFactor
+              );
+              
+              // Обновляем элементы сцены с новыми размерами
+              updateSceneElements(phaseScene, newGameWidth, newGameHeight, baseScaleFactor);
+              
+              // Обновляем фоновые изображения
+              if (phaseScene && phaseScene.children && phaseScene.children.list) {
+                phaseScene.children.list.forEach((child: any) => {
+                  if (child.texture) {
+                    // Обновляем положение и размер деревьев
+                    if (child.texture.key === 'trees') {
+                      child.setPosition(newGameWidth / 2, 0);
+                      child.setDisplaySize(newGameWidth, newGameHeight);
+                    }
+                    // Обновляем положение и размер пола
+                    else if (child.texture.key === 'floor') {
+                      const floorHeight = 30 * baseScaleFactor;
+                      child.setPosition(newGameWidth / 2, newGameHeight - floorHeight / 2);
+                      child.setDisplaySize(newGameWidth, floorHeight);
+                    }
+                  }
+                });
+              }
+            } catch (error) {
+              console.error("Ошибка при обновлении объектов:", error);
+            }
             
             // Теперь изменяем размер игры
             game.scale.resize(newGameWidth, newGameHeight);
             game.scale.refresh();
-            
-            // Обновляем изображения игровой зоны
-            if (scene) {
-              // Находим и обновляем изображение деревьев
-              scene.children.each((child: any) => {
-                if (child.texture && child.texture.key === 'trees') {
-                  child.setPosition(newGameWidth / 2, 0);
-                  child.setDisplaySize(newGameWidth, newGameHeight);
-                }
-                
-                // Находим и обновляем изображение пола
-                if (child.texture && child.texture.key === 'floor') {
-                  const floorHeight = 30;
-                  child.setPosition(newGameWidth / 2, newGameHeight - floorHeight / 2);
-                  child.setDisplaySize(newGameWidth, floorHeight);
-                }
-                
-                // Плавно обновляем все контейнеры шаров для предотвращения мигания
-                if (child.type === 'Container' && !child.destroyed) {
-                  // Сохраняем относительную позицию
-                  const relativeX = child.x / oldGameWidth;
-                  const relativeY = child.y / oldGameHeight;
-                  
-                  // Устанавливаем новую позицию с учетом масштабирования
-                  const newX = relativeX * newGameWidth;
-                  const newY = relativeY * newGameHeight;
-                  
-                  // Плавно перемещаем контейнер на новую позицию
-                  child.setPosition(newX, newY);
-                }
+
+            // Адаптируем физический мир к новым размерам
+            if (worldRef.current) {
+              // Пересоздаем физические границы для нового размера
+              // Сначала удаляем старые границы
+              if (leftWallRef.current) {
+                worldRef.current.destroyBody(leftWallRef.current);
+                leftWallRef.current = null;
+              }
+              if (rightWallRef.current) {
+                worldRef.current.destroyBody(rightWallRef.current);
+                rightWallRef.current = null;
+              }
+              if (topWallRef.current) {
+                worldRef.current.destroyBody(topWallRef.current);
+                topWallRef.current = null;
+              }
+              if (floorRef.current) {
+                worldRef.current.destroyBody(floorRef.current);
+                floorRef.current = null;
+              }
+              
+              // Создаем новые границы с новыми размерами
+              const wallThickness = 10 / SCALE;
+              const width = newGameWidth / SCALE;
+              const height = newGameHeight / SCALE;
+              const floorHeight = 30;
+              
+              // Левая стена
+              leftWallRef.current = worldRef.current.createBody({
+                type: 'static',
+                position: planck.Vec2(-wallThickness / 2, height / 2),
+              });
+              leftWallRef.current.createFixture({
+                shape: planck.Box(wallThickness / 2, height / 2),
+                friction: 0.3,
+                restitution: 0.2,
               });
               
-              // Обновляем графические элементы стен
-              scene.children.each((child: any) => {
-                if (child.type === 'Graphics') {
-                  if (child.x === 0) { // Левая стена
-                    child.clear();
-                    child.fillStyle(WALL_COLOR, 0);
-                    child.fillRect(0, 0, 32, newGameHeight);
-                  } else if (child.x > newGameWidth - 50) { // Правая стена
-                    child.clear();
-                    child.fillStyle(WALL_COLOR, 0);
-                    child.fillRect(0, 0, 32, newGameHeight);
-                    child.setPosition(newGameWidth - 32, 0);
-                  }
-                }
+              // Правая стена
+              rightWallRef.current = worldRef.current.createBody({
+                type: 'static',
+                position: planck.Vec2(width + wallThickness / 2, height / 2),
               });
+              rightWallRef.current.createFixture({
+                shape: planck.Box(wallThickness / 2, height / 2),
+                friction: 0.3,
+                restitution: 0.2,
+              });
+              
+              // Верхняя стена
+              topWallRef.current = worldRef.current.createBody({
+                type: 'static',
+                position: planck.Vec2(width / 2, -wallThickness / 2),
+              });
+              topWallRef.current.createFixture({
+                shape: planck.Box(width / 2, wallThickness / 2),
+                friction: 0.1,
+                restitution: 0.8
+              });
+              
+              // Пол
+              floorRef.current = worldRef.current.createBody({
+                type: 'static',
+                position: planck.Vec2(width / 2, height + wallThickness / 2),
+              });
+              floorRef.current.createFixture({
+                shape: planck.Box(width / 2, wallThickness / 2),
+                friction: 0.5,
+                restitution: 0.2
+              });
+              floorRef.current.setUserData({ isFloor: true });
+            }
+            
+            // Обновляем стили canvas
+            if (game.canvas) {
+              game.canvas.style.maxWidth = `${newGameWidth}px`;
+              game.canvas.style.maxHeight = `${newGameHeight}px`;
+              game.canvas.style.position = 'absolute';
+              game.canvas.style.bottom = '0';
+              game.canvas.style.left = '50%';
+              game.canvas.style.transform = 'translateX(-50%)';
+              game.canvas.style.margin = '0';
+              
+              // Добавляем плавный переход для предотвращения скачков при изменении размера
+              game.canvas.style.transition = 'width 0.2s ease, height 0.2s ease';
+            }
+            
+            // Получаем сцену игры
+            const gameScene = game.scene.scenes[0];
+            
+            // Возобновляем обработку физики после обновления всех объектов
+            if (gameScene) {
+              gameScene.physics?.resume();
             }
           } catch (error) {
-            console.error("Ошибка при обновлении визуальных элементов:", error);
-          }
-          
-          // Адаптируем физический мир к новым размерам
-          if (worldRef.current) {
-            // Пересоздаем физические границы для нового размера
-            // Сначала удаляем старые границы
-            if (leftWallRef.current) {
-              worldRef.current.destroyBody(leftWallRef.current);
-              leftWallRef.current = null;
-            }
-            if (rightWallRef.current) {
-              worldRef.current.destroyBody(rightWallRef.current);
-              rightWallRef.current = null;
-            }
-            if (topWallRef.current) {
-              worldRef.current.destroyBody(topWallRef.current);
-              topWallRef.current = null;
-            }
-            if (floorRef.current) {
-              worldRef.current.destroyBody(floorRef.current);
-              floorRef.current = null;
-            }
-            
-            // Создаем новые границы с новыми размерами
-            const wallThickness = 10 / SCALE;
-            const width = newGameWidth / SCALE;
-            const height = newGameHeight / SCALE;
-            const floorHeight = 30;
-            
-            // Левая стена
-            leftWallRef.current = worldRef.current.createBody({
-              type: 'static',
-              position: planck.Vec2(-wallThickness / 2, height / 2),
-            });
-            leftWallRef.current.createFixture({
-              shape: planck.Box(wallThickness / 2, height / 2),
-              friction: 0.3,
-              restitution: 0.2,
-            });
-            
-            // Правая стена
-            rightWallRef.current = worldRef.current.createBody({
-              type: 'static',
-              position: planck.Vec2(width + wallThickness / 2, height / 2),
-            });
-            rightWallRef.current.createFixture({
-              shape: planck.Box(wallThickness / 2, height / 2),
-              friction: 0.3,
-              restitution: 0.2,
-            });
-            
-            // Верхняя стена
-            topWallRef.current = worldRef.current.createBody({
-              type: 'static',
-              position: planck.Vec2(width / 2, -wallThickness / 2),
-            });
-            topWallRef.current.createFixture({
-              shape: planck.Box(width / 2, wallThickness / 2),
-              friction: 0.1,
-              restitution: 0.8
-            });
-            
-            // Пол
-            floorRef.current = worldRef.current.createBody({
-              type: 'static',
-              position: planck.Vec2(width / 2, height + wallThickness / 2),
-            });
-            floorRef.current.createFixture({
-              shape: planck.Box(width / 2, wallThickness / 2),
-              friction: 0.5,
-              restitution: 0.2
-            });
-            floorRef.current.setUserData({ isFloor: true });
-          }
-          
-          // Обновляем стили canvas
-          if (game.canvas) {
-            game.canvas.style.maxWidth = `${newGameWidth}px`;
-            game.canvas.style.maxHeight = `${newGameHeight}px`;
-            game.canvas.style.position = 'absolute';
-            game.canvas.style.bottom = '0';
-            game.canvas.style.left = '50%';
-            game.canvas.style.transform = 'translateX(-50%)';
-            game.canvas.style.margin = '0';
-            
-            // Добавляем плавный переход для предотвращения скачков при изменении размера
-            game.canvas.style.transition = 'width 0.2s ease, height 0.2s ease';
-          }
-          
-          // Возобновляем обработку физики после обновления всех объектов
-          if (scene) {
-            scene.physics?.resume();
+            console.error("Ошибка при изменении размера игры:", error);
           }
         };
         

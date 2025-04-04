@@ -70,6 +70,10 @@ export interface FarcasterUser {
       text?: string;
     };
   };
+  /** URL аватара пользователя (альтернатива для pfp.url) */
+  pfpUrl?: string;
+  /** Биография пользователя (альтернатива для profile.bio.text) */
+  bio?: string;
 }
 
 /**

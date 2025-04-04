@@ -9,9 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Инициализация сервиса IndexedDB
   initDatabaseService();
-  
-  // Обработчики для панели инструментов разработчика
-  setupDevToolsHandlers();
 });
 
 // Проверка состояния базы данных
@@ -45,14 +42,6 @@ async function initDatabaseService() {
   } catch (error) {
     console.error('[Layout] Ошибка при инициализации сервиса базы данных:', error);
   }
-}
-
-// Настройка обработчиков для панели инструментов разработчика
-function setupDevToolsHandlers() {
-  // Обработчик для клавиши Ctrl+A для открытия/закрытия панели разработчика
-  document.addEventListener('keydown', function(event) {
-    // Ничего не делаем, обработка производится в компоненте WarpcastDevMode
-  });
 }
 
 // Обработка данных для сохранения

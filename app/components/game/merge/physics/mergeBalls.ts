@@ -4,6 +4,22 @@ import { getBallSize } from './createBall';
 import { BALL_COLORS, MAX_LEVEL, SCALE } from '../constants/gameConstants';
 import { createBall } from './createBall';
 
+/**
+ * Функция для получения процента snot, который будет начислен при слиянии шаров высокого уровня
+ * @param level - Уровень шара после слияния
+ * @returns Процент от вместимости контейнера, который будет начислен
+ */
+export const getSnotRewardPercent = (level: number): number => {
+  if (level < 10) return 0;
+  
+  switch (level) {
+    case 10: return 0.15; // 15% от вместимости контейнера
+    case 11: return 0.35; // 35% от вместимости контейнера
+    case 12: return 0.50; // 50% от вместимости контейнера
+    default: return 0;
+  }
+};
+
 // Единая функция для слияния шаров
 export const mergeBalls = (
   scene: any, 
@@ -144,6 +160,35 @@ export const mergeBalls = (
             }
           }
         });
+        
+        // Проверяем, нужно ли начислить snot за создание шара высокого уровня
+        const snotRewardPercent = getSnotRewardPercent(newLevel);
+        if (snotRewardPercent > 0 && scene.dispatch) {
+          // Получаем текущую вместимость контейнера из состояния игры
+          if (typeof scene.state !== 'undefined' && typeof scene.state.inventory !== 'undefined') {
+            const containerCapacity = scene.state.inventory.containerCapacity || 1;
+            // Рассчитываем сумму награды
+            const snotReward = Math.round(containerCapacity * snotRewardPercent * 100) / 100;
+            
+            // Отправляем диспетчеру действие для добавления snot
+            scene.dispatch({
+              type: 'ADD_SNOT',
+              payload: snotReward
+            });
+            
+            // Показываем визуальное уведомление о начислении snot
+            if (scene.dispatch) {
+              scene.dispatch({
+                type: 'SHOW_NOTIFICATION',
+                payload: {
+                  message: `Получено ${snotReward} SNOT за создание шара уровня ${newLevel}!`,
+                  type: 'success',
+                  duration: 3000
+                }
+              });
+            }
+          }
+        }
       }
     } else {
       // console.error(`Не удалось создать новый шар уровня ${newLevel}`);

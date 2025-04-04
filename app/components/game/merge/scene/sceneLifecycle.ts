@@ -81,26 +81,31 @@ export const createScene = (
   
   // Рассчитываем масштаб относительно базового размера
   const scaleX = gameWidth / BASE_GAME_WIDTH;
-  const scaleY = gameHeight / (BASE_GAME_WIDTH * 1.5); // Соотношение сторон 2:3
+  const scaleY = gameHeight / (BASE_GAME_WIDTH * 1.335); // Соотношение сторон 2:2.67
   
   console.log(`Создание сцены с масштабом: scaleX=${scaleX}, scaleY=${scaleY}`);
+  
+  // Рассчитываем относительные размеры элементов
+  const relativePlayerSize = PLAYER_SIZE * scaleX;
+  const relativeFloorHeight = Math.round(30 * scaleY); // 30px базовая высота пола
+  const relativeInstructionsY = Math.round(64 * scaleY); // 64px базовая позиция инструкций
+  const relativeFreezeTextY = Math.round(80 * scaleY); // 80px базовая позиция текста заморозки
   
   // Добавляем фон с деревьями
   const treesImage = scene.add.image(gameWidth / 2, 0, 'trees');
   treesImage.setOrigin(0.5, 0);
   treesImage.setDisplaySize(gameWidth, gameHeight);
   
-  // Добавляем пол
-  const floorHeight = 30 * scaleY; // Масштабируем высоту пола
-  const floorImage = scene.add.image(gameWidth / 2, gameHeight - floorHeight / 2, 'floor');
-  floorImage.setDisplaySize(gameWidth, floorHeight);
+  // Добавляем пол - его высота пропорциональна размеру игры
+  const floorImage = scene.add.image(gameWidth / 2, gameHeight - relativeFloorHeight / 2, 'floor');
+  floorImage.setDisplaySize(gameWidth, relativeFloorHeight);
   floorImage.setOrigin(0.5, 0.5);
   
-  // Добавляем инструкции для игрока
+  // Добавляем инструкции для игрока с масштабируемым шрифтом
   const fontSize = Math.max(16 * scaleX, 10); // Минимальный размер шрифта 10px
   const instructions = scene.add.text(
     gameWidth / 2, 
-    64 * scaleY,
+    relativeInstructionsY,
     "Наведите и нажмите, чтобы бросить",
     { 
       fontFamily: 'Arial', 
@@ -114,8 +119,8 @@ export const createScene = (
   instructions.setOrigin(0.5, 0.5);
   
   // Создаем игрока (круг в нижней части экрана)
-  const scaledPlayerSize = PLAYER_SIZE * scaleX; // Масштабируем размер игрока
-  const playerSprite = scene.add.circle(gameWidth / 2, FIXED_PLAYER_Y, scaledPlayerSize, 0x00ff00);
+  // Размер также должен быть пропорционален размеру игровой зоны
+  const playerSprite = scene.add.circle(gameWidth / 2, FIXED_PLAYER_Y, relativePlayerSize, 0x00ff00);
   onSetPlayerSprite(playerSprite);
   
   // Создаем пунктирную линию траектории с учетом масштаба
@@ -144,7 +149,7 @@ export const createScene = (
       updateTrajectoryLine(
         scene, 
         trajectoryLineRef, 
-        gameWidth / 2, 
+        pointer.x, 
         FIXED_PLAYER_Y,
         gameStateRef.current.isPaused,
         scaleX // Передаем масштаб для корректного обновления
@@ -168,7 +173,7 @@ export const createScene = (
     const freezeFontSize = Math.max(20 * scaleX, 12);
     const freezeText = scene.add.text(
       gameWidth / 2,
-      80 * scaleY,
+      relativeFreezeTextY,
       "ЗАМОРОЗКА АКТИВНА",
       {
         fontFamily: 'Arial',

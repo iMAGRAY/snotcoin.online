@@ -37,7 +37,7 @@ export const HEADER_HEIGHT_MOBILE = 64; // 64px на мобильных
 export const PHYSICAL_FLOOR_HEIGHT = 10; // Высота физического пола в пикселях
 
 // Соотношение сторон игрового поля
-export const GAME_ASPECT_RATIO = 0.667; // соотношение сторон игры (ширина к высоте 2:3)
+export const GAME_ASPECT_RATIO = 0.749; // соотношение сторон игры (ширина к высоте 2:2.67)
 
 // Константа для настройки разброса шаров при броске
 export const THROW_X_VARIATION = 0.05; // Уменьшено для более предсказуемых бросков

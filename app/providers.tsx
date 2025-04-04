@@ -1,41 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-// import { AuthProvider } from "./hooks/useAuth"; // Убираем импорт AuthProvider
 import { GameProvider } from './contexts';
 import { FarcasterProvider, useFarcaster } from './contexts/FarcasterContext';
-import { FarcasterUser } from './types/farcaster';
 import LoadingScreen from './components/LoadingScreen';
 import { ErrorDisplay } from './components/ErrorBoundary';
-import WarpcastDevMode from './components/DevTools/WarpcastDevMode';
-import { activateFarcasterDevMock, isFarcasterDevMockActive } from './utils/devTools/farcasterDevMock';
-
-// Модифицированная версия WarpcastDevMode без кнопки активации
-const WarpcastDevModeWithoutButton = ({ children }: { children: React.ReactNode }) => {
-  // Просто рендерим детей без кнопки активации
-  return <>{children}</>;
-};
-
-// Обертка для активации режима разработки для обхода проблем с инициализацией
-const DevModeActivator = ({ children }: { children: React.ReactNode }) => {
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && !isFarcasterDevMockActive()) {
-      // Принудительно активируем режим разработки
-      console.log('[DevModeActivator] Принудительная активация режима разработки');
-      
-      const mockUser = {
-        fid: 123456789,
-        username: 'dev_user',
-        displayName: 'Dev User',
-        pfpUrl: 'https://cdn.warpcast.com/profile-pictures/default-profile.png'
-      };
-      
-      activateFarcasterDevMock(mockUser);
-    }
-  }, []);
-  
-  return <>{children}</>;
-};
 
 // Обертка для управления состоянием загрузки SDK и отображения заглушки
 const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -87,15 +56,10 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <DevModeActivator>
-      <FarcasterProvider>
-        {/* Убираем AuthProvider */}
-        <GameProviderWrapper>
-          <WarpcastDevModeWithoutButton>
-            {children}
-          </WarpcastDevModeWithoutButton>
-        </GameProviderWrapper>
-      </FarcasterProvider>
-    </DevModeActivator>
+    <FarcasterProvider>
+      <GameProviderWrapper>
+        {children}
+      </GameProviderWrapper>
+    </FarcasterProvider>
   );
 } 

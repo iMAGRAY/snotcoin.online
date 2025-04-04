@@ -64,7 +64,7 @@ body {
 .aspect-container {
   position: relative;
   width: 100%;
-  padding-bottom: 150%; /* 2:3 aspect ratio */
+  padding-bottom: 133.5%; /* 2:2.67 aspect ratio */
   height: 0;
   aspect-ratio: 1;
   height: auto;
