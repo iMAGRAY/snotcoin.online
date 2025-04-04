@@ -1,9 +1,10 @@
 import * as planck from 'planck';
-import { Ball, NextBall, TrajectoryRef } from '../types/index';
+import { ExtendedBall, ExtendedNextBall, TrajectoryRef } from '../types/index';
+import { THROW_VELOCITY_Y, SCALE } from '../constants/gameConstants';
 import { createBall } from './createBall';
 import { createNextBall } from './createNextBall';
-import { THROW_X_VARIATION, MAX_BALLS_COUNT, THROW_VELOCITY_Y } from '../constants/gameConstants';
-import { createTrajectoryLine } from '../physics/trajectoryLine';
+import { THROW_X_VARIATION, MAX_BALLS_COUNT } from '../constants/gameConstants';
+import { createTrajectoryLine } from './trajectoryLine';
 
 // Время последнего броска для ограничения частоты бросков
 let lastThrowTime = 0;
@@ -33,10 +34,10 @@ export const generateBallLevel = (): number => {
 // Функция для броска шара
 export const throwBall = (
   scene: any,
-  currentBallRef: React.MutableRefObject<NextBall | null>,
+  currentBallRef: React.MutableRefObject<ExtendedNextBall | null>,
   playerBodyRef: React.MutableRefObject<planck.Body | null>,
   worldRef: React.MutableRefObject<planck.World | null>,
-  ballsRef: React.MutableRefObject<Ball[]>,
+  ballsRef: React.MutableRefObject<ExtendedBall[]>,
   nextBallLevelRef: React.MutableRefObject<number>,
   trajectoryLineRef: React.MutableRefObject<TrajectoryRef | null>,
   isPaused: boolean,
@@ -168,7 +169,7 @@ export const throwBall = (
 };
 
 // Вспомогательная функция для очистки массива шаров от некорректных ссылок
-const cleanupBallsArray = (ballsRef: React.MutableRefObject<Ball[]>) => {
+const cleanupBallsArray = (ballsRef: React.MutableRefObject<ExtendedBall[]>) => {
   if (ballsRef.current.length > 0) {
     // Начинаем с конца массива для более эффективного удаления
     for (let i = ballsRef.current.length - 1; i >= 0; i--) {
