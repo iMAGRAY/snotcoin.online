@@ -43,6 +43,7 @@ class MergeGameScene extends Phaser.Scene {
   gameOverTimer: Phaser.Time.TimerEvent | null = null // Таймер для Game Over
   isGameOver: boolean = false // Флаг окончания игры
   recentlyShot: Record<string, number> = {}
+  newBallGracePeriod: number = 250
 
   constructor() {
     super({ key: 'MergeGameScene' })
@@ -459,28 +460,52 @@ class MergeGameScene extends Phaser.Scene {
     // Тип шара (обычный или специальный)
     const ballType = this.nextBall ? this.nextBall.getData('special') : null;
     let id = '';
+    let newBall = null;
     
     // Создаем шар в зависимости от типа
     if (ballType) {
       // Создаем специальный шар
-      id = this.createSpecialCircle(
+      const result = this.createSpecialCircle(
         canonToWorld(this.coinKing.x), 
         canonToWorld(this.coinKing.y + 40), // Небольшой отступ вниз от короля
         radius,
         ballType
       );
+      
+      id = String(result.id); // Преобразуем id к строке, так как ключи в this.bodies - строки
+      newBall = result;
     } else {
       // Создаем обычный шар соответствующего уровня
-      id = this.createCircle(
+      const result = this.createCircle(
         canonToWorld(this.coinKing.x), 
         canonToWorld(this.coinKing.y + 40), // Небольшой отступ вниз от короля
         radius,
         this.nextBallLevel
       );
+      
+      id = String(result.id); // Преобразуем id к строке
+      newBall = result;
     }
     
-    // Добавляем шар в список недавно созданных с текущей отметкой времени
+    // Добавляем созданный шар в список недавних с отметкой времени
     this.recentlyShot[id] = time;
+    
+    // Визуально отмечаем новый шар (мигающее подсвечивание)
+    if (newBall && newBall.sprite) {
+      // Создаем временный эффект вокруг шара
+      this.tweens.add({
+        targets: newBall.sprite,
+        alpha: 0.6,
+        yoyo: true,
+        repeat: 3,
+        duration: 50,
+        onComplete: () => {
+          if (newBall && newBall.sprite) {
+            newBall.sprite.setAlpha(1);
+          }
+        }
+      });
+    }
     
     // Применяем импульс в направлении указателя
     if (this.bodies[id] && this.bodies[id].body) {
@@ -498,13 +523,18 @@ class MergeGameScene extends Phaser.Scene {
       const impulseY = Math.sin(angle) * power;
       
       // Применяем импульс к телу
-      this.bodies[id].body.applyLinearImpulse(
-        planck.Vec2(impulseX, impulseY), 
-        this.bodies[id].body.getWorldCenter()
-      );
+      if (this.bodies[id] && this.bodies[id].body) {
+        this.bodies[id].body.applyLinearImpulse(
+          planck.Vec2(impulseX, impulseY), 
+          this.bodies[id].body.getWorldCenter()
+        );
+      }
     }
     
-    // Создаем новый шар для следующего выстрела
+    // Сначала генерируем новый случайный уровень для следующего шара
+    this.generateNextBallLevel();
+    
+    // Затем создаем новый шар для следующего выстрела
     this.createNextBall();
     
     // Обновляем время последнего выстрела
@@ -512,51 +542,52 @@ class MergeGameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
-    // Если игра уже завершена, не продолжаем обновление
-    if (this.isGameOver) return;
-
-    // Обновление физики
-    this.world.step(1/60)
-
-    // Обрабатываем запланированные слияния ПОСЛЕ шага физической симуляции
+    // Обрабатываем отложенные действия слияния перед физическим обновлением
     this.processPendingMerges();
-
-    // Обрабатываем отложенные удаления ПОСЛЕ шага физической симуляции
+    
+    // Обрабатываем отложенные удаления
     this.processPendingDeletions();
-
-    // Обновляем текст счета
-    if (this.scoreText) {
-      this.scoreText.setText(`Счет: ${this.score}`);
-    }
-
-    // Обновление позиций спрайтов
+    
+    // Обновляем физический мир
+    this.world.step(1 / 60);
+    
+    // Обновляем позиции и вращение спрайтов в соответствии с физическими телами
     for (const id in this.bodies) {
-      const bodyData = this.bodies[id]
-      if (bodyData) {
-        const position = bodyData.body.getPosition()
-        bodyData.sprite.x = position.x * SCALE
-        bodyData.sprite.y = position.y * SCALE
-        bodyData.sprite.rotation = bodyData.body.getAngle()
+      const body = this.bodies[id];
+      
+      if (body && body.body && body.sprite) {
+        const position = body.body.getPosition();
+        const angle = body.body.getAngle();
+        
+        // Обновляем позицию и поворот спрайта
+        body.sprite.x = position.x * SCALE;
+        body.sprite.y = position.y * SCALE;
+        body.sprite.rotation = angle;
+        
+        // Обновляем тип спрайта (полезно для дебага)
+        body.sprite.setData('bodyType', body.body.getType());
       }
     }
     
-    // Проверяем, не попал ли какой-либо шар в зону опасности
+    // Проверяем, не находятся ли шары в зоне Game Over
     let ballsInDangerZone = false;
     
     if (this.gameOverZone) {
+      // Проходим по всем шарам
       for (const id in this.bodies) {
-        // Пропускаем проверку для недавно выстреленных шаров (на 200мс)
-        if (this.recentlyShot[id] && time - this.recentlyShot[id] < 200) {
+        // Безопасное время для только что выпущенных шаров (250 мс)
+        const isSafeNewBall = this.recentlyShot[id] && (time - this.recentlyShot[id] < this.newBallGracePeriod);
+        
+        // Если шар новый - пропускаем его
+        if (isSafeNewBall) {
           continue;
         }
         
         const body = this.bodies[id];
-        if (body && body.body) {
+        if (body && body.body && body.sprite) {
           const pos = body.body.getPosition();
-          const x = pos.x * SCALE;
-          const y = pos.y * SCALE;
           
-          // Получаем размер шара для проверки перекрытия, а не только центра
+          // Получаем радиус для корректной проверки перекрытия
           const radius = body.body.getFixtureList()?.getShape()?.getRadius() || 0;
           const ballRect = new Phaser.Geom.Rectangle(
             (pos.x - radius) * SCALE, 
@@ -565,7 +596,7 @@ class MergeGameScene extends Phaser.Scene {
             radius * 2 * SCALE
           );
           
-          // Проверяем перекрытие прямоугольников шара и зоны опасности
+          // Проверяем пересечение с зоной опасности
           if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballRect)) {
             ballsInDangerZone = true;
             break;
@@ -573,161 +604,27 @@ class MergeGameScene extends Phaser.Scene {
         }
       }
       
-      // Очищаем старые записи о недавно выстреленных шарах (старше 1 секунды)
+      // Очищаем устаревшие записи о выпущенных шарах 
+      // (не удаляем шары до 1.5 секунд для большей стабильности)
       for (const id in this.recentlyShot) {
-        if (time - this.recentlyShot[id] > 1000) {
+        if (time - this.recentlyShot[id] > 1500) {
           delete this.recentlyShot[id];
         }
       }
     }
     
-    // Если обнаружен шар в зоне опасности, начинаем отсчет
+    // Запускаем или останавливаем отсчет до Game Over
     if (ballsInDangerZone) {
       this.startGameOverCountdown();
+    } else if (this.isGameOverCountdownActive) {
+      this.stopGameOverCountdown();
     }
     
-    // Если шаров больше нет в зоне опасности, но отсчет активен - останавливаем его
-    if (this.isGameOverCountdownActive && this.gameOverZone) {
-      let allClear = true;
-      
-      // Проверяем каждый шар
-      for (const id in this.bodies) {
-        const bodyData = this.bodies[id];
-        if (bodyData && bodyData.sprite) {
-          // Создаем прямоугольник для шара (учитывая его размеры)
-          const ballRadius = bodyData.sprite.displayWidth / 2;
-          const ballBounds = new Phaser.Geom.Rectangle(
-            bodyData.sprite.x - ballRadius, 
-            bodyData.sprite.y - ballRadius,
-            bodyData.sprite.displayWidth,
-            bodyData.sprite.displayHeight
-          );
-          
-          // Проверяем, пересекается ли шар с зоной опасности
-          if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballBounds)) {
-            allClear = false;
-            break;
-          }
-        }
-      }
-      
-      // Если зона чиста, останавливаем отсчет
-      if (allClear) {
-        this.stopGameOverCountdown();
-      }
+    // Обновляем линию прицеливания
+    if (this.coinKing && this.aimLine && this.isPointerDown) {
+      const pointer = this.input.activePointer;
+      this.updateAimLine(pointer.x, pointer.y);
     }
-    
-    // Массив бомб, которые достигли дна и должны быть удалены
-    const bombsToRemove: string[] = [];
-    
-    // Проходим по всем телам и находим бомбы, которые достигли дна
-    for (const id in this.bodies) {
-      const bodyData = this.bodies[id];
-      // Проверяем, что это бомба
-      if (bodyData && bodyData.sprite && bodyData.body && bodyData.sprite.getData('special') === 'bomb') {
-        // Получаем положение бомбы
-        const bombPosition = bodyData.body.getPosition();
-        if (!bombPosition) continue;
-        
-        const bombX = bombPosition.x * SCALE;
-        const bombY = bombPosition.y * SCALE;
-        
-        // Проверяем, достигла ли бомба нижней границы
-        if (bombY > this.game.canvas.height - 70) {
-          // Удаляем бомбу, добавляем эффект
-          this.addDestructionEffect(bombX, bombY);
-          bombsToRemove.push(id);
-        }
-      }
-    }
-    
-    // Удаляем бомбы, которые достигли дна
-    for (const bombId of bombsToRemove) {
-      if (this.bodies[bombId]) {
-        const bombData = this.bodies[bombId];
-        if (bombData.sprite) bombData.sprite.destroy();
-        if (bombData.body) {
-          try {
-            this.world.destroyBody(bombData.body);
-          } catch (e) {
-            console.error('Error destroying bomb at bottom:', e);
-          }
-        }
-        delete this.bodies[bombId];
-      }
-    }
-    
-    // Обновляем позиции всех шаров Bull без физического тела
-    const bullProjectiles: Phaser.GameObjects.Sprite[] = [];
-    this.children.list.forEach((gameObject: any) => {
-      if (gameObject instanceof Phaser.GameObjects.Sprite && 
-          gameObject.getData('isBullProjectile')) {
-        bullProjectiles.push(gameObject);
-      }
-    });
-    
-    // Для каждого шара Bull проверяем столкновения и обновляем позицию
-    bullProjectiles.forEach((bullSprite) => {
-      // Получаем текущую скорость
-      const velocity = bullSprite.getData('velocity');
-      
-      // Обновляем позицию
-      bullSprite.y += velocity.y * (delta / 1000); // Дельта в миллисекундах, переводим в секунды
-      
-      // Проверяем, достиг ли шар Bull нижней границы
-      if (bullSprite.y > this.game.canvas.height - 70) {
-        // Удаляем шар Bull
-        this.addBullDestructionEffect(bullSprite.x, bullSprite.y);
-        bullSprite.destroy();
-        return;
-      }
-      
-      // Проверяем столкновения с другими шарами
-      const bullBounds = bullSprite.getBounds();
-      
-      // Проходим по всем шарам и проверяем пересечение с шаром Bull
-      for (const id in this.bodies) {
-        const bodyData = this.bodies[id];
-        
-        if (bodyData && bodyData.sprite) {
-          const ballBounds = bodyData.sprite.getBounds();
-          
-          // Проверяем пересечение
-          if (Phaser.Geom.Rectangle.Overlaps(bullBounds, ballBounds)) {
-            // Запоминаем позицию шара для эффекта
-            const ballPosition = bodyData.body.getPosition();
-            const ballX = ballPosition.x * SCALE;
-            const ballY = ballPosition.y * SCALE;
-            
-            // Сохраняем ссылки на объекты перед удалением
-            const bodyToDestroy = bodyData.body;
-            const spriteToDestroy = bodyData.sprite;
-            
-            // Удаляем запись из списка this.bodies
-            delete this.bodies[id];
-            
-            // Удаляем спрайт
-            spriteToDestroy.destroy();
-            
-            // Удаляем физическое тело из мира
-            try {
-              this.world.destroyBody(bodyToDestroy);
-            } catch (e) {
-              console.error('Error destroying body:', e);
-            }
-            
-            // Используем специальный эффект столкновения шара Bull
-            this.addBullCollisionEffect(ballX, ballY);
-            
-            // НЕ удаляем шар Bull, он продолжает двигаться!
-            // Прерываем цикл, так как шар уже удален
-            break;
-          }
-        }
-      }
-      
-      // Шар Bull не исчезает при столкновении с другими шарами
-    });
   }
   
   // Метод для запуска отсчета до Game Over
