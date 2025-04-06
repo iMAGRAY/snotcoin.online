@@ -10,6 +10,7 @@ import { formatSnotValue } from "../utils/formatters"
 import { calculateContainerUpgradeCost, calculateFillingSpeedUpgradeCost } from "../utils/formatters"
 import Image from "next/image"
 import { ICONS } from '../constants/uiConstants'
+import InteractiveBall from "../components/effects/InteractiveBall"
 
 const calculateContainerCapacity = (level: number): number => {
   return 1 + (level - 1) * 1;
@@ -180,14 +181,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
         </motion.button>
         <div className="flex items-center gap-2 bg-gradient-to-r from-[#3a5c82]/90 to-[#4a7a9e]/90 rounded-full pl-1 pr-3 py-1 border border-[#5889ae]/20 shadow-[inset_0_1px_4px_rgba(0,0,0,0.4)]">
           <div className="relative w-8 h-8">
-            <Image
-              src={ICONS.COMMON.COINS.COIN}
-              width={32}
-              height={32}
-              alt={t("snotCoinImage")}
-              className="w-8 h-8 drop-shadow-[0_0_8px_rgba(88,137,174,0.5)]"
-              priority
-            />
+            <InteractiveBall width={32} height={32} />
           </div>
           <span className="text-lg font-bold text-white">{formatSnotValue(gameState.inventory?.snotCoins ?? 0)}</span>
         </div>

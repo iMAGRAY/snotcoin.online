@@ -116,9 +116,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       return items;
     }, [snotCoins, snot, showOnlySnotCoin, showOnlySnot]);
 
-    if (!isVisible) return null;
-
-    // Проверка условий для отображения StatusDisplay
+    // Проверка условий для отображения StatusDisplay - перенесено сюда
     const isLaboratoryTab = activeTab === 'laboratory';
     const hasAllRequiredProps = 
       containerCapacity !== undefined && 
@@ -127,7 +125,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       containerFillingSpeed !== undefined &&
       fillingSpeedLevel !== undefined;
     
-    // Правильное вычисление props для StatusDisplay
+    // Всегда вычисляем props для StatusDisplay через useMemo, независимо от условий
     const statusDisplayProps = useMemo(() => {
       if (!isLaboratoryTab || !hasAllRequiredProps) return null;
       
@@ -147,6 +145,8 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       containerFillingSpeed, 
       fillingSpeedLevel
     ]);
+
+    if (!isVisible) return null;
 
     // Рендеринг компонента
     return (

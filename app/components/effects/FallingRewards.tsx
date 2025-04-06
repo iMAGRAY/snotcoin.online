@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence, useAnimation } from "framer-motion"
-import Image from "next/image"
 import { ICONS } from "../../constants/uiConstants"
+import InteractiveBall from "./InteractiveBall"
 
 interface Reward {
   id: number
@@ -23,12 +23,10 @@ interface FallingRewardsProps {
 }
 
 const CoinImage = React.memo(() => (
-  <Image
-    src={ICONS.COMMON.COINS.COIN_PNG}
-    alt="Coin"
-    width={40}
-    height={40}
-    className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(255,215,0,0.7)]"
+  <InteractiveBall 
+    width={40} 
+    height={40} 
+    className="w-full h-full"
   />
 ))
 

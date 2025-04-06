@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { ICONS } from '@/app/constants/uiConstants';
+import InteractiveBall from '@/app/components/effects/InteractiveBall';
 
 interface SnotCoinRewardModalProps {
   amount: number;
@@ -37,17 +37,11 @@ export const SnotCoinRewardModal: React.FC<SnotCoinRewardModalProps> = ({ amount
             <motion.div 
               className="mx-auto relative w-24 h-24 mb-4"
               animate={{ 
-                rotate: [0, 10, -10, 10, 0],
                 scale: [1, 1.1, 1, 1.1, 1]
               }}
               transition={{ repeat: Infinity, duration: 2 }}
             >
-              <Image
-                src={ICONS.COMMON.COINS.COIN}
-                alt="SnotCoin"
-                fill
-                style={{ objectFit: 'contain' }}
-              />
+              <InteractiveBall width={96} height={96} />
             </motion.div>
             
             <h2 className="text-2xl font-bold text-white mb-2">Награда!</h2>
