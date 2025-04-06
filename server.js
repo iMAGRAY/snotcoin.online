@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const next = require('next');
 
-const dev = process.env.NODE_ENV !== 'production';
+// Всегда используем production режим
+const dev = false;
 const app = next({ dev });
 const handle = app.getRequestHandler();
 

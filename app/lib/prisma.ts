@@ -1,20 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import type { ExtendedPrismaClient, PrismaError, PrismaQueryEvent } from '@/app/types/prisma'
 
-// Создаем глобальную переменную для хранения экземпляра Prisma
-declare global {
-  var prisma: ExtendedPrismaClient | undefined
-}
-
-// Создаем или используем существующий экземпляр Prisma
-export const prisma = (global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-})) as ExtendedPrismaClient
-
-// Сохраняем экземпляр в глобальной переменной в режиме разработки
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma
-}
+// Создаем и экспортируем экземпляр Prisma
+export const prisma = new PrismaClient() as ExtendedPrismaClient;
 
 // Обработка ошибок подключения
 prisma.$on('error', (e: PrismaError) => {
@@ -27,14 +15,5 @@ prisma.$on('error', (e: PrismaError) => {
   }
 })
 
-// Обработка предупреждений
-prisma.$on('warn', (e: PrismaError) => {
-  console.warn('Предупреждение Prisma:', e)
-})
-
-// Обработка запросов (только в режиме разработки)
-if (process.env.NODE_ENV === 'development') {
-  prisma.$on('query', (e: PrismaQueryEvent) => {
-    console.log('Запрос Prisma:', e)
-  })
-} 
+// Экспортируем Prisma для использования в приложении
+export default prisma; 

@@ -139,7 +139,7 @@ export function createInitialGameState(userId: string): GameState {
     
     // Игровой интерфейс
     hideInterface: false,
-    activeTab: 'game',
+    activeTab: 'laboratory',
     fillingSpeed: 1,
     containerLevel: 1,
     isPlaying: false,
@@ -248,7 +248,7 @@ export const initialState: GameState = {
     isBackgroundMusicMuted: false
   },
   hideInterface: false,
-  activeTab: 'game',
+  activeTab: 'laboratory',
   fillingSpeed: 1,
   containerLevel: 1,
   isPlaying: false,

@@ -64,6 +64,6 @@ export function getRedisService(): RedisService {
     return RedisServiceFactory.createForTesting();
   }
   
-  // Для разработки и продакшена используем настройки из переменных окружения
+  // Для всех остальных окружений используем настройки из переменных окружения
   return RedisServiceFactory.createDefault();
 } 

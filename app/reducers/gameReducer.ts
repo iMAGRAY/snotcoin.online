@@ -229,6 +229,8 @@ export function gameReducer(state: any = initialState, action: any): any {
         
         return {
           ...customState,
+          activeTab: "laboratory",
+          hideInterface: false, // Принудительно показываем интерфейс
           _lastActionTime: new Date().toISOString(),
           _lastAction: action.type,
           lastValidation: new Date().toISOString()
@@ -241,6 +243,8 @@ export function gameReducer(state: any = initialState, action: any): any {
       return {
         ...createInitialGameState(state._userId || "unknown"),
         user: currentUser,
+        activeTab: "laboratory",
+        hideInterface: false, // Принудительно показываем интерфейс
         inventory: {
           snot: 0,
           snotCoins: 0,
@@ -265,6 +269,7 @@ export function gameReducer(state: any = initialState, action: any): any {
       return {
         ...initialState as ExtendedGameStateWithContainers,
         activeTab: "laboratory",
+        hideInterface: false, // Принудительно показываем интерфейс
         user: null,
         validationStatus: "pending",
         lastValidation: new Date().toISOString(),
@@ -308,7 +313,11 @@ export function gameReducer(state: any = initialState, action: any): any {
         _lastAction: action.type,
         _loadedAt: new Date().toISOString(),
         // Убеждаемся, что userId всегда присутствует
-        _userId: loadedState._userId || state._userId || ''
+        _userId: loadedState._userId || state._userId || '',
+        // Принудительно показываем интерфейс при загрузке
+        hideInterface: false,
+        // Устанавливаем лабораторию как активную вкладку, если не указано иное
+        activeTab: loadedState.activeTab || "laboratory"
       };
       
       // Возвращаем объединенное состояние с isLoading: false

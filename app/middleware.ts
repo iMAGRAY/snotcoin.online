@@ -10,8 +10,8 @@ import { AuthStep } from "./utils/auth-logger";
 
 const logger = new AuthLogger(AuthStep.MIDDLEWARE);
 
-// Проверяем, включен ли режим имитации продакшена
-const isProductionMode = process.env.USE_PRODUCTION_MODE === 'true' || process.env.NODE_ENV === 'production';
+// Всегда в режиме продакшена
+const isProductionMode = true;
 
 /**
  * Пути, которые не требуют аутентификации
@@ -77,10 +77,6 @@ const authRoutes = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Проверка, включен ли режим имитации продакшена в разработке
-  const useProductionMode = process.env.USE_PRODUCTION_MODE === "true";
-  const isDev = process.env.NODE_ENV === "development";
-  
   // Если это API маршрут, пропускаем проверку авторизации
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
@@ -104,17 +100,12 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Если мы в режиме разработки и не используем режим имитации продакшена,
-  // пропускаем защищенные маршруты даже без авторизации
-  if (isDev && !useProductionMode && protectedRoutes.some(route => pathname.startsWith(route))) {
-    logger.debug("Development mode: bypassing authentication for protected routes");
-    return NextResponse.next();
-  }
-
-  // Перенаправление для неавторизованных пользователей с защищенных маршрутов
-  if (!isAuthenticated && protectedRoutes.some(route => pathname.startsWith(route))) {
-    logger.info(`Redirecting unauthenticated user from protected route: ${pathname} to /login`);
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Проверка защищенных маршрутов
+  if (protectedRoutes.some(route => pathname.startsWith(route))) {
+    if (!isAuthenticated) {
+      logger.debug("Перенаправление неавторизованного пользователя на страницу входа");
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
   }
 
   // Перенаправление для авторизованных пользователей с авторизационных маршрутов

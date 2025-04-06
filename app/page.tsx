@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic"
 import LoadingScreen from "./components/LoadingScreen"
+import { useEffect } from "react"
+import { useGameDispatch } from "./contexts"
 
 // Динамический импорт HomeContent без SSR
 const HomeContent = dynamic(() => import("./components/HomeContent"), {
@@ -19,6 +21,8 @@ const FarcasterFrameHandler = dynamic(
 );
 
 export default function Home() {
+  const dispatch = useGameDispatch();
+  
   return (
     <main>
       {/* Обработчик Farcaster фрейма */}

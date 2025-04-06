@@ -16,7 +16,7 @@ export const ENV = {
   REFRESH_SECRET: process.env.REFRESH_SECRET || 'insecure-refresh-secret-change-me',
   
   // Окружение
-  NODE_ENV: process.env.NODE_ENV || 'development',
+  NODE_ENV: process.env.NODE_ENV || 'production',
   
   // Сервисы аутентификации
   NEYNAR_API_KEY: process.env.NEYNAR_API_KEY,
@@ -26,7 +26,7 @@ export const ENV = {
   
   // Логирование
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
-  ENABLE_DEBUG_LOGS: process.env.ENABLE_DEBUG_LOGS === 'true',
+  ENABLE_DEBUG_LOGS: false,
   
   // Метрики и мониторинг
   ENABLE_METRICS: process.env.ENABLE_METRICS !== 'false',
@@ -34,7 +34,6 @@ export const ENV = {
 
 // Вспомогательные функции для проверки окружения
 export const isProduction = ENV.NODE_ENV === 'production';
-export const isDevelopment = ENV.NODE_ENV === 'development';
 export const isTest = ENV.NODE_ENV === 'test';
 
 // Функция для проверки, доступен ли сервис

@@ -298,7 +298,7 @@ export function logAuth(
     clientInfo: getClientInfo(),
     serverInfo: {
       version: process.env.VERSION || 'unknown',
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'production'
     }
   };
   
@@ -315,21 +315,8 @@ export function logAuth(
     }
   }
   
-  // Сохраняем в localStorage для отладки
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const logs = JSON.parse(localStorage.getItem('auth_debug_logs') || '[]');
-      logs.push(logEntry);
-      
-      // Ограничиваем количество логов
-      if (logs.length > 100) logs.shift();
-      
-      localStorage.setItem('auth_debug_logs', JSON.stringify(logs));
-    } catch (e) {
-      // Игнорируем ошибки localStorage
-    }
-  }
-
+  // Не сохраняем логи в localStorage в production
+  
   return logEntry;
 }
 
@@ -349,7 +336,22 @@ export function logAuthError(step: AuthStep, message: string, error?: any, data?
 }
 
 export function logAuthDebug(step: AuthStep, message: string, data?: any): AuthLogEntry {
-  return logAuth(step, AuthLogType.DEBUG, message, data);
+  // Отключено в production
+  return {
+    timestamp: new Date().toISOString(),
+    sessionId: getSessionId(),
+    userId: null,
+    step,
+    type: AuthLogType.DEBUG,
+    message,
+    data: data || {},
+    error: null,
+    clientInfo: getClientInfo(),
+    serverInfo: {
+      version: process.env.VERSION || 'unknown',
+      environment: 'production'
+    }
+  };
 }
 
 export function logAuthSecurity(step: AuthStep, message: string, data?: any): AuthLogEntry {
@@ -379,26 +381,16 @@ function sendErrorToMonitoring(logEntry: AuthLogEntry): void {
  * Получает все сохраненные логи для отладки
  */
 export function getAuthLogs(): AuthLogEntry[] {
-  if (typeof window === 'undefined' || !window.localStorage) return [];
-  
-  try {
-    return JSON.parse(localStorage.getItem('auth_debug_logs') || '[]');
-  } catch (e) {
-    return [];
-  }
+  // Отключено в production
+  return [];
 }
 
 /**
  * Очищает сохраненные логи
  */
 export function clearAuthLogs(): void {
-  if (typeof window === 'undefined' || !window.localStorage) return;
-  
-  try {
-    localStorage.removeItem('auth_debug_logs');
-  } catch (e) {
-    // Игнорируем ошибки localStorage
-  }
+  // Отключено в production
+  return;
 }
 
 /**

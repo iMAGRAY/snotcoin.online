@@ -76,7 +76,6 @@ interface GameSaverProps {
   children?: React.ReactNode;
   onSaveComplete?: (success: boolean) => void;
   saveInterval?: number; // Интервал в мс
-  debugMode?: boolean;
 }
 
 // Интерфейс для дочерних элементов с функцией сохранения
@@ -86,7 +85,7 @@ interface ChildProps {
 }
 
 const GameSaver: React.FC<GameSaverProps> = memo(
-  ({ children, onSaveComplete, saveInterval = 5000, debugMode = false }) => {
+  ({ children, onSaveComplete, saveInterval = 5000 }) => {
     const gameState = useGameState();
     const dispatch = useGameDispatch();
     const { toast } = useToastHook();
@@ -113,12 +112,6 @@ const GameSaver: React.FC<GameSaverProps> = memo(
     // Дополнительные refs для отслеживания состояния сохранения
     const isSavingRef = useRef<boolean>(false);
     const lastSavedStateRef = useRef<string>('');
-
-    const log = useCallback((message: string, data?: any) => {
-      if (debugMode) {
-        console.log(`[GameSaver] ${message}`, data !== undefined ? data : '');
-      }
-    }, [debugMode]);
 
     // Обновляем интерфейс при изменении статуса
     const updateSaveStatus = useCallback((updates: Partial<SaveStatus>) => {
@@ -296,8 +289,6 @@ const GameSaver: React.FC<GameSaverProps> = memo(
         saveCount: status.saveCount + 1
       });
       
-      log(`💾 [SAVE] Starting save for user: ${gameState._userId}`); // <-- Оставляем важный лог
-
       try {
         const userId = gameState._userId;
         if (!userId) {
@@ -325,7 +316,6 @@ const GameSaver: React.FC<GameSaverProps> = memo(
             const backupKey = `${BACKUP_PREFIX}${userId}_${Date.now()}`;
             const minimalBackup = createMinimalBackup(saveData, userId);
             localStorage.setItem(backupKey, JSON.stringify(minimalBackup));
-            // console.log(`[GameSaver] Создана компактная резервная копия: ${backupKey}`); // Убираем лог
             setTimeout(cleanupLocalStorage, 100); // Оставляем вызов очистки
           } catch (storageError) {
             console.error('[GameSaver] Ошибка при создании резервной копии:', storageError); // Оставляем error
@@ -336,14 +326,12 @@ const GameSaver: React.FC<GameSaverProps> = memo(
           }
         }
         
-        log(`💾 [SAVE] Calling storageService.saveGameState for user: ${userId}`); // <-- Оставляем важный лог
         const response = await apiClient.saveGameProgress(saveData, { 
           isCritical, 
           reason
         });
         
         if (response.success) {
-          log(`✅ [SAVE] Save successful for user: ${userId}`); // <-- Оставляем важный лог
           // Сбрасываем backoff при успешном сохранении
           const newSaveStatus: Partial<SaveStatus> = {
             lastSaveTime: now,
@@ -382,7 +370,7 @@ const GameSaver: React.FC<GameSaverProps> = memo(
         }
       } catch (error: any) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log(`❌ [SAVE] Save failed for user: ${gameState._userId}. Error: ${errorMessage}`); // <-- Оставляем важный лог
+        
         // Обработка ошибки
         const isTooManyRequests = errorMessage.includes('TOO_MANY_REQUESTS') || 
                                  errorMessage.includes('SAVE_IN_PROGRESS');
@@ -441,9 +429,8 @@ const GameSaver: React.FC<GameSaverProps> = memo(
         return false;
       } finally {
          updateSaveStatus({ isSaving: false }); // Убедимся, что статус сбрасывается
-         log(`💾 [SAVE] Finished save attempt for user: ${gameState._userId}`); // <-- Оставляем важный лог
       }
-    }, [gameState, dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup, log]);
+    }, [gameState, dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup]);
   
     // Сохранение для публичного использования
     const saveGamePublic = useCallback((options: {

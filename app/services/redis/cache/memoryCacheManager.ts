@@ -164,7 +164,6 @@ export class MemoryCacheManager {
   public clear(): void {
     this.cache.clear();
     this.totalCacheSize = 0;
-    console.log('[MemoryCache] Кэш очищен');
   }
   
   /**

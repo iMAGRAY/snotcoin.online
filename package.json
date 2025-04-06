@@ -3,12 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "set FAST_REFRESH=false && next dev",
+    "dev": "set NODE_ENV=production && next dev",
     "build": "next build",
     "start": "next start",
     "start:ssl": "sudo node server.js",
     "start:prod:ssl": "NODE_ENV=production sudo node server.js",
-    "start:dev:ssl": "NODE_ENV=development sudo node server.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit"
   },
@@ -95,6 +94,7 @@
     "react-spring": "^9.7.3",
     "recharts": "2.15.0",
     "redis": "^4.7.0",
+    "sharp": "^0.34.0",
     "sonner": "^1.7.1",
     "stage-js": "^1.0.0-alpha.12",
     "tailwind-merge": "^2.5.5",

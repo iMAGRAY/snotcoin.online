@@ -27,12 +27,18 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '3000',
+        pathname: '/**',
+      }
     ],
     formats: ['image/webp'],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    unoptimized: true,
+    unoptimized: isProd ? false : true,
   },
   // Update security headers configuration
   async headers() {
@@ -55,7 +61,9 @@ const nextConfig = {
     ]
   },
   compiler: {
-    removeConsole: false,
+    removeConsole: {
+      exclude: ['error', 'warn'],
+    },
   },
   // Добавляем настройки публичных переменных среды
   env: {
@@ -65,32 +73,11 @@ const nextConfig = {
     NEXT_PUBLIC_NEYNAR_CLIENT_ID: process.env.NEYNAR_CLIENT_ID,
     NEXT_PUBLIC_IMAGE_HOST: process.env.NEXT_PUBLIC_IMAGE_HOST,
   },
-  // Отключаем проверку CSP для eval в режиме разработки
+  // Настройки для продакшена
   experimental: {
-    reactRefresh: process.env.NODE_ENV === 'production',
+    reactRefresh: true,
   },
-  webpack: (config, { dev, isServer }) => {
-    // Отключаем React Refresh в режиме разработки для решения проблем с CSP
-    if (dev && !isServer) {
-      const rules = config.module.rules
-        .find((rule) => typeof rule.oneOf === 'object')
-        .oneOf.filter((rule) => Array.isArray(rule.use));
-
-      rules.forEach((rule) => {
-        rule.use.forEach((moduleLoader) => {
-          if (
-            moduleLoader.loader?.includes('next/dist/compiled/babel/babel-loader') &&
-            moduleLoader.options?.plugins?.length
-          ) {
-            // Удаляем плагин react-refresh
-            moduleLoader.options.plugins = moduleLoader.options.plugins.filter(
-              (plugin) => !plugin.toString().includes('react-refresh')
-            );
-          }
-        });
-      });
-    }
-
+  webpack: (config, { isServer }) => {
     // Существующие настройки webpack
     config.resolve.alias = {
       ...config.resolve.alias,

@@ -1,10 +1,12 @@
 "use client"
 
-import React, { useEffect, useRef, useState } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
+import { useGameState } from "../../../contexts/game/hooks/useGameState"
+import { useGameDispatch } from "../../../contexts/game/hooks/useGameDispatch"
 import * as Phaser from 'phaser'
 import * as planck from "planck"
-import { useGameState } from "../../../contexts/game/hooks/useGameState"
 import Image from "next/image"
+import { motion, AnimatePresence } from "framer-motion" // Добавляем импорт AnimatePresence
 import { toast } from 'react-hot-toast' // Добавляем импорт тоста для уведомлений
 
 interface MergeGameLauncherProps {
@@ -324,32 +326,23 @@ class MergeGameScene extends Phaser.Scene {
 
   // Генерируем уровень для следующего шара (до 6 уровня)
   generateNextBallLevel() {
-    // Массив весов для каждого уровня (чем больше вес, тем чаще появляется шар)
-    const weights = [];
+    // Вероятности для различных уровней
+    // Первые уровни выпадают чаще, более высокие реже
+    const weights = [60, 30, 20, 12, 5, 2]; // Веса для уровней 1-6
     
-    // Заполняем массив весами: чем выше уровень, тем меньше вероятность
-    for (let i = 1; i <= this.maxRandomLevel; i++) {
-      // Используем обратную экспоненциальную зависимость: чем выше уровень, тем ниже вес
-      weights.push(Math.pow(0.6, i - 1));
-    }
+    let totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    const rand = Math.random() * totalWeight;
     
-    // Сумма всех весов
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    
-    // Генерируем случайное число от 0 до суммы весов
-    const random = Math.random() * totalWeight;
-    
-    // Определяем, какому уровню соответствует это случайное число
     let cumulativeWeight = 0;
     for (let i = 0; i < weights.length; i++) {
-      cumulativeWeight += weights[i];
-      if (random < cumulativeWeight) {
+      cumulativeWeight += weights[i] || 0; // Защита от undefined
+      if (rand < cumulativeWeight) {
         this.nextBallLevel = i + 1;
         return;
       }
     }
     
-    // Если случайно не определили уровень, берем первый (самый частый)
+    // Если по какой-то причине не выбрали уровень, устанавливаем 1-й уровень
     this.nextBallLevel = 1;
   }
 
@@ -363,6 +356,7 @@ class MergeGameScene extends Phaser.Scene {
 
   // Получаем цвет шара по его уровню
   getColorByLevel(level: number): number {
+    // Массив цветов для каждого уровня
     const colors = [
       0xFF5555, // Уровень 1 - красный
       0xFF9955, // Уровень 2 - оранжевый
@@ -377,10 +371,12 @@ class MergeGameScene extends Phaser.Scene {
       0xE5E4E2, // Уровень 11 - платиновый
       0x3D85C6  // Уровень 12 - сапфировый
     ];
-    // Убедимся, что уровень находится в допустимом диапазоне и является числом
-    const levelValue = typeof level === 'number' ? level : 1;
-    const safeLevel = Math.max(1, Math.min(levelValue, colors.length));
-    return colors[safeLevel - 1];
+    
+    // Защита от выхода за границы массива
+    const safeLevel = Math.max(1, Math.min(level, colors.length));
+    const index = safeLevel - 1;
+    // Оператор nullish coalescing для обеспечения возврата числа
+    return colors[index] ?? 0xFFFFFF;
   }
 
   // Обновляем пунктирную линию прицеливания
@@ -508,7 +504,8 @@ class MergeGameScene extends Phaser.Scene {
     }
     
     // Применяем импульс в направлении указателя
-    if (this.bodies[id] && this.bodies[id].body) {
+    const bodyEntry = this.bodies[id];
+    if (bodyEntry && bodyEntry.body) {
       // Расчет вектора направления
       const angle = Math.atan2(
         pointer.y - this.coinKing.y, 
@@ -523,12 +520,11 @@ class MergeGameScene extends Phaser.Scene {
       const impulseY = Math.sin(angle) * power;
       
       // Применяем импульс к телу
-      if (this.bodies[id] && this.bodies[id].body) {
-        this.bodies[id].body.applyLinearImpulse(
-          planck.Vec2(impulseX, impulseY), 
-          this.bodies[id].body.getWorldCenter()
-        );
-      }
+      const body = bodyEntry.body;
+      body.applyLinearImpulse(
+        planck.Vec2(impulseX, impulseY), 
+        body.getWorldCenter()
+      );
     }
     
     // Сначала генерируем новый случайный уровень для следующего шара
@@ -542,32 +538,25 @@ class MergeGameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    // Обработка физики
+    this.world.step(delta / 1000);
+    
+    // Обновление позиций спрайтов на основе физики
+    for (const id in this.bodies) {
+      const gameBody = this.bodies[id];
+      if (gameBody && gameBody.body && gameBody.sprite) {
+        const pos = gameBody.body.getPosition();
+        gameBody.sprite.x = pos.x * SCALE;
+        gameBody.sprite.y = pos.y * SCALE;
+        gameBody.sprite.rotation = gameBody.body.getAngle();
+      }
+    }
+    
     // Обрабатываем отложенные действия слияния перед физическим обновлением
     this.processPendingMerges();
     
     // Обрабатываем отложенные удаления
     this.processPendingDeletions();
-    
-    // Обновляем физический мир
-    this.world.step(1 / 60);
-    
-    // Обновляем позиции и вращение спрайтов в соответствии с физическими телами
-    for (const id in this.bodies) {
-      const body = this.bodies[id];
-      
-      if (body && body.body && body.sprite) {
-        const position = body.body.getPosition();
-        const angle = body.body.getAngle();
-        
-        // Обновляем позицию и поворот спрайта
-        body.sprite.x = position.x * SCALE;
-        body.sprite.y = position.y * SCALE;
-        body.sprite.rotation = angle;
-        
-        // Обновляем тип спрайта (полезно для дебага)
-        body.sprite.setData('bodyType', body.body.getType());
-      }
-    }
     
     // Проверяем, не находятся ли шары в зоне Game Over
     let ballsInDangerZone = false;
@@ -607,7 +596,8 @@ class MergeGameScene extends Phaser.Scene {
       // Очищаем устаревшие записи о выпущенных шарах 
       // (не удаляем шары до 1.5 секунд для большей стабильности)
       for (const id in this.recentlyShot) {
-        if (time - this.recentlyShot[id] > 1500) {
+        const shotTime = this.recentlyShot[id];
+        if (shotTime && time - shotTime > 1500) {
           delete this.recentlyShot[id];
         }
       }
@@ -816,10 +806,18 @@ class MergeGameScene extends Phaser.Scene {
           const newLevel = merge.levelA + 1;
           
           // Сохраняем ссылки на объекты
-          const bodyA = this.bodies[merge.idA].body;
-          const bodyB = this.bodies[merge.idB].body;
-          const spriteA = this.bodies[merge.idA].sprite;
-          const spriteB = this.bodies[merge.idB].sprite;
+          const bodyAEntry = this.bodies[merge.idA];
+          const bodyBEntry = this.bodies[merge.idB];
+          
+          if (!bodyAEntry || !bodyBEntry) {
+            // Один из объектов был удален, пропускаем слияние
+            continue;
+          }
+          
+          const bodyA = bodyAEntry.body;
+          const bodyB = bodyBEntry.body;
+          const spriteA = bodyAEntry.sprite;
+          const spriteB = bodyBEntry.sprite;
           
           // Удаляем записи из списка
           delete this.bodies[merge.idA];
@@ -869,14 +867,16 @@ class MergeGameScene extends Phaser.Scene {
   // Удаляем шар по его ID
   destroyBall(id: string) {
     const bodyData = this.bodies[id];
-    if (bodyData && bodyData.body && bodyData.sprite) {
+    if (bodyData && bodyData.body) {
       try {
         // Удаляем эффект свечения, если это специальный шар
         const glow = bodyData.sprite.getData('glow');
         if (glow) glow.destroy();
         
         // Удаляем спрайт
-        bodyData.sprite.destroy();
+        if (bodyData.sprite) {
+          bodyData.sprite.destroy();
+        }
         
         // Сначала сохраняем тело, чтобы удалить его правильно
         const physicalBody = bodyData.body;
@@ -894,11 +894,14 @@ class MergeGameScene extends Phaser.Scene {
         console.error(`Error destroying ball ${id}:`, error);
         
         // Если произошла ошибка, попробуем еще раз удалить тело
-        if (this.bodies[id] && this.bodies[id].body) {
-          try {
-            this.world.destroyBody(this.bodies[id].body);
-          } catch (e) {
-            console.error('Second attempt to destroy body failed:', e);
+        if (this.bodies[id]) {
+          const bodyData = this.bodies[id];
+          if (bodyData && bodyData.body) {
+            try {
+              this.world.destroyBody(bodyData.body);
+            } catch (e) {
+              console.error('Second attempt to destroy body failed:', e);
+            }
           }
           delete this.bodies[id];
         }
@@ -1066,8 +1069,8 @@ class MergeGameScene extends Phaser.Scene {
       const bodyData = this.bodies[id];
       if (bodyData && bodyData.body) {
         // Случайный импульс в обоих направлениях с большей силой
-        const impulseX = (Math.random() - 0.5) * horizontalStrength * 2.1; // Уменьшено с 2.5 до 2.1
-        const impulseY = (Math.random() - 0.5) * verticalStrength * 2.3; // Уменьшено с 2.8 до 2.3
+        const impulseX = (Math.random() - 0.5) * horizontalStrength * 2.1;
+        const impulseY = (Math.random() - 0.5) * verticalStrength * 2.3;
         
         try {
           // Применяем импульс к телу
@@ -1077,7 +1080,7 @@ class MergeGameScene extends Phaser.Scene {
           );
           
           // Добавляем случайное вращение для большего эффекта хаоса
-          const angularImpulse = (Math.random() - 0.5) * 6; // Уменьшено с 7 до 6
+          const angularImpulse = (Math.random() - 0.5) * 6;
           bodyData.body.applyAngularImpulse(angularImpulse);
         } catch (e) {
           console.error('Error applying earthquake impulse:', e);
@@ -1901,6 +1904,14 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
     }
   }
 
+  // Новый обработчик продолжения игры
+  const handleContinueClick = () => {
+    setIsPaused(false)
+    if (gameRef.current) {
+      gameRef.current.scene.resume('MergeGameScene')
+    }
+  }
+
   const handleAbilityClick = (ability: string) => {
     // Получаем стоимость активации способности в SnotCoin
     let cost = 0;
@@ -2164,21 +2175,103 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
       {/* Окно Game Over */}
       {isGameOver && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 z-20">
-          <div className="w-80 bg-[#1a2b3d] p-8 rounded-2xl border-4 border-yellow-500 shadow-2xl transform animate-bounce-in">
+          <motion.div 
+            className="w-80 bg-gradient-to-b from-[#2a3b4d] to-[#1a2b3d] p-8 rounded-2xl border-2 border-[#4a7a9e] shadow-2xl"
+            initial={{ scale: 0.8, y: 50, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.8, y: 50, opacity: 0 }}
+            transition={{ type: 'spring', damping: 15 }}
+          >
             <h2 className="text-red-500 text-4xl font-bold text-center mb-6">GAME OVER</h2>
             <div className="text-white text-center mb-6">
               <p className="text-xl mb-2">Итоговый счет</p>
               <p className="text-3xl font-bold">{finalScore}</p>
             </div>
-            <button 
+            <motion.button 
               onClick={onBack}
-              className="w-full py-3 px-4 bg-yellow-500 hover:bg-yellow-400 text-black text-lg font-bold rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+              className="relative w-full px-6 py-4 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
+                text-black shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
+                focus:ring-yellow-300 focus:ring-opacity-50 h-16"
+              whileHover={{ 
+                scale: 1.05,
+                boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
+              }}
+              whileTap={{ scale: 0.95 }}
             >
-              Вернуться в меню
-            </button>
-          </div>
+              <div className="flex items-center justify-center space-x-2">
+                <Image 
+                  src="/images/laboratory/buttons/claim-button.webp" 
+                  width={28} 
+                  height={28} 
+                  alt="Вернуться в меню" 
+                  className="inline-block" 
+                />
+                <span className="text-lg font-bold">Вернуться в меню</span>
+              </div>
+            </motion.button>
+          </motion.div>
         </div>
       )}
+
+      {/* Мини-меню паузы */}
+      <AnimatePresence>
+        {isPaused && !isGameOver && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 z-20">
+            <motion.div 
+              className="w-80 bg-gradient-to-b from-[#2a3b4d] to-[#1a2b3d] p-8 rounded-2xl border-2 border-[#4a7a9e] shadow-2xl"
+              initial={{ scale: 0.8, y: 50, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.8, y: 50, opacity: 0 }}
+              transition={{ type: 'spring', damping: 15 }}
+            >
+              <h2 className="text-white text-3xl font-bold text-center mb-6">ПАУЗА</h2>
+              <div className="flex flex-col space-y-4">
+                <motion.button 
+                  onClick={handleContinueClick}
+                  className="relative px-6 py-4 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
+                    text-white shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
+                    focus:ring-yellow-300 focus:ring-opacity-50 h-16"
+                  whileHover={{ 
+                    scale: 1.05,
+                    boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <Image 
+                      src="/images/laboratory/buttons/claim-button.webp" 
+                      width={28} 
+                      height={28} 
+                      alt="Продолжить" 
+                      className="inline-block" 
+                    />
+                    <span className="text-lg">Продолжить</span>
+                  </div>
+                </motion.button>
+                
+                <motion.button 
+                  onClick={onBack}
+                  className="relative px-6 py-4 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl font-bold 
+                    text-white shadow-lg border-2 border-red-400 focus:outline-none focus:ring-2 
+                    focus:ring-red-300 focus:ring-opacity-50 h-16"
+                  whileHover={{ 
+                    scale: 1.05,
+                    boxShadow: "0 0 12px rgba(220, 38, 38, 0.7)",
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="text-lg">Выйти в меню</span>
+                  </div>
+                </motion.button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Кнопка возврата - скрытая, но доступная для вызова в любой момент */}
       <button 

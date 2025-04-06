@@ -7,7 +7,6 @@ import type { GameState } from '../../types/gameTypes';
 import type { SaveGameResponse } from '../../lib/api';
 import { debounce } from 'lodash';
 import { useFarcaster } from '../../contexts/FarcasterContext';
-import { logger } from '@/app/lib/logger';
 
 // Простая функция для отслеживания видимости страницы
 const useVisibilityChange = (callback: (isVisible: boolean) => void) => {
@@ -96,7 +95,6 @@ interface GameSaverProps {
   children?: React.ReactNode;
   onSaveComplete?: (success: boolean) => void;
   saveInterval?: number; // Интервал в мс
-  debugMode?: boolean;
 }
 
 // Интерфейс для дочерних элементов с функцией сохранения
@@ -152,12 +150,11 @@ const categorizeError = (errorMessage: string) => {
 };
 
 const GameSaverService: React.FC<GameSaverProps> = memo(
-  ({ children, onSaveComplete, saveInterval = 5000, debugMode = false }) => {
+  ({ children, onSaveComplete, saveInterval = 5000 }) => {
     // Используем переменную для предотвращения логов при повторных рендерах
     const isFirstRenderRef = useRef(true);
     
     if (isFirstRenderRef.current) {
-      console.log('🔍 [GameSaverService] COMPONENT MOUNTED (первичный монтаж)');
       isFirstRenderRef.current = false;
     }
     
@@ -194,12 +191,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       gameStateRef.current = gameState;
     }, [gameState]);
     
-    const log = useCallback((message: string, data?: any) => {
-      if (debugMode) {
-        console.log(`[GameSaverService] ${message}`, data !== undefined ? data : '');
-      }
-    }, [debugMode]);
-
     // Обновляем интерфейс при изменении статуса
     const updateSaveStatus = useCallback((updates: Partial<SaveStatus>) => {
       const newStatus = { ...saveStatusRef.current, ...updates };
@@ -317,8 +308,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
     const getFarcasterAuthInfo = useCallback(() => {
       // Если SDK не готов, пробуем использовать данные из localStorage
       if (sdkStatus !== 'ready') {
-        log(`🔒 [AUTH] Farcaster SDK не готов: ${sdkStatus}, проверяем локальное хранилище`);
-        
         try {
           // Проверяем наличие сохраненных данных Farcaster
           const farcasterDataStr = localStorage.getItem('FARCASTER_USER');
@@ -327,7 +316,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
             const localFid = farcasterData.fid;
             
             if (localFid && !isNaN(Number(localFid))) {
-              log(`🔒 [AUTH] Используем Farcaster FID из localStorage: ${localFid}`);
               return { 
                 fid: String(localFid), 
                 username: farcasterData.username || 'unknown',
@@ -336,26 +324,23 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
             }
           }
         } catch (error) {
-          log(`🔒 [AUTH] Ошибка при получении данных Farcaster из localStorage: ${error}`);
+          // Ошибка при получении данных
         }
         
         return null;
       }
       
       if (!sdkUser) {
-        log('🔒 [AUTH] Farcaster пользователь не найден');
         return null;
       }
       
       // Проверяем наличие FID
       const fid = sdkUser.fid;
       if (!fid) {
-        log('🔒 [AUTH] Farcaster FID отсутствует в контексте пользователя');
         return null;
       }
       
       if (isNaN(Number(fid))) {
-        log(`🔒 [AUTH] Некорректный формат Farcaster FID: ${fid}`);
         return null;
       }
       
@@ -377,7 +362,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         username: sdkUser.username || 'unknown',
         source: 'sdk'
       };
-    }, [sdkUser, sdkStatus, log]);
+    }, [sdkUser, sdkStatus]);
 
     // Функция сохранения игры
     const saveGame = useCallback(async (options: { 
@@ -405,7 +390,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       
       // Если версия не изменилась и это автосохранение, пропускаем
       if (isAutoSave && currentSaveVersion === lastSavedVersion && !force) {
-        log('⏭️ Пропускаем автосохранение, состояние не изменилось');
         return false;
       }
       
@@ -459,8 +443,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         lastSavedVersion: currentSaveVersion
       });
       
-      log(`💾 [SAVE] Starting save for user: ${currentGameState._userId}, reason: ${reason}, version: ${currentSaveVersion}`);
-
       try {
         console.log('>>> performSave: START');
         const userId = currentGameState._userId;
@@ -505,10 +487,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
           }
         }
         
-        log(`💾 [SAVE] Calling storageService.saveGameState for user: ${userId}, data size: ${
-          Math.round(JSON.stringify(saveData).length / 1024)
-        }KB`);
-        
         console.log('>>> performSave: CALLING apiClient.saveGameProgress');
         
         // Получаем Farcaster авторизацию с расширенными проверками
@@ -518,22 +496,20 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         const fid = farcasterAuth?.fid || (userId && /^\d+$/.test(userId) ? userId : null);
         
         if (!fid) {
-          log(`❌ [AUTH] Не удалось получить валидный FID: farcasterAuth=${JSON.stringify(farcasterAuth)}, userId=${userId}`);
           throw new Error('TOKEN_MISSING');
         }
         
         // Больше логирования для отладки
-        log(`🔒 [AUTH] Используем Farcaster FID для сохранения: ${fid} (sdkUser?.fid=${sdkUser?.fid}, userId=${userId})`);
+        console.log(`🔒 [AUTH] Используем Farcaster FID для сохранения: ${fid} (sdkUser?.fid=${sdkUser?.fid}, userId=${userId})`);
         
         // Проверка на некорректный FID
         if (isNaN(Number(fid))) {
-          log(`❌ [AUTH] Некорректный FID: ${fid}, тип: ${typeof fid}`);
           throw new Error('INVALID_FID_FORMAT');
         }
         
         // Дополнительная информация о пользователе для отладки
         if (farcasterAuth) {
-          log(`🔒 [AUTH] Авторизован через Farcaster: FID=${farcasterAuth.fid}, username=${farcasterAuth.username}`);
+          console.log(`🔒 [AUTH] Авторизован через Farcaster: FID=${farcasterAuth.fid}, username=${farcasterAuth.username}`);
         }
         
         // Убедимся, что userId установлен в saveData
@@ -547,7 +523,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         }) as ExtendedSaveResponse;
         
         if (response.success) {
-          log(`✅ [SAVE] Save successful for user: ${userId}, version: ${saveData._saveVersion}`);
           console.log('>>> performSave: SUCCESS');
           
           // Сбрасываем backoff при успешном сохранении
@@ -589,7 +564,6 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         }
       } catch (error: any) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        log(`❌ [SAVE] Save failed for user: ${currentGameState._userId}, version: ${currentSaveVersion}. Error: ${errorMessage}`);
         console.error('>>> performSave: FAILED', error);
         
         // Определяем тип ошибки
@@ -651,9 +625,8 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         return false;
       } finally {
          updateSaveStatus({ isSaving: false });
-         log(`💾 [SAVE] Finished save attempt for user: ${currentGameState._userId}`);
       }
-    }, [dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup, log, sdkUser, sdkStatus, getFarcasterAuthInfo]);
+    }, [dispatch, toast, updateSaveStatus, onSaveComplete, cleanupLocalStorage, createMinimalBackup, getFarcasterAuthInfo]);
   
     // Сохранение для публичного использования
     const saveGamePublic = useCallback((options: {
@@ -803,7 +776,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
         // Если страница скрыта и это не первый вызов
         if (!saveStatusRef.current.isSaving && gameState._userId) {
           // Принудительное сохранение через непосредственный вызов saveGame
-          log('💾 Страница скрыта, выполняем принудительное сохранение');
+          console.log('💾 Страница скрыта, выполняем принудительное сохранение');
           
           // Отменяем все отложенные вызовы debouncedSave
           debouncedSaveRef.current.cancel();
@@ -818,7 +791,7 @@ const GameSaverService: React.FC<GameSaverProps> = memo(
       if (isFirstVisibilityChangeRef.current) {
         isFirstVisibilityChangeRef.current = false;
       }
-    }, [saveGame, log, gameState]);
+    }, [saveGame, gameState]);
 
     // Используем хук для отслеживания видимости страницы
     useVisibilityChange(handleVisibilityChange);

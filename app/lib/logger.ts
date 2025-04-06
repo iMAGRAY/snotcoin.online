@@ -66,9 +66,8 @@ class Logger {
    * Логирует сообщение уровня DEBUG
    */
   public debug(message: string, metadata?: LogMetadata): void {
-    if (this.shouldLog(LogLevel.DEBUG)) {
-      console.debug(this.formatLog(LogLevel.DEBUG, message, metadata));
-    }
+    // Отключено для production режима
+    return;
   }
   
   /**
