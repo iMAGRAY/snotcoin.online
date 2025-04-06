@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useEffect, useRef, useState } from "react"
-import Phaser from "phaser"
+import * as Phaser from 'phaser'
 import * as planck from "planck"
-import { useGameState } from "../../../contexts"
+import { useGameState } from "../../../contexts/game/hooks/useGameState"
 import Image from "next/image"
+import { toast } from 'react-hot-toast' // Добавляем импорт тоста для уведомлений
 
 interface MergeGameLauncherProps {
   onBack: () => void
@@ -35,6 +36,13 @@ class MergeGameScene extends Phaser.Scene {
   pendingDeletions: { id: string, type: string }[] = [] // Новый массив для отложенного удаления
   score: number = 0 // Счет игры
   scoreText: Phaser.GameObjects.Text | null = null // Текстовый объект для отображения счета
+  gameOverZone: Phaser.Geom.Rectangle | null = null // Зона для определения Game Over
+  isGameOverCountdownActive: boolean = false // Флаг активности отсчета до Game Over
+  gameOverCountdown: number = 0 // Таймер отсчета до Game Over
+  gameOverText: Phaser.GameObjects.Text | null = null // Текст отсчета до Game Over
+  gameOverTimer: Phaser.Time.TimerEvent | null = null // Таймер для Game Over
+  isGameOver: boolean = false // Флаг окончания игры
+  recentlyShot: Record<string, number> = {}
 
   constructor() {
     super({ key: 'MergeGameScene' })
@@ -79,19 +87,66 @@ class MergeGameScene extends Phaser.Scene {
     this.updateAimLine(width / 2, height);
     
     // Добавляем счет в левом верхнем углу игровой зоны
-    this.scoreText = this.add.text(20, 20, 'Счет: 0', {
+    this.scoreText = this.add.text(12, 10, 'Счет: 0', {
       fontFamily: 'Arial',
-      fontSize: '24px',
+      fontSize: '20px',
       color: '#FFFFFF', 
       stroke: '#000000',
-      strokeThickness: 4,
-      shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 3, stroke: true, fill: true }
+      strokeThickness: 3,
+      shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, stroke: true, fill: true }
     });
     this.scoreText.setDepth(100); // Устанавливаем высокое значение depth, чтобы текст был поверх всего
     
     // Добавляем CoinKing в верхнюю часть игровой зоны как управляемый объект
-    this.coinKing = this.add.image(width / 2, 60, 'coinKing')
+    this.coinKing = this.add.image(width / 2, 45, 'coinKing') // Подняли выше с 60 до 45
     this.coinKing.setScale(0.085) // Маленький размер
+    
+    // Добавляем горизонтальную пунктирную линию желтого цвета под CoinKing
+    const horizontalLine = this.add.graphics();
+    horizontalLine.lineStyle(2, 0xFFFF00, 0.8); // Желтый цвет (0xFFFF00)
+    
+    // Рисуем горизонтальную пунктирную линию
+    const lineY = 75; // Координата Y линии (под CoinKing) - опущена ниже с 65 до 75
+    const startX = 10; // Почти от левой стены (было 20% от ширины)
+    const endX = width - 10; // Почти до правой стены (было 80% от ширины)
+    
+    // Рисуем пунктирную линию сегментами
+    const segmentLength = 15;
+    const gapLength = 8;
+    let currentX = startX;
+    
+    while (currentX < endX) {
+      const segmentEnd = Math.min(currentX + segmentLength, endX);
+      horizontalLine.beginPath();
+      horizontalLine.moveTo(currentX, lineY);
+      horizontalLine.lineTo(segmentEnd, lineY);
+      horizontalLine.strokePath();
+      currentX = segmentEnd + gapLength;
+    }
+    
+    // Создаем зону опасности над линией (от 0 до lineY)
+    this.gameOverZone = new Phaser.Geom.Rectangle(0, 0, width, lineY);
+    
+    // Визуализация зоны опасности (полупрозрачная красная область)
+    // Раскомментируйте для отладки
+    /* 
+    const zoneGraphics = this.add.graphics();
+    zoneGraphics.fillStyle(0xFF0000, 0.2);
+    zoneGraphics.fillRectShape(this.gameOverZone);
+    */
+    
+    // Создаем текст для отсчета до Game Over (изначально скрыт)
+    this.gameOverText = this.add.text(width / 2, height / 2, '3', {
+      fontFamily: 'Arial',
+      fontSize: '140px', // Увеличили размер с 120px до 140px
+      color: '#FF0000',
+      stroke: '#000000',
+      strokeThickness: 10, // Увеличили толщину обводки с 8 до 10
+      shadow: { offsetX: 3, offsetY: 3, color: '#000000', blur: 5, stroke: true, fill: true }
+    });
+    this.gameOverText.setOrigin(0.5); // Центрируем текст
+    this.gameOverText.setAlpha(0); // Делаем текст прозрачным (скрываем)
+    this.gameOverText.setDepth(200); // Ставим поверх всех элементов
     
     // Генерируем уровень для следующего шара (до 6 уровня)
     this.generateNextBallLevel();
@@ -377,77 +432,89 @@ class MergeGameScene extends Phaser.Scene {
     }
   }
 
-  // Метод для выстрела шаром из CoinKing
+  // Метод выстрела из CoinKing
   shootFromCoinKing() {
-    if (!this.coinKing || !this.nextBall) return;
+    const time = this.time.now;
     
-    // Проверяем, является ли шар специальным
-    const isSpecialBall = this.nextBall.getData('special');
-    
-    // Используем позицию предзагруженного шара
-    const x = this.nextBall.x / SCALE;
-    const y = this.nextBall.y / SCALE;
-    
-    if (isSpecialBall === 'bull') {
-      // Для шара Bull НЕ создаем физическое тело, только спрайт
-      const radius = this.getRadiusByLevel(3) / 2; // В 2 раза меньше
-      const ballSize = radius * 2 * SCALE;
-      
-      // Удаляем эффект свечения, если он есть
-      const oldGlow = this.nextBall.getData('glow');
-      if (oldGlow) oldGlow.destroy();
-      
-      // Создаем движущийся спрайт без физического тела
-      const bullSprite = this.add.sprite(
-        this.nextBall.x, 
-        this.nextBall.y, 
-        'bull'
-      );
-      
-      bullSprite.setDisplaySize(ballSize, ballSize);
-      bullSprite.setOrigin(0.5);
-      bullSprite.setData('special', 'bull');
-      bullSprite.setData('velocity', { x: 0, y: 300 }); // Скорость движения вниз в пикселях в секунду
-      
-      // Добавляем в специальный список для обновления в методе update
-      bullSprite.setData('isBullProjectile', true);
-    } else if (isSpecialBall === 'bomb') {
-      // Используем такой же размер, как для шара Bull
-      const radius = this.getRadiusByLevel(3) / 2;
-      const result = this.createSpecialCircle(x, y, radius, 'bomb');
-      
-      // Проверяем, что тело успешно создано
-      if (result.body) {
-        // Добавляем импульс вниз
-        result.body.applyLinearImpulse(planck.Vec2(0, 2), result.body.getWorldCenter());
-      } else {
-        console.error('Failed to create bomb ball for shooting');
-      }
-    } else {
-      // Стандартный код для обычного шара
-      const level = this.nextBallLevel;
-      const radius = this.getRadiusByLevel(level);
-      
-      // Создаем физический шар на месте предзагруженного спрайта
-      const result = this.createCircle(x, y, radius, level);
-      
-      // Проверяем, что тело успешно создано
-      if (result.body) {
-        // Добавляем импульс вниз
-        result.body.applyLinearImpulse(planck.Vec2(0, 2), result.body.getWorldCenter());
-      } else {
-        console.error('Failed to create ball for shooting');
-      }
+    // Проверяем, прошло ли достаточно времени с последнего выстрела
+    if (time - this.lastShootTime < this.shootDelay) {
+      return;
     }
     
-    // Генерируем уровень для следующего шара
-    this.generateNextBallLevel();
+    // Если нет объекта короля или указатель не активен, то прекращаем
+    if (!this.coinKing || !this.isPointerDown) {
+      return;
+    }
     
-    // Создаем новый предзагруженный шар
+    // Конвертация физических координат в пиксели и обратно
+    const worldToCanon = (value: number) => value / SCALE;
+    const canonToWorld = (value: number) => value / SCALE;
+    
+    // Получаем текущий указатель
+    const pointer = this.input.activePointer;
+    
+    // Радиус шара
+    const radius = this.getRadiusByLevel(this.nextBallLevel);
+    
+    // Тип шара (обычный или специальный)
+    const ballType = this.nextBall ? this.nextBall.getData('special') : null;
+    let id = '';
+    
+    // Создаем шар в зависимости от типа
+    if (ballType) {
+      // Создаем специальный шар
+      id = this.createSpecialCircle(
+        canonToWorld(this.coinKing.x), 
+        canonToWorld(this.coinKing.y + 40), // Небольшой отступ вниз от короля
+        radius,
+        ballType
+      );
+    } else {
+      // Создаем обычный шар соответствующего уровня
+      id = this.createCircle(
+        canonToWorld(this.coinKing.x), 
+        canonToWorld(this.coinKing.y + 40), // Небольшой отступ вниз от короля
+        radius,
+        this.nextBallLevel
+      );
+    }
+    
+    // Добавляем шар в список недавно созданных с текущей отметкой времени
+    this.recentlyShot[id] = time;
+    
+    // Применяем импульс в направлении указателя
+    if (this.bodies[id] && this.bodies[id].body) {
+      // Расчет вектора направления
+      const angle = Math.atan2(
+        pointer.y - this.coinKing.y, 
+        pointer.x - this.coinKing.x
+      );
+      
+      // Сила выстрела
+      const power = 20;
+      
+      // Создаем вектор импульса в нужном направлении
+      const impulseX = Math.cos(angle) * power;
+      const impulseY = Math.sin(angle) * power;
+      
+      // Применяем импульс к телу
+      this.bodies[id].body.applyLinearImpulse(
+        planck.Vec2(impulseX, impulseY), 
+        this.bodies[id].body.getWorldCenter()
+      );
+    }
+    
+    // Создаем новый шар для следующего выстрела
     this.createNextBall();
+    
+    // Обновляем время последнего выстрела
+    this.lastShootTime = time;
   }
 
   update(time: number, delta: number) {
+    // Если игра уже завершена, не продолжаем обновление
+    if (this.isGameOver) return;
+
     // Обновление физики
     this.world.step(1/60)
 
@@ -470,6 +537,83 @@ class MergeGameScene extends Phaser.Scene {
         bodyData.sprite.x = position.x * SCALE
         bodyData.sprite.y = position.y * SCALE
         bodyData.sprite.rotation = bodyData.body.getAngle()
+      }
+    }
+    
+    // Проверяем, не попал ли какой-либо шар в зону опасности
+    let ballsInDangerZone = false;
+    
+    if (this.gameOverZone) {
+      for (const id in this.bodies) {
+        // Пропускаем проверку для недавно выстреленных шаров (на 200мс)
+        if (this.recentlyShot[id] && time - this.recentlyShot[id] < 200) {
+          continue;
+        }
+        
+        const body = this.bodies[id];
+        if (body && body.body) {
+          const pos = body.body.getPosition();
+          const x = pos.x * SCALE;
+          const y = pos.y * SCALE;
+          
+          // Получаем размер шара для проверки перекрытия, а не только центра
+          const radius = body.body.getFixtureList()?.getShape()?.getRadius() || 0;
+          const ballRect = new Phaser.Geom.Rectangle(
+            (pos.x - radius) * SCALE, 
+            (pos.y - radius) * SCALE,
+            radius * 2 * SCALE, 
+            radius * 2 * SCALE
+          );
+          
+          // Проверяем перекрытие прямоугольников шара и зоны опасности
+          if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballRect)) {
+            ballsInDangerZone = true;
+            break;
+          }
+        }
+      }
+      
+      // Очищаем старые записи о недавно выстреленных шарах (старше 1 секунды)
+      for (const id in this.recentlyShot) {
+        if (time - this.recentlyShot[id] > 1000) {
+          delete this.recentlyShot[id];
+        }
+      }
+    }
+    
+    // Если обнаружен шар в зоне опасности, начинаем отсчет
+    if (ballsInDangerZone) {
+      this.startGameOverCountdown();
+    }
+    
+    // Если шаров больше нет в зоне опасности, но отсчет активен - останавливаем его
+    if (this.isGameOverCountdownActive && this.gameOverZone) {
+      let allClear = true;
+      
+      // Проверяем каждый шар
+      for (const id in this.bodies) {
+        const bodyData = this.bodies[id];
+        if (bodyData && bodyData.sprite) {
+          // Создаем прямоугольник для шара (учитывая его размеры)
+          const ballRadius = bodyData.sprite.displayWidth / 2;
+          const ballBounds = new Phaser.Geom.Rectangle(
+            bodyData.sprite.x - ballRadius, 
+            bodyData.sprite.y - ballRadius,
+            bodyData.sprite.displayWidth,
+            bodyData.sprite.displayHeight
+          );
+          
+          // Проверяем, пересекается ли шар с зоной опасности
+          if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballBounds)) {
+            allClear = false;
+            break;
+          }
+        }
+      }
+      
+      // Если зона чиста, останавливаем отсчет
+      if (allClear) {
+        this.stopGameOverCountdown();
       }
     }
     
@@ -584,6 +728,146 @@ class MergeGameScene extends Phaser.Scene {
       
       // Шар Bull не исчезает при столкновении с другими шарами
     });
+  }
+  
+  // Метод для запуска отсчета до Game Over
+  startGameOverCountdown() {
+    if (this.isGameOverCountdownActive) return; // Уже запущен
+    
+    this.isGameOverCountdownActive = true;
+    this.gameOverCountdown = 3; // 3 секунды
+    
+    // Создаем черный полупрозрачный фон для лучшей видимости таймера
+    const { width, height } = this.game.canvas;
+    const countdownBg = this.add.circle(width / 2, height / 2, 100, 0x000000, 0.6);
+    countdownBg.setDepth(199); // Чуть ниже, чем текст
+    
+    // Сохраняем ссылку на фон для дальнейшего использования
+    if (this.gameOverText) {
+      this.gameOverText.setData('background', countdownBg);
+    }
+    
+    // Показываем текст отсчета
+    if (this.gameOverText) {
+      this.gameOverText.setText(this.gameOverCountdown.toString());
+      this.gameOverText.setAlpha(1);
+      
+      // Анимация появления
+      this.tweens.add({
+        targets: [this.gameOverText, countdownBg],
+        scale: { from: 2, to: 1 },
+        duration: 500,
+        ease: 'Bounce.easeOut'
+      });
+      
+      // Добавляем пульсацию
+      this.tweens.add({
+        targets: countdownBg,
+        scale: { from: 1, to: 1.2 },
+        alpha: { from: 0.6, to: 0.4 },
+        duration: 1000,
+        yoyo: true,
+        repeat: -1
+      });
+    }
+    
+    // Создаем отсчет
+    this.gameOverTimer = this.time.addEvent({
+      delay: 1000, // 1 секунда
+      callback: this.updateGameOverCountdown,
+      callbackScope: this,
+      loop: true
+    });
+  }
+  
+  // Обновление отсчета
+  updateGameOverCountdown() {
+    if (!this.isGameOverCountdownActive) return;
+    
+    this.gameOverCountdown--;
+    
+    if (this.gameOverText) {
+      this.gameOverText.setText(this.gameOverCountdown.toString());
+      
+      // Анимация пульсации только для текста
+      this.tweens.add({
+        targets: this.gameOverText,
+        scale: { from: 1.5, to: 1 },
+        duration: 500,
+        ease: 'Sine.easeOut'
+      });
+    }
+    
+    // Если отсчет завершен, вызываем Game Over
+    if (this.gameOverCountdown <= 0) {
+      this.triggerGameOver();
+    }
+  }
+  
+  // Остановка отсчета (если шары покинули зону опасности)
+  stopGameOverCountdown() {
+    if (!this.isGameOverCountdownActive) return;
+    
+    this.isGameOverCountdownActive = false;
+    
+    // Останавливаем таймер
+    if (this.gameOverTimer) {
+      this.gameOverTimer.remove();
+      this.gameOverTimer = null;
+    }
+    
+    // Скрываем текст и фон
+    if (this.gameOverText) {
+      // Получаем ссылку на фон
+      const countdownBg = this.gameOverText.getData('background');
+      
+      // Анимация исчезновения
+      this.tweens.add({
+        targets: [this.gameOverText, countdownBg],
+        alpha: 0,
+        scale: 0.5,
+        duration: 500,
+        ease: 'Power2',
+        onComplete: () => {
+          // Уничтожаем фон после анимации
+          if (countdownBg) {
+            countdownBg.destroy();
+          }
+        }
+      });
+    }
+  }
+  
+  // Вызываем Game Over
+  triggerGameOver() {
+    this.isGameOver = true;
+    
+    // Останавливаем все таймеры
+    if (this.gameOverTimer) {
+      this.gameOverTimer.remove();
+      this.gameOverTimer = null;
+    }
+    
+    // Отображаем надпись Game Over
+    if (this.gameOverText) {
+      this.gameOverText.setText('GAME OVER');
+      this.gameOverText.setFontSize('80px');
+      
+      // Анимация надписи Game Over
+      this.tweens.add({
+        targets: this.gameOverText,
+        scale: { from: 0, to: 1 },
+        duration: 1000,
+        ease: 'Elastic.easeOut'
+      });
+    }
+    
+    // Сохраняем информацию о Game Over в реестре игры для React-компонента
+    this.game.registry.set('gameOver', true);
+    this.game.registry.set('finalScore', this.score);
+    
+    // Останавливаем возможность управления
+    this.input.enabled = false;
   }
 
   // Планируем объединение шаров (вместо немедленного слияния)
@@ -1631,6 +1915,8 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
   const [isPaused, setIsPaused] = useState(false)
   const [score, setScore] = useState(0)
   const [selectedAbility, setSelectedAbility] = useState<string | null>(null)
+  const [isGameOver, setIsGameOver] = useState(false)
+  const [finalScore, setFinalScore] = useState(0)
   const { inventory } = useGameState()
 
   useEffect(() => {
@@ -1660,16 +1946,26 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
       game.scale.resize(window.innerWidth, window.innerHeight - 140)
     }
 
-    // Обработчик для получения обновлений счета из игры
-    const scoreUpdateListener = () => {
+    // Обработчик для получения обновлений счета из игры и проверки Game Over
+    const gameUpdateListener = () => {
       const gameScore = game.registry.get('gameScore');
       if (typeof gameScore === 'number') {
         setScore(gameScore);
       }
+      
+      // Проверяем, завершилась ли игра
+      const gameOver = game.registry.get('gameOver');
+      if (gameOver) {
+        const finalGameScore = game.registry.get('finalScore');
+        setIsGameOver(true);
+        if (typeof finalGameScore === 'number') {
+          setFinalScore(finalGameScore);
+        }
+      }
     };
     
     // Добавляем слушатель изменений в реестре каждые 500 мс
-    const scoreUpdateInterval = setInterval(scoreUpdateListener, 500);
+    const gameUpdateInterval = setInterval(gameUpdateListener, 500);
 
     window.addEventListener('resize', handleResize)
     setIsLoaded(true)
@@ -1677,7 +1973,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
     // Очистка при размонтировании
     return () => {
       window.removeEventListener('resize', handleResize)
-      clearInterval(scoreUpdateInterval);
+      clearInterval(gameUpdateInterval);
       
       if (game) {
         // Очищаем сцену перед уничтожением
@@ -1709,19 +2005,52 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
   }
 
   const handleAbilityClick = (ability: string) => {
-    setSelectedAbility(ability);
+    // Получаем стоимость активации способности в SnotCoin
+    let cost = 0;
+    switch (ability) {
+      case 'Bull':
+        cost = 10; // Фиксированная стоимость 10 SnotCoin
+        break;
+      case 'Bomb':
+        cost = 3; // Фиксированная стоимость 3 SnotCoin
+        break;
+      case 'Earthquake':
+        cost = 6; // Фиксированная стоимость 6 SnotCoin
+        break;
+    }
     
-    // Получаем доступ к сцене игры
-    if (gameRef.current) {
-      const scene = gameRef.current.scene.getScene('MergeGameScene') as MergeGameScene;
-      if (scene) {
-        // Вызываем метод активации способности
-        scene.activateAbility(ability);
-        console.log(`Активирована способность: ${ability}`);
-        
-        // Затем сбрасываем выбранную способность
-        setTimeout(() => setSelectedAbility(null), 500);
+    // Проверяем достаточно ли snotCoins
+    if (inventory.snotCoins >= cost) {
+      // Активируем способность
+      setSelectedAbility(ability);
+      
+      // Обновляем состояние игры, вычитая стоимость способности из snotCoins
+      const updatedInventory = {
+        ...inventory,
+        snotCoins: inventory.snotCoins - cost
+      };
+      
+      // Отправляем действие для обновления состояния
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('game:update-inventory', { 
+          detail: updatedInventory 
+        }));
       }
+      
+      // Получаем доступ к сцене игры
+      if (gameRef.current) {
+        const scene = gameRef.current.scene.getScene('MergeGameScene') as MergeGameScene;
+        if (scene) {
+          // Вызываем метод активации способности
+          scene.activateAbility(ability);
+          
+          // Затем сбрасываем выбранную способность
+          setTimeout(() => setSelectedAbility(null), 500);
+        }
+      }
+    } else {
+      // Показываем уведомление о недостатке ресурсов
+      toast.error(`Недостаточно SnotCoin для ${ability}! Нужно ${cost} SnotCoin`);
     }
   }
 
@@ -1732,7 +2061,9 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
         backgroundImage: "url('/images/merge/background/merge-background.webp')",
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundRepeat: "no-repeat"
+        backgroundRepeat: "no-repeat",
+        backdropFilter: "blur(2px)", // Добавляем размытие фона
+        WebkitBackdropFilter: "blur(2px)" // Для поддержки Safari
       }}
     >
       {/* Верхний бар */}
@@ -1790,7 +2121,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
       {/* Игровой контейнер без обводки */}
       <div ref={gameContainerRef} className="flex-grow outline-none" />
       
-      {/* Нижний бар с кнопками способностей */}
+      {/* Нижний бар с кнопками способностей (вернули обратно) */}
       <div 
         className="w-full h-[70px] relative flex items-center justify-center"
         style={{
@@ -1800,54 +2131,129 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
           backgroundPosition: "center"
         }}
       >
-        <div className="flex justify-around items-center w-full px-6">
-          {/* Кнопка способности Bull */}
-          <button 
-            onClick={() => handleAbilityClick('Bull')}
-            className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 
-              ${selectedAbility === 'Bull' ? 'scale-110 ring-2 ring-yellow-400' : 'hover:scale-105'} 
-              active:scale-[0.98]`}
-          >
-            <Image
-              src="/images/merge/Game/ui/Bull.webp"
-              alt="Bull"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover"
-            />
-          </button>
-          
-          {/* Кнопка способности Bomb */}
-          <button 
-            onClick={() => handleAbilityClick('Bomb')}
-            className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 
-              ${selectedAbility === 'Bomb' ? 'scale-110 ring-2 ring-yellow-400' : 'hover:scale-105'} 
-              active:scale-[0.98]`}
-          >
-            <Image
-              src="/images/merge/Game/ui/Bomb.webp"
-              alt="Bomb"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover"
-            />
-          </button>
-          
-          {/* Кнопка способности Earthquake */}
-          <button 
-            onClick={() => handleAbilityClick('Earthquake')}
-            className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 
-              ${selectedAbility === 'Earthquake' ? 'scale-110 ring-2 ring-yellow-400' : 'hover:scale-105'} 
-              active:scale-[0.98]`}
-          >
-            <Image
-              src="/images/merge/Game/ui/Eatherquake.webp"
-              alt="Earthquake"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover"
-            />
-          </button>
+        <div className="relative w-full px-6">
+          {/* Кнопки способностей подняты выше за счет отрицательного margin-top */}
+          <div className="flex justify-around items-center w-full -mt-6">
+            {/* Кнопка способности Bull */}
+            <div className="relative">
+              <button 
+                onClick={() => handleAbilityClick('Bull')}
+                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                  ${selectedAbility === 'Bull' 
+                    ? 'ring-4 ring-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.7)] scale-110' 
+                    : inventory.snotCoins >= 10
+                      ? 'ring-2 ring-yellow-700 hover:ring-yellow-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,215,0,0.4)] hover:scale-105'
+                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-yellow-500 to-amber-700`}
+                title={`Стоимость: 10 SnotCoin`}
+                disabled={inventory.snotCoins < 10}
+              >
+                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-amber-200 to-amber-600 flex items-center justify-center">
+                  {/* Используем указанное изображение */}
+                  <Image
+                    src="/images/merge/abilities/bull.webp"
+                    alt="Bull"
+                    width={42}
+                    height={42}
+                    className="w-full h-full object-cover rounded-full"
+                    priority
+                  />
+                </div>
+              </button>
+              {/* Индикатор стоимости */}
+              <div className="absolute -top-3 -right-3 bg-yellow-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-yellow-600 flex items-center shadow-md z-10">
+                <Image
+                  src="/images/common/icons/snotcoin-icon.webp"
+                  alt="SnotCoin"
+                  width={12}
+                  height={12}
+                  className="mr-1"
+                  priority
+                />
+                10
+              </div>
+            </div>
+            
+            {/* Кнопка способности Bomb */}
+            <div className="relative">
+              <button 
+                onClick={() => handleAbilityClick('Bomb')}
+                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                  ${selectedAbility === 'Bomb' 
+                    ? 'ring-4 ring-red-500 shadow-[0_0_15px_rgba(255,0,0,0.7)] scale-110' 
+                    : inventory.snotCoins >= 3
+                      ? 'ring-2 ring-red-800 hover:ring-red-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,0,0,0.4)] hover:scale-105'
+                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-red-500 to-red-900`}
+                title={`Стоимость: 3 SnotCoin`}
+                disabled={inventory.snotCoins < 3}
+              >
+                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-red-300 to-red-700 flex items-center justify-center">
+                  {/* Используем указанное изображение */}
+                  <Image
+                    src="/images/merge/abilities/bomb.webp"
+                    alt="Bomb"
+                    width={42}
+                    height={42}
+                    className="w-full h-full object-cover rounded-full"
+                    priority
+                  />
+                </div>
+              </button>
+              {/* Индикатор стоимости */}
+              <div className="absolute -top-3 -right-3 bg-red-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-red-600 flex items-center shadow-md z-10">
+                <Image
+                  src="/images/common/icons/snotcoin-icon.webp"
+                  alt="SnotCoin"
+                  width={12}
+                  height={12}
+                  className="mr-1"
+                  priority
+                />
+                3
+              </div>
+            </div>
+            
+            {/* Кнопка способности Earthquake */}
+            <div className="relative">
+              <button 
+                onClick={() => handleAbilityClick('Earthquake')}
+                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                  ${selectedAbility === 'Earthquake' 
+                    ? 'ring-4 ring-emerald-400 shadow-[0_0_15px_rgba(0,200,0,0.7)] scale-110' 
+                    : inventory.snotCoins >= 6
+                      ? 'ring-2 ring-emerald-800 hover:ring-emerald-500 shadow-lg hover:shadow-[0_0_12px_rgba(0,200,0,0.4)] hover:scale-105'
+                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-emerald-500 to-emerald-900`}
+                title={`Стоимость: 6 SnotCoin`}
+                disabled={inventory.snotCoins < 6}
+              >
+                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-emerald-300 to-emerald-700 flex items-center justify-center">
+                  {/* Используем указанное изображение */}
+                  <Image
+                    src="/images/merge/abilities/eatherquake.webp"
+                    alt="Earthquake"
+                    width={42}
+                    height={42}
+                    className="w-full h-full object-cover rounded-full"
+                    priority
+                  />
+                </div>
+              </button>
+              {/* Индикатор стоимости */}
+              <div className="absolute -top-3 -right-3 bg-emerald-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-emerald-600 flex items-center shadow-md z-10">
+                <Image
+                  src="/images/common/icons/snotcoin-icon.webp"
+                  alt="SnotCoin"
+                  width={12}
+                  height={12}
+                  className="mr-1"
+                  priority
+                />
+                6
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -1855,6 +2261,25 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
       {!isLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#1a2b3d] z-10">
           <div className="text-white text-2xl">Загрузка игры...</div>
+        </div>
+      )}
+      
+      {/* Окно Game Over */}
+      {isGameOver && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 z-20">
+          <div className="w-80 bg-[#1a2b3d] p-8 rounded-2xl border-4 border-yellow-500 shadow-2xl transform animate-bounce-in">
+            <h2 className="text-red-500 text-4xl font-bold text-center mb-6">GAME OVER</h2>
+            <div className="text-white text-center mb-6">
+              <p className="text-xl mb-2">Итоговый счет</p>
+              <p className="text-3xl font-bold">{finalScore}</p>
+            </div>
+            <button 
+              onClick={onBack}
+              className="w-full py-3 px-4 bg-yellow-500 hover:bg-yellow-400 text-black text-lg font-bold rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+            >
+              Вернуться в меню
+            </button>
+          </div>
         </div>
       )}
 
