@@ -72,6 +72,8 @@ function createDefaultRepairState(): ExtendedGameState {
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       containerSnot: 0,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now(),
       lastUpdateTimestamp: Date.now()
     },
     
@@ -209,7 +211,10 @@ function validateInventoryContainerConsistency(state: ExtendedGameState): Extend
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
-      collectionEfficiency: 1
+      collectionEfficiency: 1,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now(),
+      lastUpdateTimestamp: Date.now()
     };
     state.container = {
       level: 1,
@@ -268,6 +273,8 @@ export function verifyGameStateIntegrity(state: ExtendedGameState): DataIntegrit
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       containerSnot: 0,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now(),
       lastUpdateTimestamp: Date.now()
     } as unknown as Inventory;
     result.repairedFields.push('inventory');
@@ -589,7 +596,7 @@ export function validateAndRepairGameState(state: ExtendedGameState): ExtendedGa
  */
 function repairInventory(inventory: any): any {
   if (!inventory || typeof inventory !== 'object') {
-    return { snot: 0, snotCoins: 0, containerSnot: 0 };
+    return { snot: 0, snotCoins: 0, containerSnot: 0, energy: 500, lastEnergyUpdateTime: Date.now() };
   }
   
   const fixedInventory = { ...inventory };
@@ -598,6 +605,8 @@ function repairInventory(inventory: any): any {
   fixedInventory.snot = !isNaN(fixedInventory.snot) ? fixedInventory.snot : 0;
   fixedInventory.snotCoins = !isNaN(fixedInventory.snotCoins) ? fixedInventory.snotCoins : 0;
   fixedInventory.containerSnot = !isNaN(fixedInventory.containerSnot) ? fixedInventory.containerSnot : 0;
+  fixedInventory.energy = !isNaN(fixedInventory.energy) ? fixedInventory.energy : 500;
+  fixedInventory.lastEnergyUpdateTime = !isNaN(fixedInventory.lastEnergyUpdateTime) ? fixedInventory.lastEnergyUpdateTime : Date.now();
   
   return fixedInventory;
 }
@@ -680,6 +689,8 @@ function createEmptyGameState(): ExtendedGameState {
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now(),
       lastUpdateTimestamp: timestamp
     },
     container: { level: 1, capacity: 1, currentAmount: 0, fillRate: 1 },
@@ -797,7 +808,9 @@ export function isValidGameState(state: any): boolean {
     !isNaN(state.inventory.containerCapacityLevel) &&
     !isNaN(state.inventory.fillingSpeed) &&
     !isNaN(state.inventory.fillingSpeedLevel) &&
-    !isNaN(state.inventory.collectionEfficiency);
+    !isNaN(state.inventory.collectionEfficiency) &&
+    !isNaN(state.inventory.energy) &&
+    !isNaN(state.inventory.lastEnergyUpdateTime);
   
   const hasValidContainer = 
     !isNaN(state.container.level) &&
@@ -858,6 +871,8 @@ export function createStructuredSave(state: ExtendedGameState, userId: string): 
     fillingSpeed: typeof inventoryObj.fillingSpeed === 'number' ? inventoryObj.fillingSpeed : 1,
     fillingSpeedLevel: typeof inventoryObj.fillingSpeedLevel === 'number' ? inventoryObj.fillingSpeedLevel : 1,
     collectionEfficiency: typeof inventoryObj.collectionEfficiency === 'number' ? inventoryObj.collectionEfficiency : 1,
+    energy: typeof inventoryObj.energy === 'number' ? inventoryObj.energy : 500,
+    lastEnergyUpdateTime: typeof inventoryObj.lastEnergyUpdateTime === 'number' ? inventoryObj.lastEnergyUpdateTime : Date.now(),
     lastUpdateTimestamp: typeof inventoryObj.lastUpdateTimestamp === 'number' ? inventoryObj.lastUpdateTimestamp : Date.now()
   };
   
@@ -977,11 +992,13 @@ export function getDefaultInventoryValues(): Inventory {
     snot: 0,
     snotCoins: 0,
     containerSnot: 0,
-    containerCapacity: 1,
+    containerCapacity: 100,
     containerCapacityLevel: 1,
     fillingSpeed: 1,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
+    energy: 500,
+    lastEnergyUpdateTime: Date.now(),
     lastUpdateTimestamp: Date.now()
   };
 } 

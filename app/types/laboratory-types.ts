@@ -35,7 +35,7 @@ export interface CollectButtonProps {
 
 export interface BackgroundImageProps {
   store: GameState
-  onContainerClick: (() => void) | null
+  onContainerClick: ((e: React.MouseEvent) => void) | null
   allowContainerClick: boolean
   isContainerClicked: boolean
   id: string

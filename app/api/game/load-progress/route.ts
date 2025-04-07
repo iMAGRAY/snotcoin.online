@@ -212,6 +212,24 @@ export async function GET(request: NextRequest) {
               cache_hit: true
             });
             
+            // Проверяем данные энергии и времени восстановления
+            if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
+              // Если поле energy не определено, устанавливаем значение по умолчанию
+              if (gameStateData.inventory.energy === undefined) {
+                gameStateData.inventory.energy = 500;
+              }
+              
+              // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
+              if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
+                gameStateData.inventory.lastEnergyUpdateTime = Date.now();
+              }
+              
+              logger.debug('Проверка параметров энергии:', { 
+                energy: gameStateData.inventory.energy,
+                lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+              });
+            }
+            
             return NextResponse.json({
               success: true,
               data: {
@@ -425,6 +443,24 @@ export async function GET(request: NextRequest) {
           });
         }
 
+        // Проверяем данные энергии и времени восстановления
+        if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
+          // Если поле energy не определено, устанавливаем значение по умолчанию
+          if (gameStateData.inventory.energy === undefined) {
+            gameStateData.inventory.energy = 500;
+          }
+          
+          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
+          if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
+            gameStateData.inventory.lastEnergyUpdateTime = Date.now();
+          }
+          
+          logger.debug('Проверка параметров энергии:', { 
+            energy: gameStateData.inventory.energy,
+            lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+          });
+        }
+
         return NextResponse.json({
           success: true,
           data: {
@@ -463,6 +499,24 @@ export async function GET(request: NextRequest) {
           new_user: true
         });
         
+        // Проверяем данные энергии и времени восстановления
+        if (initialState && typeof initialState === 'object' && initialState.inventory) {
+          // Если поле energy не определено, устанавливаем значение по умолчанию
+          if (initialState.inventory.energy === undefined) {
+            initialState.inventory.energy = 500;
+          }
+          
+          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
+          if (initialState.inventory.lastEnergyUpdateTime === undefined) {
+            initialState.inventory.lastEnergyUpdateTime = Date.now();
+          }
+          
+          logger.debug('Проверка параметров энергии:', { 
+            energy: initialState.inventory.energy,
+            lastEnergyUpdateTime: initialState.inventory.lastEnergyUpdateTime 
+          });
+        }
+
         return NextResponse.json({
           success: true,
           data: {
@@ -502,6 +556,24 @@ export async function GET(request: NextRequest) {
           db_error: true
         });
         
+        // Проверяем данные энергии и времени восстановления
+        if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
+          // Если поле energy не определено, устанавливаем значение по умолчанию
+          if (gameStateData.inventory.energy === undefined) {
+            gameStateData.inventory.energy = 500;
+          }
+          
+          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
+          if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
+            gameStateData.inventory.lastEnergyUpdateTime = Date.now();
+          }
+          
+          logger.debug('Проверка параметров энергии:', { 
+            energy: gameStateData.inventory.energy,
+            lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+          });
+        }
+
         return NextResponse.json({
           success: true,
           warning: 'Данные загружены из кэша, ошибка БД',

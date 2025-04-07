@@ -11,9 +11,14 @@ import { calculateContainerUpgradeCost, calculateFillingSpeedUpgradeCost } from 
 import Image from "next/image"
 import { ICONS } from '../constants/uiConstants'
 import InteractiveBall from "../components/effects/InteractiveBall"
+import { UPGRADE_VALUES } from '../constants/gameConstants'
 
 const calculateContainerCapacity = (level: number): number => {
-  return 1 + (level - 1) * 1;
+  const safeLevel = Math.max(1, Math.min(level, UPGRADE_VALUES.containerCapacity.length));
+  
+  const capacity = UPGRADE_VALUES.containerCapacity[safeLevel - 1];
+  
+  return typeof capacity === 'number' ? capacity : 1;
 }
 
 const calculateFillingSpeed = (level: number): number => {
@@ -141,10 +146,11 @@ const UpgradePageContent: React.FC = React.memo(() => {
   }, [gameDispatch, router])
 
   const handleCapacityUpgrade = useCallback(() => {
-    if (gameState.inventory?.snotCoins !== undefined && gameState.inventory.snotCoins >= capacityCost) {
-      gameDispatch({ type: "UPGRADE_CONTAINER_CAPACITY" })
-      setShowUpgradeEffect(true)
-      setTimeout(() => setShowUpgradeEffect(false), 1000)
+    if (gameState.inventory?.snotCoins >= capacityCost) {
+      gameDispatch({
+        type: "UPGRADE_CONTAINER_CAPACITY",
+        payload: { cost: capacityCost }
+      })
     }
   }, [gameState.inventory?.snotCoins, gameDispatch, capacityCost])
 

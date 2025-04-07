@@ -47,7 +47,9 @@ const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => 
         width={32} 
         height={32} 
         alt={t("upgradeResources")} 
-        className="inline-block" 
+        className="inline-block"
+        draggable="false"
+        onContextMenu={(e) => e.preventDefault()}
       />
     </motion.button>
   )

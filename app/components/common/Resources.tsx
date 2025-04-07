@@ -21,6 +21,7 @@ interface ResourcesProps {
   showOnlySnot?: boolean
   snot: number
   snotCoins: number
+  energy?: number
   // Параметры для StatusDisplay
   containerCapacity?: number
   containerLevel?: number
@@ -39,12 +40,16 @@ const ResourceItem: React.FC<{
   label: string
   colorClass: string
   ariaLabel: string
-}> = React.memo(({ icon, value, maxValue, label, colorClass, ariaLabel }) => {
+  timeToFull?: string | null | undefined
+  noDecimals?: boolean | undefined
+  showTimeInline?: boolean | undefined
+}> = React.memo(({ icon, value, maxValue, label, colorClass, ariaLabel, timeToFull, noDecimals, showTimeInline }) => {
   const formattedValue = useMemo(() => {
     if (value === undefined) return "0"
     if (maxValue !== undefined) return `${Math.floor(value)}/${maxValue}`
+    if (noDecimals) return Math.floor(value).toString()
     return formatSnotValue(value, 4)
-  }, [value, maxValue])
+  }, [value, maxValue, noDecimals])
 
   const { t } = useTranslation()
 
@@ -62,12 +67,26 @@ const ResourceItem: React.FC<{
           height={LAYOUT.RESOURCE_ICON_SIZE}
           alt={t(label)}
           className="object-contain transition-all duration-300"
+          draggable="false"
+          onContextMenu={(e) => e.preventDefault()}
         />
       </div>
-      <div className="flex items-center">
-        <span className={`${UI_CLASSES.RESOURCE_ITEM.TEXT} ${colorClass}`}>
-          {formattedValue}
-        </span>
+      <div className="flex flex-col items-center">
+        <div className="flex items-center">
+          <span className={`${UI_CLASSES.RESOURCE_ITEM.TEXT} ${colorClass}`}>
+            {formattedValue}
+          </span>
+          {showTimeInline && timeToFull && (
+            <span className="text-xs bg-gray-900 bg-opacity-40 px-2 py-0.5 rounded-sm text-blue-300 ml-2 whitespace-nowrap">
+              {timeToFull}
+            </span>
+          )}
+        </div>
+        {!showTimeInline && timeToFull && (
+          <span className="text-xs bg-gray-900 bg-opacity-40 px-2 py-0.5 rounded-sm text-blue-300 mt-0.5 whitespace-nowrap">
+            {timeToFull}
+          </span>
+        )}
       </div>
     </motion.div>
   )
@@ -86,6 +105,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     showOnlySnot = false,
     snot,
     snotCoins,
+    energy,
     containerCapacity,
     containerLevel,
     containerSnot,
@@ -94,9 +114,41 @@ const Resources: React.FC<ResourcesProps> = React.memo(
   }) => {
     const { t } = useTranslation()
 
+    // Вычисляем время до полного восстановления энергии
+    const timeToFullEnergy = useMemo(() => {
+      if (energy === undefined || energy >= 500) return undefined;
+      
+      // Вычисляем сколько энергии осталось восстановить
+      const energyToRecover = 500 - energy;
+      
+      // Скорость восстановления: 500 единиц за 8 часов = 500 / (8 * 60 * 60) единиц в секунду
+      const energyPerSecond = 500 / (8 * 60 * 60);
+      
+      // Сколько секунд нужно для восстановления оставшейся энергии
+      const secondsToFull = Math.ceil(energyToRecover / energyPerSecond);
+      
+      // Конвертируем в часы:минуты (убираем секунды)
+      const hours = Math.floor(secondsToFull / 3600);
+      const minutes = Math.floor((secondsToFull % 3600) / 60);
+      
+      // Форматируем строку времени без секунд
+      return `${hours}ч ${minutes}м`;
+    }, [energy]);
+
     // Построение списка ресурсов с использованием констант
     const resourceItems = useMemo(() => {
-      const items = [
+      // Определяем тип с нужными свойствами, позволяющий undefined в опциональных полях
+      type ResourceItemType = {
+        icon: string;
+        value: number;
+        label: string;
+        colorClass: string;
+        timeToFull?: string | undefined;
+        noDecimals?: boolean | undefined;
+        showTimeInline?: boolean | undefined;
+      };
+      
+      const items: ResourceItemType[] = [
         {
           icon: ICONS.SNOTCOIN,
           value: snotCoins,
@@ -110,11 +162,24 @@ const Resources: React.FC<ResourcesProps> = React.memo(
           colorClass: COLORS.SNOT,
         }
       ];
+      
+      // Добавляем энергию, если она определена
+      if (energy !== undefined) {
+        items.push({
+          icon: ICONS.ENERGY, // Используем новую специальную иконку для энергии
+          value: energy,
+          label: "Energy",
+          colorClass: "text-blue-400", // Цвет для энергии
+          timeToFull: timeToFullEnergy,
+          noDecimals: true, // Показывать без десятичных знаков
+          showTimeInline: true // Отображать время восстановления справа
+        });
+      }
 
       if (showOnlySnotCoin) return items.filter(item => item.label === "SnotCoins");
       if (showOnlySnot) return items.filter(item => item.label === "SNOT");
       return items;
-    }, [snotCoins, snot, showOnlySnotCoin, showOnlySnot]);
+    }, [snotCoins, snot, energy, timeToFullEnergy, showOnlySnotCoin, showOnlySnot]);
 
     // Проверка условий для отображения StatusDisplay - перенесено сюда
     const isLaboratoryTab = activeTab === 'laboratory';
@@ -167,6 +232,9 @@ const Resources: React.FC<ResourcesProps> = React.memo(
                     label={item.label}
                     colorClass={item.colorClass}
                     ariaLabel={`${t(item.label)}: ${item.value}`}
+                    timeToFull={item.timeToFull}
+                    noDecimals={item.noDecimals}
+                    showTimeInline={item.showTimeInline}
                   />
                 ))}
               </div>
@@ -188,4 +256,3 @@ const Resources: React.FC<ResourcesProps> = React.memo(
 Resources.displayName = "Resources"
 
 export default Resources
-

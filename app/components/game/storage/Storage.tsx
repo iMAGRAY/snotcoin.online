@@ -17,33 +17,6 @@ import { SnotCoinRewardModal } from "./SnotCoinRewardModal"
 import { SwipeButtons } from "./SwipeButtons"
 import BackgroundImage from "@/app/components/common/BackgroundImage"
 
-const chests: Chest[] = [
-  {
-    id: 1,
-    name: "commonChest",
-    image: ICONS.STORAGE.LEVELS.LEVEL1,
-    requiredSnot: 5,
-    reward: () => Math.floor(Math.random() * 7) + 2, // 2-8
-    description: "commonChestDescription",
-  },
-  {
-    id: 2,
-    name: "rareChest",
-    image: ICONS.STORAGE.LEVELS.LEVEL2,
-    requiredSnot: 50,
-    reward: () => Math.floor(Math.random() * 46) + 25, // 25-70
-    description: "rareChestDescription",
-  },
-  {
-    id: 3,
-    name: "legendaryChest",
-    image: ICONS.STORAGE.LEVELS.LEVEL3,
-    requiredSnot: 400,
-    reward: () => Math.floor(Math.random() * 301) + 200, // 200-500
-    description: "legendaryChestDescription",
-  },
-]
-
 const ArrowButton: React.FC<{ direction: "left" | "right"; onClick: () => void }> = React.memo(
   ({ direction, onClick }) => (
     <motion.button
@@ -163,15 +136,74 @@ const Storage: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
   
-  // Динамически определяем стоимость сундука 1 уровня (100% от вместимости контейнера)
+  // Динамически определяем стоимость сундуков
   const level1ChestCost = gameState.inventory.containerCapacity || 5;
+  const level2ChestCost = level1ChestCost * 2; // 200% от вместимости
+  const level3ChestCost = level1ChestCost * 5; // 500% от вместимости
   
-  // Обновляем стоимость сундука 1 уровня при изменении вместимости контейнера
-  useEffect(() => {
-    if (chests && chests[0]) {
-      chests[0].requiredSnot = level1ChestCost;
-    }
-  }, [level1ChestCost]);
+  // Создаем массив сундуков внутри компонента, с правильными начальными значениями
+  const chests: Chest[] = [
+    {
+      id: 1,
+      name: "Common",
+      image: ICONS.STORAGE.LEVELS.LEVEL1,
+      requiredSnot: level1ChestCost,
+      reward: () => {
+        // Вероятность выигрыша 35%
+        const isWin = Math.random() < 0.35;
+        // Награда от 50% до 150% от вместимости контейнера
+        const minReward = Math.floor(level1ChestCost * 0.5);
+        const maxReward = Math.floor(level1ChestCost * 1.5);
+        // Если выигрыш, то награда больше стоимости сундука
+        if (isWin) {
+          return Math.floor(Math.random() * (maxReward - level1ChestCost) + level1ChestCost);
+        }
+        // Если не выигрыш, то награда меньше стоимости сундука
+        return Math.floor(Math.random() * (level1ChestCost - minReward) + minReward);
+      },
+      description: "commonChestDescription",
+    },
+    {
+      id: 2,
+      name: "Uncommon",
+      image: ICONS.STORAGE.LEVELS.LEVEL2,
+      requiredSnot: level2ChestCost,
+      reward: () => {
+        // Вероятность выигрыша 35%
+        const isWin = Math.random() < 0.35;
+        // Награда от 100% до 300% от вместимости контейнера
+        const minReward = Math.floor(level1ChestCost * 1.0);
+        const maxReward = Math.floor(level1ChestCost * 3.0);
+        // Если выигрыш, то награда больше стоимости сундука
+        if (isWin) {
+          return Math.floor(Math.random() * (maxReward - level2ChestCost) + level2ChestCost);
+        }
+        // Если не выигрыш, то награда меньше стоимости сундука
+        return Math.floor(Math.random() * (level2ChestCost - minReward) + minReward);
+      },
+      description: "rareChestDescription",
+    },
+    {
+      id: 3,
+      name: "Rare",
+      image: ICONS.STORAGE.LEVELS.LEVEL3,
+      requiredSnot: level3ChestCost,
+      reward: () => {
+        // Вероятность выигрыша 35%
+        const isWin = Math.random() < 0.35;
+        // Награда от 300% до 700% от вместимости контейнера
+        const minReward = Math.floor(level1ChestCost * 3.0);
+        const maxReward = Math.floor(level1ChestCost * 7.0);
+        // Если выигрыш, то награда больше стоимости сундука
+        if (isWin) {
+          return Math.floor(Math.random() * (maxReward - level3ChestCost) + level3ChestCost);
+        }
+        // Если не выигрыш, то награда меньше стоимости сундука
+        return Math.floor(Math.random() * (level3ChestCost - minReward) + minReward);
+      },
+      description: "legendaryChestDescription",
+    },
+  ];
 
   const handleSwipeComplete = useCallback((index: number) => {
     setActiveChestIndex(index);
@@ -231,6 +263,70 @@ const Storage: React.FC = () => {
     };
   }, []);
 
+  // Описание свойств сундуков
+  const renderChestDescription = () => {
+    const currentChest = chests[activeChestIndex];
+    if (!currentChest) return null;
+    
+    // Рассчитываем диапазоны наград в абсолютных значениях без округления
+    const chest1MinReward = level1ChestCost * 0.5;
+    const chest1MaxReward = level1ChestCost * 1.5;
+    
+    const chest2MinReward = level1ChestCost * 1.0;
+    const chest2MaxReward = level1ChestCost * 3.0;
+    
+    const chest3MinReward = level1ChestCost * 3.0;
+    const chest3MaxReward = level1ChestCost * 7.0;
+    
+    return (
+      <div className="fixed top-20 left-0 right-0 mx-auto w-4/5 max-w-lg z-20 
+                    bg-gradient-to-b from-gray-900 to-gray-800 
+                    border-2 border-yellow-600 
+                    rounded-xl p-5 text-center 
+                    shadow-lg shadow-black/50">
+        {/* Заголовок */}
+        <h2 className="text-2xl font-bold mb-2 
+                      bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 
+                      text-transparent bg-clip-text 
+                      drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+          {currentChest.name}
+        </h2>
+        
+        {/* Описание */}
+        <p className="text-white text-base mb-3 
+                    opacity-90 font-medium">
+          {t(currentChest.description)}
+        </p>
+        
+        {/* Разделитель */}
+        <div className="h-0.5 w-2/3 mx-auto 
+                      bg-gradient-to-r from-transparent via-yellow-600 to-transparent 
+                      my-2 opacity-70"></div>
+        
+        {/* Награда */}
+        <div className="mt-2 bg-gray-900/60 
+                      rounded-lg p-2 
+                      border border-yellow-800/50">
+          {activeChestIndex === 0 && (
+            <p className="text-yellow-200 text-sm">
+              <span className="font-bold">Награда:</span> {chest1MinReward.toFixed(2)}-{chest1MaxReward.toFixed(2)} SnotCoin
+            </p>
+          )}
+          {activeChestIndex === 1 && (
+            <p className="text-yellow-200 text-sm">
+              <span className="font-bold">Награда:</span> {chest2MinReward.toFixed(2)}-{chest2MaxReward.toFixed(2)} SnotCoin
+            </p>
+          )}
+          {activeChestIndex === 2 && (
+            <p className="text-yellow-200 text-sm">
+              <span className="font-bold">Награда:</span> {chest3MinReward.toFixed(2)}-{chest3MaxReward.toFixed(2)} SnotCoin
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <motion.div 
@@ -248,6 +344,9 @@ const Storage: React.FC = () => {
             backgroundSize: "cover",
           }}
         />
+        
+        {/* Описание свойств сундуков */}
+        {renderChestDescription()}
         
         {/* Слой с каруселью и сундуками (z-10) */}
         <div className="fixed inset-0 flex flex-col z-10">

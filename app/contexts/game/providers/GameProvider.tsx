@@ -11,10 +11,12 @@ import {
 } from '../../../services/localStorageManager'
 import * as storageService from '../../../services/storageService'
 import { StorageType } from '../../../services/storageService'
+import { secureLocalLoad, secureLocalSave } from '../../../utils/localSaveProtection'
+import { compareSaves } from '../../../utils/localSaveChecker'
 
 interface GameProviderProps {
   children: React.ReactNode
-  userId: string
+  userId?: string
   enableAutoSave?: boolean
   autoSaveInterval?: number
 }
@@ -62,6 +64,7 @@ function createDefaultGameState(userId: string): GameState {
       containerCapacityLevel: 1, // Начальный уровень вместимости
       fillingSpeedLevel: 1, // Начальный уровень скорости наполнения
       collectionEfficiency: 1, // Начальная эффективность сбора
+      energy: 500, // Инициализация энергии
       lastUpdateTimestamp: Date.now()
     },
     containers: [],
@@ -78,84 +81,160 @@ function createDefaultGameState(userId: string): GameState {
 }
 
 /**
- * Проверяет структуру объекта GameState и исправляет/устанавливает поля с некорректными значениями
- * @param state Состояние игры для проверки
- * @param userId Текущий userId для добавления в дефолтное состояние при ошибке
- * @returns Проверенное и исправленное состояние игры
+ * Функция для валидации игрового состояния
+ * @param state Состояние для валидации
+ * @returns Валидированное состояние
  */
-export function validateGameState(state: any, userId: string): GameState {
-  if (!state || typeof state !== 'object') {
-    console.error('[GameProvider] validateGameState: Отсутствует или некорректное состояние для валидации');
-    return createDefaultGameState(userId);
+function validateGameState(state: GameState): GameState {
+  const validatedState = { ...state };
+
+  // Проверяем основные поля
+  if (!validatedState.inventory) {
+    validatedState.inventory = {
+      snot: 0,
+      snotCoins: 0,
+      containerSnot: 0,
+      containerCapacity: 1,
+      containerCapacityLevel: 1,
+      fillingSpeed: 1,
+      fillingSpeedLevel: 1,
+      collectionEfficiency: 1.0,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now(),
+      lastUpdateTimestamp: Date.now()
+    };
+  } else {
+    // Валидируем поля инвентаря
+    validatedState.inventory = {
+      snot: Number(validatedState.inventory.snot || 0),
+      snotCoins: Number(validatedState.inventory.snotCoins || 0),
+      containerSnot: Number(validatedState.inventory.containerSnot || 0),
+      containerCapacity: Number(validatedState.inventory.containerCapacity || 1),
+      containerCapacityLevel: Number(validatedState.inventory.containerCapacityLevel || 1),
+      fillingSpeed: Number(validatedState.inventory.fillingSpeed || 1),
+      fillingSpeedLevel: Number(validatedState.inventory.fillingSpeedLevel || 1),
+      collectionEfficiency: Number(validatedState.inventory.collectionEfficiency || 1),
+      energy: Number(validatedState.inventory.energy || 500),
+      lastEnergyUpdateTime: validatedState.inventory.lastEnergyUpdateTime || Date.now(),
+      lastUpdateTimestamp: validatedState.inventory.lastUpdateTimestamp || Date.now()
+    };
+  }
+
+  return validatedState;
+}
+
+// Функция для загрузки экстренных сохранений
+const loadEmergencySaves = (userId: string): any => {
+  if (!userId || typeof window === 'undefined' || !window.localStorage) {
+    return null;
   }
   
   try {
-    // Создаем копию, чтобы не мутировать исходный объект напрямую
-    const validatedState = { ...state };
+    console.log('[GameProvider] Поиск экстренных сохранений для', userId);
     
-    // Проверяем и исправляем основные поля
-    if (!validatedState.inventory || typeof validatedState.inventory !== 'object') {
-      console.warn('[GameProvider] validateGameState: Отсутствует или некорректный inventory, будет создан');
-      validatedState.inventory = createDefaultGameState(userId).inventory;
-    } else {
-      // Проверяем типы полей инвентаря
-      validatedState.inventory = {
-        snot: Number(validatedState.inventory.snot || 0),
-        snotCoins: Number(validatedState.inventory.snotCoins || 0),
-        containerSnot: Number(validatedState.inventory.containerSnot || 0),
-        containerCapacity: Number(validatedState.inventory.containerCapacity || 1),
-        containerCapacityLevel: Number(validatedState.inventory.containerCapacityLevel || 1),
-        fillingSpeed: Number(validatedState.inventory.fillingSpeed || 1),
-        fillingSpeedLevel: Number(validatedState.inventory.fillingSpeedLevel || 1),
-        collectionEfficiency: Number(validatedState.inventory.collectionEfficiency || 1),
-        lastUpdateTimestamp: validatedState.inventory.lastUpdateTimestamp || Date.now()
+    // Ищем ключи экстренных сохранений
+    const emergencySaveKeys: string[] = [];
+    const EMERGENCY_SAVE_PREFIX = 'emergency_save_';
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${EMERGENCY_SAVE_PREFIX}${userId}`)) {
+        emergencySaveKeys.push(key);
+      }
+    }
+    
+    if (emergencySaveKeys.length === 0) {
+      console.log('[GameProvider] Экстренных сохранений не найдено');
+      return null;
+    }
+    
+    // Сортируем по времени, берем самое последнее
+    emergencySaveKeys.sort((a, b) => {
+      const timeA = parseInt(a.split('_').pop() || '0', 10);
+      const timeB = parseInt(b.split('_').pop() || '0', 10);
+      return timeB - timeA; // Сортировка от нового к старому
+    });
+    
+    // Берем самое свежее сохранение
+    const latestKey = emergencySaveKeys[0];
+    console.log(`[GameProvider] Найдено ${emergencySaveKeys.length} экстренных сохранений, используем последнее: ${latestKey}`);
+    
+    // Загружаем данные
+    if (latestKey) {
+      const rawData = localStorage.getItem(latestKey);
+      if (!rawData) {
+        console.warn('[GameProvider] Экстренное сохранение пусто');
+        return null;
+      }
+      
+      const emergencyData = JSON.parse(rawData);
+      
+      // Проверяем основные данные
+      if (!emergencyData || !emergencyData.inventory || typeof emergencyData.inventory.snot !== 'number') {
+        console.warn('[GameProvider] Экстренное сохранение некорректно');
+        return null;
+      }
+      
+      console.log('[GameProvider] Успешно загружено экстренное сохранение:', {
+        timestamp: new Date(emergencyData.timestamp).toISOString(),
+        snot: emergencyData.inventory.snot
+      });
+      
+      return emergencyData;
+    }
+  } catch (error) {
+    console.error('[GameProvider] Ошибка при загрузке экстренных сохранений:', error);
+    return null;
+  }
+};
+
+// Функция для сравнения данных с экстренным сохранением  
+const mergeWithEmergencySave = (gameState: any, emergencyData: any): any => {
+  if (!gameState || !emergencyData) return gameState;
+  
+  try {
+    // Проверяем, что экстренное сохранение новее
+    const gameStateTime = gameState._lastModified || 
+                         (gameState._lastSaved ? new Date(gameState._lastSaved).getTime() : 0);
+    
+    const emergencyTime = emergencyData.timestamp || 0;
+    
+    // Если экстренное сохранение старше обычного, игнорируем его
+    if (emergencyTime < gameStateTime) {
+      console.log('[GameProvider] Экстренное сохранение старше загруженного состояния, игнорируем');
+      return gameState;
+    }
+    
+    console.log('[GameProvider] Экстренное сохранение новее загруженного состояния, объединяем данные');
+    
+    // Создаем копию состояния
+    const mergedState = { ...gameState };
+    
+    // Переносим ключевые данные из экстренного сохранения
+    if (emergencyData.inventory) {
+      mergedState.inventory = {
+        ...mergedState.inventory,
+        snot: emergencyData.inventory.snot,
+        snotCoins: emergencyData.inventory.snotCoins,
+        containerSnot: emergencyData.inventory.containerSnot
       };
     }
     
-    if (!validatedState.container || typeof validatedState.container !== 'object') {
-      console.warn('[GameProvider] validateGameState: Отсутствует или некорректный container, будет создан');
-      validatedState.container = createDefaultGameState(userId).container;
-    } else {
-       validatedState.container.level = Number(validatedState.container.level || 1);
-       validatedState.container.currentAmount = Number(validatedState.container.currentAmount || 0);
-       validatedState.container.fillRate = Number(validatedState.container.fillRate || 1);
-    }
+    // Обновляем метаданные
+    mergedState._emergencyRestored = true;
+    mergedState._emergencyTimestamp = emergencyTime;
     
-    if (!validatedState.upgrades || typeof validatedState.upgrades !== 'object') {
-      console.warn('[GameProvider] validateGameState: Отсутствует или некорректный upgrades, будет создан');
-      validatedState.upgrades = createDefaultGameState(userId).upgrades;
-    } else {
-       validatedState.upgrades.containerLevel = Number(validatedState.upgrades.containerLevel || 1);
-       validatedState.upgrades.fillingSpeedLevel = Number(validatedState.upgrades.fillingSpeedLevel || 1);
-       validatedState.upgrades.collectionEfficiencyLevel = Number(validatedState.upgrades.collectionEfficiencyLevel || 1);
-       
-       if (!validatedState.upgrades.clickPower || typeof validatedState.upgrades.clickPower !== 'object') {
-         validatedState.upgrades.clickPower = { level: 1, value: 1 };
-       } else {
-         validatedState.upgrades.clickPower.level = Number(validatedState.upgrades.clickPower.level || 1);
-         validatedState.upgrades.clickPower.value = Number(validatedState.upgrades.clickPower.value || 1);
-       }
-       
-       if (!validatedState.upgrades.passiveIncome || typeof validatedState.upgrades.passiveIncome !== 'object') {
-         validatedState.upgrades.passiveIncome = { level: 1, value: 0.1 };
-       } else {
-         validatedState.upgrades.passiveIncome.level = Number(validatedState.upgrades.passiveIncome.level || 1);
-         validatedState.upgrades.passiveIncome.value = Number(validatedState.upgrades.passiveIncome.value || 0.1);
-       }
-    }
+    console.log('[GameProvider] Обновлены данные из экстренного сохранения:', {
+      snot: mergedState.inventory.snot,
+      timestamp: new Date(emergencyTime).toISOString()
+    });
     
-    // Убеждаемся, что системные поля присутствуют
-    validatedState._userId = userId;
-    validatedState._lastSaved = state._lastSaved || new Date().toISOString();
-    validatedState._saveVersion = Number(state._saveVersion || 1);
-    validatedState._skipSave = state._skipSave === true; // Приводим к boolean
-
-    return validatedState as GameState;
+    return mergedState;
   } catch (error) {
-    console.error('[GameProvider] Ошибка при валидации состояния:', error);
-    return createDefaultGameState(userId);
+    console.error('[GameProvider] Ошибка при объединении с экстренным сохранением:', error);
+    return gameState;
   }
-}
+};
 
 export function GameProvider({
   children,
@@ -199,44 +278,252 @@ export function GameProvider({
       
       console.log('[GameProvider] Starting state load for userId:', userId);
       
-      // Сначала пробуем загрузить из localStorage напрямую
-      let gameData = null;
+      // Переменные для хранения данных из разных источников
+      let localGameData = null;
+      let serverGameData = null;
+      let dataSource = 'default'; // Явно объявляем тип
+      
+      // 1. Загружаем данные из защищенного локального хранилища
       try {
-        const localData = localStorage.getItem(`gameState_${userId}`);
-        if (localData) {
-          gameData = JSON.parse(localData);
-          console.log('[GameProvider] Loaded game state directly from localStorage');
+        localGameData = secureLocalLoad(userId);
+        if (localGameData) {
+          console.log('[GameProvider] Loaded game state from secure localStorage');
         }
       } catch (localError) {
-        console.warn('[GameProvider] Error loading from localStorage directly:', localError);
+        console.warn('[GameProvider] Error loading from secure localStorage:', localError);
       }
       
-      // Если не нашли прямое сохранение, используем storageService
-      if (!gameData) {
-        try {
-          const loadResult = await storageService.loadGameState(userId);
-          gameData = loadResult?.data;
+      // 2. Загружаем данные с сервера через API
+      try {
+        const loadResult = await storageService.loadGameState(userId);
+        serverGameData = loadResult?.data;
+        
+        if (serverGameData) {
+          console.log('[GameProvider] Data loaded from server for', userId);
+        } else {
+          console.log('[GameProvider] No server data found for', userId);
+        }
+      } catch (serverError) {
+        console.error('[GameProvider] Error loading from server:', serverError);
+      }
+      
+      // 3. Проверяем наличие экстренных сохранений
+      const emergencyData = loadEmergencySaves(userId);
+      
+      // 4. Сравниваем локальное и серверное сохранение
+      const comparisonResult = compareSaves(localGameData, serverGameData, userId);
+      
+      // Выводим детальную информацию о сравнении
+      console.log('[GameProvider] Save comparison result:', {
+        localValid: comparisonResult.localValid,
+        serverValid: comparisonResult.serverValid,
+        useLocal: comparisonResult.useLocal,
+        useServer: comparisonResult.useServer,
+        localNewer: comparisonResult.localNewer,
+        timeDifferenceMs: comparisonResult.timeDifference,
+        timeDifferenceMin: Math.abs(comparisonResult.timeDifference) / (60 * 1000),
+        errors: comparisonResult.integrityErrors,
+        emergencySaveFound: Boolean(emergencyData)
+      });
+      
+      // 5. Выбираем источник данных на основе результата сравнения
+      let gameData = null;
+      
+      if (comparisonResult.useLocal && localGameData) {
+        gameData = localGameData;
+        dataSource = 'local';
+        console.log('[GameProvider] Using local save (newer or server save invalid)');
+        
+        // Если локальное сохранение новее, сохраняем его на сервер
+        if (comparisonResult.localNewer && serverGameData) {
+          console.log('[GameProvider] Local save is newer, syncing to server');
           
-          if (gameData) {
-            console.log('[GameProvider] Data found for', userId);
-          } else {
-            console.log('[GameProvider] Data not found for', userId);
-          }
-        } catch (storageError) {
-          console.error('[GameProvider] Error loading from storageService:', storageError);
+          // Запускаем синхронизацию в фоне
+          (async () => {
+            try {
+              const syncResult = await storageService.saveGameState(
+                userId, 
+                localGameData,
+                localGameData._saveVersion || 1
+              );
+              
+              if (syncResult.success) {
+                console.log('[GameProvider] Successfully synced local save to server');
+              } else {
+                console.warn('[GameProvider] Failed to sync local save to server');
+              }
+            } catch (syncError) {
+              console.error('[GameProvider] Error syncing local save to server:', syncError);
+            }
+          })();
+        }
+      } 
+      else if (comparisonResult.useServer && serverGameData) {
+        gameData = serverGameData;
+        dataSource = 'server';
+        console.log('[GameProvider] Using server save (newer or local save invalid)');
+        
+        // Сохраняем серверные данные в локальное хранилище
+        try {
+          secureLocalSave(userId, serverGameData);
+          console.log('[GameProvider] Server data cached to local storage');
+        } catch (cacheError) {
+          console.warn('[GameProvider] Failed to cache server data locally:', cacheError);
         }
       }
       
-      // Если нашли данные, загружаем их в состояние
-      if (gameData) {
-        dispatch({ type: 'LOAD_GAME_STATE', payload: gameData });
-        return true;
+      // 6. Если все валидные сохранения отсутствуют, создаем новое состояние
+      if (!gameData) {
+        console.log('[GameProvider] No valid saves found for', userId, ', initializing default state');
+        gameData = createDefaultGameState(userId);
+        dataSource = 'new';
       }
       
-      // Если данные не найдены, создаем новое состояние
-      console.log('[GameProvider] No saved state found for', userId, ', initializing default state');
-      dispatch({ type: 'LOAD_GAME_STATE', payload: createDefaultGameState(userId) });
-      return false;
+      // 7. Проверяем наличие экстренных сохранений и объединяем с выбранными данными
+      if (emergencyData) {
+        const originalSnot = gameData?.inventory?.snot;
+        gameData = mergeWithEmergencySave(gameData, emergencyData);
+        
+        if (originalSnot !== gameData?.inventory?.snot) {
+          console.log('[GameProvider] Данные обновлены из экстренного сохранения', {
+            originalSnot,
+            updatedSnot: gameData?.inventory?.snot
+          });
+          dataSource += '+emergency';
+        }
+      }
+      
+      // 8. Обновляем ресурсы на основе прошедшего времени
+      try {
+        // Импортируем функцию обновления ресурсов
+        const { updateResourcesBasedOnTimePassed } = await import('../../../utils/resourceUtils');
+        const { calculateRestoredEnergy } = await import('../../../hooks/useEnergyRestoration');
+        
+        // Получаем текущее время
+        const now = Date.now();
+        
+        // Сохраняем исходные значения для сравнения
+        const originalContainerSnot = gameData?.inventory?.containerSnot || 0;
+        const originalEnergy = gameData?.inventory?.energy || 0;
+        
+        // Сначала проверяем и инициализируем энергию и время обновления энергии, если они не установлены
+        if (gameData.inventory.energy === undefined || gameData.inventory.energy === null || isNaN(gameData.inventory.energy)) {
+          console.log('[GameProvider] Инициализируем отсутствующую энергию:', {
+            было: gameData.inventory.energy,
+            стало: 500
+          });
+          gameData.inventory.energy = 500; // Максимальное значение только если энергия отсутствует или некорректна
+        } else {
+          console.log('[GameProvider] Используем существующее значение энергии:', gameData.inventory.energy);
+        }
+        
+        // Инициализируем lastEnergyUpdateTime только если его нет или он некорректный
+        if (!gameData.inventory.lastEnergyUpdateTime || isNaN(Number(gameData.inventory.lastEnergyUpdateTime))) {
+          console.log('[GameProvider] Инициализируем отсутствующий lastEnergyUpdateTime:', {
+            было: gameData.inventory.lastEnergyUpdateTime,
+            стало: now
+          });
+          gameData.inventory.lastEnergyUpdateTime = now;
+        } else {
+          // Логируем существующее значение для отладки
+          console.log('[GameProvider] Используем существующий lastEnergyUpdateTime:', {
+            время: new Date(gameData.inventory.lastEnergyUpdateTime).toISOString(),
+            прошлоВремени: `${((now - gameData.inventory.lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`
+          });
+        }
+        
+        // Обновляем контейнер снота с учетом прошедшего времени
+        gameData = updateResourcesBasedOnTimePassed(gameData, now);
+        
+        // Обновляем энергию с учетом прошедшего времени
+        const maxEnergy = 500; // Максимальная энергия
+        const hoursToFullRestore = 8; // Часов для полного восстановления
+        const lastEnergyUpdateTime = gameData.inventory.lastEnergyUpdateTime;
+        
+        // Запоминаем исходное время обновления для сохранения в состоянии
+        const originalLastEnergyUpdateTime = lastEnergyUpdateTime;
+        
+        // Рассчитываем восстановленную энергию
+        const newEnergy = calculateRestoredEnergy(
+          gameData.inventory.energy,
+          maxEnergy,
+          lastEnergyUpdateTime,
+          hoursToFullRestore,
+          now
+        );
+        
+        // Обновляем энергию в состоянии, но НЕ обновляем lastEnergyUpdateTime
+        // если энергия еще не полностью восстановлена - сохраняем старое значение для
+        // корректного расчета восстановления в будущем
+        const shouldUpdateTimestamp = newEnergy >= maxEnergy;
+        gameData = {
+          ...gameData,
+          inventory: {
+            ...gameData.inventory,
+            energy: newEnergy,
+            // Обновляем timestamp только если энергия полностью восстановлена
+            lastEnergyUpdateTime: shouldUpdateTimestamp ? now : originalLastEnergyUpdateTime
+          }
+        };
+        
+        // Логируем изменения энергии
+        if (Math.abs(newEnergy - originalEnergy) > 0.5) {
+          console.log('[GameProvider] Обновлена энергия на основе прошедшего времени:', {
+            было: originalEnergy,
+            стало: newEnergy,
+            разница: newEnergy - originalEnergy,
+            прошлоВремени: `${((now - lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`,
+            lastEnergyUpdateTime: shouldUpdateTimestamp ? 
+              new Date(now).toISOString() : 
+              new Date(originalLastEnergyUpdateTime).toISOString(),
+            обновленTimestamp: shouldUpdateTimestamp
+          });
+          
+          // После обновления энергии сохраняем состояние локально,
+          // чтобы гарантировать сохранение между сессиями
+          try {
+            const { secureLocalSave } = await import('../../../utils/localSaveProtection');
+            if (userId) {
+              secureLocalSave(userId, gameData);
+              console.log('[GameProvider] Сохранено обновленное состояние энергии:', {
+                userId,
+                энергия: newEnergy,
+                timestamp: shouldUpdateTimestamp ? now : originalLastEnergyUpdateTime
+              });
+            }
+          } catch (savingError) {
+            console.error('[GameProvider] Ошибка при сохранении обновленного состояния энергии:', savingError);
+          }
+        }
+        
+        // Логируем изменения контейнера
+        if (Math.abs(gameData?.inventory?.containerSnot - originalContainerSnot) > 0.001) {
+          console.log('[GameProvider] Обновлен containerSnot на основе прошедшего времени:', {
+            было: originalContainerSnot,
+            стало: gameData.inventory.containerSnot,
+            разница: gameData.inventory.containerSnot - originalContainerSnot
+          });
+          
+          // Добавляем информацию в dataSource, только если строка
+          if (typeof dataSource === 'string') {
+            dataSource += '+timeCalculated';
+          }
+        }
+      } catch (timeUpdateError) {
+        console.error('[GameProvider] Ошибка при обновлении ресурсов на основе времени:', timeUpdateError);
+      }
+      
+      // 9. Добавляем метаданные о загрузке
+      gameData._dataSource = dataSource;
+      gameData._loadedAt = new Date().toISOString();
+      
+      // 10. Загружаем данные в состояние
+      dispatch({ type: 'LOAD_GAME_STATE', payload: gameData });
+      
+      // 11. Логируем успешную загрузку
+      console.log(`[GameProvider] Game state loaded from ${dataSource} source for ${userId}`);
+      
+      return true;
     } catch (error) {
       console.error('[GameProvider] Error loading user data:', error);
       dispatch({ type: 'LOAD_GAME_STATE', payload: createDefaultGameState(userId) });
@@ -276,31 +563,55 @@ export function GameProvider({
       // Создаем объект для сохранения БЕЗ поля _skipSave
       const { _skipSave, ...stateToActuallySave } = preparedState;
 
-      // Сохраняем без лишних логов
-      const { success, storageType } = await storageService.saveGameState(
-        normalizedId,
-        stateToActuallySave, // Передаем объект без _skipSave
-        preparedState._saveVersion // Версию берем из подготовленного состояния
-      );
-
-      lastUserIdRef.current = userId;
+      // Сначала сохраняем в защищенное локальное хранилище
+      try {
+        const localSaveSuccess = secureLocalSave(normalizedId, stateToActuallySave as unknown as GameState);
+        if (!localSaveSuccess) {
+          console.warn(`[GameProvider] Failed to save to secure localStorage, proceeding to server save`);
+        }
+      } catch (localSaveError) {
+        console.error(`[GameProvider] Error saving to secure localStorage:`, localSaveError);
+        // Продолжаем сохранение на сервер даже при ошибке локального сохранения
+      }
       
-      if (typeof window !== 'undefined') {
-        if (success) {
-          window.dispatchEvent(new CustomEvent('game-saved', {
-            detail: { userId, storageType }
-          }));
-        } else {
-          console.warn(`[GameProvider] Save failed, creating backup...`);
-          window.dispatchEvent(new CustomEvent('game-save-error', {
-            detail: { userId, error: 'SAVE_FAILED' }
-          }));
-          try {
-            await storageService.createBackup(normalizedId, preparedState, preparedState._saveVersion || 1);
-          } catch (backupError) {
-            console.error(`[GameProvider] Failed to create backup:`, backupError);
+      // Проверяем, нужно ли сохранять на сервер
+      // Получаем метаданные о последнем сохранении
+      const { needsServerSync } = await import('../../../utils/localSaveProtection');
+      const shouldSaveToServer = needsServerSync(normalizedId);
+      
+      if (shouldSaveToServer) {
+        // Сохраняем на сервер
+        const { success, storageType } = await storageService.saveGameState(
+          normalizedId,
+          stateToActuallySave, // Передаем объект без _skipSave
+          preparedState._saveVersion // Версию берем из подготовленного состояния
+        );
+
+        lastUserIdRef.current = userId;
+        
+        if (typeof window !== 'undefined') {
+          if (success) {
+            window.dispatchEvent(new CustomEvent('game-saved', {
+              detail: { userId, storageType }
+            }));
+            
+            // Обновляем метаданные о последней синхронизации с сервером
+            const { updateSyncMetadata } = await import('../../../utils/localSaveProtection');
+            updateSyncMetadata(normalizedId, preparedState._lastSaved, preparedState._saveVersion);
+          } else {
+            console.warn(`[GameProvider] Server save failed, creating backup...`);
+            window.dispatchEvent(new CustomEvent('game-save-error', {
+              detail: { userId, error: 'SAVE_FAILED' }
+            }));
+            try {
+              await storageService.createBackup(normalizedId, preparedState, preparedState._saveVersion || 1);
+            } catch (backupError) {
+              console.error(`[GameProvider] Failed to create backup:`, backupError);
+            }
           }
         }
+      } else {
+        console.log(`[GameProvider] Skipping server save, using local storage only`);
       }
     } catch (error) {
       console.error(`[GameProvider] Error during saveState:`, error);
@@ -352,7 +663,7 @@ export function GameProvider({
   useEffect(() => {
     // Проверяем, изменился ли userId (сравниваем userId из props с lastUserIdRef)
     if (userId !== lastUserIdRef.current) {
-      console.log(`[GameProvider] Changed userId: ${lastUserIdRef.current || 'undefined'} -> ${userId}`);
+      console.log(`[GameProvider] Changed userId: ${lastUserIdRef.current || 'undefined'} -> ${userId || 'undefined'}`);
       initialLoadDoneRef.current = false;
       // Сбрасываем флаг запроса на загрузку при смене пользователя
       loadRequestInProgressRef.current = false; 
@@ -381,6 +692,37 @@ export function GameProvider({
       });
     }
   }, [userId, loadUserData]);
+  
+  // Добавляем эффект для сохранения состояния перед закрытием окна
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Функция, которая будет вызвана перед выходом
+    const handleBeforeUnload = () => {
+      // Отмечаем, что это сохранение перед выходом
+      const saveData = {
+        ...state,
+        _isBeforeUnloadSave: true
+      };
+      
+      try {
+        // Используем синхронное локальное сохранение
+        const normalizedId = typeof userId === 'string' ? userId : '';
+        const saved = secureLocalSave(normalizedId, saveData);
+        console.log(`[GameProvider] Состояние ${saved ? 'успешно' : 'не'} сохранено перед выходом`);
+      } catch (error) {
+        console.error('[GameProvider] Ошибка при сохранении состояния перед выходом:', error);
+      }
+    };
+    
+    // Регистрируем обработчик события
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Очищаем обработчик при размонтировании компонента
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [userId, state]);
   
   // Предоставляем состояние и диспетчер через контексты
   return (

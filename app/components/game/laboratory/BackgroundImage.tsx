@@ -7,6 +7,7 @@ import { formatSnotValue } from "../../../utils/formatters"
 import { calculateFillingPercentage, calculateFillPercentage } from "../../../utils/resourceUtils"
 import type { BackgroundImageProps } from "../../../types/laboratory-types"
 import { ICONS } from "../../../constants/uiConstants"
+import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 
 // Компонент для отдельной частицы
 const Particle: React.FC<{ 
@@ -127,6 +128,10 @@ const ParticleSystem: React.FC<{ count: number }> = ({ count }) => {
 
 const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
   ({ store, onContainerClick, allowContainerClick, isContainerClicked, id, containerSnotValue, containerFilling }) => {
+    // Получаем доступ к состоянию и диспетчеру на уровне компонента
+    const gameState = useGameState();
+    const dispatch = useGameDispatch();
+    
     // Вычисляем процент заполнения на основе данных инвентаря
     const containerFillingMemo = useMemo(() => {
       // Если передан containerFilling, используем его непосредственно
@@ -165,7 +170,8 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
 
     const handleContainerClick = (e: React.MouseEvent) => {
       if (onContainerClick && allowContainerClick) {
-        onContainerClick();
+        // Вызываем оригинальный обработчик клика с передачей события
+        onContainerClick(e);
       }
     };
 
@@ -232,6 +238,17 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
             text-shadow: -0.025em 0 0 rgba(255, 0, 0, 0.5), -0.025em -0.025em 0 rgba(0, 255, 0, 0.5), -0.025em -0.05em 0 rgba(0, 0, 255, 0.5);
           }
         }
+        /* Предотвращаем выделение всех элементов в игре */
+        * {
+          user-select: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+        }
+        /* Предотвращаем действия перетаскивания по всему приложению */
+        img {
+          pointer-events: none;
+        }
       `}</style>
         {/* Система частиц по всему экрану */}
         <ParticleSystem count={60} />
@@ -244,6 +261,8 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
             sizes="100vw"
             style={{ objectFit: "cover" }}
             priority
+            draggable="false"
+            onContextMenu={(e) => e.preventDefault()}
           />
         </div>
         <div className="absolute inset-0 flex items-center justify-center z-10">
@@ -296,6 +315,8 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
                 sizes="100vw"
                 style={{ objectFit: "contain" }}
                 priority
+                draggable="false"
+                onContextMenu={(e) => e.preventDefault()}
               />
               
               {/* Числовой дисплей с абсолютным значением - теперь внутри контейнера */}

@@ -233,12 +233,14 @@ function mergeInventoryObjects(oldInventory: Inventory, newInventory: Inventory,
       snot: 0,
       snotCoins: 0,
       containerSnot: 0,
-      containerCapacity: 1,
-      containerCapacityLevel: 1,
+      containerCapacity: 100,
       fillingSpeed: 1,
+      containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      lastUpdateTimestamp: Date.now()
+      lastUpdateTimestamp: Date.now(),
+      energy: 500,
+      lastEnergyUpdateTime: Date.now()
     };
   }
 
@@ -253,7 +255,9 @@ function mergeInventoryObjects(oldInventory: Inventory, newInventory: Inventory,
     containerCapacityLevel: Math.max(oldInventory.containerCapacityLevel || 1, newInventory.containerCapacityLevel || 1),
     fillingSpeedLevel: Math.max(oldInventory.fillingSpeedLevel || 1, newInventory.fillingSpeedLevel || 1),
     collectionEfficiency: Math.max(oldInventory.collectionEfficiency || 1, newInventory.collectionEfficiency || 1),
-    lastUpdateTimestamp: Math.max(oldInventory.lastUpdateTimestamp || 0, newInventory.lastUpdateTimestamp || 0)
+    lastUpdateTimestamp: Math.max(oldInventory.lastUpdateTimestamp || 0, newInventory.lastUpdateTimestamp || 0),
+    energy: Math.max(oldInventory.energy || 0, newInventory.energy || 0),
+    lastEnergyUpdateTime: Math.max(oldInventory.lastEnergyUpdateTime || 0, newInventory.lastEnergyUpdateTime || 0)
   };
 }
 

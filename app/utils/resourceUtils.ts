@@ -1,41 +1,95 @@
 /**
  * Утилиты для работы с ресурсами и инвентарем
  */
-import { ExtendedGameState, Inventory } from "../types/gameTypes";
+import { ExtendedGameState, Inventory, GameState } from "../types/gameTypes";
 import { RESOURCES } from "../constants/uiConstants";
-import { initialState } from "../constants/gameConstants";
+import { initialState, FILL_RATES } from "../constants/gameConstants";
 
 /**
- * Безопасно получает объект инвентаря из состояния игры с проверкой корректности полей
- * @param state Состояние игры или объект с инвентарем
- * @returns Объект инвентаря с безопасными значениями полей
+ * Получает безопасный объект инвентаря из состояния игры с установкой значений по умолчанию
+ * @param gameState Состояние игры
+ * @returns Инвентарь с безопасными значениями
  */
-export function getSafeInventory(state: any): any {
-  const inventory = state.inventory || {};
-  const defaultValues = {
-    snot: 0,
-    snotCoins: 0,
-    containerSnot: 0,
-    containerCapacity: 1, // Устанавливаем containerCapacity по умолчанию
-    containerCapacityLevel: 1,
-    fillingSpeed: 1,
-    fillingSpeedLevel: 1,
-    collectionEfficiency: 1,
-    lastUpdateTimestamp: Date.now()
+export function getSafeInventory(gameState: any): Inventory {
+  if (!gameState || !gameState.inventory) {
+    console.warn('[resourceUtils] getSafeInventory: Инвентарь отсутствует, создаем новый');
+    return {
+      snot: 0,
+      snotCoins: 0,
+      containerSnot: 0,
+      containerCapacity: 1,
+      containerCapacityLevel: 1,
+      fillingSpeed: 1,
+      fillingSpeedLevel: 1,
+      collectionEfficiency: 1,
+      energy: 500,
+      lastEnergyUpdateTime: Date.now()
+    };
+  }
+  
+  const inventory = gameState.inventory;
+  
+  // Проверяем и исправляем некорректные значения
+  const safeInventory: Inventory = {
+    snot: typeof inventory.snot === 'number' && !isNaN(inventory.snot) ? inventory.snot : 0,
+    snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) ? inventory.snotCoins : 0,
+    containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) ? inventory.containerSnot : 0,
+    containerCapacity: typeof inventory.containerCapacity === 'number' && !isNaN(inventory.containerCapacity) ? 
+      Math.max(1, inventory.containerCapacity) : 1,
+    containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' && !isNaN(inventory.containerCapacityLevel) ? 
+      Math.max(1, inventory.containerCapacityLevel) : 1,
+    fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) ? 
+      Math.max(1, inventory.fillingSpeed) : 1,
+    fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) ? 
+      Math.max(1, inventory.fillingSpeedLevel) : 1,
+    collectionEfficiency: typeof inventory.collectionEfficiency === 'number' && !isNaN(inventory.collectionEfficiency) ? 
+      Math.max(1, inventory.collectionEfficiency) : 1,
+    energy: 500,
+    lastEnergyUpdateTime: Date.now()
   };
   
-  // Безопасно получаем значения или используем значения по умолчанию
-  return {
-    snot: typeof inventory.snot === 'number' ? inventory.snot : defaultValues.snot,
-    snotCoins: typeof inventory.snotCoins === 'number' ? inventory.snotCoins : defaultValues.snotCoins,
-    containerSnot: typeof inventory.containerSnot === 'number' ? inventory.containerSnot : defaultValues.containerSnot,
-    containerCapacity: typeof inventory.containerCapacity === 'number' ? inventory.containerCapacity : defaultValues.containerCapacity,
-    containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' ? inventory.containerCapacityLevel : defaultValues.containerCapacityLevel,
-    fillingSpeed: typeof inventory.fillingSpeed === 'number' ? inventory.fillingSpeed : defaultValues.fillingSpeed,
-    fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' ? inventory.fillingSpeedLevel : defaultValues.fillingSpeedLevel,
-    collectionEfficiency: typeof inventory.collectionEfficiency === 'number' ? inventory.collectionEfficiency : defaultValues.collectionEfficiency,
-    lastUpdateTimestamp: typeof inventory.lastUpdateTimestamp === 'number' ? inventory.lastUpdateTimestamp : defaultValues.lastUpdateTimestamp
-  };
+  // Специальная проверка для энергии
+  if (typeof inventory.energy === 'number' && !isNaN(inventory.energy)) {
+    // Проверяем границы
+    if (inventory.energy < 0) {
+      console.warn('[resourceUtils] getSafeInventory: Отрицательное значение энергии:', inventory.energy);
+      safeInventory.energy = 0;
+    } else if (inventory.energy > 500) {
+      console.warn('[resourceUtils] getSafeInventory: Превышение максимального значения энергии:', inventory.energy);
+      safeInventory.energy = 500;
+    } else {
+      safeInventory.energy = inventory.energy;
+    }
+  } else {
+    console.warn('[resourceUtils] getSafeInventory: Некорректное значение энергии:', inventory.energy);
+    safeInventory.energy = 500; // Безопасное значение по умолчанию
+  }
+  
+  // Специальная проверка для временной метки обновления энергии
+  if (typeof inventory.lastEnergyUpdateTime === 'number' && 
+      !isNaN(inventory.lastEnergyUpdateTime) && 
+      inventory.lastEnergyUpdateTime > 0) {
+    // Проверяем, что метка времени находится в разумных пределах
+    const now = Date.now();
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    
+    if (inventory.lastEnergyUpdateTime > now) {
+      // Метка времени в будущем
+      console.warn('[resourceUtils] getSafeInventory: Метка времени энергии в будущем:', new Date(inventory.lastEnergyUpdateTime).toISOString());
+      safeInventory.lastEnergyUpdateTime = now;
+    } else if ((now - inventory.lastEnergyUpdateTime) > oneYearMs) {
+      // Слишком старая метка времени
+      console.warn('[resourceUtils] getSafeInventory: Слишком старая метка времени энергии:', new Date(inventory.lastEnergyUpdateTime).toISOString());
+      safeInventory.lastEnergyUpdateTime = now;
+    } else {
+      safeInventory.lastEnergyUpdateTime = inventory.lastEnergyUpdateTime;
+    }
+  } else {
+    console.warn('[resourceUtils] getSafeInventory: Некорректная метка времени энергии:', inventory.lastEnergyUpdateTime);
+    safeInventory.lastEnergyUpdateTime = Date.now(); // Безопасное значение по умолчанию
+  }
+  
+  return safeInventory;
 }
 
 /**
@@ -198,4 +252,114 @@ export function processResources(gameState: any): any {
  */
 export function getContainerCapacity(inventory: Inventory): number {
   return inventory.containerCapacity;
+}
+
+/**
+ * Рассчитывает количество snot, которое должно было накопиться в контейнере за время отсутствия
+ * @param lastLoadTime Время последнего сохранения/входа в игру (timestamp)
+ * @param currentTime Текущее время (timestamp)
+ * @param fillingSpeed Скорость заполнения контейнера
+ * @param currentContainerSnot Текущее количество snot в контейнере
+ * @param containerCapacity Максимальная вместимость контейнера
+ * @returns Обновленное количество snot в контейнере
+ */
+export function calculateAccumulatedContainerSnot(
+  lastLoadTime: number,
+  currentTime: number,
+  fillingSpeed: number,
+  currentContainerSnot: number,
+  containerCapacity: number
+): number {
+  // Проверяем валидность входных данных
+  if (!lastLoadTime || !currentTime || currentTime <= lastLoadTime) {
+    return currentContainerSnot;
+  }
+
+  // Вычисляем прошедшее время в секундах
+  const elapsedSeconds = (currentTime - lastLoadTime) / 1000;
+  
+  // Определяем базовую скорость заполнения
+  const baseIncreasePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE;
+  
+  // Учитываем текущий уровень скорости заполнения
+  const actualIncreasePerSecond = baseIncreasePerSecond * fillingSpeed;
+  
+  // Вычисляем накопленный snot за прошедшее время
+  const accumulatedSnot = actualIncreasePerSecond * elapsedSeconds;
+  
+  // Прибавляем к текущему значению и ограничиваем максимальной вместимостью
+  const newContainerSnot = Math.min(
+    containerCapacity,
+    currentContainerSnot + accumulatedSnot
+  );
+  
+  console.log('[resourceUtils] Расчет накопленного containerSnot:', {
+    прошлоСекунд: elapsedSeconds,
+    накоплено: accumulatedSnot,
+    было: currentContainerSnot,
+    стало: newContainerSnot,
+    скоростьНакопления: `${(actualIncreasePerSecond * 3600).toFixed(6)} в час`
+  });
+  
+  return newContainerSnot;
+}
+
+/**
+ * Обновляет состояние игры с учетом времени, прошедшего с последнего входа
+ * @param gameState Текущее состояние игры
+ * @param currentTime Текущее время (timestamp)
+ * @returns Обновленное состояние игры
+ */
+export function updateResourcesBasedOnTimePassed(
+  gameState: GameState | ExtendedGameState,
+  currentTime: number = Date.now()
+): GameState | ExtendedGameState {
+  if (!gameState || !gameState.inventory) {
+    return gameState;
+  }
+  
+  // Получаем время последнего сохранения/загрузки
+  // Используем приведение типа для доступа к нестандартным полям
+  const state = gameState as any;
+  const lastLoadTime = state._localSaveTimestamp || 
+                       state._lastModified || 
+                       state._lastSaved ? new Date(state._lastSaved).getTime() : 
+                       state._loadedAt ? new Date(state._loadedAt).getTime() : 
+                       null;
+  
+  // Если нет информации о последнем сохранении, возвращаем исходное состояние
+  if (!lastLoadTime) {
+    return gameState;
+  }
+
+  // Получаем данные для расчета
+  const currentContainerSnot = gameState.inventory.containerSnot || 0;
+  const containerCapacity = gameState.inventory.containerCapacity || 1;
+  const fillingSpeed = gameState.inventory.fillingSpeed || 1;
+  
+  // Вычисляем новое значение containerSnot
+  const updatedContainerSnot = calculateAccumulatedContainerSnot(
+    lastLoadTime,
+    currentTime,
+    fillingSpeed,
+    currentContainerSnot,
+    containerCapacity
+  );
+  
+  // Создаем новый объект без добавления нестандартных полей
+  const result = {
+    ...gameState,
+    inventory: {
+      ...gameState.inventory,
+      containerSnot: updatedContainerSnot
+    }
+  };
+  
+  // Также сохраняем время обновления непосредственно в исходный объект
+  // для отладки, не используя его в возвращаемом результате
+  if (state) {
+    state._lastTimeBasedUpdate = currentTime;
+  }
+  
+  return result;
 } 

@@ -11,8 +11,7 @@ const DOMAIN = isProd ? 'https://snotcoin.online' : 'http://localhost:3000';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Добавляем настройки для домена
-  assetPrefix: isProd ? 'https://snotcoin.online' : undefined,
+  // Полностью удаляем assetPrefix
   images: {
     remotePatterns: [
       {
@@ -55,15 +54,29 @@ const nextConfig = {
           {
             key: 'X-Frame-Options',
             value: 'ALLOWALL'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable' // Для статических ресурсов
+          }
+        ]
+      },
+      // Специальные заголовки для статических файлов
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
           }
         ]
       }
     ]
   },
   compiler: {
-    removeConsole: {
+    removeConsole: isProd ? {
       exclude: ['error', 'warn'],
-    },
+    } : false,
   },
   // Добавляем настройки публичных переменных среды
   env: {
@@ -118,6 +131,15 @@ const nextConfig = {
     
     return config;
   },
+  output: 'standalone',
+  // Используем стандартный каталог
+  distDir: '.next',
+  // Отключаем трассировку для режима разработки
+  generateBuildId: async () => {
+    // Можно использовать дату/время или даже хеш git-коммита
+    return `build-${Date.now()}`
+  },
+  poweredByHeader: false
 }
 
 export default nextConfig;

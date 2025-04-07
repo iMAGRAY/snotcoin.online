@@ -51,7 +51,7 @@ export function createInitialGameState(userId: string): GameState {
     inventory: {
       snot: 0,
       snotCoins: 0,
-      containerCapacity: 100,
+      containerCapacity: 1,
       containerSnot: 0,
       fillingSpeed: 1,
       containerCapacityLevel: 0,
@@ -174,7 +174,7 @@ export const initialState: GameState = {
     snot: 0,
     snotCoins: 0,
     containerSnot: 0,
-    containerCapacity: 100,
+    containerCapacity: 1,
     containerCapacityLevel: 1,
     fillingSpeed: 1,
     fillingSpeedLevel: 1,

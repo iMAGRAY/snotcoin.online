@@ -8,9 +8,23 @@ import * as planck from "planck"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion" // Добавляем импорт AnimatePresence
 import { toast } from 'react-hot-toast' // Добавляем импорт тоста для уведомлений
+import { useForceSave } from '../../../hooks/useForceSave'
+import dynamic from 'next/dynamic'
+import { useTranslation } from 'react-i18next'
 
+// Определяем типы для игры
+interface MergeGameAttemptsData {
+  attemptsLeft: number;
+  lastAttemptTime: number;
+  nextRecoveryTime: number;
+}
+
+// Определяем интерфейс пропсов для компонента
 interface MergeGameLauncherProps {
-  onBack: () => void
+  onBack: () => void;
+  attemptsData?: MergeGameAttemptsData;
+  maxAttempts?: number;
+  remainingTime?: string;
 }
 
 const SCALE = 30 // Масштаб для перевода между физическими единицами и пикселями
@@ -18,6 +32,7 @@ const SCALE = 30 // Масштаб для перевода между физич
 type GameBody = {
   body: planck.Body;
   sprite: Phaser.GameObjects.Sprite;
+  lastTimeInDangerZone?: number | null; // Добавляем поле для отслеживания времени в опасной зоне
 }
 
 class MergeGameScene extends Phaser.Scene {
@@ -45,12 +60,12 @@ class MergeGameScene extends Phaser.Scene {
   gameOverTimer: Phaser.Time.TimerEvent | null = null // Таймер для Game Over
   isGameOver: boolean = false // Флаг окончания игры
   recentlyShot: Record<string, number> = {}
-  newBallGracePeriod: number = 250
+  newBallGracePeriod: number = 320 // Уменьшаю с 1500 до 320 мс для более короткого игнорирования новых шаров
 
   constructor() {
     super({ key: 'MergeGameScene' })
     this.world = planck.World({
-      gravity: planck.Vec2(0, 10)
+      gravity: planck.Vec2(0, 15)
     })
   }
 
@@ -127,8 +142,9 @@ class MergeGameScene extends Phaser.Scene {
       currentX = segmentEnd + gapLength;
     }
     
-    // Создаем зону опасности над линией (от 0 до lineY)
-    this.gameOverZone = new Phaser.Geom.Rectangle(0, 0, width, lineY);
+    // Создаем зону опасности над линией (от 0 до lineY) с дополнительным отступом вниз
+    const safetyOffset = 5; // Дополнительный отступ вниз для более чувствительного определения пересечения
+    this.gameOverZone = new Phaser.Geom.Rectangle(0, 0, width, lineY + safetyOffset);
     
     // Визуализация зоны опасности (полупрозрачная красная область)
     // Раскомментируйте для отладки
@@ -157,20 +173,28 @@ class MergeGameScene extends Phaser.Scene {
     // Создаем следующий шар для броска
     this.createNextBall();
     
+    // Добавляем флаг определения типа устройства - добавляем console.log для отладки
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    console.log('Тип устройства:', isMobile ? 'Мобильное' : 'Десктоп', navigator.userAgent);
+    
     // Добавляем обработчики для перемещения CoinKing
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.coinKing) {
-        // Обновляем только позицию X, Y остается фиксированной
-        const newX = Phaser.Math.Clamp(pointer.x, 50, width - 50)
-        this.coinKing.x = newX
-        
-        // Перемещаем следующий шар вместе с CoinKing
-        if (this.nextBall) {
-          this.nextBall.x = newX;
+        // Для мобильных устройств перемещаем CoinKing только при зажатом пальце
+        // Для компьютера перемещаем всегда при движении мыши
+        if (!isMobile || (isMobile && this.isPointerDown)) {
+          // Обновляем только позицию X, Y остается фиксированной
+          const newX = Phaser.Math.Clamp(pointer.x, 50, width - 50)
+          this.coinKing.x = newX
+          
+          // Перемещаем следующий шар вместе с CoinKing
+          if (this.nextBall) {
+            this.nextBall.x = newX;
+          }
+          
+          // Обновляем линию прицеливания
+          this.updateAimLine(newX, height);
         }
-        
-        // Обновляем линию прицеливания
-        this.updateAimLine(newX, height);
       }
     })
     
@@ -200,20 +224,39 @@ class MergeGameScene extends Phaser.Scene {
       .setAlpha(0.3);
     */
     
-    // Обработка кликов/тапов только для выстрела
+    // Обработка кликов/тапов
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.isPointerDown = true;
+      console.log('Pointerdown event');
       
-      // Выстрел из CoinKing
-      const currentTime = this.time.now;
-      if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
-        this.shootFromCoinKing();
-        this.lastShootTime = currentTime;
+      // На компьютере стреляем сразу при клике, на мобильных - только при отпускании
+      if (!isMobile) {
+        console.log('Стреляем на десктопе');
+        // Выстрел из CoinKing
+        const currentTime = this.time.now;
+        if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
+          this.shootFromCoinKing();
+          this.lastShootTime = currentTime;
+        }
       }
     })
     
     this.input.on('pointerup', () => {
-      this.isPointerDown = false
+      console.log('Pointerup event, isMobile:', isMobile);
+      
+      // На мобильных устройствах стреляем при отпускании пальца
+      if (isMobile && this.isPointerDown) {
+        console.log('Пытаемся стрелять на мобильном');
+        // Выстрел из CoinKing при отпускании пальца
+        const currentTime = this.time.now;
+        if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
+          console.log('Условия для выстрела выполнены');
+          this.shootFromCoinKing();
+          this.lastShootTime = currentTime;
+        }
+      }
+      
+      this.isPointerDown = false;
     })
     
     // Настраиваем обработчик контактов в физическом движке
@@ -258,14 +301,8 @@ class MergeGameScene extends Phaser.Scene {
             const position = ballData.body.getPosition();
             const special = ballData.sprite.getData('special');
             
-            // Удаляем запись из списка
-            delete this.bodies[ballId];
-            
-            // Удаляем спрайт
-            ballData.sprite.destroy();
-            
-            // Удаляем физическое тело из мира
-            this.world.destroyBody(ballData.body);
+            // Добавляем в список отложенных удалений
+            this.pendingDeletions.push({ id: ballId, type: special });
             
             // Добавляем соответствующий эффект уничтожения
             if (position) {
@@ -275,6 +312,8 @@ class MergeGameScene extends Phaser.Scene {
                 this.addDestructionEffect(position.x * SCALE, position.y * SCALE);
               }
             }
+            
+            console.log(`Шар ${special} добавлен в очередь на удаление при контакте с дном`);
             
             return; // Прекращаем обработку контакта
           }
@@ -296,25 +335,47 @@ class MergeGameScene extends Phaser.Scene {
           
           // Если нашли оба шара
           if (idA && idB) {
-            // Проверяем, является ли один из шаров специальным
+            // Проверяем, есть ли специальные шары
             const ballA = this.bodies[idA];
             const ballB = this.bodies[idB];
             
-            if (ballA && ballB && ballA.sprite && ballA.sprite.getData('special') === 'bull') {
-              // Шар Bull удаляет другой шар при столкновении
-              this.destroyTargetBall(idB, ballB);
-            } else if (ballB && ballA && ballB.sprite && ballB.sprite.getData('special') === 'bull') {
-              // Шар Bull удаляет другой шар при столкновении
-              this.destroyTargetBall(idA, ballA);
-            } else if (ballA && ballB && ballA.sprite && ballA.sprite.getData('special') === 'bomb') {
-              // Шар Bomb удаляет ТОЛЬКО шар с которым столкнулся
-              this.destroyBombTarget(idB, ballB, idA, ballA);
-            } else if (ballB && ballA && ballB.sprite && ballB.sprite.getData('special') === 'bomb') {
-              // Шар Bomb удаляет ТОЛЬКО шар с которым столкнулся
-              this.destroyBombTarget(idA, ballA, idB, ballB);
-            } else {
-              // Стандартное поведение - запланировать объединение шаров
-              this.scheduleMerge(idA, idB);
+            if (ballA && ballB) {
+              // Проверяем, есть ли специальные шары
+              const ballASpecial = ballA.sprite ? ballA.sprite.getData('special') : null;
+              const ballBSpecial = ballB.sprite ? ballB.sprite.getData('special') : null;
+              
+              if (ballASpecial === 'bull') {
+                // Шар Bull удаляет другой шар при столкновении
+                this.destroyTargetBall(idB, ballB);
+                
+                // Запланируем удаление самого шара Bull через некоторое время
+                this.time.delayedCall(200, () => {
+                  if (this.bodies[idA]) {
+                    // Добавляем в очередь удаления
+                    this.pendingDeletions.push({ id: idA, type: 'bull_self' });
+                  }
+                });
+              } else if (ballBSpecial === 'bull') {
+                // Шар Bull удаляет другой шар при столкновении
+                this.destroyTargetBall(idA, ballA);
+                
+                // Запланируем удаление самого шара Bull через некоторое время
+                this.time.delayedCall(200, () => {
+                  if (this.bodies[idB]) {
+                    // Добавляем в очередь удаления
+                    this.pendingDeletions.push({ id: idB, type: 'bull_self' });
+                  }
+                });
+              } else if (ballASpecial === 'bomb') {
+                // Шар Bomb удаляет ТОЛЬКО шар с которым столкнулся
+                this.destroyBombTarget(idB, ballB, idA, ballA);
+              } else if (ballBSpecial === 'bomb') {
+                // Шар Bomb удаляет ТОЛЬКО шар с которым столкнулся
+                this.destroyBombTarget(idA, ballA, idB, ballB);
+              } else {
+                // Стандартное поведение - запланировать объединение шаров
+                this.scheduleMerge(idA, idB);
+              }
             }
           }
         }
@@ -432,16 +493,21 @@ class MergeGameScene extends Phaser.Scene {
   // Метод выстрела из CoinKing
   shootFromCoinKing() {
     const time = this.time.now;
+    console.log('Метод shootFromCoinKing вызван', time);
     
     // Проверяем, прошло ли достаточно времени с последнего выстрела
     if (time - this.lastShootTime < this.shootDelay) {
+      console.log('Не прошло достаточно времени после последнего выстрела');
       return;
     }
     
     // Если нет объекта короля или указатель не активен, то прекращаем
-    if (!this.coinKing || !this.isPointerDown) {
+    if (!this.coinKing) {
+      console.log('Нет объекта короля');
       return;
     }
+    
+    console.log('Все проверки прошли, создаем шар для выстрела');
     
     // Конвертация физических координат в пиксели и обратно
     const worldToCanon = (value: number) => value / SCALE;
@@ -488,16 +554,24 @@ class MergeGameScene extends Phaser.Scene {
     
     // Визуально отмечаем новый шар (мигающее подсвечивание)
     if (newBall && newBall.sprite) {
-      // Создаем временный эффект вокруг шара
+      // Расчитываем физический размер шара
+      const physicalSize = radius * 2 * SCALE;
+      const originalScale = physicalSize / newBall.sprite.width;
+      
+      // Создаем временный эффект вокруг шара, сохраняя корректный масштаб
       this.tweens.add({
         targets: newBall.sprite,
-        alpha: 0.6,
+        scale: { 
+          from: originalScale * 1.1, // Увеличиваем относительно исходного размера 
+          to: originalScale  // Возвращаем к исходному размеру
+        },
         yoyo: true,
-        repeat: 3,
-        duration: 50,
+        repeat: 2,
+        duration: 200,
         onComplete: () => {
           if (newBall && newBall.sprite) {
-            newBall.sprite.setAlpha(1);
+            // Возвращаем к исходному масштабу, а не к 1
+            newBall.sprite.setScale(originalScale);
           }
         }
       });
@@ -538,17 +612,32 @@ class MergeGameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    // Ограничиваем delta максимальным значением для стабильности физики
+    const maxDelta = 33; // ~30 FPS минимум
+    const clampedDelta = Math.min(delta, maxDelta);
+    
     // Обработка физики
-    this.world.step(delta / 1000);
+    this.world.step(clampedDelta / 1000);
+    
+    // Обновление только видимых спрайтов
+    const { width, height } = this.game.canvas;
+    const visibleMargin = 100; // Дополнительный отступ за границы экрана
     
     // Обновление позиций спрайтов на основе физики
     for (const id in this.bodies) {
       const gameBody = this.bodies[id];
       if (gameBody && gameBody.body && gameBody.sprite) {
         const pos = gameBody.body.getPosition();
-        gameBody.sprite.x = pos.x * SCALE;
-        gameBody.sprite.y = pos.y * SCALE;
-        gameBody.sprite.rotation = gameBody.body.getAngle();
+        const screenX = pos.x * SCALE;
+        const screenY = pos.y * SCALE;
+        
+        // Проверяем, находится ли объект в поле зрения (с небольшим запасом)
+        if (screenX > -visibleMargin && screenX < width + visibleMargin && 
+            screenY > -visibleMargin && screenY < height + visibleMargin) {
+          gameBody.sprite.x = screenX;
+          gameBody.sprite.y = screenY;
+          gameBody.sprite.rotation = gameBody.body.getAngle();
+        }
       }
     }
     
@@ -558,56 +647,78 @@ class MergeGameScene extends Phaser.Scene {
     // Обрабатываем отложенные удаления
     this.processPendingDeletions();
     
-    // Проверяем, не находятся ли шары в зоне Game Over
-    let ballsInDangerZone = false;
-    
-    if (this.gameOverZone) {
-      // Проходим по всем шарам
-      for (const id in this.bodies) {
-        // Безопасное время для только что выпущенных шаров (250 мс)
-        const isSafeNewBall = this.recentlyShot[id] && (time - this.recentlyShot[id] < this.newBallGracePeriod);
-        
-        // Если шар новый - пропускаем его
-        if (isSafeNewBall) {
-          continue;
+    // Оптимизированная проверка шаров в зоне опасности
+    // Проверяем каждый кадр, если активен отсчет, иначе каждые 5 кадров
+    if (this.isGameOverCountdownActive || (time % 5 === 0 || this.game.loop.frame % 5 === 0)) {
+      let ballsInDangerZone = false;
+      
+      if (this.gameOverZone) {
+        // Проходим по всем шарам
+        for (const id in this.bodies) {
+          // Безопасное время для только что выпущенных шаров
+          const isSafeNewBall = this.recentlyShot[id] && (time - this.recentlyShot[id] < this.newBallGracePeriod);
+          
+          // Если шар новый - пропускаем его
+          if (isSafeNewBall) {
+            continue;
+          }
+          
+          const body = this.bodies[id];
+          if (body && body.body && body.sprite && body.sprite.visible) {
+            const pos = body.body.getPosition();
+            
+            // Получаем радиус для корректной проверки перекрытия
+            const radius = body.body.getFixtureList()?.getShape()?.getRadius() || 0;
+            
+            // Проверяем скорость шара - если шар движется быстро вверх, игнорируем его
+            const velocity = body.body.getLinearVelocity();
+            const isMovingUpFast = velocity.y < -10; // Если скорость по Y отрицательная и большая, шар движется вверх быстро
+            
+            if (isMovingUpFast) {
+              continue; // Пропускаем быстро движущиеся вверх шары
+            }
+            
+            // Создаем прямоугольник для проверки пересечения
+            const ballRect = new Phaser.Geom.Rectangle(
+              (pos.x - radius) * SCALE, 
+              (pos.y - radius) * SCALE,
+              radius * 2 * SCALE, 
+              radius * 2 * SCALE
+            );
+            
+            // Проверяем пересечение с зоной опасности
+            if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballRect)) {
+              // Дополнительно проверяем, что шар находится в зоне не мгновенно
+              // (это может быть результатом телепортации или другого глюка)
+              if (!body.lastTimeInDangerZone) {
+                body.lastTimeInDangerZone = time;
+              } else if (time - body.lastTimeInDangerZone > 100) { // Уменьшаем с 500 до 100 мс для более быстрой реакции
+                ballsInDangerZone = true;
+                break;
+              }
+            } else {
+              // Сбрасываем счетчик если шар вышел из зоны
+              body.lastTimeInDangerZone = null;
+            }
+          }
         }
         
-        const body = this.bodies[id];
-        if (body && body.body && body.sprite) {
-          const pos = body.body.getPosition();
-          
-          // Получаем радиус для корректной проверки перекрытия
-          const radius = body.body.getFixtureList()?.getShape()?.getRadius() || 0;
-          const ballRect = new Phaser.Geom.Rectangle(
-            (pos.x - radius) * SCALE, 
-            (pos.y - radius) * SCALE,
-            radius * 2 * SCALE, 
-            radius * 2 * SCALE
-          );
-          
-          // Проверяем пересечение с зоной опасности
-          if (Phaser.Geom.Rectangle.Overlaps(this.gameOverZone, ballRect)) {
-            ballsInDangerZone = true;
-            break;
+        // Очищаем устаревшие записи о выпущенных шарах 
+        // (не удаляем шары до 1.5 секунд для большей стабильности)
+        for (const id in this.recentlyShot) {
+          const shotTime = this.recentlyShot[id];
+          if (shotTime && time - shotTime > 1500) {
+            delete this.recentlyShot[id];
           }
         }
       }
       
-      // Очищаем устаревшие записи о выпущенных шарах 
-      // (не удаляем шары до 1.5 секунд для большей стабильности)
-      for (const id in this.recentlyShot) {
-        const shotTime = this.recentlyShot[id];
-        if (shotTime && time - shotTime > 1500) {
-          delete this.recentlyShot[id];
-        }
+      // Запускаем или останавливаем отсчет до Game Over
+      if (ballsInDangerZone) {
+        this.startGameOverCountdown();
+      } else if (this.isGameOverCountdownActive) {
+        this.stopGameOverCountdown();
       }
-    }
-    
-    // Запускаем или останавливаем отсчет до Game Over
-    if (ballsInDangerZone) {
-      this.startGameOverCountdown();
-    } else if (this.isGameOverCountdownActive) {
-      this.stopGameOverCountdown();
     }
     
     // Обновляем линию прицеливания
@@ -752,6 +863,34 @@ class MergeGameScene extends Phaser.Scene {
     // Сохраняем информацию о Game Over в реестре игры для React-компонента
     this.game.registry.set('gameOver', true);
     this.game.registry.set('finalScore', this.score);
+    
+    // Добавляем сохранение счета в localStorage для статистики
+    try {
+      const bestScore = localStorage.getItem('mergeGameBestScore');
+      if (!bestScore || parseInt(bestScore) < this.score) {
+        localStorage.setItem('mergeGameBestScore', this.score.toString());
+      }
+      
+      // Сохраняем историю последних игр
+      const gameHistoryStr = localStorage.getItem('mergeGameHistory');
+      const gameHistory = gameHistoryStr ? JSON.parse(gameHistoryStr) : [];
+      
+      // Добавляем текущую игру в историю
+      gameHistory.unshift({
+        score: this.score,
+        date: new Date().toISOString(),
+        duration: Date.now() - (this.game.registry.get('gameStartTime') || Date.now())
+      });
+      
+      // Ограничиваем историю до 10 последних игр
+      if (gameHistory.length > 10) {
+        gameHistory.pop();
+      }
+      
+      localStorage.setItem('mergeGameHistory', JSON.stringify(gameHistory));
+    } catch (e) {
+      console.error('Ошибка при сохранении счета:', e);
+    }
     
     // Останавливаем возможность управления
     this.input.enabled = false;
@@ -1386,21 +1525,22 @@ class MergeGameScene extends Phaser.Scene {
     const ballX = position.x * SCALE;
     const ballY = position.y * SCALE;
     
-    // Удаляем запись из списка
-    delete this.bodies[targetId];
-    
-    // Удаляем спрайт
-    targetBall.sprite.destroy();
-    
-    // Удаляем физическое тело из мира
-    try {
-      this.world.destroyBody(targetBall.body);
-    } catch (e) {
-      console.error('Error destroying body:', e);
-    }
+    // Получаем уровень шара для начисления очков
+    const ballLevel = targetBall.sprite.getData('level') || 1;
     
     // Добавляем эффект уничтожения
     this.addBullCollisionEffect(ballX, ballY);
+    
+    // Вместо немедленного удаления добавляем в очередь отложенных удалений
+    this.pendingDeletions.push(
+      { id: targetId, type: 'bull_target' }
+    );
+    
+    console.log(`Шар ${targetId} добавлен в очередь на удаление после столкновения с Bull`);
+    
+    // Начисляем очки за удаление шара - чем выше уровень шара, тем больше очков
+    // Bull шар более мощный, поэтому даём больше очков (x15)
+    this.increaseScore(ballLevel * 15);
   }
 
   // Метод для эффекта бомбы в области - исправляем удаление шаров
@@ -1448,7 +1588,10 @@ class MergeGameScene extends Phaser.Scene {
     
     console.log(`Bomb explosion: removing ${ballsToRemove.length} balls in radius ${radius}`);
     
-    // Для каждого шара в радиусе создаем эффект и удаляем его
+    // Суммарное количество очков за все шары
+    let totalScorePoints = 0;
+    
+    // Для каждого шара в радиусе создаем эффект и добавляем в очередь на удаление
     for (const id of ballsToRemove) {
       if (this.bodies[id]) {
         const ballData = this.bodies[id];
@@ -1460,44 +1603,28 @@ class MergeGameScene extends Phaser.Scene {
           const ballX = position.x * SCALE;
           const ballY = position.y * SCALE;
           
-          // Удаляем запись из списка
-          delete this.bodies[id];
+          // Получаем уровень шара для начисления очков
+          const ballLevel = ballData.sprite.getData('level') || 1;
           
-          // Удаляем спрайт
-          ballData.sprite.destroy();
-          
-          // Удаляем физическое тело из мира
-          try {
-            this.world.destroyBody(ballData.body);
-          } catch (e) {
-            console.error('Error destroying body:', e);
-          }
+          // Накапливаем очки (x12 для Bomb)
+          totalScorePoints += ballLevel * 12;
           
           // Добавляем эффект уничтожения
           this.addMiniExplosionEffect(ballX, ballY);
+          
+          // Добавляем в очередь на удаление вместо немедленного удаления
+          this.pendingDeletions.push({ id, type: 'bomb_target' });
         }
       }
     }
     
-    // Обязательно удаляем саму бомбу после взрыва
-    if (this.bodies[bombId]) {
-      const bombData = this.bodies[bombId];
-      
-      // Удаляем запись из списка перед удалением объектов
-      delete this.bodies[bombId];
-      
-      // Удаляем спрайт
-      if (bombData.sprite) bombData.sprite.destroy();
-      
-      // Удаляем физическое тело из мира
-      if (bombData.body) {
-        try {
-          this.world.destroyBody(bombData.body);
-        } catch (e) {
-          console.error('Error destroying bomb body:', e);
-        }
-      }
+    // Начисляем суммарные очки за все удаленные бомбой шары
+    if (totalScorePoints > 0) {
+      this.increaseScore(totalScorePoints);
     }
+    
+    // Добавляем саму бомбу в очередь на удаление
+    this.pendingDeletions.push({ id: bombId, type: 'bomb_self' });
   }
 
   // Добавляем эффект взрыва бомбы с радиусом поражения
@@ -1678,8 +1805,8 @@ class MergeGameScene extends Phaser.Scene {
     
     // Добавляем объекты в список отложенных удалений
     this.pendingDeletions.push(
-      { id: targetId, type: 'target' },
-      { id: bombId, type: 'bomb' }
+      { id: targetId, type: 'bomb_target' },
+      { id: bombId, type: 'bomb_self' }
     );
     
     console.log(`Объекты добавлены в очередь на удаление. Будут удалены в следующем кадре.`);
@@ -1770,6 +1897,21 @@ class MergeGameScene extends Phaser.Scene {
           }
         }
         
+        // Добавляем эффект в зависимости от типа
+        if (type === 'bull_self' || type === 'bull') {
+          // Эффект для шара bull
+          const position = bodyData.body.getPosition();
+          if (position) {
+            this.addBullDestructionEffect(position.x * SCALE, position.y * SCALE);
+          }
+        } else if (type === 'bull_target') {
+          // Эти шары уже имеют эффект, добавленный в методе destroyTargetBall
+        } else if (type === 'bomb_self' || type === 'bomb') {
+          // Бомба уже имеет эффект при уничтожении
+        } else if (type === 'bomb_target' || type === 'target') {
+          // Цели бомбы уже имеют эффект
+        }
+        
         // Удаляем запись из списка
         delete this.bodies[id];
         console.log(`- Запись в списке удалена`);
@@ -1808,7 +1950,12 @@ class MergeGameScene extends Phaser.Scene {
   }
 }
 
-const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
+const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ 
+  onBack, 
+  attemptsData = { attemptsLeft: 0, lastAttemptTime: 0, nextRecoveryTime: 0 }, 
+  maxAttempts = 3,
+  remainingTime = ""
+}) => {
   const gameContainerRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -1817,10 +1964,24 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
   const [selectedAbility, setSelectedAbility] = useState<string | null>(null)
   const [isGameOver, setIsGameOver] = useState(false)
   const [finalScore, setFinalScore] = useState(0)
+  const [bestScore, setBestScore] = useState(0)
   const { inventory } = useGameState()
+  
+  // Хук для принудительного сохранения состояния игры
+  const forceSave = useForceSave()
 
   useEffect(() => {
     if (!gameContainerRef.current) return
+
+    // Получаем лучший счет из localStorage
+    try {
+      const savedBestScore = localStorage.getItem('mergeGameBestScore');
+      if (savedBestScore) {
+        setBestScore(parseInt(savedBestScore));
+      }
+    } catch (e) {
+      console.error('Ошибка при чтении лучшего счета:', e);
+    }
 
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
@@ -1841,6 +2002,9 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
 
     const game = new Phaser.Game(config)
     gameRef.current = game
+    
+    // Сохраняем время начала игры
+    game.registry.set('gameStartTime', Date.now());
 
     const handleResize = () => {
       game.scale.resize(window.innerWidth, window.innerHeight - 140)
@@ -1889,7 +2053,16 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
   }, [])
 
   const handleBackClick = () => {
-    onBack()
+    // Сохраняем состояние игры перед возвратом в меню
+    forceSave(300).then(success => {
+      if (success) {
+        console.log('[MergeGame] Состояние игры сохранено при выходе из игры');
+      } else {
+        console.warn('[MergeGame] Не удалось сохранить состояние игры при выходе');
+      }
+      // Возвращаемся в меню после сохранения
+      onBack();
+    });
   }
 
   const handlePauseClick = () => {
@@ -1912,18 +2085,56 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
     }
   }
 
+  // Функция для перезапуска игры
+  const handleRestartClick = () => {
+    if (!gameRef.current) return;
+
+    // Сначала сохраняем текущее состояние игры
+    forceSave(300).then(success => {
+      if (success) {
+        console.log('[MergeGame] Состояние игры сохранено перед рестартом');
+      } else {
+        console.warn('[MergeGame] Не удалось сохранить состояние игры перед рестартом');
+      }
+      
+      if (!gameRef.current) return;
+
+      // Останавливаем текущую игру
+      gameRef.current.scene.stop('MergeGameScene');
+      
+      // Удаляем сцену перед добавлением новой
+      gameRef.current.scene.remove('MergeGameScene');
+      
+      // Создаем новую сцену
+      gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
+      
+      // Обновляем состояния
+      setIsGameOver(false);
+      setScore(0);
+      setIsPaused(false);
+      
+      // Сохраняем время начала игры
+      gameRef.current.registry.set('gameStartTime', Date.now());
+    });
+  }
+
   const handleAbilityClick = (ability: string) => {
-    // Получаем стоимость активации способности в SnotCoin
+    // Получаем стоимость активации способности в зависимости от вместимости контейнера
+    const containerCapacity = inventory.containerCapacity || 1;
     let cost = 0;
+    
     switch (ability) {
       case 'Bull':
-        cost = 10; // Фиксированная стоимость 10 SnotCoin
+        // 30% от вместимости контейнера без минимального порога
+        cost = containerCapacity * 0.3;
         break;
       case 'Bomb':
-        cost = 3; // Фиксированная стоимость 3 SnotCoin
+        // 10% от вместимости контейнера без минимального порога
+        cost = containerCapacity * 0.1;
         break;
       case 'Earthquake':
-        cost = 6; // Фиксированная стоимость 6 SnotCoin
+        // 20% от вместимости контейнера без минимального порога
+        cost = containerCapacity * 0.2;
         break;
     }
     
@@ -1958,7 +2169,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
       }
     } else {
       // Показываем уведомление о недостатке ресурсов
-      toast.error(`Недостаточно SnotCoin для ${ability}! Нужно ${cost} SnotCoin`);
+      toast.error(`Недостаточно SnotCoin для ${ability}! Нужно ${cost.toFixed(1)} SnotCoin`);
     }
   }
 
@@ -2043,124 +2254,145 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
           {/* Кнопки способностей подняты выше за счет отрицательного margin-top */}
           <div className="flex justify-around items-center w-full -mt-6">
             {/* Кнопка способности Bull */}
-            <div className="relative">
-              <button 
-                onClick={() => handleAbilityClick('Bull')}
-                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                  ${selectedAbility === 'Bull' 
-                    ? 'ring-4 ring-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.7)] scale-110' 
-                    : inventory.snotCoins >= 10
-                      ? 'ring-2 ring-yellow-700 hover:ring-yellow-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,215,0,0.4)] hover:scale-105'
-                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-yellow-500 to-amber-700`}
-                title={`Стоимость: 10 SnotCoin`}
-                disabled={inventory.snotCoins < 10}
-              >
-                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-amber-200 to-amber-600 flex items-center justify-center">
-                  {/* Используем указанное изображение */}
-                  <Image
-                    src="/images/merge/abilities/bull.webp"
-                    alt="Bull"
-                    width={42}
-                    height={42}
-                    className="w-full h-full object-cover rounded-full"
-                    priority
-                  />
+            {(() => {
+              // Рассчитываем стоимость Bull (30% от вместимости контейнера) без минимального порога
+              const bullCost = (inventory.containerCapacity || 1) * 0.3;
+              const bullCostDisplay = bullCost.toFixed(1);
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Bull')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Bull' 
+                        ? 'ring-4 ring-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= bullCost
+                          ? 'ring-2 ring-yellow-700 hover:ring-yellow-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,215,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-yellow-500 to-amber-700`}
+                    title={`Стоимость: ${bullCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < bullCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-amber-200 to-amber-600 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/bull.webp"
+                        alt="Bull"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
+                    </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-yellow-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-yellow-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {bullCostDisplay}
+                  </div>
                 </div>
-              </button>
-              {/* Индикатор стоимости */}
-              <div className="absolute -top-3 -right-3 bg-yellow-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-yellow-600 flex items-center shadow-md z-10">
-                <Image
-                  src="/images/common/icons/snotcoin-icon.webp"
-                  alt="SnotCoin"
-                  width={12}
-                  height={12}
-                  className="mr-1"
-                  priority
-                />
-                10
-              </div>
-            </div>
+              );
+            })()}
             
             {/* Кнопка способности Bomb */}
-            <div className="relative">
-              <button 
-                onClick={() => handleAbilityClick('Bomb')}
-                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                  ${selectedAbility === 'Bomb' 
-                    ? 'ring-4 ring-red-500 shadow-[0_0_15px_rgba(255,0,0,0.7)] scale-110' 
-                    : inventory.snotCoins >= 3
-                      ? 'ring-2 ring-red-800 hover:ring-red-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,0,0,0.4)] hover:scale-105'
-                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-red-500 to-red-900`}
-                title={`Стоимость: 3 SnotCoin`}
-                disabled={inventory.snotCoins < 3}
-              >
-                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-red-300 to-red-700 flex items-center justify-center">
-                  {/* Используем указанное изображение */}
-                  <Image
-                    src="/images/merge/abilities/bomb.webp"
-                    alt="Bomb"
-                    width={42}
-                    height={42}
-                    className="w-full h-full object-cover rounded-full"
-                    priority
-                  />
+            {(() => {
+              // Рассчитываем стоимость Bomb (10% от вместимости контейнера) без минимального порога
+              const bombCost = (inventory.containerCapacity || 1) * 0.1;
+              const bombCostDisplay = bombCost.toFixed(1);
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Bomb')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Bomb' 
+                        ? 'ring-4 ring-red-500 shadow-[0_0_15px_rgba(255,0,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= bombCost
+                          ? 'ring-2 ring-red-800 hover:ring-red-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,0,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-red-500 to-red-900`}
+                    title={`Стоимость: ${bombCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < bombCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-red-300 to-red-700 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/bomb.webp"
+                        alt="Bomb"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
+                    </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-red-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-red-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {bombCostDisplay}
+                  </div>
                 </div>
-              </button>
-              {/* Индикатор стоимости */}
-              <div className="absolute -top-3 -right-3 bg-red-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-red-600 flex items-center shadow-md z-10">
-                <Image
-                  src="/images/common/icons/snotcoin-icon.webp"
-                  alt="SnotCoin"
-                  width={12}
-                  height={12}
-                  className="mr-1"
-                  priority
-                />
-                3
-              </div>
-            </div>
+              );
+            })()}
             
             {/* Кнопка способности Earthquake */}
-            <div className="relative">
-              <button 
-                onClick={() => handleAbilityClick('Earthquake')}
-                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                  ${selectedAbility === 'Earthquake' 
-                    ? 'ring-4 ring-emerald-400 shadow-[0_0_15px_rgba(0,200,0,0.7)] scale-110' 
-                    : inventory.snotCoins >= 6
-                      ? 'ring-2 ring-emerald-800 hover:ring-emerald-500 shadow-lg hover:shadow-[0_0_12px_rgba(0,200,0,0.4)] hover:scale-105'
-                      : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                  transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-emerald-500 to-emerald-900`}
-                title={`Стоимость: 6 SnotCoin`}
-                disabled={inventory.snotCoins < 6}
-              >
-                <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-emerald-300 to-emerald-700 flex items-center justify-center">
-                  {/* Используем указанное изображение */}
-                  <Image
-                    src="/images/merge/abilities/eatherquake.webp"
-                    alt="Earthquake"
-                    width={42}
-                    height={42}
-                    className="w-full h-full object-cover rounded-full"
-                    priority
-                  />
+            {(() => {
+              // Рассчитываем стоимость Earthquake (20% от вместимости контейнера) без минимального порога
+              const earthquakeCost = (inventory.containerCapacity || 1) * 0.2;
+              const earthquakeCostDisplay = earthquakeCost.toFixed(1);
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Earthquake')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Earthquake' 
+                        ? 'ring-4 ring-emerald-400 shadow-[0_0_15px_rgba(0,200,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= earthquakeCost
+                          ? 'ring-2 ring-emerald-800 hover:ring-emerald-500 shadow-lg hover:shadow-[0_0_12px_rgba(0,200,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-emerald-500 to-emerald-900`}
+                    title={`Стоимость: ${earthquakeCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < earthquakeCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-emerald-300 to-emerald-700 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/eatherquake.webp"
+                        alt="Earthquake"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
+                    </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-emerald-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-emerald-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {earthquakeCostDisplay}
+                  </div>
                 </div>
-              </button>
-              {/* Индикатор стоимости */}
-              <div className="absolute -top-3 -right-3 bg-emerald-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-emerald-600 flex items-center shadow-md z-10">
-                <Image
-                  src="/images/common/icons/snotcoin-icon.webp"
-                  alt="SnotCoin"
-                  width={12}
-                  height={12}
-                  className="mr-1"
-                  priority
-                />
-                6
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -2186,29 +2418,80 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
             <div className="text-white text-center mb-6">
               <p className="text-xl mb-2">Итоговый счет</p>
               <p className="text-3xl font-bold">{finalScore}</p>
-            </div>
-            <motion.button 
-              onClick={onBack}
-              className="relative w-full px-6 py-4 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
-                text-black shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
-                focus:ring-yellow-300 focus:ring-opacity-50 h-16"
-              whileHover={{ 
-                scale: 1.05,
-                boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
-              }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Image 
-                  src="/images/laboratory/buttons/claim-button.webp" 
-                  width={28} 
-                  height={28} 
-                  alt="Вернуться в меню" 
-                  className="inline-block" 
-                />
-                <span className="text-lg font-bold">Вернуться в меню</span>
+              {bestScore > 0 && (
+                <p className="text-sm mt-2">Лучший счет: <span className="font-bold">{bestScore}</span></p>
+              )}
+              <div className="mt-4 p-3 bg-gradient-to-r from-[#1a1a2e] to-[#162447] rounded-2xl border border-red-500/20 shadow-lg">
+                <div className="mb-2 flex items-center justify-center">
+                  <p className="text-sm font-medium text-gray-300">Осталось попыток:</p>
+                </div>
+                <div className="flex justify-center gap-2">
+                  {[...Array(maxAttempts)].map((_, index) => (
+                    <div 
+                      key={index} 
+                      className={`w-8 h-8 rounded-full flex items-center justify-center 
+                        ${index < attemptsData.attemptsLeft 
+                          ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 shadow-[0_0_8px_rgba(250,204,21,0.7)]' 
+                          : 'bg-gray-700 opacity-50'}`}
+                    >
+                      {index < attemptsData.attemptsLeft ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </motion.button>
+            </div>
+            <div className="flex flex-col space-y-3">
+              {attemptsData.attemptsLeft > 0 && (
+                <motion.button 
+                  onClick={handleRestartClick}
+                  className="relative w-full px-6 py-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl font-bold 
+                    text-white shadow-lg border-2 border-blue-300 focus:outline-none focus:ring-2 
+                    focus:ring-blue-300 focus:ring-opacity-50 h-14"
+                  whileHover={{ 
+                    scale: 1.05,
+                    boxShadow: "0 0 12px rgba(59, 130, 246, 0.7)",
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span className="text-lg font-bold">Начать заново</span>
+                  </div>
+                </motion.button>
+              )}
+              <motion.button 
+                onClick={onBack}
+                className="relative w-full px-6 py-4 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
+                  text-black shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
+                  focus:ring-yellow-300 focus:ring-opacity-50 h-16"
+                whileHover={{ 
+                  scale: 1.05,
+                  boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
+                }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <Image 
+                    src="/images/laboratory/buttons/claim-button.webp" 
+                    width={28} 
+                    height={28} 
+                    alt="Вернуться в меню" 
+                    className="inline-block" 
+                  />
+                  <span className="text-lg font-bold">Вернуться в меню</span>
+                </div>
+              </motion.button>
+            </div>
           </motion.div>
         </div>
       )}
@@ -2225,6 +2508,34 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
               transition={{ type: 'spring', damping: 15 }}
             >
               <h2 className="text-white text-3xl font-bold text-center mb-6">ПАУЗА</h2>
+              
+              <div className="bg-gradient-to-r from-[#1a1a2e] to-[#162447] p-4 rounded-2xl mb-4 border border-blue-500/20 shadow-lg">
+                <div className="mb-2 flex items-center justify-center">
+                  <p className="text-sm font-medium text-blue-300">Осталось попыток:</p>
+                </div>
+                <div className="flex justify-center gap-2">
+                  {[...Array(maxAttempts)].map((_, index) => (
+                    <div 
+                      key={index} 
+                      className={`w-7 h-7 rounded-full flex items-center justify-center 
+                        ${index < attemptsData.attemptsLeft 
+                          ? 'bg-gradient-to-r from-blue-400 to-blue-600 shadow-[0_0_8px_rgba(96,165,250,0.7)]' 
+                          : 'bg-gray-700 opacity-50'}`}
+                    >
+                      {index < attemptsData.attemptsLeft ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
               <div className="flex flex-col space-y-4">
                 <motion.button 
                   onClick={handleContinueClick}
@@ -2248,6 +2559,27 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ onBack }) => {
                     <span className="text-lg">Продолжить</span>
                   </div>
                 </motion.button>
+                
+                {attemptsData.attemptsLeft > 0 && (
+                  <motion.button 
+                    onClick={handleRestartClick}
+                    className="relative px-6 py-4 bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl font-bold 
+                      text-white shadow-lg border-2 border-blue-300 focus:outline-none focus:ring-2 
+                      focus:ring-blue-300 focus:ring-opacity-50 h-16"
+                    whileHover={{ 
+                      scale: 1.05,
+                      boxShadow: "0 0 12px rgba(59, 130, 246, 0.7)",
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span className="text-lg">Начать заново</span>
+                    </div>
+                  </motion.button>
+                )}
                 
                 <motion.button 
                   onClick={onBack}

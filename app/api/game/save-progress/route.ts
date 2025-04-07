@@ -643,6 +643,28 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
         
+        // Проверяем, что поля energy и lastEnergyUpdateTime существуют и сохраняются
+        if (gameState && gameState.inventory) {
+          // Проверяем поле energy
+          if (gameState.inventory.energy === undefined) {
+            gameState.inventory.energy = 500; // Устанавливаем значение по умолчанию
+            console.log(`[save-progress] Восстановлено поле energy = 500 для пользователя ${userId}`);
+          }
+          
+          // Проверяем поле lastEnergyUpdateTime
+          if (gameState.inventory.lastEnergyUpdateTime === undefined) {
+            gameState.inventory.lastEnergyUpdateTime = Date.now();
+            console.log(`[save-progress] Восстановлено поле lastEnergyUpdateTime для пользователя ${userId}`);
+          }
+          
+          // Логируем для отладки
+          logger.debug('Значения энергии при сохранении:', { 
+            userId, 
+            energy: gameState.inventory.energy,
+            lastEnergyUpdateTime: gameState.inventory.lastEnergyUpdateTime
+          });
+        }
+        
         metrics.dbSaveTime = performance.now() - dbSaveStartTime;
         
         logger.info('Прогресс успешно обновлен в БД', {

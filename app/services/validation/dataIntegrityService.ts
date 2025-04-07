@@ -23,12 +23,14 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
         snot: 0,
         snotCoins: 0,
         containerSnot: 0,
-        containerCapacity: 1,
+        containerCapacity: 100,
         containerCapacityLevel: 1,
         fillingSpeed: 1,
         fillingSpeedLevel: 1,
         collectionEfficiency: 1,
-        lastUpdateTimestamp: Date.now()
+        lastUpdateTimestamp: Date.now(),
+        energy: 500,
+        lastEnergyUpdateTime: Date.now()
       };
       repairedFields.push('inventory');
     } else {
@@ -37,12 +39,14 @@ export const repairGameState = (gameState: ExtendedGameState): ExtendedGameState
         { field: 'snot', defaultValue: 0 },
         { field: 'snotCoins', defaultValue: 0 },
         { field: 'containerSnot', defaultValue: 0 },
-        { field: 'containerCapacity', defaultValue: 1 },
+        { field: 'containerCapacity', defaultValue: 100 },
         { field: 'containerCapacityLevel', defaultValue: 1 },
         { field: 'fillingSpeed', defaultValue: 1 },
         { field: 'fillingSpeedLevel', defaultValue: 1 },
         { field: 'collectionEfficiency', defaultValue: 1 },
-        { field: 'lastUpdateTimestamp', defaultValue: Date.now() }
+        { field: 'lastUpdateTimestamp', defaultValue: Date.now() },
+        { field: 'energy', defaultValue: 500 },
+        { field: 'lastEnergyUpdateTime', defaultValue: Date.now() }
       ];
       
       for (const { field, defaultValue } of validationRules) {
@@ -338,12 +342,14 @@ export const createDefaultGameState = (userId: string): ExtendedGameState => {
       snot: 0,
       snotCoins: 0,
       containerSnot: 0,
-      containerCapacity: 1,
+      containerCapacity: 100,
       containerCapacityLevel: 1,
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      lastUpdateTimestamp: Date.now()
+      lastUpdateTimestamp: Date.now(),
+      energy: 500,
+      lastEnergyUpdateTime: Date.now()
     },
     
     // Контейнер

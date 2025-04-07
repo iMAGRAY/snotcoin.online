@@ -9,6 +9,7 @@
 export const ICONS = {
   SNOTCOIN: '/images/common/icons/snotcoin.webp',
   SNOT: '/images/common/icons/snot.webp',
+  ENERGY: '/images/common/icons/energy.webp',
   PLACEHOLDER: '/images/common/placeholder.svg',
   LABORATORY: {
     MACHINE: '/images/laboratory/laboratory-machine.webp',
