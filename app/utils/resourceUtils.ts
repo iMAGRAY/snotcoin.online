@@ -4,6 +4,7 @@
 import { ExtendedGameState, Inventory, GameState } from "../types/gameTypes";
 import { RESOURCES } from "../constants/uiConstants";
 import { initialState, FILL_RATES } from "../constants/gameConstants";
+import { getFillingSpeedByLevel } from "./gameUtils";
 
 /**
  * Получает безопасный объект инвентаря из состояния игры с установкой значений по умолчанию
@@ -12,14 +13,13 @@ import { initialState, FILL_RATES } from "../constants/gameConstants";
  */
 export function getSafeInventory(gameState: any): Inventory {
   if (!gameState || !gameState.inventory) {
-    console.warn('[resourceUtils] getSafeInventory: Инвентарь отсутствует, создаем новый');
     return {
       snot: 0,
       snotCoins: 0,
       containerSnot: 0,
-      containerCapacity: 1,
+      containerCapacity: 1, // Уровень 1 соответствует емкости 1
       containerCapacityLevel: 1,
-      fillingSpeed: 1,
+      fillingSpeed: 1, // 1 snot за 12 часов на уровне 1
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       lastUpdateTimestamp: Date.now()
@@ -44,7 +44,7 @@ export function getSafeInventory(gameState: any): Inventory {
       
     containerCapacity: typeof inventory.containerCapacity === 'number' && !isNaN(inventory.containerCapacity) && inventory.containerCapacity > 0
       ? inventory.containerCapacity 
-      : 1,
+      : 1, // Для уровня 1 емкость должна быть 1
       
     containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' && !isNaN(inventory.containerCapacityLevel) && inventory.containerCapacityLevel > 0
       ? inventory.containerCapacityLevel 
@@ -52,7 +52,7 @@ export function getSafeInventory(gameState: any): Inventory {
       
     fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) && inventory.fillingSpeed > 0
       ? inventory.fillingSpeed 
-      : 1,
+      : 1, // 1 snot за 12 часов на уровне 1
       
     fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) && inventory.fillingSpeedLevel > 0
       ? inventory.fillingSpeedLevel 
@@ -216,7 +216,7 @@ export function getContainerCapacity(inventory: Inventory): number {
 }
 
 /**
- * Рассчитывает количество snot, которое должно было накопиться в контейнере за время отсутствия
+ * Вычисляет накопленный containerSnot за время между загрузками
  * @param lastLoadTime Время последнего сохранения/входа в игру (timestamp)
  * @param currentTime Текущее время (timestamp)
  * @param fillingSpeed Скорость заполнения контейнера
@@ -231,38 +231,22 @@ export function calculateAccumulatedContainerSnot(
   currentContainerSnot: number,
   containerCapacity: number
 ): number {
-  // Проверяем валидность входных данных
-  if (!lastLoadTime || !currentTime || currentTime <= lastLoadTime) {
-    return currentContainerSnot;
+  // Базовые проверки
+  if (currentTime <= lastLoadTime || fillingSpeed <= 0 || currentContainerSnot >= containerCapacity) {
+    return Math.min(currentContainerSnot, containerCapacity);
   }
 
-  // Вычисляем прошедшее время в секундах
+  // 1. Вычисляем время в секундах
   const elapsedSeconds = (currentTime - lastLoadTime) / 1000;
   
-  // Определяем базовую скорость заполнения
-  const baseIncreasePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE;
+  // 2. Используем базовую скорость заполнения из констант и умножаем на пользовательскую fillingSpeed
+  const fillRatePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE * fillingSpeed;
   
-  // Учитываем текущий уровень скорости заполнения
-  const actualIncreasePerSecond = baseIncreasePerSecond * fillingSpeed;
+  // 3. Вычисляем количество накопленного snot
+  const accumulatedSnot = fillRatePerSecond * elapsedSeconds;
   
-  // Вычисляем накопленный snot за прошедшее время
-  const accumulatedSnot = actualIncreasePerSecond * elapsedSeconds;
-  
-  // Прибавляем к текущему значению и ограничиваем максимальной вместимостью
-  const newContainerSnot = Math.min(
-    containerCapacity,
-    currentContainerSnot + accumulatedSnot
-  );
-  
-  console.log('[resourceUtils] Расчет накопленного containerSnot:', {
-    прошлоСекунд: elapsedSeconds,
-    накоплено: accumulatedSnot,
-    было: currentContainerSnot,
-    стало: newContainerSnot,
-    скоростьНакопления: `${(actualIncreasePerSecond * 3600).toFixed(6)} в час`
-  });
-  
-  return newContainerSnot;
+  // 4. Возвращаем новое значение с учетом максимальной вместимости контейнера
+  return Math.min(currentContainerSnot + accumulatedSnot, containerCapacity);
 }
 
 /**
@@ -275,52 +259,75 @@ export function updateResourcesBasedOnTimePassed(
   gameState: GameState | ExtendedGameState,
   currentTime: number = Date.now()
 ): GameState | ExtendedGameState {
-  if (!gameState || !gameState.inventory) {
+  if (!gameState?.inventory) {
     return gameState;
   }
   
-  // Получаем время последнего сохранения/загрузки
-  // Используем приведение типа для доступа к нестандартным полям
+  // Получаем время последнего обновления
   const state = gameState as any;
-  const lastLoadTime = state._localSaveTimestamp || 
-                       state._lastModified || 
-                       state._lastSaved ? new Date(state._lastSaved).getTime() : 
-                       state._loadedAt ? new Date(state._loadedAt).getTime() : 
-                       null;
+  const inventory = gameState.inventory;
   
-  // Если нет информации о последнем сохранении, возвращаем исходное состояние
-  if (!lastLoadTime) {
-    return gameState;
+  // Находим последнее время обновления (от самого нового к старому)
+  const lastLoadTime = inventory.lastUpdateTimestamp || 
+                     state._localSaveTimestamp || 
+                     state._lastModified || 
+                     (state._lastSaved ? new Date(state._lastSaved).getTime() : null) || 
+                     (currentTime - 1000); // Если нет данных, используем текущее время - 1 секунда
+  
+  // Получаем необходимые данные с валидацией
+  const currentContainerSnot = Math.max(0, Number(inventory.containerSnot) || 0);
+  const containerCapacity = Math.max(1, Number(inventory.containerCapacity) || 1);
+  
+  // Получаем уровень скорости и вычисляем правильное значение скорости
+  const fillingSpeedLevel = Math.max(1, Number(inventory.fillingSpeedLevel) || 1);
+  
+  // Используем вычисленную скорость заполнения на основе уровня
+  const fillingSpeed = getFillingSpeedByLevel(fillingSpeedLevel);
+  
+  // Проверка на слишком малое значение containerSnot при большом промежутке времени
+  // Если прошло более 1 часа, но значение очень маленькое, возможно произошел сброс
+  const elapsedSeconds = (currentTime - lastLoadTime) / 1000;
+  const fillRatePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE * fillingSpeed;
+  const expectedMinimumAccumulation = Math.min(fillRatePerSecond * Math.max(0, elapsedSeconds - 60), containerCapacity);
+  
+  let updatedContainerSnot = currentContainerSnot;
+  
+  // Если прошло более часа, проверим на сброс значения
+  if (elapsedSeconds > 3600 && currentContainerSnot < 0.01) {
+    // Принудительно устанавливаем минимальное значение на основе времени
+    updatedContainerSnot = expectedMinimumAccumulation;
+  } 
+  // Стандартная логика расчета containerSnot
+  else if (currentTime - lastLoadTime > 1000) {
+    updatedContainerSnot = calculateAccumulatedContainerSnot(
+      lastLoadTime,
+      currentTime,
+      fillingSpeed,
+      currentContainerSnot,
+      containerCapacity
+    );
   }
-
-  // Получаем данные для расчета
-  const currentContainerSnot = gameState.inventory.containerSnot || 0;
-  const containerCapacity = gameState.inventory.containerCapacity || 1;
-  const fillingSpeed = gameState.inventory.fillingSpeed || 1;
   
-  // Вычисляем новое значение containerSnot
-  const updatedContainerSnot = calculateAccumulatedContainerSnot(
-    lastLoadTime,
-    currentTime,
-    fillingSpeed,
-    currentContainerSnot,
-    containerCapacity
-  );
+  // Дополнительная проверка - если расчетное значение меньше ожидаемого минимума
+  // при значительном времени, используем ожидаемый минимум
+  if (elapsedSeconds > 3600 && updatedContainerSnot < expectedMinimumAccumulation) {
+    updatedContainerSnot = expectedMinimumAccumulation;
+  }
   
-  // Создаем новый объект без добавления нестандартных полей
+  // Создаем новый объект с обновленными данными
   const result = {
     ...gameState,
     inventory: {
-      ...gameState.inventory,
-      containerSnot: updatedContainerSnot
+      ...inventory,
+      containerSnot: updatedContainerSnot,
+      // Обновляем также значение скорости для соответствия уровню
+      fillingSpeed: fillingSpeed,
+      lastUpdateTimestamp: currentTime // Обновляем время последнего расчета
     }
   };
   
-  // Также сохраняем время обновления непосредственно в исходный объект
-  // для отладки, не используя его в возвращаемом результате
-  if (state) {
-    state._lastTimeBasedUpdate = currentTime;
-  }
+  // Добавляем метаданные об обновлении через приведение типа
+  (result as any)._lastTimeBasedUpdate = currentTime;
   
   return result;
 }

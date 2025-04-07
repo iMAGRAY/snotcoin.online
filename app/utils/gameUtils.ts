@@ -3,7 +3,22 @@
  */
 import { GameState } from "../types/gameTypes";
 import { formatTime as formatTimeFromFormatters } from "./formatters";
-import { FILL_RATES } from "../constants/gameConstants";
+import { FILL_RATES, UPGRADE_VALUES } from "../constants/gameConstants";
+
+/**
+ * Вычисляет скорость заполнения на основе уровня
+ * @param level - Уровень скорости заполнения
+ * @returns Скорость заполнения
+ */
+export function getFillingSpeedByLevel(level: number): number {
+  const safeLevel = Math.max(1, Math.min(level, UPGRADE_VALUES.fillingSpeed.length));
+  
+  // Получаем значение из константы
+  const speed = UPGRADE_VALUES.fillingSpeed[safeLevel - 1];
+  
+  // Возвращаем значение скорости заполнения
+  return typeof speed === 'number' ? speed : 1;
+}
 
 /**
  * Форматирует значение SNOT для отображения в интерфейсе
@@ -22,81 +37,111 @@ export const formatSnotValue = (value: number, decimals = 0): string => {
 };
 
 /**
- * Рассчитывает время заполнения контейнера в секундах (перегрузка для отдельных параметров)
- * @param containerSnot - Текущее количество SNOT в контейнере
- * @param containerCapacity - Вместимость контейнера
- * @param fillingSpeed - Скорость заполнения
- * @returns Время заполнения в секундах
+ * Результат расчета времени заполнения контейнера
  */
-export const calculateFillingTime = (
-  containerSnot: number, 
-  containerCapacity: number,
-  fillingSpeed: number
-): number => {
-  // Добавляем логирование входных данных
-  console.log("calculateFillingTime inputs:", { containerSnot, containerCapacity, fillingSpeed });
-  
-  // Проверка входных данных на корректность
-  if (isNaN(containerSnot) || isNaN(containerCapacity) || isNaN(fillingSpeed)) {
-    console.log("calculateFillingTime: invalid inputs, returning Infinity");
-    return Infinity;
-  }
-  
-  // Проверка на деление на ноль
-  if (fillingSpeed <= 0) {
-    console.log("calculateFillingTime: fillingSpeed <= 0, returning Infinity");
-    return Infinity;
-  }
-  
-  // Проверка на некорректные входные данные
-  if (containerCapacity <= 0) {
-    console.log("calculateFillingTime: containerCapacity <= 0, returning Infinity");
-    return Infinity;
-  }
-  
-  // Если контейнер полон или переполнен, время заполнения = 0
-  if (containerSnot >= containerCapacity) {
-    console.log("calculateFillingTime: container is full, returning 0");
-    return 0;
-  }
-  
-  // Безопасные значения с обработкой отрицательных чисел
-  const safeContainerSnot = Math.max(0, containerSnot);
-  const safeContainerCapacity = Math.max(1, containerCapacity);
-  
-  // Используем константу из gameConstants для базовой скорости заполнения
+export interface FillingTimeResult {
+  safeContainerSnot: number;
+  safeContainerCapacity: number;
+  safeFillingSpeed: number;
+  baseIncreasePerSecond: number;
+  remainingCapacity: number;
+  timeInSeconds: number;
+  fillPercentage: number;
+  fillPerMinute: number;
+  fillPerHour: number;
+  hoursToFill: number;
+}
+
+/**
+ * Рассчитывает время до полного заполнения контейнера
+ * @param containerSnot текущий snot в контейнере
+ * @param containerCapacity максимальная вместимость контейнера
+ * @param fillingSpeed скорость заполнения
+ * @returns время в секундах
+ */
+export function calculateFillingTime({
+  containerSnot,
+  containerCapacity,
+  fillingSpeed
+}: {
+  containerSnot: number;
+  containerCapacity: number;
+  fillingSpeed: number;
+}): FillingTimeResult {
+  // Безопасные значения в случае передачи невалидных параметров
+  const safeContainerSnot = typeof containerSnot === 'number' && !isNaN(containerSnot) 
+    ? Math.max(0, containerSnot) 
+    : 0;
+    
+  const safeContainerCapacity = typeof containerCapacity === 'number' && !isNaN(containerCapacity) && containerCapacity > 0
+    ? containerCapacity
+    : 1;
+    
+  const safeFillingSpeed = typeof fillingSpeed === 'number' && !isNaN(fillingSpeed) && fillingSpeed > 0
+    ? fillingSpeed
+    : 1;
+
+  // Базовая скорость заполнения в секунду
+  // При скорости 1 контейнер заполняется за 12 часов
   const baseIncreasePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE;
-  const safeFillingSpeed = Math.max(0.000001, fillingSpeed);
   
-  const remainingCapacity = safeContainerCapacity - safeContainerSnot;
-  const timeToFill = remainingCapacity / (baseIncreasePerSecond * safeFillingSpeed);
+  // Сколько ещё осталось до полного заполнения
+  const remainingCapacity = Math.max(0, safeContainerCapacity - safeContainerSnot);
   
-  console.log("calculateFillingTime results:", { 
-    safeContainerSnot, 
-    safeContainerCapacity, 
+  // Сколько ресурса добавляется в час при данной скорости заполнения
+  // При fillingSpeed = 1 добавляется 0.08333 в час (1/12 от полного контейнера)
+  const fillPerHour = safeFillingSpeed / 12;
+  
+  // Рассчитываем заполнение за минуту
+  const fillPerMinute = fillPerHour / 60;
+  
+  // Сколько часов потребуется для заполнения оставшейся емкости
+  const hoursToFill = fillPerHour > 0 ? remainingCapacity / fillPerHour : 0;
+  
+  // Переводим часы в секунды для отображения
+  const timeInSeconds = hoursToFill * 3600;
+  
+  // Вычисляем процент заполнения
+  const fillPercentage = Math.min(100, (safeContainerSnot / safeContainerCapacity) * 100);
+  
+  return {
+    timeInSeconds,
+    safeContainerSnot,
+    safeContainerCapacity,
     safeFillingSpeed,
     baseIncreasePerSecond,
-    remainingCapacity, 
-    timeToFill,
-    timeInDays: timeToFill / FILL_RATES.SECONDS_PER_DAY 
-  });
-  
-  return timeToFill;
-};
+    remainingCapacity,
+    fillPercentage,
+    fillPerMinute,
+    fillPerHour,
+    hoursToFill
+  };
+}
 
 /**
  * Рассчитывает время заполнения контейнера на основе текущего состояния игры
  * @param state - Состояние игры
- * @returns Время заполнения в секундах
+ * @returns Результат расчета времени заполнения
  */
-export const calculateFillingTimeFromState = (state: GameState): number => {
+export const calculateFillingTimeFromState = (state: GameState): FillingTimeResult => {
   if (!state || !state.inventory || !state.container) {
-    return Infinity;
+    return {
+      safeContainerSnot: 0,
+      safeContainerCapacity: 1,
+      safeFillingSpeed: 0.001,
+      baseIncreasePerSecond: 0,
+      remainingCapacity: 1,
+      timeInSeconds: Number.MAX_SAFE_INTEGER,
+      fillPercentage: 0,
+      fillPerMinute: 0,
+      fillPerHour: 0,
+      hoursToFill: 0
+    };
   }
   
   const { containerSnot, fillingSpeed, containerCapacity } = state.inventory;
   
-  return calculateFillingTime(containerSnot, containerCapacity, fillingSpeed);
+  return calculateFillingTime({ containerSnot, containerCapacity, fillingSpeed });
 };
 
 /**

@@ -4,7 +4,7 @@ import React, { useMemo } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../../i18n"
 import { formatTime, formatSnotValue } from "../../../utils/formatters"
-import { calculateFillingTime } from "../../../utils/gameUtils"
+import { calculateFillingTime, getFillingSpeedByLevel } from "../../../utils/gameUtils"
 import { validateContainerParams } from "../../../utils/resourceUtils"
 import { Database, Zap, Clock, ArrowUp } from "lucide-react"
 import type { StatusDisplayProps } from "../../../types/laboratory-types"
@@ -60,6 +60,34 @@ const StatusDisplay: React.FC<StatusDisplayProps> = React.memo(({
     fillingSpeedLevel
   ]);
   
+  // Получаем корректное значение скорости заполнения на основе уровня
+  const correctFillingSpeed = useMemo(() => {
+    return getFillingSpeedByLevel(validatedParams.fillingSpeedLevel);
+  }, [validatedParams.fillingSpeedLevel]);
+  
+  // Расчет времени заполнения контейнера с использованием корректной скорости
+  const fillingTimeInfo = useMemo(() => {
+    return calculateFillingTime(
+      validatedParams.containerSnot, 
+      validatedParams.containerCapacity, 
+      correctFillingSpeed
+    );
+  }, [
+    validatedParams.containerSnot, 
+    validatedParams.containerCapacity, 
+    correctFillingSpeed
+  ]);
+  
+  // Форматирование времени в человекочитаемый формат
+  const formattedTime = useMemo(() => {
+    return formatTime(fillingTimeInfo.timeInSeconds);
+  }, [fillingTimeInfo.timeInSeconds]);
+  
+  // Процент заполнения
+  const fillPercentage = useMemo(() => {
+    return Math.min(100, (containerSnot / Math.max(1, containerCapacity)) * 100);
+  }, [containerSnot, containerCapacity]);
+  
   // Создаем массив элементов статуса
   const statusItems = useMemo(() => [
     {
@@ -83,20 +111,15 @@ const StatusDisplay: React.FC<StatusDisplayProps> = React.memo(({
     {
       icon: Clock,
       label: "Fill",
-      value: formatTime(calculateFillingTime(
-        validatedParams.containerSnot, 
-        validatedParams.containerCapacity, 
-        validatedParams.containerFillingSpeed
-      )),
+      value: formattedTime,
       tooltip: t("fillTimeTooltip"),
     },
   ], [
     validatedParams.containerCapacity, 
     validatedParams.containerLevel, 
-    validatedParams.containerSnot, 
-    validatedParams.containerFillingSpeed, 
     validatedParams.fillingSpeedLevel, 
-    t
+    t,
+    formattedTime
   ]);
 
   // Обработка случая когда контейнер недоступен

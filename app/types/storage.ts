@@ -27,7 +27,6 @@ export interface StorageData {
 
 export interface StorageOptions {
   useLocalCache?: boolean;
-  useRedisCache?: boolean;
   priority?: 'high' | 'medium' | 'low';
   ttl?: number;
 }

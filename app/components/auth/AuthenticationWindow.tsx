@@ -17,7 +17,7 @@ interface AuthenticationWindowProps {
 
 const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthenticate }) => {
   const { t } = useTranslation()
-  const gameDispatch = useGameDispatch()
+  const setState = useGameDispatch()
   const { sdkUser } = useFarcaster()
   
   const isAuthenticated = !!sdkUser
@@ -65,11 +65,16 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
       }
       
       // Update game state
-      gameDispatch({ type: "SET_USER", payload: userData })
+      setState(prevState => ({
+        ...prevState,
+        user: userData
+      }));
       
       // Явно устанавливаем laboratory как активную вкладку перед вызовом onAuthenticate
-      // для гарантии правильного начального состояния
-      gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+      setState(prevState => ({
+        ...prevState,
+        activeTab: "laboratory"
+      }));
       
       if (onAuthenticate) {
         try {
@@ -85,7 +90,7 @@ const AuthenticationWindow: React.FC<AuthenticationWindowProps> = ({ onAuthentic
         }
       }
     },
-    [gameDispatch, onAuthenticate]
+    [setState, onAuthenticate]
   )
 
   const handleAuthError = (error: string) => {

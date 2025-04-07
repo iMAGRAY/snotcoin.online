@@ -282,17 +282,6 @@ export const gameMetrics = {
     metrics.measureAsyncFn('game_load_duration_ms', fn, labels)
 };
 
-// Предварительно созданные метрики для Redis
-export const redisMetrics = {
-  cacheHitCounter: (labels = {}) => metrics.incrementCounter('redis_cache_hits', 1, labels),
-  cacheMissCounter: (labels = {}) => metrics.incrementCounter('redis_cache_misses', 1, labels),
-  cacheErrorCounter: (labels = {}) => metrics.incrementCounter('redis_cache_errors', 1, labels),
-  
-  // Измерители времени
-  startRedisTimer: (operation: string, labels = {}) => 
-    metrics.startTimer(`redis_operation_duration_ms`, { operation, ...labels })
-};
-
 // Предварительно созданные метрики для фоновой синхронизации
 export const syncMetrics = {
   taskScheduledCounter: (labels = {}) => metrics.incrementCounter('sync_tasks_scheduled', 1, labels),

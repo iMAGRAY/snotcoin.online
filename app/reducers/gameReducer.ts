@@ -27,14 +27,17 @@ const inMemoryStore: Record<string, any> = {};
  * @returns Емкость контейнера
  */
 function calculateContainerCapacity(level: number): number {
-  // Проверяем, что уровень находится в допустимом диапазоне
+  // Безопасный уровень для доступа к массиву значений
   const safeLevel = Math.max(1, Math.min(level, UPGRADE_VALUES.containerCapacity.length));
   
-  // Получаем емкость на основе уровня из массива значений
-  const capacity = UPGRADE_VALUES.containerCapacity[safeLevel - 1];
+  // Индекс в массиве на 1 меньше, чем уровень
+  const capacityIndex = safeLevel - 1;
   
-  // Проверяем, что значение определено
-  return typeof capacity === 'number' ? capacity : 1;
+  // Получаем значение из константы
+  const result = UPGRADE_VALUES.containerCapacity[capacityIndex];
+  
+  // Возвращаем значение вместимости контейнера
+  return typeof result === 'number' ? result : 1;
 }
 
 // Тип для пэйлоада действий
@@ -157,6 +160,7 @@ export function gameReducer(state: any = initialState, action: any): any {
       });
 
     case "UPDATE_FILLING_SPEED":
+      // Используем payload для прямого обновления значения скорости
       return withMetadata({
         inventory: {
           ...state.inventory,
@@ -195,7 +199,9 @@ export function gameReducer(state: any = initialState, action: any): any {
       });
 
     case "COLLECT_CONTAINER_SNOT": {
-      const currentSnot = state.inventory.snot || 0;
+      // Текущее значение snot - гарантируем число
+      const currentSnot = typeof state.inventory.snot === 'number' ? state.inventory.snot : 0;
+      
       // Проверяем, что передан containerSnot
       const amountToCollect = typeof action.payload.containerSnot === 'number' 
         ? action.payload.containerSnot 
@@ -204,38 +210,91 @@ export function gameReducer(state: any = initialState, action: any): any {
       // Валидируем значение
       const validAmount = Math.max(0, amountToCollect);
       
-      // Вычисляем новое значение снота строго и точно
+      // Вычисляем новое значение снота
       const newSnot = currentSnot + validAmount;
       
-      // Проверяем, есть ли указание на ожидаемое значение и используем его для проверки
+      // Проверяем, есть ли указание на ожидаемое значение
       const expectedSnot = action.payload.expectedSnot;
       
-      // Используем ожидаемое значение, если оно задано и отличается от расчета
-      const finalSnot = expectedSnot !== undefined 
-        ? expectedSnot 
-        : newSnot;
+      // Выбираем окончательное значение, гарантируя, что оно число
+      let finalSnot = expectedSnot !== undefined ? Number(expectedSnot) : Number(newSnot);
       
-      console.log(`[gameReducer] COLLECT_CONTAINER_SNOT: currentSnot=${currentSnot}, amountToCollect=${validAmount}, newSnot=${newSnot}, finalSnot=${finalSnot}`);
+      if (isNaN(finalSnot)) {
+        finalSnot = currentSnot + validAmount; // Fallback если новое значение NaN
+        console.warn('[COLLECT_CONTAINER_SNOT] Обнаружено недопустимое значение snot, исправлено:', {
+          currentSnot,
+          amountToCollect,
+          expectedSnot,
+          finalSnot
+        });
+      }
       
-      // Обновляем состояние одним действием, гарантируя атомарность
-      return {
+      // Немедленно сохраняем значение в сессионное хранилище для максимальной защиты
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          const userId = state._userId || 'unknown';
+          const backupKey = `snot_backup_${userId}`;
+          const backup = {
+            snot: finalSnot,
+            snotCoins: state.inventory.snotCoins || 0,
+            timestamp: Date.now(),
+            action: 'COLLECT_CONTAINER_SNOT'
+          };
+          sessionStorage.setItem(backupKey, JSON.stringify(backup));
+          
+          // Создаем дополнительную копию с уникальным ключом для максимальной надежности
+          const uniqueBackupKey = `snot_backup_${userId}_${Date.now()}`;
+          sessionStorage.setItem(uniqueBackupKey, JSON.stringify(backup));
+          
+          console.log('[COLLECT_CONTAINER_SNOT] Сохранены резервные копии snot:', {
+            snot: finalSnot,
+            standardKey: backupKey,
+            uniqueKey: uniqueBackupKey
+          });
+          
+          // Также сохраняем в localStorage для дополнительной защиты
+          try {
+            const localBackupKey = `snotcoin_snot_backup_${userId}`;
+            localStorage.setItem(localBackupKey, JSON.stringify(backup));
+          } catch (localError) {
+            // Игнорируем ошибки localStorage, основной приоритет у sessionStorage
+          }
+        }
+      } catch (error) {
+        // Игнорируем ошибки сессионного хранилища, но логируем для отладки
+        console.warn('[COLLECT_CONTAINER_SNOT] Ошибка при создании резервной копии:', error);
+      }
+      
+      // Атомарно обновляем состояние с минимальным логированием
+      const updatedState = {
         ...state,
         inventory: {
           ...state.inventory,
           snot: finalSnot,
-          containerSnot: 0 // Всегда обнуляем контейнер при сборе
+          containerSnot: 0 // Обнуляем контейнер при сборе
         },
         _lastActionTime: new Date().toISOString(),
-        _lastAction: action.type
+        _lastAction: action.type,
+        _lastModified: Date.now() // Важно обновить время модификации для корректного сохранения
       };
+      
+      return updatedState;
     }
 
     case "UPGRADE_FILLING_SPEED":
+      // Получаем новый уровень скорости
+      const newSpeedLevel = state.inventory.fillingSpeedLevel + 1;
+      
+      // Получаем новую скорость заполнения из массива значений для уровней
+      // Используем индексацию с 0, поэтому для уровня 1 берем элемент с индексом 0
+      const safeLevel = Math.min(newSpeedLevel, UPGRADE_VALUES.fillingSpeed.length) - 1;
+      const newFillingSpeed = UPGRADE_VALUES.fillingSpeed[Math.max(0, safeLevel)];
+      
       return withMetadata({
         inventory: {
           ...state.inventory,
-          fillingSpeed: state.inventory.fillingSpeed * FILL_RATES.FILL_SPEED_MULTIPLIER, // Увеличиваем согласно константе
-          fillingSpeedLevel: state.inventory.fillingSpeedLevel + 1, // Увеличиваем уровень
+          fillingSpeed: newFillingSpeed, // Устанавливаем значение из массива
+          fillingSpeedLevel: newSpeedLevel,
         },
       });
 
@@ -316,9 +375,9 @@ export function gameReducer(state: any = initialState, action: any): any {
           snot: 0,
           snotCoins: 0,
           containerSnot: 0,
-          containerCapacity: 1, // Обновляем значение containerCapacity
+          containerCapacity: 1, // Вместимость для 1 уровня
           containerCapacityLevel: 1,
-          fillingSpeed: 1,
+          fillingSpeed: 1, // 1 snot за 12 часов при уровне 1
           fillingSpeedLevel: 1,
           collectionEfficiency: 1,
           lastUpdateTimestamp: Date.now(),
@@ -360,14 +419,11 @@ export function gameReducer(state: any = initialState, action: any): any {
     case "LOAD_GAME_STATE": {
       // Нормализуем восстановленное состояние
       const loadedState = action.payload;
-      console.log("[GameReducer] Загружаем сохраненное состояние игры", 
-        loadedState._isRestoredFromBackup ? "из резервной копии" : "");
       
       // Сохраняем userId из localStorage, если он отсутствует в загружаемом состоянии
       if (typeof window !== 'undefined' && !loadedState._userId) {
         const storedUserId = localStorage.getItem('user_id') || localStorage.getItem('game_id');
         if (storedUserId) {
-          console.log(`[GameReducer] Устанавливаем _userId из localStorage: ${storedUserId}`);
           loadedState._userId = storedUserId;
         }
       }

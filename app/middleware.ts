@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { authService } from '@/app/services/auth/authService';
 import { verifyJWT } from './utils/auth';
-import { ENV, disableRedis } from './lib/env';
-import { redisService } from './services/redis';
+import { ENV } from './lib/env';
 import { verify } from "./utils/jwt";
 import { AuthLogger } from "./utils/auth-logger";
 import { AuthStep } from "./utils/auth-logger";
@@ -131,28 +130,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
-
-// Функция для инициализации и проверки сервисов
-async function checkServices() {
-  // Проверяем Redis
-  try {
-    if (ENV.REDIS_ENABLED) {
-      const isAvailable = await redisService.isAvailable();
-      if (!isAvailable) {
-        console.warn('[Middleware] Redis недоступен, отключаем его использование');
-        disableRedis();
-      } else {
-        console.log('[Middleware] Redis доступен и работает');
-      }
-    }
-  } catch (error) {
-    console.error('[Middleware] Ошибка при проверке Redis:', error);
-    disableRedis();
-  }
-}
-
-// Вызываем проверку сервисов при старте
-checkServices().catch(error => {
-  console.error('[Middleware] Ошибка при инициализации сервисов:', error);
-});
 

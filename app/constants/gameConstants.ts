@@ -12,16 +12,53 @@ import { Inventory } from '../types/inventory';
  */
 export function createInitialGameState(userId: string): GameState {
   const now = new Date();
+  const currentTimeMs = now.getTime();
+  
+  // Попытка восстановить сохраненное значение snot из sessionStorage
+  let initialSnot = 0.1; // Значение по умолчанию
+  let initialSnotCoins = 0;
+  let initialContainerSnot = 0.05;
+  
+  // Функция выполняется только в браузере
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      // Проверяем наличие резервной копии в sessionStorage
+      const backupKey = `snot_backup_${userId}`;
+      const backupData = sessionStorage.getItem(backupKey);
+      
+      if (backupData) {
+        const backup = JSON.parse(backupData);
+        
+        // Проверяем, что значение snot в backup - число
+        if (backup && typeof backup.snot === 'number' && !isNaN(backup.snot)) {
+          console.log('[createInitialGameState] Найдена резервная копия snot:', {
+            snot: backup.snot,
+            backupTime: new Date(backup.timestamp).toISOString()
+          });
+          
+          initialSnot = backup.snot;
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки при проверке сохранений
+      console.warn('[createInitialGameState] Ошибка при проверке резервной копии:', error);
+    }
+  }
+  
+  // Гарантируем, что все значения являются числами
+  initialSnot = Number(initialSnot) || 0.1;
+  initialSnotCoins = Number(initialSnotCoins) || 0;
+  initialContainerSnot = Number(initialContainerSnot) || 0.05;
   
   return {
     // Мета-информация
     _userId: userId,
     _saveVersion: 1,
     _lastSaved: now.toISOString(),
-    _lastModified: now.getTime(),
+    _lastModified: currentTimeMs,
     _createdAt: now.toISOString(),
     _wasRepaired: false,
-    _repairedAt: now.getTime(),
+    _repairedAt: currentTimeMs,
     _repairedFields: [],
     _tempData: null,
     _isSavingInProgress: false,
@@ -49,15 +86,15 @@ export function createInitialGameState(userId: string): GameState {
     
     // Игровой инвентарь
     inventory: {
-      snot: 0,
-      snotCoins: 0,
+      snot: initialSnot,
+      snotCoins: initialSnotCoins,
       containerCapacity: 1,
-      containerSnot: 0,
-      fillingSpeed: 1,
-      containerCapacityLevel: 0,
-      fillingSpeedLevel: 0,
+      containerSnot: initialContainerSnot,
+      fillingSpeed: 0.01, // Изменено с 1 на 0.01, чтобы соответствовало createDefaultGameState
+      containerCapacityLevel: 1,
+      fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      lastUpdateTimestamp: now.getTime()
+      lastUpdateTimestamp: currentTimeMs
     },
     
     // Контейнер
@@ -140,7 +177,7 @@ export function createInitialGameState(userId: string): GameState {
     // Игровой интерфейс
     hideInterface: false,
     activeTab: 'laboratory',
-    fillingSpeed: 1,
+    fillingSpeed: 0.01, // Синхронизировано с inventory.fillingSpeed
     containerLevel: 1,
     isPlaying: false,
     validationStatus: 'pending',
@@ -171,12 +208,12 @@ export const GAME_VERSION = 1;
 export const initialState: GameState = {
   user: null,
   inventory: {
-    snot: 0,
+    snot: 0.1,
     snotCoins: 0,
-    containerSnot: 0,
+    containerSnot: 0.05,
     containerCapacity: 1,
     containerCapacityLevel: 1,
-    fillingSpeed: 1,
+    fillingSpeed: 0.01, // Обновлено для соответствия с createInitialGameState
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
     lastUpdateTimestamp: Date.now()
@@ -304,7 +341,7 @@ export const UPGRADE_COSTS = {
  * Значения улучшений
  */
 export const UPGRADE_VALUES = {
-  containerCapacity: [1, 2, 3, 4, 5, 10],
+  containerCapacity: [1, 2, 3, 5, 8, 12],
   fillingSpeed: [1, 1.5, 2, 3, 4, 6],
   collectionEfficiency: [1, 1.2, 1.5, 1.8, 2.2, 3],
   clickPower: [1, 2, 3, 5, 8, 12],
@@ -353,12 +390,12 @@ export const RESOURCES = {
 };
 
 export const DEFAULT_INVENTORY: Inventory = {
-  snot: 0,
+  snot: 0.1,
   snotCoins: 0,
-  containerSnot: 0,
+  containerSnot: 0.05,
   containerCapacity: 1,
   containerCapacityLevel: 1,
-  fillingSpeed: 1,
+  fillingSpeed: 0.01, // Обновлено для соответствия начальным значениям
   fillingSpeedLevel: 1,
   collectionEfficiency: 1,
   lastUpdateTimestamp: Date.now()
@@ -366,16 +403,36 @@ export const DEFAULT_INVENTORY: Inventory = {
 
 // Константы для обновления ресурсов
 export const FILL_RATES = {
-  // Базовая скорость заполнения контейнера - 1 snot за 24 часа
-  BASE_CONTAINER_FILL_RATE: 1 / 86400, // снот в секунду (примерно 0.000011574)
+  // На уровне 1 заполняем 1 единицу snotа за 12 часов
+  BASE_FILL_RATE: 1, // Базовый уровень, при котором 1 единица snot заполняется за 12 часов
   
-  // Множитель скорости заполнения за каждый уровень
-  FILL_SPEED_MULTIPLIER: 2,
+  // Базовая скорость заполнения в единицах в секунду для уровня 1
+  // 1 snot за 12 часов = 1 / (12 * 3600) snot в секунду
+  BASE_CONTAINER_FILL_RATE: 1 / (7.2 * 360), // Увеличено в 100 раз для более быстрого заполнения
   
-  // Количество секунд в сутках (для расчетов)
-  SECONDS_PER_DAY: 86400,
+  // Коэффициент улучшения на каждом уровне (значение fillingSpeed)
+  LEVEL_1_FILL_SPEED: 1,    // 1 snot за 12 часов
+  LEVEL_2_FILL_SPEED: 1.5,  // 1 snot за 8 часов
+  LEVEL_3_FILL_SPEED: 2,    // 1 snot за 6 часов
+  LEVEL_4_FILL_SPEED: 3,    // 1 snot за 4 часа
+  LEVEL_5_FILL_SPEED: 4,    // 1 snot за 3 часа
   
-  // Коэффициент для преобразования текущей скорости заполнения в секунды
-  // Это количество секунд, необходимое для заполнения 1 единицы при базовой скорости 1
-  SECONDS_PER_UNIT: 86400 
+  // Время полного заполнения на 1 уровне в часах
+  FULL_CONTAINER_FILL_TIME_HOURS: 12
+};
+
+/**
+ * Рассчитывает емкость контейнера на основе уровня
+ * @param level Уровень контейнера
+ * @returns Емкость контейнера
+ */
+function calculateContainerCapacity(level: number): number {
+  // Проверяем, что уровень находится в допустимом диапазоне
+  const safeLevel = Math.max(1, Math.min(level, UPGRADE_VALUES.containerCapacity.length));
+  
+  // Получаем емкость на основе уровня из массива значений
+  const capacity = UPGRADE_VALUES.containerCapacity[safeLevel - 1];
+  
+  // Проверяем, что значение определено
+  return typeof capacity === 'number' ? capacity : 1;
 } 

@@ -1,3 +1,12 @@
+/**
+ * ВНИМАНИЕ! Этот компонент устарел и будет удален в ближайшее время.
+ * Вместо него используйте контекст SaveManagerProvider и хуки:
+ * - useSaveManager() - из app/contexts/SaveManagerProvider
+ * - useSaveGame() - из app/hooks/useSaveGame
+ * - useLoadGame() - из app/hooks/useLoadGame
+ * - useForceSave() - из app/hooks/useForceSave
+ */
+
 import React, { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react';
 import { useGameState, useGameDispatch } from '../../contexts';
 import { api } from '../../lib/api';

@@ -1,4 +1,17 @@
 /**
+ * ВНИМАНИЕ! Этот файл устарел и будет удален в ближайшее время.
+ * Вместо него используйте систему сохранений из каталога saveSystem:
+ * - LocalStorageAdapter - из app/services/saveSystem/adapters/LocalStorageAdapter
+ * - saveManager - из app/services/saveSystem/index
+ * - useSaveManager - из app/contexts/SaveManagerProvider
+ */
+
+/**
+ * Утилита для работы с localStorage
+ * Обеспечивает безопасное сохранение, загрузку и очистку данных в localStorage
+ */
+
+/**
  * localStorageManager.ts
  * Модуль для управления localStorage с функциями контроля размера, очистки и работы с резервными копиями
  */

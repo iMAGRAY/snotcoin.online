@@ -1,163 +1,202 @@
 /**
- * Модуль структурированного логирования
+ * Логгер приложения
  */
 
-// Определяем уровни логирования
-export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
+// Конфигурация уровней логирования
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
+
+// Стандартный уровень логирования
+const DEFAULT_LOG_LEVEL: LogLevel = 
+  (process.env.LOG_LEVEL as LogLevel) || 'info';
+
+// Включен ли режим отладки
+const DEBUG_MODE = process.env.NODE_ENV !== 'production' || 
+                  process.env.DEBUG === 'true';
+
+// Числовые уровни для сравнения
+const LOG_LEVEL_VALUES: Record<LogLevel, number> = {
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+  fatal: 5,
+  silent: 6
+};
+
+// Служебная функция форматирования даты для логов
+function formatDate(date: Date): string {
+  return date.toISOString();
 }
 
-// Тип для метаданных лога
-export interface LogMetadata {
-  [key: string]: any;
+// Параметры логгера
+export interface LoggerOptions {
+  level?: LogLevel;
+  component?: string;
+  enabled?: boolean;
+  prefix?: string;
 }
 
-// Основной класс логгера
-class Logger {
-  private serviceName: string;
-  private minLevel: LogLevel;
+/**
+ * Базовый класс логгера
+ */
+export class Logger {
+  private level: LogLevel;
+  private component: string;
+  private enabled: boolean;
+  private prefix: string;
   
-  /**
-   * Создает экземпляр логгера
-   * @param serviceName Название сервиса для идентификации логов
-   * @param minLevel Минимальный уровень логирования
-   */
-  constructor(serviceName: string, minLevel: LogLevel = LogLevel.INFO) {
-    this.serviceName = serviceName;
-    this.minLevel = minLevel;
-    
-    // Используем настройки из переменных окружения, если они доступны
-    if (process.env.LOG_LEVEL) {
-      this.minLevel = process.env.LOG_LEVEL as LogLevel;
-    }
-  }
-  
-  /**
-   * Форматирует сообщение лога в JSON
-   */
-  private formatLog(level: LogLevel, message: string, metadata?: LogMetadata): string {
-    const timestamp = new Date().toISOString();
-    const logData = {
-      timestamp,
-      level,
-      service: this.serviceName,
-      message,
-      ...metadata,
-    };
-    
-    return JSON.stringify(logData);
-  }
-  
-  /**
-   * Проверяет, нужно ли логировать указанный уровень
-   */
-  private shouldLog(level: LogLevel): boolean {
-    const levels = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR];
-    const currentLevelIndex = levels.indexOf(this.minLevel);
-    const targetLevelIndex = levels.indexOf(level);
-    
-    return targetLevelIndex >= currentLevelIndex;
-  }
-  
-  /**
-   * Логирует сообщение уровня DEBUG
-   */
-  public debug(message: string, metadata?: LogMetadata): void {
-    // Отключено для production режима
-    return;
-  }
-  
-  /**
-   * Логирует сообщение уровня INFO
-   */
-  public info(message: string, metadata?: LogMetadata): void {
-    if (this.shouldLog(LogLevel.INFO)) {
-      console.info(this.formatLog(LogLevel.INFO, message, metadata));
-    }
-  }
-  
-  /**
-   * Логирует сообщение уровня WARN
-   */
-  public warn(message: string, metadata?: LogMetadata): void {
-    if (this.shouldLog(LogLevel.WARN)) {
-      console.warn(this.formatLog(LogLevel.WARN, message, metadata));
-    }
-  }
-  
-  /**
-   * Логирует сообщение уровня ERROR
-   */
-  public error(message: string, metadata?: LogMetadata): void {
-    if (this.shouldLog(LogLevel.ERROR)) {
-      console.error(this.formatLog(LogLevel.ERROR, message, metadata));
-    }
+  constructor(options: LoggerOptions = {}) {
+    this.level = options.level || DEFAULT_LOG_LEVEL;
+    this.component = options.component || 'app';
+    this.enabled = options.enabled !== false;
+    this.prefix = options.prefix || '';
   }
   
   /**
    * Создает дочерний логгер с дополнительным контекстом
    */
-  public child(context: LogMetadata): Logger {
-    const childLogger = new Logger(this.serviceName, this.minLevel);
+  child(options: LoggerOptions): Logger {
+    return new Logger({
+      level: options.level || this.level,
+      component: options.component || this.component,
+      enabled: options.enabled !== undefined ? options.enabled : this.enabled,
+      prefix: `${this.prefix}${options.prefix || ''}`
+    });
+  }
+  
+  /**
+   * Проверяет, должно ли сообщение быть залогировано на текущем уровне
+   */
+  private shouldLog(messageLevel: LogLevel): boolean {
+    return (
+      this.enabled && 
+      LOG_LEVEL_VALUES[messageLevel] >= LOG_LEVEL_VALUES[this.level]
+    );
+  }
+  
+  /**
+   * Форматирует сообщение лога
+   */
+  private formatMessage(level: string, message: string, data: any = {}): string {
+    const timestamp = formatDate(new Date());
+    const prefix = this.prefix ? `${this.prefix} ` : '';
     
-    // Переопределяем методы для добавления контекста
-    const originalMethods = {
-      debug: childLogger.debug.bind(childLogger),
-      info: childLogger.info.bind(childLogger),
-      warn: childLogger.warn.bind(childLogger),
-      error: childLogger.error.bind(childLogger),
-    };
+    if (typeof data === 'object' && data !== null) {
+      // Преобразование объекта в строку, исключая циклические ссылки
+      try {
+        const dataStr = JSON.stringify(data);
+        return `[${timestamp}] [${level.toUpperCase()}] [${this.component}] ${prefix}${message} ${dataStr}`;
+      } catch (e) {
+        return `[${timestamp}] [${level.toUpperCase()}] [${this.component}] ${prefix}${message} [Невозможно сериализовать данные]`;
+      }
+    }
     
-    childLogger.debug = (message: string, metadata?: LogMetadata) => {
-      originalMethods.debug(message, { ...context, ...metadata });
-    };
+    return `[${timestamp}] [${level.toUpperCase()}] [${this.component}] ${prefix}${message}`;
+  }
+  
+  /**
+   * Логирует сообщение с указанным уровнем
+   */
+  private log(level: LogLevel, message: string, data?: any): void {
+    if (!this.shouldLog(level)) return;
     
-    childLogger.info = (message: string, metadata?: LogMetadata) => {
-      originalMethods.info(message, { ...context, ...metadata });
-    };
+    const formattedMessage = this.formatMessage(level, message, data);
     
-    childLogger.warn = (message: string, metadata?: LogMetadata) => {
-      originalMethods.warn(message, { ...context, ...metadata });
-    };
-    
-    childLogger.error = (message: string, metadata?: LogMetadata) => {
-      originalMethods.error(message, { ...context, ...metadata });
-    };
-    
-    return childLogger;
+    switch (level) {
+      case 'trace':
+      case 'debug':
+        if (DEBUG_MODE) {
+          console.debug(formattedMessage);
+        }
+        break;
+      case 'info':
+        console.info(formattedMessage);
+        break;
+      case 'warn':
+        console.warn(formattedMessage);
+        break;
+      case 'error':
+      case 'fatal':
+        console.error(formattedMessage);
+        break;
+      default:
+        // silent и неизвестные уровни не логируются
+        break;
+    }
+  }
+  
+  // Методы логирования разных уровней
+  trace(message: string, data?: any): void {
+    this.log('trace', message, data);
+  }
+  
+  debug(message: string, data?: any): void {
+    this.log('debug', message, data);
+  }
+  
+  info(message: string, data?: any): void {
+    this.log('info', message, data);
+  }
+  
+  warn(message: string, data?: any): void {
+    this.log('warn', message, data);
+  }
+  
+  error(message: string, data?: any): void {
+    this.log('error', message, data);
+  }
+  
+  fatal(message: string, data?: any): void {
+    this.log('fatal', message, data);
   }
 }
 
-// Создаем и экспортируем экземпляр логгера
-export const logger = new Logger('game-service');
+// Основной экземпляр логгера
+export const logger = new Logger();
 
-// Создаем предварительно настроенные логгеры для разных компонентов
+// Логгеры компонентов
 export const apiLogger = logger.child({ component: 'api' });
-export const redisLogger = logger.child({ component: 'redis' });
-export const dbLogger = logger.child({ component: 'database' });
-export const syncLogger = logger.child({ component: 'sync' });
+export const authLogger = logger.child({ component: 'auth' });
+export const gameLogger = logger.child({ component: 'game' });
+export const dbLogger = logger.child({ component: 'db' });
+export const clientLogger = logger.child({ component: 'client' });
+export const serverLogger = logger.child({ component: 'server' });
 
-// Функция для логирования времени выполнения
-export function logTiming<T>(
-  fn: () => Promise<T>,
-  message: string,
-  targetLogger = logger
-): Promise<T> {
+// Инструмент для логирования времени выполнения операций
+export function logTiming(operationName: string, callback: () => any, logger = apiLogger): any {
   const start = performance.now();
-  
-  return fn().then(result => {
-    const elapsed = performance.now() - start;
-    targetLogger.info(`${message} - выполнено за ${elapsed.toFixed(2)}мс`);
+  try {
+    const result = callback();
+    const duration = performance.now() - start;
+    
+    logger.debug(`Операция "${operationName}" выполнена за ${duration.toFixed(2)}ms`);
+    
     return result;
-  }).catch(error => {
-    const elapsed = performance.now() - start;
-    targetLogger.error(`${message} - ошибка за ${elapsed.toFixed(2)}мс`, { error: error.message });
+  } catch (error) {
+    const duration = performance.now() - start;
+    logger.error(`Ошибка в операции "${operationName}" через ${duration.toFixed(2)}ms`, { error });
     throw error;
-  });
+  }
 }
 
-// По умолчанию экспортируем основной логгер
-export default logger; 
+// Асинхронная версия логирования времени
+export async function logTimingAsync<T>(
+  operationName: string, 
+  callback: () => Promise<T>, 
+  logger = apiLogger
+): Promise<T> {
+  const start = performance.now();
+  try {
+    const result = await callback();
+    const duration = performance.now() - start;
+    
+    logger.debug(`Асинхронная операция "${operationName}" выполнена за ${duration.toFixed(2)}ms`);
+    
+    return result;
+  } catch (error) {
+    const duration = performance.now() - start;
+    logger.error(`Ошибка в асинхронной операции "${operationName}" через ${duration.toFixed(2)}ms`, { error });
+    throw error;
+  }
+} 

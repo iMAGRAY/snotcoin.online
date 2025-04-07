@@ -100,16 +100,21 @@ npm start
 
 ## Переменные окружения
 
-См. `.env.example` для списка необходимых переменных окружения.
+Для правильной работы приложения необходимо настроить следующие переменные окружения:
 
-# Redis Setup
+```bash
+# Для авторизации через Discord
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
 
-## Redis Configuration
+# Хостинг
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=
 
-The project uses Redis for caching game states and improving performance. Redis is configured to use a remote server by default.
+# База данных
+DATABASE_URL=
 
-### Environment Variables
-
-Redis configuration is controlled through environment variables in `.env.local`:
-
+# Серверная часть
+API_SECRET=
+API_ENDPOINT=
 ```

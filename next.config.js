@@ -1,24 +1,76 @@
-/** @type {import('next').NextConfig} */
+/**
+ * @type {import('next').NextConfig}
+ */
+
 const nextConfig = {
-  reactStrictMode: true, // Включаем Strict Mode обратно
+  // Указываем, что будем использовать файл .env.local для всех режимов
+  env: {
+    NEXT_CONFIG_ENV_LOADED: 'true',
+  },
+  
+  // Отключаем строгий режим для маршрутов
+  reactStrictMode: false,
+
+  // Настройки сборки и оптимизации
+  swcMinify: true,
+  compress: true,
+  productionBrowserSourceMaps: false,
+  optimizeFonts: true,
+
+  // Настройки изображений
   images: {
-    dangerouslyAllowSVG: true,
-    contentDispositionType: 'attachment',
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    domains: ['imagedelivery.net', 'warpcast.com', 'i.imgur.com', 'img.farcaster.xyz'],
+    domains: ['images.neynar.com', 'cloudflare-ipfs.com', 'snotcoin.online', 'imagedelivery.net'],
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.farcaster.xyz',
+      },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
+    ],
   },
-  // Эти опции не поддерживаются в Next.js 14.2.26
-  // experimental: {
-  //   fontLoaders: [
-  //     { loader: 'next/font/local' } // Использовать только локальные шрифты
-  //   ],
-  // },
-  // Увеличиваем таймаут для загрузки шрифтов и других ресурсов
-  httpAgentOptions: {
-    keepAlive: true,
-    // timeout: 60000, // 60 секунд - не поддерживается
+
+  // Настройки вебпака
+  webpack: (config, { dev, isServer }) => {
+    // Кастомные настройки вебпака можно добавить здесь
+    return config;
   },
-  // Add other Next.js configurations here if needed
+
+  // Настройки заголовков для безопасности
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          // Убираем ограничение X-Frame-Options, чтобы разрешить отображение в фрейме
+          // {
+          //   key: 'X-Frame-Options',
+          //   value: 'SAMEORIGIN',
+          // },
+        ],
+      },
+    ];
+  },
+
+  // Переопределяем фазы сборки для всегда использования .env.local
+  experimental: {
+    // Включаем экспериментальные функции, если нужно
+  },
 };
 
 module.exports = nextConfig; 

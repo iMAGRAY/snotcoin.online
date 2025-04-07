@@ -5,8 +5,12 @@ import { motion } from "framer-motion"
 import styles from "./statusPanel.module.css"
 import { useTranslation } from "../../i18n"
 import { formatTime, formatSnotValue } from "../../utils/formatters"
-import { calculateFillingTime } from "../../utils/gameUtils"
+import { calculateFillingTime, getFillingSpeedByLevel } from "../../utils/gameUtils"
 import { Database, Zap, Clock, ArrowUp } from "lucide-react"
+import { useSelector } from "react-redux"
+import { RootState } from "../../redux/rootReducer"
+import { checkIfContainerFull } from "../../utils/inventory"
+import StatInfo from "./StatInfo"
 
 interface StatusPanelProps {
   containerCapacity: number
@@ -26,24 +30,43 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation()
+  const inventory = useSelector((state: RootState) => state.game.inventory)
+  
+  const safeContainerCapacity = isNaN(containerCapacity) || containerCapacity <= 0 ? 100 : containerCapacity
+  const safeContainerLevel = isNaN(containerLevel) || containerLevel <= 0 ? 1 : containerLevel
+  const safeFillingSpeedLevel = isNaN(fillingSpeedLevel) || fillingSpeedLevel <= 0 ? 1 : fillingSpeedLevel
 
-  // Безопасные значения для отображения
-  const safeContainerCapacity = isNaN(containerCapacity) || containerCapacity <= 0 ? 100 : containerCapacity;
-  const safeContainerLevel = isNaN(containerLevel) || containerLevel <= 0 ? 1 : containerLevel;
-  const safeFillingSpeedLevel = isNaN(fillingSpeedLevel) || fillingSpeedLevel <= 0 ? 1 : fillingSpeedLevel;
-
-  const statusItems = [
-    { icon: Database, label: "Capacity", value: formatSnotValue(safeContainerCapacity, 2), tooltip: t("capacityTooltip") },
-    { icon: ArrowUp, label: "Lvl", value: safeContainerLevel, tooltip: t("capacityLevelTooltip") },
-    { icon: Zap, label: "Spd", value: safeFillingSpeedLevel, tooltip: t("fillingLevelTooltip") },
+  // Получаем корректное значение скорости заполнения на основе уровня
+  const correctFillingSpeed = getFillingSpeedByLevel(fillingSpeedLevel ?? 1)
+  
+  // Проверяем, заполнен ли контейнер полностью
+  const isContainerFull = checkIfContainerFull(containerSnot, containerCapacity)
+  
+  const stats = [
     {
-      icon: Clock,
-      label: "Fill",
-      value: formatTime(calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed)),
-      tooltip: t("timeToFillTooltip"),
+      id: "snotcoins",
+      label: t("snotcoins"),
+      value: formatSnotValue(inventory?.snotcoins || 0, 2),
+      tooltip: t("snotcoinsTooltip")
     },
+    {
+      id: "container",
+      label: t("container"),
+      value: `${Math.floor(containerSnot)}/${containerCapacity}`,
+      tooltip: t("containerTooltip")
+    }
   ]
-
+  
+  // Добавляем время до заполнения только если контейнер не полон
+  if (!isContainerFull) {
+    stats.push({
+      id: "timeToFill",
+      label: t("timeToFill"),
+      value: formatTime(calculateFillingTime(containerSnot, containerCapacity, correctFillingSpeed).timeInSeconds),
+      tooltip: t("timeToFillTooltip")
+    })
+  }
+  
   return (
     <motion.div
       className={`flex flex-wrap justify-between bg-black/20 backdrop-blur-sm rounded-full ${className}`}
@@ -51,20 +74,13 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {statusItems.map((item, index) => (
-        <motion.div
-          key={item.label}
-          className="flex-1 flex items-center justify-center px-0.5 rounded-full space-x-1 hover:bg-white/20 transition-all duration-300"
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: index * 0.1 }}
-          whileHover={{ scale: 1.05 }}
-          title={item.tooltip}
-        >
-          <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-          <span className="text-[10px] sm:text-xs font-medium text-white">{item.label}</span>
-          <span className="text-[10px] sm:text-xs font-bold text-white">{item.value}</span>
-        </motion.div>
+      {stats.map((stat) => (
+        <StatInfo
+          key={stat.id}
+          label={stat.label}
+          value={stat.value}
+          tooltip={stat.tooltip}
+        />
       ))}
     </motion.div>
   )

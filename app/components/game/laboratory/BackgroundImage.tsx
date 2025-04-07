@@ -159,7 +159,10 @@ const BackgroundImage: React.FC<BackgroundImageProps> = React.memo(
         return containerSnotValue;
       }
       
-      const containerSnot = Math.max(0, store?.inventory?.containerSnot ?? 0);
+      // Проверка на существование store и inventory
+      if (!store?.inventory) return "0";
+      
+      const containerSnot = Math.max(0, store.inventory.containerSnot ?? 0);
       
       if (isNaN(containerSnot)) {
         return "0";

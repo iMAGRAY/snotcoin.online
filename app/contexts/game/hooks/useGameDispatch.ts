@@ -1,9 +1,9 @@
 import { useContext } from 'react'
-import { GameDispatchContext } from '../contexts'
-import type { Action } from '../../../types/gameTypes'
+import { SetGameStateContext } from '../contexts'
+import type { GameState } from '../../../types/gameTypes'
 
-export function useGameDispatch(): (action: Action) => void {
-  const context = useContext(GameDispatchContext)
+export function useGameDispatch(): (newStateOrFunction: GameState | ((prevState: GameState) => GameState)) => void {
+  const context = useContext(SetGameStateContext)
   if (!context) {
     throw new Error('useGameDispatch должен использоваться внутри GameProvider')
   }

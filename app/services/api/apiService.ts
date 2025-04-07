@@ -275,81 +275,111 @@ export async function loadGameStateViaAPI(userIdOrGameState: string | ExtendedGa
 }
 
 /**
- * Сохраняет состояние игры в Redis через API
+ * Сохраняет состояние игры через API
  * @param userId ID пользователя
  * @param gameState Состояние игры
  * @param isCritical Флаг критичности сохранения
+ * @param storeLastState Сохранять ли последнее состояние в localStorage
  * @returns Promise<boolean> Успешность выполнения операции
  */
-export async function saveGameStateToRedisViaAPI(
+export async function saveGameState(
   userId: string, 
   gameState: any, 
-  isCritical = true
+  isCritical = false,
+  storeLastState = true
 ): Promise<boolean> {
   try {
+    // Если мы в браузере, сохраняем копию состояния в localStorage для аварийного восстановления
+    if (typeof window !== 'undefined' && storeLastState) {
+      // Сохраняем состояние в localStorage для аварийного восстановления
+      try {
+        // Создаем безопасную для сохранения версию состояния
+        const safeState = { ...gameState };
+        
+        // Удаляем циклические ссылки и другие проблемные поля
+        delete safeState._providers;
+        delete safeState._refs;
+        
+        localStorage.setItem(
+          `${STORAGE_KEYS.EMERGENCY_SAVE_PREFIX}${userId}`, 
+          JSON.stringify({
+            state: safeState,
+            timestamp: Date.now(),
+            version: safeState._saveVersion || 0
+          })
+        );
+      } catch (localError) {
+        console.error('[ApiService] Ошибка при сохранении аварийной копии:', localError);
+        // Продолжаем выполнение даже при ошибке локального сохранения
+      }
+    }
+    
     // Получаем токен для авторизации
-    const token = authService.getToken();
+    const token = await authService.getTokenAsync();
     
     if (!token) {
-      console.warn(`[ApiService] Не удалось получить токен для сохранения в Redis`);
+      console.warn(`[ApiService] Не удалось получить токен для сохранения`);
       return false;
     }
     
-    // Отправляем запрос на сервер для сохранения в Redis с токеном в URL
-    const redisResponse = await fetch(`/api/cache/save-redis?token=${encodeURIComponent(token)}`, {
+    // Отправляем запрос на сервер
+    const saveResponse = await fetch('/api/game/save-progress', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-Client-Id': getClientId()
       },
       body: JSON.stringify({
-        userId: userId,
-        data: gameState,
+        gameState: gameState,
+        reason: 'api',
         isCritical: isCritical
       }),
     });
     
-    if (redisResponse.ok) {
-      console.log(`[ApiService] Состояние успешно сохранено в Redis через API`);
+    if (saveResponse.ok) {
+      console.log(`[ApiService] Состояние успешно сохранено через API`);
       return true;
     } else {
-      const errorData = await redisResponse.json();
-      console.warn(`[ApiService] Ошибка при сохранении в Redis: ${errorData.error || redisResponse.statusText}`);
+      const errorData = await saveResponse.json();
+      console.warn(`[ApiService] Ошибка при сохранении: ${errorData.error || saveResponse.statusText}`);
       return false;
     }
   } catch (error) {
-    console.error('[ApiService] Ошибка при сохранении в Redis через API:', error);
+    console.error('[ApiService] Ошибка при сохранении через API:', error);
     return false;
   }
 }
 
 /**
- * Загружает состояние из Redis через API
+ * Загружает состояние игры через API
  * @param userId ID пользователя
  * @returns Состояние игры или null при ошибке
  */
-export async function loadGameStateFromRedisViaAPI(userId: string): Promise<ExtendedGameState | null> {
+export async function loadGameState(userId: string): Promise<ExtendedGameState | null> {
   try {
-    console.log(`[ApiService] Загрузка данных из Redis через API для ${userId}`);
+    console.log(`[ApiService] Загрузка состояния через API для ${userId}`);
     
     // Получаем токен для авторизации
-    const token = authService.getToken();
+    const token = await authService.getTokenAsync();
     
     if (!token) {
-      console.warn(`[ApiService] Не удалось получить токен для загрузки данных из Redis`);
+      console.warn(`[ApiService] Не удалось получить токен для загрузки данных`);
       return null;
     }
     
-    // Отправляем запрос на сервер для получения данных из Redis с токеном в URL
-    const response = await fetch(`/api/cache/load-redis?userId=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`, {
+    // Отправляем запрос на сервер
+    const response = await fetch(`/api/game/load-progress?userId=${encodeURIComponent(userId)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
       }
     });
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.warn(`[ApiService] Не удалось загрузить данные из Redis через API: ${errorData.error || response.statusText}`);
+      console.warn(`[ApiService] Не удалось загрузить данные через API: ${errorData.error || response.statusText}`);
       return null;
     }
     
@@ -357,27 +387,30 @@ export async function loadGameStateFromRedisViaAPI(userId: string): Promise<Exte
     
     // Проверяем структуру ответа
     if (!result || typeof result !== 'object') {
-      console.warn(`[ApiService] Некорректный формат ответа от Redis API`);
+      console.warn(`[ApiService] Некорректный формат ответа от API`);
       return null;
     }
     
     // Проверяем наличие данных
     if (!result.success) {
-      console.warn(`[ApiService] Redis API вернул ошибку: ${result.error || 'Unknown error'}`);
+      console.warn(`[ApiService] API вернул ошибку: ${result.error || 'Unknown error'}`);
       return null;
     }
     
     // Проверяем наличие данных в ответе
-    if (!result.data) {
-      console.warn(`[ApiService] Redis API вернул пустой ответ`);
+    if (!result.gameState) {
+      console.warn(`[ApiService] API вернул пустой ответ`);
       return null;
     }
     
-    console.log(`[ApiService] Данные успешно загружены из Redis через API (источник: ${result.source})`);
+    console.log(`[ApiService] Данные успешно загружены через API`);
     
-    return result.data as ExtendedGameState;
+    // Получаем свойство gameState из ответа сервера
+    const gameState = result.gameState;
+    
+    return gameState as ExtendedGameState;
   } catch (error) {
-    console.error(`[ApiService] Ошибка при загрузке данных из Redis через API:`, error);
+    console.error(`[ApiService] Ошибка при загрузке данных через API:`, error);
     return null;
   }
 }
@@ -388,4 +421,25 @@ export async function loadGameStateFromRedisViaAPI(userId: string): Promise<Exte
 export function cancelAllRequests(): void {
   console.log('[ApiService] Отмена всех активных запросов');
   // Здесь должна быть реализация отмены запросов с использованием AbortController
+}
+
+/**
+ * Загружает состояние игры для пользователя
+ * Алиас для loadGameStateViaAPI для обратной совместимости
+ * @param userIdOrGameState ID пользователя или текущее состояние игры
+ * @returns Promise с состоянием игры
+ */
+export async function loadGameState(userIdOrGameState: string | ExtendedGameState): Promise<ExtendedGameState | null> {
+  return loadGameStateViaAPI(userIdOrGameState);
+}
+
+/**
+ * Сохраняет состояние игры для пользователя
+ * Алиас для saveGameStateViaAPI для обратной совместимости
+ * @param gameState Состояние игры для сохранения (может быть сжатым в строку)
+ * @param forceSave Принудительное сохранение даже без изменений
+ * @returns Promise с результатом сохранения
+ */
+export async function saveGameState(gameState: ExtendedGameState | string, forceSave = false): Promise<SaveProgressResponse> {
+  return saveGameStateViaAPI(gameState, forceSave);
 } 

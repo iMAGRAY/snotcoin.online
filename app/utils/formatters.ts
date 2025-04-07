@@ -42,61 +42,77 @@ export type TimeFormatOptions = {
   showSeconds?: boolean;
   /** Показывать только наибольшую единицу */
   maxUnitOnly?: boolean;
+  /** Показывать в краткой форме */
+  shortFormat?: boolean;
+  /** Максимальное количество единиц времени */
+  maxUnits?: number;
 }
 
 /**
- * Форматирует время в секундах в читаемый формат (ч, м, с)
- * @param seconds - Количество секунд
- * @param options - Опции форматирования
- * @returns Отформатированное значение времени
+ * Форматирует время в секундах в удобочитаемую строку
+ * @param seconds Время в секундах или объект конфигурации
+ * @param options Опции форматирования
+ * @returns Отформатированная строка времени
  */
-export function formatTime(seconds: number, options?: TimeFormatOptions): string {
-  console.log("formatTime input:", { seconds, options });
-  
-  const { showSeconds = true, maxUnitOnly = true } = options || {};
-  
-  // Проверка на некорректные значения
-  if (isNaN(seconds) || seconds === Infinity) {
-    console.log("formatTime: returning infinity symbol");
-    return "∞";
+export function formatTime(
+  secondsOrConfig: number | { seconds: number; options?: TimeFormatOptions },
+  optionsParam?: TimeFormatOptions
+): string {
+  // Получаем параметры из разных источников
+  const seconds = typeof secondsOrConfig === 'number' 
+    ? secondsOrConfig 
+    : secondsOrConfig?.seconds;
+    
+  const options = typeof secondsOrConfig === 'object' && secondsOrConfig?.options
+    ? secondsOrConfig.options
+    : optionsParam;
+    
+  // Базовые проверки
+  if (isNaN(seconds) || seconds === undefined || seconds === null) {
+    return '0 с';
   }
   
-  // Если время равно нулю, показываем "0s"
-  if (seconds === 0) {
-    console.log("formatTime: returning 0s");
-    return "0s";
+  if (seconds < 0) {
+    return '0 с';
   }
   
-  // Расчет времени в различных единицах
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
+  // Максимальное отображаемое время - 30 дней для подробного отображения
+  const MAX_TIME = 30 * 24 * 60 * 60; // 30 дней в секундах
   
-  console.log("formatTime calculation:", { days, hours, minutes, remainingSeconds });
-
-  if (maxUnitOnly) {
-    if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h`;
-    if (minutes > 0) return `${minutes}m`;
-    return `${remainingSeconds}s`;
+  if (seconds > MAX_TIME) {
+    // Для очень больших значений (больше 100 дней) показываем в месяцах
+    if (seconds > 100 * 24 * 3600) {
+      const months = Math.floor(seconds / (30 * 24 * 3600));
+      return `≈ ${months} мес`;
+    }
+    
+    // Для значений от 30 до 100 дней показываем в днях
+    const days = Math.floor(seconds / (24 * 3600));
+    return `${days} д`;
   }
-
+  
+  // Разбиваем время на компоненты
+  const secValue = Math.round(seconds);
+  const days = Math.floor(secValue / (24 * 3600));
+  const hours = Math.floor((secValue % (24 * 3600)) / 3600);
+  const minutes = Math.floor((secValue % 3600) / 60);
+  const secs = Math.floor(secValue % 60);
+  
+  // Формируем строку, пропуская нулевые значения для компактности
+  const parts = [];
+  
   if (days > 0) {
-    return showSeconds 
-      ? `${days}d ${hours}h ${minutes}m ${remainingSeconds}s`
-      : `${days}d ${hours}h ${minutes}m`;
-  } else if (hours > 0) {
-    return showSeconds 
-      ? `${hours}h ${minutes}m ${remainingSeconds}s`
-      : `${hours}h ${minutes}m`;
-  } else if (minutes > 0) {
-    return showSeconds 
-      ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`;
-  } else {
-    return `${remainingSeconds}s`;
+    parts.push(`${days} д`);
   }
+  
+  if (hours > 0 || days > 0) {
+    parts.push(`${hours} ч`);
+  }
+  
+  // Всегда показываем минуты, даже если они равны нулю
+  parts.push(`${minutes} м`);
+  
+  return parts.join(' ');
 }
 
 /**
@@ -233,41 +249,6 @@ export function formatNumber(
   }
   
   return result;
-}
-
-/**
- * Рассчитывает время заполнения контейнера
- * @param containerSnot - Текущее количество SNOT в контейнере
- * @param containerCapacity - Вместимость контейнера
- * @param fillingSpeed - Скорость заполнения
- * @returns Время заполнения в секундах
- */
-export function calculateFillingTime(
-  containerSnot: number, 
-  containerCapacity: number,
-  fillingSpeed: number
-): number {
-  // Проверка входных данных на корректность
-  if (isNaN(containerSnot) || isNaN(containerCapacity) || isNaN(fillingSpeed)) {
-    return Infinity;
-  }
-  
-  // Проверка на деление на ноль
-  if (fillingSpeed <= 0) return Infinity;
-  
-  // Проверка на некорректные входные данные
-  if (containerCapacity <= 0) return Infinity;
-  
-  // Если контейнер полон или переполнен, время заполнения = 0
-  if (containerSnot >= containerCapacity) return 0;
-  
-  // Безопасные значения с обработкой отрицательных чисел
-  const safeContainerSnot = Math.max(0, containerSnot);
-  const safeContainerCapacity = Math.max(1, containerCapacity);
-  const safeFillingSpeed = Math.max(0.000001, fillingSpeed);
-  
-  const remainingCapacity = safeContainerCapacity - safeContainerSnot;
-  return remainingCapacity / safeFillingSpeed;
 }
 
 /**

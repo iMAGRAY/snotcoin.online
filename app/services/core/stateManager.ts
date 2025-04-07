@@ -12,6 +12,12 @@ import * as localStorage from '../storage/localStorageService';
 import * as dataIntegrity from '../validation/dataIntegrityService';
 import * as compression from '../compression/compressionService';
 import * as saveQueue from '../queue/saveQueueService';
+import { createInitialGameState } from '@/app/constants/gameConstants';
+import { verifyLocalSaveIntegrity } from '@/app/utils/localSaveChecker';
+import { logTiming } from '@/app/lib/logger';
+import { compress } from '@/app/utils/compression';
+import { calculateGameLogic } from '@/app/utils/gameLogic';
+import { prepareStateForSaving } from '@/app/services/dataServiceModular';
 
 // Настройки менеджера состояния
 interface StateManagerOptions {
@@ -30,6 +36,11 @@ class StateManager {
   private minimumSaveInterval: number;
   private criticalSaveInterval: number;
   private unloadProtection: boolean;
+  private activeUserId: string | null = null;
+  private lastLoadedState: ExtendedGameState | null = null;
+  private isInitialized = false;
+  private localStorageCacheKey = 'game_state_cache';
+  private localStoragePrefix = 'game_state_';
   
   /**
    * Конструктор менеджера состояния
@@ -40,6 +51,8 @@ class StateManager {
     this.minimumSaveInterval = options.minimumSaveInterval ?? 5000;
     this.criticalSaveInterval = options.criticalSaveInterval ?? 2000;
     this.unloadProtection = options.unloadProtection ?? true;
+    this.isInitialized = true;
+    console.log('[StateManager] Инициализирован');
   }
   
   /**
@@ -49,120 +62,84 @@ class StateManager {
    */
   async loadGameState(userId: string): Promise<ExtendedGameState | null> {
     try {
-      console.log(`[StateManager] Загрузка игрового состояния для пользователя ${userId}`);
+      console.log(`[StateManager] Запрос данных для пользователя ${userId}`);
       
-      // Проверяем минимальный интервал между загрузками
-      const now = Date.now();
-      const lastLoadTime = memoryStorage.getLastLoadTime(userId);
-      const MIN_LOAD_INTERVAL = 2000; // 2 секунды между загрузками
+      const startTime = performance.now();
+      const apiState = await api.loadGameState(userId);
+      logTiming('StateManager.loadFromAPI', performance.now() - startTime);
       
-      if (now - lastLoadTime < MIN_LOAD_INTERVAL) {
-        console.log(`[StateManager] Слишком частые загрузки для пользователя ${userId}, ожидаем ${MIN_LOAD_INTERVAL - (now - lastLoadTime)}мс`);
+      if (apiState) {
+        console.log(`[StateManager] Данные получены из API`);
         
-        // Возвращаем кэшированные данные, если они есть
-        const cachedState = memoryStorage.getFromCache(userId);
-        if (cachedState) {
-          console.log(`[StateManager] Возвращаем данные из кэша для ${userId}`);
-          return cachedState;
+        this.activeUserId = userId;
+        this.lastLoadedState = apiState;
+        
+        // Кэшируем полученное состояние в localStorage
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              `${this.localStoragePrefix}${userId}`, 
+              JSON.stringify({ 
+                state: apiState, 
+                timestamp: Date.now() 
+              })
+            );
+          } catch (cacheError) {
+            console.warn('[StateManager] Не удалось кэшировать состояние в localStorage:', cacheError);
+          }
         }
         
-        return null;
+        return apiState;
       }
       
-      // Обновляем время последней загрузки
-      memoryStorage.updateLastLoadTime(userId);
+      // Если не удалось загрузить из API, пробуем локальный кэш
+      console.log(`[StateManager] Не удалось получить данные из API, проверяем локальный кэш`);
       
-      // Пытаемся загрузить из Redis через API
       if (typeof window !== 'undefined') {
         try {
-          const redisState = await api.loadGameStateFromRedisViaAPI(userId);
-          if (redisState) {
-            console.log(`[StateManager] Данные получены из Redis через API`);
+          const cachedData = localStorage.getItem(`${this.localStoragePrefix}${userId}`);
+          
+          if (cachedData) {
+            const parsed = JSON.parse(cachedData);
             
-            // Проверяем целостность данных
-            if (!dataIntegrity.checkDataIntegrity(redisState)) {
-              console.warn(`[StateManager] Данные из Redis не прошли проверку целостности`);
+            if (parsed && parsed.state) {
+              const localState = parsed.state;
               
-              // Проверяем наличие данных в кэше
-              const localCachedState = memoryStorage.getFromCache(userId);
-              if (localCachedState && memoryStorage.checkCacheIntegrity(userId)) {
-                console.log(`[StateManager] Использую данные из локального кэша вместо Redis`);
-                return localCachedState;
+              // Проверяем целостность
+              if (verifyLocalSaveIntegrity(localState)) {
+                console.log(`[StateManager] Использую данные из локального кэша`);
+                
+                this.activeUserId = userId;
+                this.lastLoadedState = localState;
+                
+                return localState;
+              } else {
+                console.warn('[StateManager] Локальный кэш поврежден, создаю новое состояние');
               }
-              
-              console.warn(`[StateManager] Нет валидных данных в кэше, создаю новое состояние`);
-              return null;
             }
-            
-            // Если данные сжаты, распаковываем их
-            if (isCompressedGameState(redisState)) {
-              console.log(`[StateManager] Распаковка сжатых данных из Redis`);
-              const decompressedState = compression.decompressGameState(redisState);
-              
-              // Сохраняем в кэш
-              memoryStorage.saveToCache(userId, decompressedState, true);
-              
-              return decompressedState;
-            }
-            
-            // Сохраняем в кэш
-            memoryStorage.saveToCache(userId, redisState, true);
-            
-            return redisState;
           }
-        } catch (apiError) {
-          console.warn(`[StateManager] Ошибка при получении данных из Redis через API:`, apiError);
-          // Продолжаем выполнение для получения из основного источника
+        } catch (localError) {
+          console.warn('[StateManager] Ошибка при чтении локального кэша:', localError);
         }
       }
       
-      // Проверяем наличие кэшированных данных
-      const cachedState = memoryStorage.getFromCache(userId);
-      if (cachedState && memoryStorage.checkCacheIntegrity(userId)) {
-        console.log(`[StateManager] Использую данные из локального кэша`);
-        return cachedState;
-      }
+      // Если ничего не помогло, создаем новое состояние
+      console.log(`[StateManager] Создаю новое состояние игры для пользователя ${userId}`);
       
-      // Проверяем наличие резервной копии в localStorage
-      const backupState = localStorage.loadGameStateBackup(userId);
-      if (backupState) {
-        console.log(`[StateManager] Использую данные из резервной копии в localStorage`);
-        
-        // Валидируем состояние
-        const validatedState = dataIntegrity.validateLoadedGameState(backupState, userId);
-        
-        // Сохраняем в кэш
-        memoryStorage.saveToCache(userId, validatedState, true);
-        
-        // Очищаем резервную копию
-        localStorage.clearGameStateBackup();
-        
-        return validatedState;
-      }
+      const initialState = createInitialGameState(userId);
+      this.activeUserId = userId;
+      this.lastLoadedState = initialState;
       
-      // Пробуем загрузить с сервера через API
-      try {
-        const serverState = await api.loadGameStateViaAPI(userId);
-        if (serverState) {
-          console.log(`[StateManager] Использую данные с сервера`);
-          
-          // Валидируем состояние
-          const validatedState = dataIntegrity.validateLoadedGameState(serverState, userId);
-          
-          // Сохраняем в кэш
-          memoryStorage.saveToCache(userId, validatedState, true);
-          
-          return validatedState;
-        }
-      } catch (serverError) {
-        console.error(`[StateManager] Ошибка при загрузке с сервера:`, serverError);
-      }
-      
-      console.log(`[StateManager] Не удалось загрузить данные для ${userId}, возвращаем null`);
-      return null;
+      return initialState;
     } catch (error) {
-      console.error(`[StateManager] Критическая ошибка при загрузке данных:`, error);
-      return null;
+      console.error('[StateManager] Ошибка при получении состояния:', error);
+      
+      // В случае ошибки, возвращаем начальное состояние
+      const initialState = createInitialGameState(userId);
+      this.activeUserId = userId;
+      this.lastLoadedState = initialState;
+      
+      return initialState;
     }
   }
   
@@ -177,81 +154,52 @@ class StateManager {
     userId: string, 
     gameState: ExtendedGameState, 
     isCritical = false
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
-      console.log(`[StateManager] Сохранение игрового состояния для пользователя ${userId}`);
-      
-      // Проверяем минимальный интервал между сохранениями
-      const now = Date.now();
-      const lastSaveTime = memoryStorage.getLastSaveTime(userId);
-      const MIN_SAVE_INTERVAL = isCritical ? this.criticalSaveInterval : this.minimumSaveInterval;
-      
-      if (now - lastSaveTime < MIN_SAVE_INTERVAL) {
-        console.log(`[StateManager] Слишком частые сохранения для пользователя ${userId}, ожидаем ${MIN_SAVE_INTERVAL - (now - lastSaveTime)}мс`);
-        
-        // Если это не критическое сохранение, добавляем в очередь с низким приоритетом
-        if (!isCritical) {
-          saveQueue.addSaveToQueue(userId, gameState, 0, false);
-        }
-        
-        return;
+      if (!userId) {
+        console.error('[StateManager] Не указан userId для сохранения');
+        return false;
       }
       
-      // Обновляем время последнего сохранения
-      memoryStorage.updateLastSaveTime(userId);
+      if (!gameState) {
+        console.error('[StateManager] Пустое состояние игры');
+        return false;
+      }
       
-      // Сохраняем в кэш
-      memoryStorage.saveToCache(userId, gameState, dataIntegrity.checkDataIntegrity(gameState));
+      // Обновляем логику игры перед сохранением
+      calculateGameLogic(gameState);
       
-      // Сохраняем в Redis через API, если мы в браузере
+      // Подготавливаем состояние к сохранению
+      const processedData = prepareStateForSaving(gameState);
+      
+      // Сохраняем через API
+      const saveResult = await api.saveGameState(userId, processedData, isCritical);
+      
+      if (!saveResult) {
+        console.error('[StateManager] Ошибка при сохранении через API');
+        return false;
+      }
+      
+      // Обновляем локальный кэш если успешно сохранили в API
       if (typeof window !== 'undefined') {
         try {
-          // Обеспечиваем отсутствие циклических ссылок в объекте state
-          const safeState = this.prepareStateForSaving(gameState);
-          
-          // Сжимаем данные перед отправкой, если включена компрессия
-          const processedData = this.compressionEnabled 
-            ? await compression.compressGameState(safeState)
-            : safeState;
-          
-          // Сохраняем в Redis через API
-          await api.saveGameStateToRedisViaAPI(userId, processedData, isCritical);
-        } catch (redisError) {
-          console.error(`[StateManager] Ошибка при сохранении в Redis:`, redisError);
-          
-          // Создаем резервную копию в localStorage при ошибке
-          localStorage.saveGameStateBackup(userId, gameState);
+          localStorage.setItem(
+            `${this.localStoragePrefix}${userId}`, 
+            JSON.stringify({ 
+              state: processedData, 
+              timestamp: Date.now() 
+            })
+          );
+        } catch (cacheError) {
+          console.warn('[StateManager] Не удалось обновить локальный кэш:', cacheError);
+          // Продолжаем выполнение даже при ошибке кэширования
         }
       }
       
-      // Если это критическое сохранение или принудительное сохранение, сохраняем на сервер напрямую
-      if (isCritical) {
-        try {
-          // Обеспечиваем отсутствие циклических ссылок в объекте state
-          const safeState = this.prepareStateForSaving(gameState);
-          
-          // Сжимаем данные перед отправкой, если включена компрессия
-          const processedData = this.compressionEnabled 
-            ? await compression.compressGameState(safeState)
-            : safeState;
-          
-          // Сохраняем на сервер через API
-          await api.saveGameStateViaAPI(processedData as ExtendedGameState, true);
-        } catch (serverError) {
-          console.error(`[StateManager] Ошибка при сохранении на сервер:`, serverError);
-          
-          // Создаем резервную копию в localStorage при ошибке
-          localStorage.saveGameStateBackup(userId, gameState);
-        }
-      } else {
-        // Добавляем задачу сохранения в очередь
-        saveQueue.addSaveToQueue(userId, gameState, 0, false);
-      }
+      return true;
     } catch (error) {
-      console.error(`[StateManager] Критическая ошибка при сохранении данных:`, error);
-      
-      // Создаем резервную копию в localStorage при ошибке
-      localStorage.saveGameStateBackup(userId, gameState);
+      console.error('[StateManager] Ошибка при сохранении состояния:', error);
+      return false;
     }
   }
   
@@ -301,7 +249,7 @@ class StateManager {
         }, timeoutMs);
         
         // Вызываем API для сохранения
-        api.saveGameStateToRedisViaAPI(userId, safeState)
+        api.saveGameState(userId, safeState)
           .then(() => {
             isCompleted = true;
             if (timer) clearTimeout(timer);

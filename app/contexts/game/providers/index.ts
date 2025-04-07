@@ -1,4 +1,6 @@
 /**
  * Экспорт провайдеров игры
  */
-export { default as GameProvider } from './GameProvider'; 
+import { GameProvider } from './GameProvider'
+
+export { GameProvider } 

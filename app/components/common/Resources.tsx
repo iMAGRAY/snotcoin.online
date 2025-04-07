@@ -50,11 +50,11 @@ const ResourceItem: React.FC<{
   React.useEffect(() => {
     // Небольшая задержка для избежания постоянного обновления
     const timerId = setTimeout(() => {
-      // Обновляем только если разница существенная (>0.5)
-      if (Math.abs(value - stableValue) > 0.5) {
+      // Обновляем только если разница существенная (>0.01) или прошло достаточно времени
+      if (Math.abs(value - stableValue) > 0.01) {
         setStableValue(value);
       }
-    }, 300);
+    }, 500);
     
     return () => clearTimeout(timerId);
   }, [value, stableValue]);

@@ -1,17 +1,17 @@
 'use client'
 
 import { createContext } from 'react'
-import type { GameState, Action } from '../../../types/gameTypes'
+import type { GameState } from '../../../types/gameTypes'
 
 /**
- * Контекст для хранения состояния игры
+ * Контекст для доступа к состоянию игры
  */
 export const GameStateContext = createContext<GameState | null>(null)
 
 /**
- * Контекст для изменения состояния игры
+ * Контекст для установки нового состояния игры (заменяет диспетчер)
  */
-export const GameDispatchContext = createContext<((action: Action) => void) | null>(null)
+export const SetGameStateContext = createContext<((newStateOrFunction: GameState | ((prevState: GameState) => GameState)) => void) | null>(null)
 
 /**
  * Контекст для отслеживания процесса сохранения

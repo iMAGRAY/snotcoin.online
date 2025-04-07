@@ -1,5 +1,13 @@
 /**
- * Модульная версия dataService, использующая новые модульные сервисы
+ * ВНИМАНИЕ! Этот файл устарел и будет удален в ближайшее время.
+ * Вместо него используйте систему сохранений из каталога saveSystem:
+ * - saveManager - из app/services/saveSystem/index
+ * - useSaveManager - из app/contexts/SaveManagerProvider
+ */
+
+/**
+ * Модульный сервис для управления данными игры
+ * Поддерживает загрузку, сохранение и синхронизацию состояния игры
  */
 import type { ExtendedGameState } from "../types/gameTypes";
 import { isCompressedGameState } from "../types/saveTypes";
@@ -20,9 +28,6 @@ import * as api from './api/apiService';
 // Импорт сервисов очереди
 import * as saveQueue from './queue/saveQueueService';
 
-// Импорт сервиса Redis
-import { redisService } from './redis';
-
 // Импорт сервиса аутентификации
 import { authService } from './auth/authService';
 
@@ -33,46 +38,80 @@ import { createInitialGameState } from '../constants/gameConstants';
 let compressionEnabled = true;
 
 /**
- * Загружает состояние игры
- * @param userId ID пользователя
- * @returns Состояние игры или null
+ * Функция для преобразования GameState в ExtendedGameState
+ * @param state Базовое состояние игры
+ * @returns Расширенное состояние игры
+ */
+function extendGameState(state: ExtendedGameState): ExtendedGameState {
+  // Преобразуем GameState в ExtendedGameState, добавляя необходимые поля
+  const extendedState: ExtendedGameState = {
+    ...state,
+    _loadedAt: new Date().toISOString(),
+    _dataSource: 'memory',
+    _integrityVerified: true
+  };
+  
+  return extendedState;
+}
+
+/**
+ * Подготавливает состояние для сохранения, удаляя циклические ссылки
+ * @param state Игровое состояние
+ */
+function prepareStateForSaving(state: any): any {
+  // Создаем копию объекта
+  const cleanedState = { ...state };
+  
+  // Список полей, которые могут вызвать проблемы при сериализации
+  const fieldsToClean = [
+    '_tempData',
+    '_skipSave',
+    '_savePromise',
+    '_saveTimeout',
+    '_saveTimeoutId',
+    '_savePending',
+    '_saveError',
+    '_saveRetry',
+    '_saveRetryCount',
+    '_saveMaxRetry'
+  ];
+  
+  // Удаляем проблемные поля
+  fieldsToClean.forEach(field => {
+    if ((cleanedState as any)[field]) {
+      delete (cleanedState as any)[field];
+    }
+  });
+  
+  return cleanedState;
+}
+
+/**
+ * Загружает состояние игры с сервера или локального хранилища
+ * @param userId Идентификатор пользователя
+ * @returns Состояние игры или null если не найдено
  */
 export async function loadGameState(userId: string): Promise<ExtendedGameState | null> {
   try {
-    console.log(`[DataService] Загрузка игрового состояния для пользователя ${userId}`);
+    console.log(`[DataService] Загрузка состояния игры для пользователя ${userId}`);
     
-    // Проверяем минимальный интервал между загрузками
-    const now = Date.now();
-    const lastLoadTime = memoryStorage.getLastLoadTime(userId);
-    const MIN_LOAD_INTERVAL = 2000; // 2 секунды между загрузками
-    
-    if (now - lastLoadTime < MIN_LOAD_INTERVAL) {
-      console.log(`[DataService] Слишком частые загрузки для пользователя ${userId}, ожидаем ${MIN_LOAD_INTERVAL - (now - lastLoadTime)}мс`);
-      
-      // Возвращаем кэшированные данные, если они есть
-      const cachedState = memoryStorage.getFromCache(userId);
-      if (cachedState) {
-        console.log(`[DataService] Возвращаем данные из кэша для ${userId}`);
-        return cachedState;
-      }
-      
+    // Проверяем наличие авторизации
+    if (!userId) {
+      console.warn(`[DataService] Отсутствует идентификатор пользователя`);
       return null;
     }
     
-    // Обновляем время последней загрузки
-    memoryStorage.updateLastLoadTime(userId);
-    
-    // Проверяем, запущены ли мы в браузере для загрузки из Redis через API
+    // Проверяем, запущены ли мы в браузере для загрузки через API
     if (typeof window !== 'undefined') {
-      console.log(`[DataService] Попытка загрузить данные из Redis через API`);
+      console.log(`[DataService] Попытка загрузить данные через API`);
       try {
-        const cachedState = await api.loadGameStateFromRedisViaAPI(userId);
-        if (cachedState) {
-          console.log(`[DataService] Использую данные из Redis через API`);
+        const state = await api.loadGameState(userId);
+        if (state) {
+          console.log(`[DataService] Использую данные из API`);
           
           // Проверяем целостность данных
-          if (!dataIntegrity.checkDataIntegrity(cachedState)) {
-            console.warn(`[DataService] Данные из Redis не прошли проверку целостности`);
+          if (!dataIntegrity.checkDataIntegrity(state)) {
+            console.warn(`[DataService] Данные из API не прошли проверку целостности`);
             
             // Проверяем наличие данных в кэше
             const localCachedState = memoryStorage.getFromCache(userId);
@@ -86,9 +125,9 @@ export async function loadGameState(userId: string): Promise<ExtendedGameState |
           }
           
           // Если данные сжаты, распаковываем их
-          if (isCompressedGameState(cachedState)) {
+          if (isCompressedGameState(state)) {
             console.log(`[DataService] Распаковка сжатых данных`);
-            const decompressedState = compression.decompressGameState(cachedState);
+            const decompressedState = compression.decompressGameState(state);
             
             // Сохраняем в кэш
             memoryStorage.saveToCache(userId, decompressedState, true);
@@ -97,12 +136,12 @@ export async function loadGameState(userId: string): Promise<ExtendedGameState |
           }
           
           // Сохраняем в кэш
-          memoryStorage.saveToCache(userId, cachedState, true);
+          memoryStorage.saveToCache(userId, state, true);
           
-          return cachedState;
+          return state;
         }
       } catch (apiError) {
-        console.warn(`[DataService] Ошибка при получении данных из Redis через API:`, apiError);
+        console.warn(`[DataService] Ошибка при получении данных из API:`, apiError);
         // Продолжаем выполнение для получения из основного источника
       }
     }
@@ -131,29 +170,22 @@ export async function loadGameState(userId: string): Promise<ExtendedGameState |
       return validatedState;
     }
     
-    // Пробуем загрузить с сервера через API
-    try {
-      const serverState = await api.loadGameStateViaAPI(userId);
-      if (serverState) {
-        console.log(`[DataService] Использую данные с сервера`);
-        
-        // Валидируем состояние
-        const validatedState = dataIntegrity.validateLoadedGameState(serverState, userId);
-        
-        // Сохраняем в кэш
-        memoryStorage.saveToCache(userId, validatedState, true);
-        
-        return validatedState;
-      }
-    } catch (serverError) {
-      console.error(`[DataService] Ошибка при загрузке с сервера:`, serverError);
-    }
+    // Если все предыдущие методы не дали результата, загружаем начальное состояние
+    console.log(`[DataService] Создаю новое состояние игры`);
+    const initialState = createInitialGameState(userId) as unknown as ExtendedGameState;
     
-    console.log(`[DataService] Не удалось загрузить данные для ${userId}, возвращаем null`);
-    return null;
+    // Сохраняем в кэш
+    memoryStorage.saveToCache(userId, initialState, true);
+    
+    return initialState;
   } catch (error) {
-    console.error(`[DataService] Критическая ошибка при загрузке данных:`, error);
-    return null;
+    console.error(`[DataService] Ошибка при загрузке состояния:`, error);
+    
+    // Создаем новое состояние при ошибке
+    console.warn(`[DataService] Возвращаю новое состояние из-за ошибки`);
+    const initialState = createInitialGameState(userId) as unknown as ExtendedGameState;
+    
+    return initialState;
   }
 }
 
@@ -208,36 +240,26 @@ async function fallbackSaveGameState(
 }
 
 /**
- * Принудительное сохранение состояния игры
- * @param userId ID пользователя
+ * Принудительно сохраняет состояние игры
+ * Используется для сохранения при выгрузке страницы
+ * @param userId Идентификатор пользователя
  * @param state Состояние игры
  */
 export async function forceSaveGameState(userId: string, state: ExtendedGameState): Promise<void> {
   try {
-    if (!userId) {
-      console.error('[DataService] Отсутствует ID пользователя для принудительного сохранения');
-      return Promise.reject(new Error('Missing userId for force save'));
+    console.log(`[DataService] Принудительное сохранение для ${userId}`);
+    
+    if (!userId || !state) {
+      console.warn(`[DataService] Невозможно сохранить: отсутствует userId или state`);
+      return;
     }
     
-    console.log(`[DataService] Выполняем принудительное сохранение состояния игры для ${userId}`);
-    
-    // Проверяем минимальный интервал между сохранениями, но с меньшим ограничением для принудительных сохранений
-    const now = Date.now();
-    const lastSaveTime = memoryStorage.getLastSaveTime(userId);
-    const MIN_SAVE_INTERVAL = 2000; // 2 секунды между принудительными сохранениями
-    
-    if (now - lastSaveTime < MIN_SAVE_INTERVAL) {
-      console.log(`[DataService] Слишком частые сохранения для пользователя ${userId}, ожидаем ${MIN_SAVE_INTERVAL - (now - lastSaveTime)}мс`);
-      return Promise.resolve(); // Для принудительных сохранений не возвращаем ошибку, а просто пропускаем
-    }
-    
-    // Обновляем время последнего сохранения
-    memoryStorage.updateLastSaveTime(userId);
-    
-    // Создаем контрольный таймер для отслеживания длительности операции
-    const timeoutMs = 5000; // 5 секунд максимум на сохранение
-    let timer: NodeJS.Timeout | null = null;
+    // Переменные для контроля выполнения
     let isCompleted = false;
+    let timer: NodeJS.Timeout | null = null;
+    
+    // В режиме выгрузки страницы используем короткий таймаут
+    const timeoutMs = 2000;
     
     // Обеспечиваем отсутствие циклических ссылок в state
     const safeState = prepareStateForSaving(state);
@@ -253,13 +275,13 @@ export async function forceSaveGameState(userId: string, state: ExtendedGameStat
       }, timeoutMs);
       
       // Вызываем API для сохранения
-      api.saveGameStateToRedisViaAPI(userId, safeState)
+      api.saveGameState(safeState)
         .then(() => {
           isCompleted = true;
           if (timer) clearTimeout(timer);
           resolve();
         })
-        .catch((error) => {
+        .catch((error: Error) => {
           isCompleted = true;
           if (timer) clearTimeout(timer);
           
@@ -275,18 +297,12 @@ export async function forceSaveGameState(userId: string, state: ExtendedGameStat
     
     await savePromise;
     
-    if (isCompleted) {
-      console.log(`[DataService] Принудительное сохранение для ${userId} завершено успешно`);
-    }
-    
-    return Promise.resolve();
+    console.log(`[DataService] Принудительное сохранение завершено для ${userId}`);
   } catch (error) {
-    console.error(`[DataService] Критическая ошибка при принудительном сохранении: ${error}`);
+    console.error(`[DataService] Ошибка при принудительном сохранении: ${error}`);
     
     // Создаем резервную копию в localStorage при ошибке
     localStorage.saveGameStateBackup(userId, state);
-    
-    return Promise.resolve(); // Резолвим даже при ошибке, чтобы не блокировать выгрузку страницы
   }
 }
 
@@ -405,37 +421,6 @@ export function cancelAllRequests(): void {
   api.cancelAllRequests();
 }
 
-/**
- * Подготавливает состояние для сохранения, удаляя циклические ссылки
- * @param state Игровое состояние
- */
-function prepareStateForSaving(state: any): any {
-  // Создаем копию объекта
-  const cleanedState = { ...state };
-  
-  // Список полей, которые следует удалить
-  const fieldsToClean = [
-    '_thrownBalls', 
-    '_worldRef', 
-    '_bodiesMap', 
-    '_tempData',
-    '_physicsObjects',
-    '_sceneObjects',
-    '_renderData',
-    '_debugInfo',
-    '_frameData'
-  ];
-  
-  // Удаляем проблемные поля
-  fieldsToClean.forEach(field => {
-    if ((cleanedState as any)[field]) {
-      delete (cleanedState as any)[field];
-    }
-  });
-  
-  return cleanedState;
-}
-
 // Оставляем только последние версии
 export async function loadGameStateWithIntegrity(userId: string): Promise<LoadResponse> {
   try {
@@ -465,7 +450,7 @@ export async function loadGameStateWithIntegrity(userId: string): Promise<LoadRe
   }
 }
 
-export async function saveGameStateWithIntegrity(userId: string, state: GameState): Promise<SaveResponse> {
+export async function saveGameStateWithIntegrity(userId: string, state: ExtendedGameState): Promise<SaveResponse> {
   try {
     const response = await fetch(`/api/game/save/${userId}`, {
       method: 'POST',
@@ -497,7 +482,7 @@ export async function saveGameStateWithIntegrity(userId: string, state: GameStat
   }
 }
 
-import type { GameState } from '../types/gameTypes';
+import type { ExtendedGameState } from '../types/gameTypes';
 
 interface SaveResponse {
   success: boolean;
@@ -507,12 +492,12 @@ interface SaveResponse {
 
 interface LoadResponse {
   success: boolean;
-  data?: GameState;
+  data?: ExtendedGameState;
   error?: string;
   version?: number;
 }
 
-export async function validateGameState(state: GameState): Promise<boolean> {
+export async function validateGameState(state: ExtendedGameState): Promise<boolean> {
   try {
     // Проверяем наличие обязательных полей
     if (!state.inventory || !state.container || !state.upgrades) {

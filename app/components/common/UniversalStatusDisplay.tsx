@@ -4,8 +4,8 @@ import React, { useMemo } from "react"
 import { motion } from "framer-motion"
 import { useTranslation } from "../../i18n"
 import { useGameState } from "../../contexts/game/hooks"
-import { formatTime, formatSnotValue } from "../../utils/formatters"
-import { calculateFillingTime } from "../../utils/gameUtils"
+import { formatSnotValue } from "../../utils/formatters"
+import { calculateFillingTime, getFillingSpeedByLevel, formatTime } from "../../utils/gameUtils"
 import { Database, Zap, Clock, ArrowUp, Trophy, Coins } from "lucide-react"
 import Image from "next/image"
 import { cn } from "../../lib/utils"
@@ -56,15 +56,6 @@ export interface UniversalStatusDisplayProps {
 const StatusItem: React.FC<StatusItemProps & { className?: string }> = React.memo(
   ({ icon, label, value, tooltip, color = "text-white", className }) => {
     const Icon = typeof icon === "string" ? undefined : icon
-    
-    // Добавляем логирование для отладки
-    React.useEffect(() => {
-      console.log(`StatusItem ${label}: ${value}`, { label, value });
-      // Если label === "Fill", логируем более подробно
-      if (label === "Fill") {
-        console.log(`Fill time details:`, { value });
-      }
-    }, [label, value]);
     
     return (
       <motion.div
@@ -182,15 +173,42 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
           icon: Clock,
           label: "Fill",
           value: (() => {
-            console.log("Calculating fill time with params:", {
+            // Вычисляем правильную скорость заполнения на основе уровня
+            const correctFillingSpeed = getFillingSpeedByLevel(fillingSpeedLevel ?? 1);
+            
+            // Убедимся в корректности скорости заполнения
+            let safeFillingSpeed = correctFillingSpeed; // Используем вычисленную скорость вместо существующей
+            if (!safeFillingSpeed || safeFillingSpeed <= 0) {
+              safeFillingSpeed = 1; // Минимальное значение для уровня 1 должно быть 1
+            }
+            
+            // Вызываем функцию из gameUtils.ts с правильной скоростью
+            const fillTimeResult = calculateFillingTime({
               containerSnot,
               containerCapacity,
-              containerFillingSpeed,
-              fillingSpeedLevel
+              fillingSpeed: safeFillingSpeed
             });
-            const fillTime = calculateFillingTime(containerSnot, containerCapacity, containerFillingSpeed);
-            console.log("Fill time calculated:", fillTime);
-            return formatTime(fillTime);
+            
+            // Подробно логируем результаты для отладки
+            const timeInSeconds = fillTimeResult.timeInSeconds;
+            
+            // Для очень длительного времени (например, при fillingSpeed=0.01)
+            // предоставим упрощенный формат
+            if (timeInSeconds > 30 * 24 * 3600) { // Больше 30 дней
+              const daysToFill = Math.floor(timeInSeconds / (24 * 3600));
+              
+              if (daysToFill > 100) { // Если больше 100 дней, покажем месяцы
+                const monthsToFill = Math.floor(daysToFill / 30);
+                return `≈ ${monthsToFill} мес`;
+              }
+              
+              return `${daysToFill} д`;
+            }
+            
+            // Форматируем время для стандартных случаев
+            const formattedTime = formatTime(timeInSeconds);
+            
+            return formattedTime;
           })(),
           tooltip: t("timeToFillTooltip"),
         },

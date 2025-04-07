@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyJWT } from '../../../utils/auth'
-import { redisService } from '../../../services/redis'
 import { apiLogger as logger } from '../../../lib/logger'
 import { gameMetrics } from '../../../lib/metrics'
 import { prisma } from '../../../lib/prisma'
@@ -13,9 +12,17 @@ import { encryptGameSave, verifySaveIntegrity } from '../../../utils/saveEncrypt
 import { ModelFields, createProgressData, createProgressHistoryData, createSyncQueueData } from '../../../utils/modelHelpers'
 import { recordSaveAttempt } from '../../../services/monitoring'
 import { Prisma } from '@prisma/client'
-import { redisClient } from '../../../lib/redis'
 import { extractToken } from '../../../utils/auth'
-import { GameState } from '../../../types/gameTypes'
+
+// Расширяем тип GameState для включения необходимых полей
+export interface GameState {
+  _saveVersion?: number;
+  _mergedAt?: string;
+  score?: number;
+  inventory?: Record<string, any>;
+  quests?: Record<string, any>;
+  [key: string]: any;
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +36,6 @@ interface RequestMetrics {
   isCriticalSave?: boolean;
   saveReason?: string;
   hasMeaningfulChanges?: boolean;
-  redisSaveTime?: number;
   dbSaveTime?: number;
   duplicateRequest?: boolean;
   concurrentRequest?: boolean;
@@ -50,6 +56,13 @@ const MIN_SAVE_INTERVAL_MS = 300; // Минимальный интервал м�
 const FARCASTER_MIN_INTERVAL_MS = 500; // Более строгий интервал для Farcaster запросов
 const THROTTLE_STATUS_CODE = 429; // Too Many Requests
 
+// Информация о последнем клиенте для каждого пользователя
+interface ClientSaveInfo {
+  client_id: string;
+  timestamp: number;
+}
+const clientSaveInfo = new Map<string, ClientSaveInfo>();
+
 // Буферы состояния для отложенного сохранения
 interface PendingSave {
   gameState: any;
@@ -66,6 +79,27 @@ const BATCH_TIMEOUT_MS = 400; // Время ожидания новых запр
 // Функция для генерации ID пакета
 function generateBatchId(): string {
   return `batch_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+}
+
+// Функция для получения предыдущего состояния игры из базы данных
+async function getPreviousGameState(userId: string): Promise<GameState | null> {
+  try {
+    const progress = await prisma.progress.findUnique({
+      where: { user_id: userId }
+    });
+    
+    if (progress && progress.game_state) {
+      return JSON.parse(progress.game_state as string) as GameState;
+    }
+    
+    return null;
+  } catch (error) {
+    logger.error('Ошибка при получении предыдущего состояния из базы данных', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId 
+    });
+    return null;
+  }
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -395,32 +429,32 @@ export async function POST(request: NextRequest): Promise<Response> {
     
     // Проверяем наличие конкурентных сохранений от других клиентов
     try {
-      if (!redisService) {
-        logger.warn('Redis сервис не инициализирован');
-      } else {
-        const currentCache = await redisService.getClientSaveInfo(userId);
+      // Получаем информацию о последнем клиенте для этого пользователя
+      const currentInfo = clientSaveInfo.get(userId);
         
-        if (currentCache && currentCache.client_id && 
-            currentCache.client_id !== clientId && 
-            currentCache.timestamp) {
+      if (currentInfo && currentInfo.client_id && 
+          currentInfo.client_id !== clientId && 
+          currentInfo.timestamp) {
             
-          const timeSinceLastSave = Date.now() - currentCache.timestamp;
+        const timeSinceLastSave = Date.now() - currentInfo.timestamp;
           
-          // Если недавно было сохранение от другого клиента
-          if (timeSinceLastSave < 30000) { // 30 секунд
-            logger.warn('Обнаружено конкурентное сохранение', {
-              otherClientId: currentCache.client_id,
-              timeSinceLastSaveMs: timeSinceLastSave
-            });
+        // Если недавно было сохранение от другого клиента
+        if (timeSinceLastSave < 30000) { // 30 секунд
+          logger.warn('Обнаружено конкурентное сохранение', {
+            otherClientId: currentInfo.client_id,
+            timeSinceLastSaveMs: timeSinceLastSave
+          });
             
-            // Увеличиваем счетчик конкурентных сохранений
-            gameMetrics.saveTotalCounter({ concurrent: true, userId });
-          }
+          // Увеличиваем счетчик конкурентных сохранений
+          gameMetrics.saveTotalCounter({ concurrent: true, userId });
         }
-        
-        // Обновляем информацию о текущем клиенте
-        await redisService.updateClientSaveInfo(userId, clientId);
       }
+        
+      // Обновляем информацию о текущем клиенте
+      clientSaveInfo.set(userId, {
+        client_id: clientId,
+        timestamp: Date.now()
+      });
     } catch (cacheError) {
       // Просто логируем ошибку, но не прерываем процесс
       logger.warn('Ошибка при проверке конкурентных сохранений', {
@@ -428,318 +462,135 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     }
     
-    // Загружаем предыдущее состояние из Redis
+    // Загружаем предыдущее состояние из базы данных
     let hasMeaningfulChanges = true;
     let mergeNeeded = false;
     let previousVersion = 0;
     
     try {
-      if (!redisService) {
-        logger.warn('Redis сервис не инициализирован при загрузке предыдущего состояния');
-      } else {
-        const previousState = await redisService.loadGameState(userId);
+      const previousState = await getPreviousGameState(userId);
+      
+      if (previousState) {
+        logger.info('Получено предыдущее состояние игры', {
+          userId,
+          version: previousState._saveVersion || 0
+        });
         
-        if (previousState.success && previousState.data) {
-          // Проверяем версию и необходимость слияния
-          previousVersion = previousState.data._saveVersion || 0;
-          const currentVersion = gameState._saveVersion || 0;
+        // Проверяем версию сохранения
+        const prevVersion = previousState._saveVersion || 0;
+        const currVersion = gameState._saveVersion || 0;
+        
+        // Если текущая версия не новее, возможно дублирующийся запрос
+        if (prevVersion >= currVersion) {
+          logger.warn('Получен запрос с устаревшей версией сохранения', {
+            userId,
+            currentVersion: currVersion,
+            previousVersion: prevVersion
+          });
+          metrics.duplicateRequest = true;
           
-          if (previousVersion > currentVersion) {
-            logger.info('Обнаружен конфликт версий', {
-              previousVersion,
-              currentVersion,
-              clientId
-            });
+          // Увеличиваем счетчик дублирующихся запросов
+          gameMetrics.saveTotalCounter({ duplicate: true, userId });
+          
+          // Если версия та же, проверяем, есть ли значимые изменения
+          if (prevVersion === currVersion) {
+            // Проверяем значимые изменения (например, счет, инвентарь, квесты)
+            const prevScore = previousState.score || 0;
+            const currScore = gameState.score || 0;
+            const hasScoreChanges = prevScore !== currScore;
             
-            mergeNeeded = true;
+            // Проверяем изменения в инвентаре
+            const prevInventory = previousState.inventory || {};
+            const currInventory = gameState.inventory || {};
+            const hasInventoryChanges = JSON.stringify(prevInventory) !== JSON.stringify(currInventory);
             
-            // Сливаем состояния, предпочитая более новое
-            gameState = mergeGameStates(previousState.data, gameState);
-            gameState._saveVersion = Math.max(previousVersion, currentVersion) + 1;
-            gameState._mergedAt = new Date().toISOString();
+            // Проверяем изменения в квестах
+            const prevQuests = previousState.quests || {};
+            const currQuests = gameState.quests || {};
+            const hasQuestChanges = JSON.stringify(prevQuests) !== JSON.stringify(currQuests);
             
-            logger.info('Состояние игры слито', {
-              newVersion: gameState._saveVersion
-            });
-        } else {
-            // Проверяем наличие значимых изменений
-            // Этот код зависит от логики игры, здесь упрощенный пример
-            const hasScoreChanges = gameState.score !== previousState.data.score;
-            const hasInventoryChanges = gameState.inventory && 
-                                      JSON.stringify(gameState.inventory) !== 
-                                      JSON.stringify(previousState.data.inventory || {});
-            const hasQuestChanges = gameState.quests && 
-                                  JSON.stringify(gameState.quests) !== 
-                                  JSON.stringify(previousState.data.quests || {});
-            
-            hasMeaningfulChanges = hasScoreChanges || hasInventoryChanges || hasQuestChanges;
+            // Если есть значимые изменения, разрешаем сохранение
+            const hasMeaningfulChanges = hasScoreChanges || hasInventoryChanges || hasQuestChanges;
             metrics.hasMeaningfulChanges = hasMeaningfulChanges;
           }
         }
       }
+      
+      // Сохраняем состояние в базу данных
+      const dbSaveStartTime = performance.now();
+      try {
+        // Создаем или обновляем запись прогресса в базе данных
+        const encryptedState = encryptGameSave(JSON.stringify(gameState));
+        
+        await prisma.progress.upsert({
+          where: { user_id: userId },
+          update: {
+            game_state: encryptedState,
+            updated_at: new Date()
+          },
+          create: createProgressData(userId, encryptedState)
+        });
+        
+        metrics.dbSaveTime = performance.now() - dbSaveStartTime;
+        
+        logger.info('Состояние игры сохранено в базу данных', {
+          userId,
+          timeMs: metrics.dbSaveTime.toFixed(2)
+        });
+      } catch (dbError) {
+        logger.error('Ошибка при сохранении состояния в базу данных', {
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          userId
+        });
+        
+        // Увеличиваем счетчик ошибок базы данных
+        gameMetrics.saveErrorCounter({ reason: 'db_error' });
+        
+        // Отмечаем метрику
+        metrics.dbSaveTime = performance.now() - dbSaveStartTime;
+      }
     } catch (loadError) {
-      logger.warn('Ошибка при загрузке предыдущего состояния из Redis', {
+      logger.warn('Ошибка при загрузке предыдущего состояния из базы данных', {
         error: loadError instanceof Error ? loadError.message : String(loadError)
       });
       // Продолжаем сохранение, даже если не удалось загрузить предыдущее состояние
     }
     
-    // Сохраняем данные в Redis для быстрого доступа
-    const redisSaveStartTime = performance.now();
+    // Сохраняем данные в историю прогресса
     try {
-      if (!redisService) {
-        logger.warn('Redis сервис не инициализирован при сохранении');
-        metrics.redisSaveTime = performance.now() - redisSaveStartTime;
-      } else {
-        const redisSaveResult = await redisService.saveGameState(
-          userId, 
-          gameState,
-          { isCritical, metadata: { clientId, saveReason } }
-        );
-        
-        metrics.redisSaveTime = performance.now() - redisSaveStartTime;
-        
-        if (!redisSaveResult.success) {
-          logger.warn('Ошибка при сохранении в Redis', {
-            error: redisSaveResult.error,
-            timeMs: metrics.redisSaveTime.toFixed(2)
-          });
-        } else {
-          logger.info('Данные успешно сохранены в Redis', {
-            timeMs: metrics.redisSaveTime.toFixed(2)
-          });
-        }
-      }
-    } catch (redisError) {
-      metrics.redisSaveTime = performance.now() - redisSaveStartTime;
+      const historyData = createProgressHistoryData(userId, encryptedState, saveReason);
+      await prisma.progressHistory.create({ data: historyData });
       
-      logger.error('Ошибка при сохранении в Redis', {
-        error: redisError instanceof Error ? redisError.message : String(redisError),
-        timeMs: metrics.redisSaveTime.toFixed(2)
+      logger.info('История прогресса сохранена', { userId });
+    } catch (historyError) {
+      logger.error('Ошибка при сохранении истории прогресса', {
+        error: historyError instanceof Error ? historyError.message : String(historyError),
+        userId
       });
       
-      gameMetrics.saveErrorCounter({ reason: 'redis_error' });
-      
-      // Продолжаем выполнение, чтобы сохранить в БД
+      // Увеличиваем счетчик ошибок
+      gameMetrics.saveErrorCounter({ reason: 'history_error' });
     }
     
-    // Сохраняем в базу данных, если изменения значительные или это критическое сохранение
-    if (hasMeaningfulChanges || isCritical) {
-      const dbSaveStartTime = performance.now();
-      
+    // Проверяем, нужно ли обновить данные очереди синхронизации
+    if (isCritical || (metrics.hasMeaningfulChanges && !metrics.duplicateRequest)) {
       try {
-        // Шифруем состояние игры перед сохранением
-        const { encryptedSave, metadata } = encryptGameSave(gameState, userId);
+        // Добавляем или обновляем запись в очереди синхронизации
+        const syncData = createSyncQueueData(userId);
         
-        // Добавляем информацию о шифровании в метаданные
-        gameState._isEncrypted = true;
-        gameState._encryptionMetadata = {
-          timestamp: metadata.timestamp,
-          version: metadata.version,
-          algorithm: metadata.algorithm
-        };
-        
-        // Преобразуем gameState в JSON строку для сохранения в БД
-        const gameStateJson = JSON.stringify(gameState);
-        
-        try {
-          // Оптимизированный upsert с проверкой версии
-          const upsertResult = await prisma.progress.upsert({
-            where: { user_id: userId },
-            update: {
-              ...createProgressData({
-                game_state: gameState,
-                version: gameState._saveVersion || 1,
-                updated_at: new Date()
-              }),
-              // Добавляем условие для предотвращения race condition
-              // Обновляем только если версия старая меньше новой
-              ...((gameState._saveVersion || 1) > 1 ? {
-                version: {
-                  increment: 1
-                }
-              } : {})
-            },
-            create: createProgressData({
-              user_id: userId,
-              version: gameState._saveVersion || 1,
-              game_state: gameState,
-              updated_at: new Date()
-            })
-          });
-          
-          logger.info('Прогресс успешно сохранен в БД через upsert', {
-            userId,
-            version: gameState._saveVersion,
-            isNew: upsertResult.created_at.toISOString() === upsertResult.updated_at.toISOString()
-          });
-        } catch (upsertError) {
-          logger.error('Ошибка при выполнении upsert', {
-            error: upsertError instanceof Error ? upsertError.message : String(upsertError),
-            userId
-          });
-          
-          // Если upsert не сработал, пробуем fallback на update
-          try {
-            await prisma.progress.update({
-              where: { user_id: userId },
-              data: createProgressData({
-                game_state: gameState,
-                version: gameState._saveVersion || 1,
-                updated_at: new Date()
-              })
-            });
-            
-            logger.info('Прогресс сохранен через fallback update', { userId });
-          } catch (updateError) {
-            // Если и update не сработал, значит записи действительно нет, пытаемся создать
-            try {
-              await prisma.progress.create({
-                data: createProgressData({
-                  user_id: userId,
-                  version: gameState._saveVersion || 1,
-                  game_state: gameState,
-                  updated_at: new Date()
-                })
-              });
-              
-              logger.info('Прогресс сохранен через fallback create', { userId });
-            } catch (createError: any) {
-              // Если и create не сработал, пробрасываем ошибку
-              throw new Error(`Не удалось сохранить прогресс: ${createError.message}`);
-            }
-          }
-        }
-        
-        // Сохраняем историю прогресса, если это критическое сохранение или слияние
-        if (isCritical || mergeNeeded || (gameState._saveVersion || 0) % 5 === 0) {
-          try {
-            // Запрос на добавление в историю прогресса через сырой SQL
-            await prisma.$executeRaw`
-              INSERT INTO progress_history (
-                ${ModelFields.ProgressHistory.user_id}, 
-                ${ModelFields.ProgressHistory.client_id}, 
-                ${ModelFields.ProgressHistory.save_type}, 
-                ${ModelFields.ProgressHistory.save_reason}, 
-                ${ModelFields.ProgressHistory.created_at}
-              ) VALUES (
-                ${userId}, 
-                ${clientId || 'unknown'},
-                ${isCritical ? 'critical' : (mergeNeeded ? 'merged' : 'regular')},
-                ${saveReason},
-                NOW()
-              )
-            `;
-            
-            logger.debug('Состояние сохранено в историю прогресса', {
-              userId,
-              version: gameState._saveVersion
-            });
-          } catch (historyError) {
-            // Если ошибка только в истории, логируем, но продолжаем выполнение
-            logger.warn('Ошибка при сохранении истории прогресса', {
-              error: historyError instanceof Error ? historyError.message : String(historyError)
-            });
-          }
-        }
-        
-        // Проверяем, что поля energy и lastEnergyUpdateTime существуют и сохраняются
-        if (gameState && gameState.inventory) {
-          // Больше не проверяем поля energy и lastEnergyUpdateTime, так как функционал энергии удален
-          
-          // Логируем для отладки
-          logger.debug('Значения инвентаря при сохранении:', { 
-            userId, 
-            snot: gameState.inventory.snot,
-            snotCoins: gameState.inventory.snotCoins,
-            containerSnot: gameState.inventory.containerSnot
-          });
-        }
-        
-        metrics.dbSaveTime = performance.now() - dbSaveStartTime;
-        
-        logger.info('Прогресс успешно обновлен в БД', {
-          userId,
-          version: gameState._saveVersion,
-          timeMs: metrics.dbSaveTime.toFixed(2)
+        await prisma.syncQueue.upsert({
+          where: { user_id: userId },
+          update: syncData,
+          create: syncData
         });
         
-        // Записываем метрику времени сохранения в БД
-        gameMetrics.saveDuration(metrics.dbSaveTime, { 
-          db_save: true,
-          meaningful_changes: hasMeaningfulChanges,
-          critical: isCritical
+        logger.info('Очередь синхронизации обновлена', { userId });
+      } catch (syncError) {
+        logger.error('Ошибка при обновлении очереди синхронизации', {
+          error: syncError instanceof Error ? syncError.message : String(syncError),
+          userId
         });
-        
-      } catch (dbError) {
-        metrics.dbSaveTime = performance.now() - dbSaveStartTime;
-        
-        logger.error('Ошибка при сохранении в БД', {
-          error: dbError instanceof Error ? dbError.message : String(dbError),
-          stack: dbError instanceof Error ? dbError.stack : undefined,
-          timeMs: metrics.dbSaveTime.toFixed(2)
-        });
-        
-        gameMetrics.saveErrorCounter({ reason: 'db_error' });
-        
-        // Добавляем в очередь синхронизации для повторной попытки
-        try {
-          // Добавляем задачу в очередь синхронизации
-          await prisma.$executeRaw`
-            INSERT INTO sync_queue (
-              ${ModelFields.SyncQueue.user_id}, 
-              ${ModelFields.SyncQueue.operation}, 
-              ${ModelFields.SyncQueue.data}, 
-              ${ModelFields.SyncQueue.status}, 
-              ${ModelFields.SyncQueue.created_at}, 
-              ${ModelFields.SyncQueue.updated_at}, 
-              ${ModelFields.SyncQueue.attempts}
-            ) VALUES (
-              ${userId}, 
-              'save_progress', 
-              ${JSON.stringify({ gameState, saveReason, isCritical })}, 
-              'pending',
-              NOW(),
-              NOW(),
-              0
-            )
-          `;
-          
-          logger.info('Задача добавлена в очередь синхронизации', { userId });
-          
-          // Возвращаем частичный успех
-          return NextResponse.json({
-            success: true,
-            warning: 'Данные сохранены только в кэше, ожидается синхронизация с БД',
-            processingTime: performance.now() - startTime,
-            metrics: {
-              redisSaveTime: metrics.redisSaveTime,
-              dbError: true,
-              queuedForSync: true
-            }
-          }, { status: 207 }); // 207 Multi-Status
-        } catch (queueError) {
-          logger.error('Ошибка при добавлении в очередь синхронизации', {
-            error: queueError instanceof Error ? queueError.message : String(queueError)
-          });
-          
-          // Возвращаем ошибку с данными о частичном сохранении
-          return NextResponse.json({
-            success: false,
-            error: 'DB_ERROR',
-            message: 'Ошибка сохранения в БД и добавления в очередь',
-            warning: 'Данные сохранены только в кэше',
-            processingTime: performance.now() - startTime,
-            metrics: {
-              redisSaveTime: metrics.redisSaveTime,
-              dbError: true,
-              queueError: true
-            }
-          }, { status: 500 });
-        }
       }
-    } else {
-      logger.info('Пропуск сохранения в БД, нет значимых изменений');
     }
     
     // Отправляем метрики в случае успеха
@@ -772,8 +623,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         mergeNeeded,
         hasMeaningfulChanges,
         requestSizeBytes: metrics.requestSize,
-        redisSaveTimeMs: metrics.redisSaveTime,
-        dbSaveTimeMs: metrics.dbSaveTime,
+        dbSaveTimeMs: metrics.dbSaveTime?.toFixed(2),
         totalTimeMs: totalTime
       }
     });
@@ -835,236 +685,216 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
-/**
- * Обрабатывает отложенное сохранение из буфера
- */
-async function processPendingSave(userId: string): Promise<void> {
+// Упрощенная функция для обработки ожидающих сохранений
+async function processPendingSave(userId: string) {
+  // Получаем ожидающее сохранение из буфера
   const pendingSave = pendingSaves.get(userId);
-  if (!pendingSave) return;
+  if (!pendingSave) {
+    logger.warn('Не найдено ожидающее сохранение для пользователя', { userId });
+    return;
+  }
   
-  // Удаляем из буфера перед обработкой, чтобы избежать повторной обработки
+  // Удаляем из буфера, чтобы не обработать повторно
   pendingSaves.delete(userId);
   
-  const { gameState, isCritical, saveReason, clientId, batchId, resolvers } = pendingSave;
-  const totalRequests = resolvers.length;
-  
-  logger.info('Начало обработки отложенного сохранения', {
-    userId,
-    batchId,
-    totalRequests,
-    critical: isCritical
-  });
-  
   try {
-    // Устанавливаем блокировку для предотвращения одновременных сохранений
-    saveLocks.set(userId, true);
+    // Получаем информацию о сохранении
+    const { gameState, resolvers, clientId, batchId } = pendingSave;
+    const totalRequests = resolvers.length;
     
-    // Обновляем время последнего сохранения
-    lastSaveTime.set(userId, Date.now());
+    logger.info('Начинаем обработку отложенного сохранения', {
+      userId,
+      batchId,
+      totalRequests
+    });
     
-    // Проверка согласованности userId
-    if (gameState._userId) {
-      // Нормализация ID пользователя
-      const normalizedGameStateUserId = gameState._userId.replace(/^(farcaster_|local_|google_)/, '');
-      const normalizedUserId = userId.replace(/^(farcaster_|local_|google_)/, "");
-      
-      // Добавляем/обновляем userId и метку времени
-      gameState._userId = userId;
-    }
-    
-    gameState._savedAt = new Date().toISOString();
-    gameState._saveReason = saveReason;
-    gameState._batchId = batchId;
-    gameState._batchSize = totalRequests;
-    
-    // Увеличиваем версию сохранения
+    // Инкрементируем версию сохранения
     gameState._saveVersion = (gameState._saveVersion || 0) + 1;
     
-    // Сохраняем данные в Redis
-    let redisSaveResult = null;
-    let redisSaveTime = 0;
-    
-    try {
-      const redisSaveStartTime = performance.now();
-      
-      if (redisService) {
-        redisSaveResult = await redisService.saveGameState(
-          userId, 
-          gameState,
-          { isCritical, metadata: { clientId, saveReason, batchId } }
-        );
-        redisSaveTime = performance.now() - redisSaveStartTime;
-        
-        if (redisSaveResult.success) {
-          logger.info('Batch: данные успешно сохранены в Redis', {
-            userId,
-            batchId,
-            timeMs: redisSaveTime.toFixed(2)
-          });
-        } else {
-          logger.warn('Batch: ошибка при сохранении в Redis', {
-            error: redisSaveResult.error,
-            batchId,
-            timeMs: redisSaveTime.toFixed(2)
-          });
-        }
-      } else {
-        logger.warn('Batch: Redis сервис не инициализирован');
-        redisSaveTime = performance.now() - redisSaveStartTime;
-      }
-    } catch (redisError) {
-      logger.error('Batch: ошибка при сохранении в Redis', {
-        error: redisError instanceof Error ? redisError.message : String(redisError),
-        batchId
-      });
-    }
-    
-    // Сохраняем в базу данных
+    // Сохраняем данные в базу данных
     let dbSaveResult = null;
     let dbSaveTime = 0;
     
+    const dbSaveStartTime = performance.now();
     try {
-      const dbSaveStartTime = performance.now();
+      // Шифруем состояние игры для сохранения
+      const encryptedState = encryptGameSave(JSON.stringify(gameState));
       
-      // Шифруем состояние игры перед сохранением
-      const { encryptedSave, metadata } = encryptGameSave(gameState, userId);
-      
-      // Добавляем информацию о шифровании в метаданные
-      gameState._isEncrypted = true;
-      gameState._encryptionMetadata = {
-        timestamp: metadata.timestamp,
-        version: metadata.version,
-        algorithm: metadata.algorithm
-      };
-      
-      // Оптимизированный upsert с проверкой версии
-      const upsertResult = await prisma.progress.upsert({
+      // Обновляем или создаем запись в базе данных
+      await prisma.progress.upsert({
         where: { user_id: userId },
         update: {
-          ...createProgressData({
-            game_state: gameState,
-            version: gameState._saveVersion || 1,
-            updated_at: new Date()
-          }),
-          // Добавляем условие для предотвращения race condition
-          ...((gameState._saveVersion || 1) > 1 ? {
-            version: {
-              increment: 1
-            }
-          } : {})
+          game_state: encryptedState,
+          updated_at: new Date()
         },
         create: createProgressData({
           user_id: userId,
-          version: gameState._saveVersion || 1,
-          game_state: gameState,
+          game_state: encryptedState,
+          created_at: new Date(),
           updated_at: new Date()
         })
       });
       
       dbSaveTime = performance.now() - dbSaveStartTime;
-      dbSaveResult = { success: true, upsertResult };
+      dbSaveResult = { success: true };
       
-      logger.info('Batch: прогресс успешно сохранен в БД', {
+      logger.info('Batch: данные успешно сохранены в БД', {
         userId,
         batchId,
-        version: gameState._saveVersion,
         timeMs: dbSaveTime.toFixed(2)
       });
-      
-      // Записываем метрику времени сохранения в БД
-      gameMetrics.saveDuration(dbSaveTime, { 
-        db_save: true,
-        critical: isCritical,
-        batched: true,
-        batch_size: totalRequests
-      });
-      
     } catch (dbError) {
-      logger.error('Batch: ошибка при сохранении в БД', {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        batchId
-      });
-      
+      dbSaveTime = performance.now() - dbSaveStartTime;
       dbSaveResult = { 
         success: false, 
         error: dbError instanceof Error ? dbError.message : String(dbError) 
       };
+      
+      logger.error('Batch: ошибка при сохранении в БД', {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        batchId
+      });
     }
     
-    // Отправляем метрики
+    // Рассчитываем общее время выполнения пакета
     const totalTime = performance.now() - pendingSave.timestamp;
-    gameMetrics.saveDuration(totalTime, { 
-      total: true,
-      critical: isCritical,
-      batched: true,
-      batch_size: totalRequests,
-      reason: saveReason
-    });
     
     // Определяем статус ответа
-    const status = dbSaveResult?.success ? 200 : 
-                  redisSaveResult?.success ? 207 : 500;
+    const status = dbSaveResult?.success ? 200 : 500;
     
     // Успешный результат для всех ожидающих запросов
     const response = NextResponse.json({
-      success: dbSaveResult?.success || redisSaveResult?.success,
+      success: dbSaveResult?.success,
       message: dbSaveResult?.success ? 
-        'Прогресс успешно сохранен (батчевое сохранение)' : 
-        'Данные сохранены только в Redis (батчевое сохранение)',
-      error: !dbSaveResult?.success && !redisSaveResult?.success ? 
-        'BATCH_SAVE_ERROR' : undefined,
+        'Прогресс успешно сохранен (батчевое сохранение)' : 'BATCH_SAVE_ERROR',
+      error: !dbSaveResult?.success ? dbSaveResult?.error : undefined,
       batchId,
       totalRequests,
-      isBatched: true,
       processingTime: totalTime,
       metrics: {
-        saveVersion: gameState._saveVersion,
         batchId,
         totalBatchedRequests: totalRequests,
-        redisSaveTimeMs: redisSaveTime,
-        dbSaveTimeMs: dbSaveResult?.success ? dbSaveTime : undefined,
+        dbSaveTimeMs: dbSaveTime,
         totalTimeMs: totalTime,
-        redisSuccess: !!redisSaveResult?.success,
         dbSuccess: !!dbSaveResult?.success
       }
     }, { status });
     
-    // Уведомляем всех ожидающих клиентов
+    // Разрешаем все промисы с одинаковым ответом
     for (const resolver of resolvers) {
-      resolver(response.clone());
+      resolver(response);
     }
     
-    logger.info('Отложенное сохранение успешно обработано', {
+    // Логируем результат
+    logger.info('Обработка отложенного сохранения завершена', {
       userId,
       batchId,
+      success: dbSaveResult?.success,
       totalRequests,
-      status
+      timeMs: totalTime.toFixed(2)
     });
   } catch (error) {
-    // Ошибка для всех ожидающих запросов
-    const errorResponse = NextResponse.json({
-      success: false,
-      error: 'INTERNAL_ERROR',
-      message: 'Ошибка при обработке отложенного сохранения',
-      details: error instanceof Error ? error.message : String(error),
-      batchId,
-      totalRequests,
-      isBatched: true
-    }, { status: 500 });
-    
-    // Уведомляем всех ожидающих клиентов об ошибке
-    for (const resolver of resolvers) {
-      resolver(errorResponse.clone());
-    }
-    
     logger.error('Ошибка при обработке отложенного сохранения', {
       error: error instanceof Error ? error.message : String(error),
-      userId,
-      batchId,
-      totalRequests
+      userId
     });
+    
+    // Необходимо разрешить промисы даже в случае ошибки
+    const errorResponse = NextResponse.json({
+      success: false,
+      error: 'BATCH_PROCESSING_ERROR',
+      message: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
+    
+    // Разрешаем все промисы с ошибкой
+    const resolvers = pendingSave.resolvers;
+    for (const resolver of resolvers) {
+      resolver(errorResponse);
+    }
   } finally {
-    // Снимаем блокировку
+    // Разблокируем пользователя
     saveLocks.delete(userId);
   }
-} 
+}
+
+// Дополнительные функции для API
+const saveToDatabase = async (userId: string, gameState: GameState, saveReason: string): Promise<{success: boolean, error?: string}> => {
+  try {
+    const encryptedState = encryptGameSave(JSON.stringify(gameState));
+    
+    await prisma.progress.upsert({
+      where: { user_id: userId },
+      update: {
+        game_state: encryptedState,
+        updated_at: new Date()
+      },
+      create: {
+        user_id: userId,
+        game_state: encryptedState,
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+    });
+    
+    // Также сохраняем историю (при необходимости)
+    try {
+      await prisma.progressHistory.create({
+        data: {
+          user_id: userId,
+          save_reason: saveReason,
+          created_at: new Date()
+        }
+      });
+    } catch (historyError) {
+      logger.warn('Ошибка при сохранении истории', {
+        error: historyError instanceof Error ? historyError.message : String(historyError)
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : String(error) 
+    };
+  }
+};
+
+// Создаем запись в очереди синхронизации
+const updateSyncQueue = async (userId: string): Promise<void> => {
+  try {
+    // Проверяем существует ли уже запись
+    const existingRecord = await prisma.syncQueue.findFirst({
+      where: { user_id: userId }
+    });
+    
+    if (existingRecord) {
+      // Обновляем существующую запись
+      await prisma.syncQueue.update({
+        where: { id: existingRecord.id },
+        data: {
+          updated_at: new Date()
+        }
+      });
+    } else {
+      // Создаем новую запись
+      await prisma.syncQueue.create({
+        data: {
+          user_id: userId,
+          operation: 'save_progress',
+          status: 'pending',
+          created_at: new Date(),
+          updated_at: new Date(),
+          attempts: 0
+        }
+      });
+    }
+    
+    logger.info('Очередь синхронизации обновлена', { userId });
+  } catch (error) {
+    logger.error('Ошибка при обновлении очереди синхронизации', {
+      error: error instanceof Error ? error.message : String(error),
+      userId
+    });
+  }
+}; 

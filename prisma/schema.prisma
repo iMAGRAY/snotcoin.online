@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,45 +8,42 @@ datasource db {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  farcaster_fid       String?   @unique // Farcaster ID как строка
-  farcaster_username  String?   // Делаем необязательным
+  id                    String    @id @default(cuid())
+  jwt_token             String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
   farcaster_displayname String?
-  farcaster_pfp       String?
-  jwt_token           String?
-  refresh_token       String?
-  token_expires_at    DateTime?
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-  progress            Progress?
+  farcaster_pfp         String?
+  farcaster_username    String
+  refresh_token         String?
+  token_expires_at      DateTime?
+  farcaster_fid         String    @unique
+  progress              Progress?
 
-  @@index([farcaster_fid])
   @@map("users")
 }
 
 model Progress {
-  id              String             @id @default(cuid())
-  user_id         String             @unique
-  game_state      Json               @map("gameState")
-  encrypted_state String?            @db.Text @map("encryptedState")
-  version         Int                @default(1)
-  created_at      DateTime           @default(now())
-  updated_at      DateTime           @updatedAt
-  is_compressed   Boolean            @default(false) @map("isCompressed")
-  user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  histories       ProgressHistory[]
+  id            String   @id @default(cuid())
+  user_id       String   @unique
+  game_state    Json
+  version       Int      @default(1)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  is_compressed Boolean  @default(false)
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("user_progress")
 }
 
 model SyncQueue {
   id         Int      @id @default(autoincrement())
-  user_id    String   @map("userId")
+  user_id    String
   operation  String
   data       Json
   status     String   @default("pending")
-  created_at DateTime @default(now()) @db.Timestamp(6) @map("createdAt")
-  updated_at DateTime @updatedAt @db.Timestamp(6) @map("updatedAt")
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
   attempts   Int      @default(0)
 
   @@index([status], map: "idx_sync_queue_status")
@@ -59,14 +53,13 @@ model SyncQueue {
 
 model ProgressHistory {
   id          Int      @id @default(autoincrement())
-  user_id     String   @map("userId")
-  client_id   String   @map("clientId")
-  save_type   String   @map("saveType")
-  save_reason String   @map("saveReason")
-  created_at  DateTime @default(now()) @db.Timestamp(6) @map("createdAt")
-  progress    Progress @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  user_id     String
+  client_id   String
+  save_type   String
+  save_reason String
+  created_at  DateTime @default(now()) @db.Timestamp(6)
 
   @@index([created_at], map: "idx_progress_history_created_at")
   @@index([user_id], map: "idx_progress_history_user_id")
   @@map("progress_history")
-} 
+}

@@ -3,8 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServicesStatus, enableRedis, disableRedis, ENV } from '../../../lib/env';
-import { redisService } from '../../../services/redis';
+import { getServicesStatus, ENV } from '../../../lib/env';
 import { prisma } from '../../../lib/prisma';
 
 // Запрос на получение статуса системы
@@ -24,21 +23,6 @@ export async function GET(request: NextRequest) {
     // Статус сервисов из конфигурации
     const servicesStatus = getServicesStatus();
     
-    // Проверяем состояние Redis
-    let redisStatus = {
-      enabled: ENV.REDIS_ENABLED,
-      connected: false,
-      status: null as any
-    };
-    
-    try {
-      redisStatus.status = redisService.getStatus();
-      const isAvailable = await redisService.isAvailable();
-      redisStatus.connected = isAvailable;
-    } catch (error) {
-      redisStatus.status = error instanceof Error ? error.message : String(error);
-    }
-    
     // Проверяем состояние базы данных
     let dbStatus = {
       connected: false,
@@ -57,7 +41,6 @@ export async function GET(request: NextRequest) {
       success: true,
       status: 'ok',
       services: servicesStatus,
-      redis: redisStatus,
       database: dbStatus,
       environment: ENV.NODE_ENV,
       timestamp: new Date().toISOString()
@@ -100,44 +83,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Выполняем команду в зависимости от сервиса
-    switch (service) {
-      case 'redis':
-        if (command === 'enable') {
-          enableRedis();
-          return NextResponse.json({
-            success: true,
-            message: 'Redis enabled',
-            status: { redis: ENV.REDIS_ENABLED }
-          });
-        } else if (command === 'disable') {
-          disableRedis();
-          return NextResponse.json({
-            success: true,
-            message: 'Redis disabled',
-            status: { redis: ENV.REDIS_ENABLED }
-          });
-        } else if (command === 'reset') {
-          redisService.resetConnectionState();
-          return NextResponse.json({
-            success: true,
-            message: 'Redis connection state reset',
-            status: redisService.getStatus()
-          });
-        }
-        break;
-        
-      // Можно добавить другие сервисы по необходимости
-        
-      default:
-        return NextResponse.json(
-          { success: false, error: `Unknown service: ${service}` }, 
-          { status: 400 }
-        );
-    }
-    
+    // Поддержка других сервисов можно добавить по необходимости
     return NextResponse.json(
-      { success: false, error: `Unknown command: ${command}` }, 
+      { success: false, error: `Unknown service: ${service}` }, 
       { status: 400 }
     );
   } catch (error) {

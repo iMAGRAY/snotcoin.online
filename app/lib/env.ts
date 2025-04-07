@@ -4,10 +4,6 @@
 
 // Флаги для включения/отключения внешних сервисов
 export const ENV = {
-  // Redis
-  REDIS_ENABLED: process.env.REDIS_ENABLED !== 'false',
-  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
-  
   // База данных
   DATABASE_URL: process.env.DATABASE_URL,
   
@@ -39,8 +35,6 @@ export const isTest = ENV.NODE_ENV === 'test';
 // Функция для проверки, доступен ли сервис
 export function isServiceEnabled(serviceName: keyof typeof ENV): boolean {
   switch (serviceName) {
-    case 'REDIS_ENABLED':
-      return ENV.REDIS_ENABLED;
     case 'ENABLE_METRICS':
       return ENV.ENABLE_METRICS;
     default:
@@ -53,20 +47,9 @@ export function setMaintenanceMode(enabled: boolean): void {
   ENV.IS_MAINTENANCE_MODE = enabled;
 }
 
-// Временное отключение Redis
-export function disableRedis(): void {
-  ENV.REDIS_ENABLED = false;
-}
-
-// Включение Redis
-export function enableRedis(): void {
-  ENV.REDIS_ENABLED = true;
-}
-
 // Получение текущего статуса сервисов
 export function getServicesStatus(): Record<string, boolean> {
   return {
-    redis: ENV.REDIS_ENABLED,
     metrics: ENV.ENABLE_METRICS,
     maintenanceMode: ENV.IS_MAINTENANCE_MODE,
     debugLogs: ENV.ENABLE_DEBUG_LOGS,

@@ -5,6 +5,7 @@ import { GameProvider } from './contexts';
 import { FarcasterProvider, useFarcaster } from './contexts/FarcasterContext';
 import LoadingScreen from './components/LoadingScreen';
 import { ErrorDisplay } from './components/ErrorBoundary';
+import { SaveManagerProvider } from './contexts/SaveManagerProvider';
 
 // Обертка для управления состоянием загрузки SDK и отображения заглушки
 const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -56,10 +57,12 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <FarcasterProvider>
-      <GameProviderWrapper>
-        {children}
-      </GameProviderWrapper>
-    </FarcasterProvider>
+    <SaveManagerProvider>
+      <FarcasterProvider>
+        <GameProviderWrapper>
+          {children}
+        </GameProviderWrapper>
+      </FarcasterProvider>
+    </SaveManagerProvider>
   );
 } 

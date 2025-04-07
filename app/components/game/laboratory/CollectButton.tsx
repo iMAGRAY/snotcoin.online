@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useMemo, useCallback, useState } from "react"
-import { motion } from "framer-motion"
 import Image from "next/image"
 import { useTranslation } from "../../../i18n"
 import type { CollectButtonProps } from "../../../types/laboratory-types"
@@ -11,7 +10,7 @@ import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import { useForceSave } from "../../../hooks/useForceSave"
 
 // Длительность анимации сбора ресурсов
-const ANIMATION_DURATION = 1000; // 1 секунда
+const ANIMATION_DURATION = 800; // Уменьшаем с 1000 до 800 мс
 
 /**
  * Компонент кнопки сбора ресурсов
@@ -23,9 +22,10 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
 }) => {
   const { t } = useTranslation()
   const store = useGameState()
-  const dispatch = useGameDispatch()
+  const setState = useGameDispatch()
   const forceSave = useForceSave()
   const [collectAnimationActive, setCollectAnimationActive] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   
   const isDisabled = typeof containerSnot !== 'number' || isNaN(containerSnot) || containerSnot <= 0 || isCollecting || collectAnimationActive
 
@@ -39,63 +39,77 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
   const handleCollect = useCallback(() => {
     if (isDisabled) return;
     
-    const currentSnot = store.inventory.snot;
-    const expectedFinalSnot = currentSnot + containerSnot;
+    // Проверяем, что store и inventory существуют
+    if (!store || !store.inventory) return;
     
-    // Логируем детали операции для отладки
-    console.log(`[Laboratory] Начинаем сбор ресурсов: 
-    {initialSnot: ${currentSnot}, amountToCollect: ${containerSnot}, expectedFinalSnot: ${expectedFinalSnot}, время: '${new Date().toISOString()}'}`);
+    // Сразу обновляем анимацию, чтобы заблокировать повторные нажатия
+    setCollectAnimationActive(true);
     
-    // Отправляем действие с указанием ожидаемого результата
-    dispatch({
-      type: 'COLLECT_CONTAINER_SNOT',
-      payload: {
-        containerSnot: containerSnot,
-        expectedSnot: currentSnot // Передаем ожидаемое начальное значение для корректировки
-      }
+    const currentSnot = store?.inventory?.snot ?? 0;
+    const validAmount = Math.max(0, containerSnot);
+    const expectedFinalSnot = currentSnot + validAmount;
+    
+    // Вместо диспатча напрямую обновляем состояние
+    setState(prevState => {
+      if (!prevState || !prevState.inventory) return prevState;
+      
+      return {
+        ...prevState,
+        inventory: {
+          ...prevState.inventory,
+          snot: expectedFinalSnot,
+          containerSnot: 0 // Обнуляем контейнер при сборе
+        },
+        _lastAction: 'COLLECT_CONTAINER_SNOT'
+      };
     });
     
-    // Обновляем анимацию и запускаем эффект сбора
-    setCollectAnimationActive(true);
+    // Запускаем сохранение сразу после обновления состояния
+    forceSave(100);
+    
+    // Вызываем внешний обработчик для анимации полета чисел, если он есть
+    if (onCollect) {
+      onCollect();
+    }
+    
+    // Разблокируем кнопку после завершения анимации
     setTimeout(() => {
       setCollectAnimationActive(false);
-      if (onCollect) onCollect();
     }, ANIMATION_DURATION);
     
-    // Сохраняем игру после сбора
-    forceSave(300);
-  }, [isDisabled, containerSnot, store.inventory.snot, dispatch, onCollect, forceSave]);
+  }, [isDisabled, containerSnot, store?.inventory?.snot, setState, onCollect, forceSave]);
+
+  // Стили для эффекта при наведении
+  const buttonStyles = {
+    transform: isHovered && !isDisabled ? 'scale(1.05)' : 'scale(1)',
+    boxShadow: isHovered && !isDisabled ? "0 0 12px rgba(250, 204, 21, 0.7)" : "0 0 0px rgba(250, 204, 21, 0)",
+    transition: 'all 0.2s ease-in-out'
+  };
 
   return (
-    <motion.button
+    <button
+      className={`flex items-center justify-center px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold border-2 border-yellow-300 w-3/5 h-16 z-50 ${
+        isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-400'
+      }`}
       onClick={handleCollect}
-      className={`relative px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
-        text-white shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
-        focus:ring-yellow-300 focus:ring-opacity-50 h-16 flex-grow ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      whileHover={!isDisabled ? { 
-        scale: 1.05,
-        boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
-      } : {}}
-      whileTap={!isDisabled ? { scale: 0.95 } : {}}
       disabled={isDisabled}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={buttonStyles}
     >
-      <div className="flex items-center justify-center space-x-2">
-        <Image 
-          src={ICONS.LABORATORY.BUTTONS.CLAIM} 
-          width={28} 
-          height={28} 
-          alt={t("collectResources")} 
-          className="inline-block" 
-          draggable="false"
-          onContextMenu={(e) => e.preventDefault()}
-        />
-        <span>{t("collect")}</span>
-      </div>
-    </motion.button>
-  )
-})
+      <Image 
+        src={ICONS.LABORATORY.BUTTONS.CLAIM}
+        alt="Collect"
+        width={24}
+        height={24}
+        className="mr-2"
+      />
+      <span>{t('Collect')}</span>
+    </button>
+  );
+});
 
-CollectButton.displayName = "CollectButton"
+CollectButton.displayName = 'CollectButton';
 
-export default CollectButton
+export default CollectButton;
 

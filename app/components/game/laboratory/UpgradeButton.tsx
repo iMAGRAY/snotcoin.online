@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useCallback, useState, useEffect } from "react"
-import { motion } from "framer-motion"
 import Image from "next/image"
 import type { UpgradeButtonProps } from "../../../types/laboratory-types"
 import { useTranslation } from "../../../i18n"
@@ -15,6 +14,8 @@ const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => 
   const { t } = useTranslation()
   const router = useRouter()
   const pathname = usePathname()
+  const [isHovered, setIsHovered] = useState(false)
+  const [isPressed, setIsPressed] = useState(false)
   
   // Предзагружаем страницу улучшений
   useEffect(() => {
@@ -30,28 +31,35 @@ const UpgradeButton: React.FC<UpgradeButtonProps> = React.memo(({ onClick }) => 
     }
   }, [onClick]);
 
+  // Стили для эффекта при наведении и нажатии
+  const buttonStyles = {
+    transform: isPressed ? 'scale(0.95)' : (isHovered ? 'scale(1.05)' : 'scale(1)'),
+    boxShadow: isHovered ? "0 0 12px rgba(250, 204, 21, 0.7)" : "0 0 0px rgba(250, 204, 21, 0)",
+    transition: 'all 0.2s ease-in-out'
+  };
+
   return (
-    <motion.button
+    <button
       onClick={handleClick}
-      className="relative p-3 bg-gradient-to-r from-[#4a7a9e] to-[#3a4c62] rounded-2xl font-bold 
-        text-white shadow-lg border-2 border-[#5889ae] focus:outline-none focus:ring-2 
-        focus:ring-[#4a7a9e] transition-all duration-200 h-16 w-16 flex items-center justify-center"
-      whileHover={{ 
-        scale: 1.05,
-        boxShadow: "0 0 12px rgba(74, 122, 158, 0.7)",
+      className="flex items-center justify-center rounded-2xl bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold border-2 border-yellow-300 w-16 h-16 z-50"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsPressed(false);
       }}
-      whileTap={{ scale: 0.95 }}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      style={buttonStyles}
     >
       <Image 
         src={ICONS.LABORATORY.BUTTONS.UPGRADE} 
         width={32} 
         height={32} 
         alt={t("upgradeResources")} 
-        className="inline-block"
         draggable="false"
         onContextMenu={(e) => e.preventDefault()}
       />
-    </motion.button>
+    </button>
   )
 })
 

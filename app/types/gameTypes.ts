@@ -386,22 +386,88 @@ export interface GameStateUpdate {
 }
 
 /**
- * Создает состояние игры по умолчанию
+ * Создает дефолтное состояние игры
  */
 export function createDefaultGameState(): GameState {
   const now = new Date().toISOString();
+  // Получаем текущее время в миллисекундах
+  const currentTimeMs = Date.now();
+  
+  // Значения по умолчанию
+  let initialSnot = 0.1;
+  let initialSnotCoins = 0;
+  let initialContainerSnot = 0.05;
+  let hadPreviousSaves = false;
+  
+  // Функция выполняется только в браузере
+  if (typeof window !== 'undefined') {
+    // Проверка sessionStorage на наличие резервных копий
+    try {
+      if (window.sessionStorage) {
+        // Ищем все ключи с префиксом snot_backup_
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith('snot_backup_')) {
+            const backupData = sessionStorage.getItem(key);
+            if (backupData) {
+              try {
+                const backup = JSON.parse(backupData);
+                // Проверяем, что значение snot в backup - число
+                if (backup && typeof backup.snot === 'number' && !isNaN(backup.snot)) {
+                  initialSnot = backup.snot;
+                  hadPreviousSaves = true;
+                  console.log('[createDefaultGameState] Найдена резервная копия snot:', {
+                    snot: initialSnot,
+                    key: key
+                  });
+                  break;
+                }
+              } catch (e) {
+                // Игнорируем ошибки при разборе JSON
+              }
+            }
+          }
+        }
+      }
+      
+      // Поиск сохранений в localStorage если не найдено в sessionStorage
+      if (!hadPreviousSaves) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes('snotcoin_') && (key.includes('_backup') || key.includes('game_state_'))) {
+            hadPreviousSaves = true;
+            // Если найдены предыдущие сохранения, устанавливаем начальное значение containerSnot
+            initialContainerSnot = 0.05; // Базовое значение
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      // Игнорируем ошибки при проверке сохранений
+      console.warn('[createDefaultGameState] Ошибка при проверке сохранений:', error);
+    }
+  }
+  
+  // Гарантируем, что все значения являются числами
+  initialSnot = Number(initialSnot) || 0.1;
+  initialSnotCoins = Number(initialSnotCoins) || 0;
+  initialContainerSnot = Number(initialContainerSnot) || 0.05;
+  
+  // Создаем tempData с информацией о предыдущих сохранениях
+  const tempData = hadPreviousSaves ? { hadPreviousSaves: true } : null;
+  
   return {
     user: null,
     inventory: {
-      snot: 0,
-      snotCoins: 0,
-      containerSnot: 0,
+      snot: initialSnot,
+      snotCoins: initialSnotCoins,
+      containerSnot: initialContainerSnot,
       containerCapacity: 1,
       containerCapacityLevel: 1,
-      fillingSpeed: 1,
+      fillingSpeed: 0.01, // Синхронизировано с другими местами создания начальных состояний
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      lastUpdateTimestamp: Date.now()
+      lastUpdateTimestamp: currentTimeMs
     },
     container: {
       level: 1,
@@ -426,12 +492,12 @@ export function createDefaultGameState(): GameState {
     _lastSaved: now,
     _userId: '',
     _provider: '',
-    _lastModified: Date.now(),
+    _lastModified: currentTimeMs,
     _createdAt: now,
     _wasRepaired: false,
-    _repairedAt: Date.now(),
+    _repairedAt: currentTimeMs,
     _repairedFields: [],
-    _tempData: null,
+    _tempData: tempData,
     _isSavingInProgress: false,
     _skipSave: false,
     _lastSaveError: null,
@@ -479,14 +545,14 @@ export function createDefaultGameState(): GameState {
     },
     hideInterface: false,
     activeTab: 'game',
-    fillingSpeed: 1,
+    fillingSpeed: 0.01, // Синхронизировано с inventory.fillingSpeed
     containerLevel: 1,
     isPlaying: false,
     isGameInstanceRunning: false,
     validationStatus: 'pending',
     lastValidation: now,
     gameStarted: false,
-    isLoading: false
+    isLoading: false,
   };
 }
 

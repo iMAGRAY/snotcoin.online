@@ -23,7 +23,10 @@ const TabBar: React.FC<TabBarProps> = () => {
 
   const handleTabClick = useCallback(
     (id: TabId) => {
-      dispatch({ type: "SET_ACTIVE_TAB", payload: id })
+      dispatch(prevState => ({
+        ...prevState,
+        activeTab: id
+      }))
     },
     [dispatch],
   )

@@ -137,30 +137,53 @@ const UpgradePageContent: React.FC = React.memo(() => {
   const router = useRouter()
   const [showUpgradeEffect, setShowUpgradeEffect] = React.useState(false)
 
-  const capacityCost = useMemo(() => calculateContainerUpgradeCost(gameState.inventory.containerCapacity), [gameState.inventory.containerCapacity])
+  const capacityCost = useMemo(() => calculateContainerUpgradeCost(gameState?.inventory?.containerCapacity ?? 1), [gameState?.inventory?.containerCapacity])
   const speedCost = useMemo(() => calculateFillingSpeedUpgradeCost(gameState.fillingSpeed || 1), [gameState.fillingSpeed])
 
   const handleBack = useCallback(() => {
-    gameDispatch({ type: "SET_ACTIVE_TAB", payload: "laboratory" })
+    gameDispatch(prevState => ({
+      ...prevState,
+      _activeTab: "laboratory"
+    }));
     router.push("/")
   }, [gameDispatch, router])
 
   const handleCapacityUpgrade = useCallback(() => {
     if (gameState.inventory?.snotCoins >= capacityCost) {
-      gameDispatch({
-        type: "UPGRADE_CONTAINER_CAPACITY",
-        payload: { cost: capacityCost }
-      })
+      gameDispatch(prevState => {
+        const newLevel = (prevState.inventory?.containerCapacityLevel || 1) + 1;
+        return {
+          ...prevState,
+          inventory: {
+            ...prevState.inventory,
+            containerCapacity: calculateContainerCapacity(newLevel),
+            containerCapacityLevel: newLevel,
+            snotCoins: (prevState.inventory?.snotCoins || 0) - capacityCost
+          }
+        };
+      });
     }
-  }, [gameState.inventory?.snotCoins, gameDispatch, capacityCost])
+  }, [gameState.inventory?.snotCoins, gameDispatch, capacityCost, calculateContainerCapacity])
 
   const handleSpeedUpgrade = useCallback(() => {
     if (gameState.inventory?.snotCoins !== undefined && gameState.inventory.snotCoins >= speedCost) {
-      gameDispatch({ type: "UPGRADE_FILLING_SPEED" })
+      gameDispatch(prevState => {
+        const currentLevel = prevState.inventory?.fillingSpeedLevel || 1;
+        const newLevel = currentLevel + 1;
+        return {
+          ...prevState,
+          inventory: {
+            ...prevState.inventory,
+            fillingSpeed: calculateFillingSpeed(newLevel),
+            fillingSpeedLevel: newLevel,
+            snotCoins: (prevState.inventory?.snotCoins || 0) - speedCost
+          }
+        };
+      });
       setShowUpgradeEffect(true)
       setTimeout(() => setShowUpgradeEffect(false), 1000)
     }
-  }, [gameState.inventory?.snotCoins, gameDispatch, speedCost])
+  }, [gameState.inventory?.snotCoins, gameDispatch, speedCost, calculateFillingSpeed])
 
   useEffect(() => {
     router.prefetch('/')
@@ -212,9 +235,9 @@ const UpgradePageContent: React.FC = React.memo(() => {
               title={t("fillingSpeedUpgrade")}
               description={t("fillingSpeedDescription")}
               cost={speedCost}
-              currentLevel={gameState.inventory.fillingSpeedLevel || 1}
+              currentLevel={gameState.inventory?.fillingSpeedLevel || 1}
               currentEffect={(24 * 60 * 60 * (gameState.fillingSpeed || 1)).toFixed(2)}
-              nextEffect={((gameState.inventory.fillingSpeedLevel || 1) + 1).toFixed(2)}
+              nextEffect={((gameState.inventory?.fillingSpeedLevel || 1) + 1).toFixed(2)}
               onUpgrade={handleSpeedUpgrade}
               canAfford={(gameState.inventory?.snotCoins ?? 0) >= speedCost}
               icon={<Zap className="w-8 h-8" />}

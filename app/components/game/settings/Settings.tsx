@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation"
 import MenuItem from "../../../components/ui/menu-item"
 import { authService } from '../../../services/auth/authService'
 import Link from "next/link"
+import { createInitialGameState } from '../../../types/gameTypes'
 
 interface SettingsProps {
   isOpen?: boolean
@@ -56,7 +57,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const { language, t } = useTranslation()
   const [currentPage, setCurrentPage] = useState<"main" | "games" | "roadmap" | "tokenomic" | "about">("main")
   const router = useRouter()
-  const dispatch = useGameDispatch()
+  const setState = useGameDispatch()
 
   const handleOutsideClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -70,18 +71,15 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     // Dispatch a custom event to notify other components
     window.dispatchEvent(new Event("logout"))
 
-    // Reset game state
-    dispatch({ type: "RESET_GAME_STATE" })
-
-    // Clear user data
-    dispatch({ type: "SET_USER", payload: null })
+    // Сбрасываем состояние игры и очищаем данные пользователя
+    setState(createInitialGameState())
 
     // Close settings
     onClose()
 
     // Redirect to the home page, which will show the authentication screen
     router.push("/")
-  }, [dispatch, router, onClose])
+  }, [setState, router, onClose])
 
   return (
     <motion.div

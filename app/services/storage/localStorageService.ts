@@ -1,4 +1,12 @@
 /**
+ * ВНИМАНИЕ! Этот файл устарел и будет удален в ближайшее время.
+ * Вместо него используйте систему сохранений из каталога saveSystem:
+ * - LocalStorageAdapter - из app/services/saveSystem/adapters/LocalStorageAdapter
+ * - saveManager - из app/services/saveSystem/index
+ * - useSaveManager - из app/contexts/SaveManagerProvider
+ */
+
+/**
  * Сервис для работы с localStorage
  * Обеспечивает сохранение и загрузку игровых данных в локальном хранилище браузера
  */
