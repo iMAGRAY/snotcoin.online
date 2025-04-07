@@ -175,71 +175,75 @@ export const saveGameState = async (
 };
 
 /**
- * Загрузка игрового состояния
+ * Загружает состояние игры
  * @param userId ID пользователя
+ * @returns Результат загрузки
  */
-export const loadGameState = async (
-  userId: string
-): Promise<{ data: any | null; source: StorageType }> => {
-  // Проверяем инициализацию
-  if (!isInitialized) {
-    await initStorage(storageConfig);
-  }
-  
+export async function loadGameState(userId: string): Promise<{
+  success: boolean;
+  data: GameState | null;
+  error?: string;
+  storageType?: StorageType;
+  isNewUser?: boolean;
+}> {
   try {
-    console.log(`[storageService] Загрузка данных пользователя ${userId}`);
+    // Отслеживаем откуда было загружено
+    let storageType: StorageType = 'local';
     
-    // Определяем, откуда загружать данные
-    if (storageConfig.preferredStorage === StorageType.INDEXED_DB) {
-      // Пробуем загрузить из IndexedDB
+    // 1. Сначала пытаемся загрузить из local storage
+    try {
+      const localStorageKey = `game_state_${userId}`;
+      const savedState = localStorage.getItem(localStorageKey);
+      
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        
+        // Проверяем наличие критических полей
+        if (parsedState && typeof parsedState === 'object' && parsedState.inventory) {
+          console.log('[StorageService] Загружено состояние из localStorage', { userId });
+          
+          return {
+            success: true,
+            data: parsedState,
+            storageType: 'local'
+          };
+        }
+      }
+    } catch (localError) {
+      console.error('[StorageService] Error loading from localStorage:', localError);
+      // Продолжаем выполнение, чтобы попробовать другие источники
+    }
+    
+    // 2. Затем пытаемся загрузить из IndexedDB
+    if (indexedDB.isIndexedDBAvailable()) {
       try {
-        const data = await indexedDB.getGameData(userId);
-        if (data) {
-          return { data, source: StorageType.INDEXED_DB };
+        const idbData = await indexedDB.getGameData(userId);
+        if (idbData) {
+          console.log('[storageService] Загружено состояние из IndexedDB', { userId });
+          return {
+            success: true,
+            data: idbData,
+            storageType: StorageType.INDEXED_DB
+          };
         }
       } catch (idbError) {
         console.warn(`[storageService] Ошибка при загрузке из IndexedDB:`, idbError);
       }
-    } else if (storageConfig.preferredStorage === StorageType.LOCAL_STORAGE) {
-      // Загружаем из localStorage
-      try {
-        const dataString = localStorage.getItem(`gameState_${userId}`);
-        if (dataString) {
-          return { data: JSON.parse(dataString), source: StorageType.LOCAL_STORAGE };
-        }
-      } catch (lsError) {
-        console.warn(`[storageService] Ошибка при загрузке из localStorage:`, lsError);
-      }
-    } else {
-      // Гибридный режим - сначала пробуем localStorage для быстрого доступа
-      try {
-        const dataString = localStorage.getItem(`gameState_${userId}`);
-        if (dataString) {
-          return { data: JSON.parse(dataString), source: StorageType.LOCAL_STORAGE };
-        }
-      } catch (lsError) {
-        console.warn(`[storageService] Ошибка при загрузке из localStorage в гибридном режиме:`, lsError);
-      }
-      
-      // Затем пробуем IndexedDB
-      try {
-        const data = await indexedDB.getGameData(userId);
-        if (data) {
-          return { data, source: StorageType.INDEXED_DB };
-        }
-      } catch (idbError) {
-        console.warn(`[storageService] Ошибка при загрузке из IndexedDB в гибридном режиме:`, idbError);
-      }
     }
     
-    // Если данные не найдены в приоритетных хранилищах, проверяем резервные копии
+    // 3. Если данные не найдены в приоритетных хранилищах, проверяем резервные копии
     console.log(`[storageService] Данные не найдены в основных хранилищах, проверяем резервные копии`);
     
     // Сначала проверяем бэкапы в localStorage
     try {
       const latestBackup = localStorageManager.getLatestBackup(userId);
       if (latestBackup) {
-        return { data: latestBackup.gameState, source: StorageType.LOCAL_STORAGE };
+        console.log('[storageService] Загружено состояние из резервной копии localStorage', { userId });
+        return {
+          success: true,
+          data: latestBackup.gameState,
+          storageType: StorageType.LOCAL_STORAGE
+        };
       }
     } catch (backupError) {
       console.warn(`[storageService] Ошибка при загрузке резервной копии из localStorage:`, backupError);
@@ -250,7 +254,12 @@ export const loadGameState = async (
       try {
         const backup = await indexedDB.getLatestBackup(userId);
         if (backup) {
-          return { data: backup.data, source: StorageType.INDEXED_DB };
+          console.log('[storageService] Загружено состояние из резервной копии IndexedDB', { userId });
+          return {
+            success: true,
+            data: backup.data,
+            storageType: StorageType.INDEXED_DB
+          };
         }
       } catch (idbBackupError) {
         console.warn(`[storageService] Ошибка при загрузке резервной копии из IndexedDB:`, idbBackupError);
@@ -259,12 +268,22 @@ export const loadGameState = async (
     
     // Если ничего не найдено
     console.log(`[storageService] Данные пользователя ${userId} не найдены ни в одном хранилище`);
-    return { data: null, source: StorageType.LOCAL_STORAGE };
+    return {
+      success: false,
+      data: null,
+      error: 'Данные пользователя не найдены ни в одном хранилище',
+      storageType: storageConfig.preferredStorage
+    };
   } catch (error) {
     console.error(`[storageService] Критическая ошибка при загрузке данных пользователя ${userId}:`, error);
-    return { data: null, source: StorageType.LOCAL_STORAGE };
+    return {
+      success: false,
+      data: null,
+      error: 'Критическая ошибка при загрузке данных пользователя',
+      storageType: storageConfig.preferredStorage
+    };
   }
-};
+}
 
 /**
  * Создание резервной копии игрового состояния

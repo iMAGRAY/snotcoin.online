@@ -112,7 +112,6 @@ const HomeContent: React.FC = () => {
           activeTab={gameState.activeTab || "laboratory"}
           snot={gameState.inventory?.snot || 0}
           snotCoins={gameState.inventory?.snotCoins || 0}
-          energy={gameState.inventory?.energy || 0}
           containerCapacity={gameState.inventory?.containerCapacity}
           containerLevel={gameState.container?.level}
           containerSnot={gameState.inventory?.containerSnot}

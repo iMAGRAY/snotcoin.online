@@ -21,7 +21,6 @@ interface ResourcesProps {
   showOnlySnot?: boolean
   snot: number
   snotCoins: number
-  energy?: number
   // Параметры для StatusDisplay
   containerCapacity?: number
   containerLevel?: number
@@ -44,12 +43,29 @@ const ResourceItem: React.FC<{
   noDecimals?: boolean | undefined
   showTimeInline?: boolean | undefined
 }> = React.memo(({ icon, value, maxValue, label, colorClass, ariaLabel, timeToFull, noDecimals, showTimeInline }) => {
+  // Стабилизация значения для предотвращения моргания
+  const [stableValue, setStableValue] = React.useState(value);
+  
+  // Обновление значения с задержкой для предотвращения мерцания
+  React.useEffect(() => {
+    // Небольшая задержка для избежания постоянного обновления
+    const timerId = setTimeout(() => {
+      // Обновляем только если разница существенная (>0.5)
+      if (Math.abs(value - stableValue) > 0.5) {
+        setStableValue(value);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timerId);
+  }, [value, stableValue]);
+  
+  // Используем стабильное значение для отображения
   const formattedValue = useMemo(() => {
-    if (value === undefined) return "0"
-    if (maxValue !== undefined) return `${Math.floor(value)}/${maxValue}`
-    if (noDecimals) return Math.floor(value).toString()
-    return formatSnotValue(value, 4)
-  }, [value, maxValue, noDecimals])
+    if (stableValue === undefined) return "0"
+    if (maxValue !== undefined) return `${Math.floor(stableValue)}/${maxValue}`
+    if (noDecimals) return Math.floor(stableValue).toString()
+    return formatSnotValue(stableValue, 4)
+  }, [stableValue, maxValue, noDecimals])
 
   const { t } = useTranslation()
 
@@ -105,7 +121,6 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     showOnlySnot = false,
     snot,
     snotCoins,
-    energy,
     containerCapacity,
     containerLevel,
     containerSnot,
@@ -113,27 +128,6 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     fillingSpeedLevel
   }) => {
     const { t } = useTranslation()
-
-    // Вычисляем время до полного восстановления энергии
-    const timeToFullEnergy = useMemo(() => {
-      if (energy === undefined || energy >= 500) return undefined;
-      
-      // Вычисляем сколько энергии осталось восстановить
-      const energyToRecover = 500 - energy;
-      
-      // Скорость восстановления: 500 единиц за 8 часов = 500 / (8 * 60 * 60) единиц в секунду
-      const energyPerSecond = 500 / (8 * 60 * 60);
-      
-      // Сколько секунд нужно для восстановления оставшейся энергии
-      const secondsToFull = Math.ceil(energyToRecover / energyPerSecond);
-      
-      // Конвертируем в часы:минуты (убираем секунды)
-      const hours = Math.floor(secondsToFull / 3600);
-      const minutes = Math.floor((secondsToFull % 3600) / 60);
-      
-      // Форматируем строку времени без секунд
-      return `${hours}ч ${minutes}м`;
-    }, [energy]);
 
     // Построение списка ресурсов с использованием констант
     const resourceItems = useMemo(() => {
@@ -163,23 +157,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
         }
       ];
       
-      // Добавляем энергию, если она определена
-      if (energy !== undefined) {
-        items.push({
-          icon: ICONS.ENERGY, // Используем новую специальную иконку для энергии
-          value: energy,
-          label: "Energy",
-          colorClass: "text-blue-400", // Цвет для энергии
-          timeToFull: timeToFullEnergy,
-          noDecimals: true, // Показывать без десятичных знаков
-          showTimeInline: true // Отображать время восстановления справа
-        });
-      }
-
       if (showOnlySnotCoin) return items.filter(item => item.label === "SnotCoins");
       if (showOnlySnot) return items.filter(item => item.label === "SNOT");
       return items;
-    }, [snotCoins, snot, energy, timeToFullEnergy, showOnlySnotCoin, showOnlySnot]);
+    }, [snotCoins, snot, showOnlySnotCoin, showOnlySnot]);
 
     // Проверка условий для отображения StatusDisplay - перенесено сюда
     const isLaboratoryTab = activeTab === 'laboratory';
@@ -232,9 +213,6 @@ const Resources: React.FC<ResourcesProps> = React.memo(
                     label={item.label}
                     colorClass={item.colorClass}
                     ariaLabel={`${t(item.label)}: ${item.value}`}
-                    timeToFull={item.timeToFull}
-                    noDecimals={item.noDecimals}
-                    showTimeInline={item.showTimeInline}
                   />
                 ))}
               </div>

@@ -29,7 +29,8 @@ const criticalInventoryFields = [
   "containerCapacity",
   "containerCapacityLevel",
   "fillingSpeed",
-  "fillingSpeedLevel"
+  "fillingSpeedLevel",
+  "collectionEfficiency"
 ];
 
 /**
@@ -997,8 +998,6 @@ export function getDefaultInventoryValues(): Inventory {
     fillingSpeed: 1,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
-    energy: 500,
-    lastEnergyUpdateTime: Date.now(),
     lastUpdateTimestamp: Date.now()
   };
 } 

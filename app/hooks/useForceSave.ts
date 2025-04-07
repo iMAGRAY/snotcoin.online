@@ -91,7 +91,7 @@ export function useForceSave() {
               inventory: {
                 snot: gameState.inventory?.snot,
                 snotCoins: gameState.inventory?.snotCoins,
-                containerSnot: gameState.inventory?.containerSnot,
+                containerSnot: gameState.inventory?.containerSnot
               },
               _lastSaved: new Date().toISOString(),
               _attemptId: currentAttempt,

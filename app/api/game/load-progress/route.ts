@@ -214,19 +214,12 @@ export async function GET(request: NextRequest) {
             
             // Проверяем данные энергии и времени восстановления
             if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
-              // Если поле energy не определено, устанавливаем значение по умолчанию
-              if (gameStateData.inventory.energy === undefined) {
-                gameStateData.inventory.energy = 500;
-              }
+              // Больше не проверяем поля energy и lastEnergyUpdateTime, так как функционал энергии удален
               
-              // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
-              if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
-                gameStateData.inventory.lastEnergyUpdateTime = Date.now();
-              }
-              
-              logger.debug('Проверка параметров энергии:', { 
-                energy: gameStateData.inventory.energy,
-                lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+              logger.debug('Загрузка данных инвентаря:', { 
+                snot: gameStateData.inventory.snot,
+                snotCoins: gameStateData.inventory.snotCoins,
+                containerSnot: gameStateData.inventory.containerSnot
               });
             }
             
@@ -445,19 +438,12 @@ export async function GET(request: NextRequest) {
 
         // Проверяем данные энергии и времени восстановления
         if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
-          // Если поле energy не определено, устанавливаем значение по умолчанию
-          if (gameStateData.inventory.energy === undefined) {
-            gameStateData.inventory.energy = 500;
-          }
+          // Больше не проверяем поля energy и lastEnergyUpdateTime, так как функционал энергии удален
           
-          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
-          if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
-            gameStateData.inventory.lastEnergyUpdateTime = Date.now();
-          }
-          
-          logger.debug('Проверка параметров энергии:', { 
-            energy: gameStateData.inventory.energy,
-            lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+          logger.debug('Загрузка данных инвентаря:', { 
+            snot: gameStateData.inventory.snot,
+            snotCoins: gameStateData.inventory.snotCoins,
+            containerSnot: gameStateData.inventory.containerSnot
           });
         }
 
@@ -501,19 +487,12 @@ export async function GET(request: NextRequest) {
         
         // Проверяем данные энергии и времени восстановления
         if (initialState && typeof initialState === 'object' && initialState.inventory) {
-          // Если поле energy не определено, устанавливаем значение по умолчанию
-          if (initialState.inventory.energy === undefined) {
-            initialState.inventory.energy = 500;
-          }
+          // Больше не проверяем поля energy и lastEnergyUpdateTime, так как функционал энергии удален
           
-          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
-          if (initialState.inventory.lastEnergyUpdateTime === undefined) {
-            initialState.inventory.lastEnergyUpdateTime = Date.now();
-          }
-          
-          logger.debug('Проверка параметров энергии:', { 
-            energy: initialState.inventory.energy,
-            lastEnergyUpdateTime: initialState.inventory.lastEnergyUpdateTime 
+          logger.debug('Загрузка данных инвентаря:', { 
+            snot: initialState.inventory.snot,
+            snotCoins: initialState.inventory.snotCoins,
+            containerSnot: initialState.inventory.containerSnot
           });
         }
 
@@ -558,19 +537,12 @@ export async function GET(request: NextRequest) {
         
         // Проверяем данные энергии и времени восстановления
         if (gameStateData && typeof gameStateData === 'object' && gameStateData.inventory) {
-          // Если поле energy не определено, устанавливаем значение по умолчанию
-          if (gameStateData.inventory.energy === undefined) {
-            gameStateData.inventory.energy = 500;
-          }
+          // Больше не проверяем поля energy и lastEnergyUpdateTime, так как функционал энергии удален
           
-          // Если поле lastEnergyUpdateTime не определено, устанавливаем текущее время
-          if (gameStateData.inventory.lastEnergyUpdateTime === undefined) {
-            gameStateData.inventory.lastEnergyUpdateTime = Date.now();
-          }
-          
-          logger.debug('Проверка параметров энергии:', { 
-            energy: gameStateData.inventory.energy,
-            lastEnergyUpdateTime: gameStateData.inventory.lastEnergyUpdateTime 
+          logger.debug('Загрузка данных инвентаря:', { 
+            snot: gameStateData.inventory.snot,
+            snotCoins: gameStateData.inventory.snotCoins,
+            containerSnot: gameStateData.inventory.containerSnot
           });
         }
 

@@ -59,19 +59,6 @@ export class RedisService {
     }
     
     try {
-      // Проверяем, что поля energy и lastEnergyUpdateTime существуют в inventory
-      if (gameState.inventory) {
-        // Убеждаемся, что energy сохраняется и имеет правильное значение
-        if (gameState.inventory.energy === undefined) {
-          gameState.inventory.energy = 500; // Дефолтное значение
-        }
-        
-        // Убеждаемся, что поле lastEnergyUpdateTime сохраняется
-        if (gameState.inventory.lastEnergyUpdateTime === undefined) {
-          gameState.inventory.lastEnergyUpdateTime = Date.now();
-        }
-      }
-      
       const isCritical = options.isCritical ?? false;
       const ttl = options.ttl ?? (isCritical ? CRITICAL_TTL : DEFAULT_TTL);
       

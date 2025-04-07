@@ -77,18 +77,7 @@ export function verifyLocalSaveIntegrity(gameState: GameState | ExtendedGameStat
       }
     }
     
-    // Дополнительно проверяем поля энергии
-    if (gameState.inventory.lastEnergyUpdateTime) {
-      if (gameState.inventory.lastEnergyUpdateTime > now) {
-        console.warn('[localSaveChecker] Время обновления энергии в будущем');
-        return false;
-      }
-      
-      if (now - gameState.inventory.lastEnergyUpdateTime > maxTimeDiff) {
-        console.warn('[localSaveChecker] Время обновления энергии слишком старое');
-        return false;
-      }
-    }
+    // Больше не проверяем поля энергии, так как функционал удален
     
     // Всё прошло проверку
     return true;

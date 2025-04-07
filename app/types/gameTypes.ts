@@ -62,8 +62,6 @@ export interface Inventory {
   fillingSpeed: number;
   fillingSpeedLevel: number;
   collectionEfficiency: number;
-  energy: number;
-  lastEnergyUpdateTime: number;
   lastUpdateTimestamp?: number;
 }
 
@@ -178,6 +176,9 @@ export interface GameState {
   _lastAction: string;
   _dataSource?: string; // Источник данных: 'local', 'server', 'new', 'default'
   _loadedAt?: string;   // Время загрузки данных
+  // Служебные поля для целостности данных
+  _integrityHash?: string;   // Хеш для проверки целостности данных
+  _integrityFailed?: boolean; // Флаг нарушения целостности данных
   logs: any[];
   analytics: any | null;
   items: Item[];
@@ -400,8 +401,6 @@ export function createDefaultGameState(): GameState {
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      energy: 500,
-      lastEnergyUpdateTime: Date.now(),
       lastUpdateTimestamp: Date.now()
     },
     container: {

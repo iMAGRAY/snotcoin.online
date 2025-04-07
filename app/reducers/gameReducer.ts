@@ -42,13 +42,6 @@ export type ActionPayload = {
   [key: string]: any;
 };
 
-// Определяем интерфейс для корректной обработки энергии
-export interface RestoreEnergyPayload {
-  energy: number;
-  timestamp: number;
-  forceUpdateTimestamp?: boolean;
-}
-
 // Тип для действий
 export type ActionType = 
   | 'SET_RESOURCE'
@@ -60,8 +53,6 @@ export type ActionType =
   | 'REPLACE_GAME_STATE'
   | 'UPDATE_GAME_STATE'
   | 'MERGE_GAME_STATE'
-  | 'RESTORE_ENERGY'           // Действие для восстановления энергии
-  | 'UPDATE_ENERGY_TIMESTAMP'  // Действие для обновления временной метки энергии
   | 'RESET_PROGRESS'
   | 'SET_USER_ID'
   | 'SET_SAVE_VERSION'
@@ -74,7 +65,28 @@ export type ActionType =
   | 'UPDATE_FILLING_SPEED'
   | 'UPDATE_RESOURCES'
   | 'ADD_SNOT'
-  | 'LOAD_GAME_STATE';
+  | 'LOAD_GAME_STATE'
+  | 'UPDATE_CONTAINER'         // Этот тип уже есть выше, но TypeScript его не видит
+  | 'ADD_CONTAINER'            // Добавим недостающие типы, использованные в reducer
+  | 'REMOVE_CONTAINER'         // Добавим недостающие типы, использованные в reducer
+  | 'SET_GAME_STARTED'         // Добавим недостающие типы
+  | 'SET_CLICK_SOUND_VOLUME'   // Добавим недостающие типы
+  | 'SET_BACKGROUND_MUSIC_VOLUME' // Добавим недостающие типы
+  | 'SET_EFFECTS_SOUND_VOLUME' // Добавим недостающие типы
+  | 'SET_MUTE'                 // Добавим недостающие типы
+  | 'SET_EFFECTS_MUTE'         // Добавим недостающие типы
+  | 'SET_BACKGROUND_MUSIC_MUTE' // Добавим недостающие типы
+  | 'SET_HIDE_INTERFACE'       // Добавим недостающие типы
+  | 'SET_SOUND_SETTINGS'       // Добавим недостающие типы
+  | 'UPDATE_INVENTORY'         // Добавим недостающие типы
+  | 'UPDATE_UPGRADES'          // Добавим недостающие типы
+  | 'UPGRADE_FILLING_SPEED'    // Добавим недостающие типы
+  | 'UPGRADE_CONTAINER_CAPACITY' // Добавим недостающие типы
+  | 'INCREMENT_CONTAINER_CAPACITY' // Добавим недостающие типы
+  | 'INITIALIZE_NEW_USER'      // Добавим недостающие типы
+  | 'LOAD_USER_DATA'           // Добавим недостающие типы
+  | 'SET_IS_PLAYING'           // Добавим недостающие типы
+  | 'SET_GAME_INSTANCE_RUNNING'; // Добавим недостающие типы
 
 // Используем any для обхода строгой типизации
 export function gameReducer(state: any = initialState, action: any): any {
@@ -166,17 +178,6 @@ export function gameReducer(state: any = initialState, action: any): any {
     case "SET_RESOURCE": {
       const { resource, value } = action.payload;
       
-      // Если обновляем energy, проверяем наличие lastEnergyUpdateTime
-      if (resource === "energy" && !action.payload.skipUpdateTime) {
-        return withMetadata({
-          inventory: {
-            ...state.inventory,
-            [resource]: value,
-            lastEnergyUpdateTime: Date.now() // Обновляем время при изменении энергии
-          }
-        });
-      }
-      
       return withMetadata({
         inventory: {
           ...state.inventory,
@@ -194,35 +195,38 @@ export function gameReducer(state: any = initialState, action: any): any {
       });
 
     case "COLLECT_CONTAINER_SNOT": {
-      const currentSnot = state.inventory.snot;
-      const amountToCollect = action.payload.containerSnot;
+      const currentSnot = state.inventory.snot || 0;
+      // Проверяем, что передан containerSnot
+      const amountToCollect = typeof action.payload.containerSnot === 'number' 
+        ? action.payload.containerSnot 
+        : (action.payload.amount || 0);
       
-      // Округляем до 12 знаков после запятой для уменьшения погрешности
-      const roundToPrecision = (num: number, precision: number = 12): number => {
-        return Math.round(num * Math.pow(10, precision)) / Math.pow(10, precision);
-      };
+      // Валидируем значение
+      const validAmount = Math.max(0, amountToCollect);
       
-      // Проверяем, есть ли расхождение между текущим значением и ожидаемым
+      // Вычисляем новое значение снота строго и точно
+      const newSnot = currentSnot + validAmount;
+      
+      // Проверяем, есть ли указание на ожидаемое значение и используем его для проверки
       const expectedSnot = action.payload.expectedSnot;
-      if (expectedSnot !== undefined && Math.abs(currentSnot - expectedSnot) > 0.000001) {
-        console.log(`[gameReducer] Обнаружено расхождение в snot: текущее=${currentSnot}, ожидаемое=${expectedSnot}, разница=${currentSnot - expectedSnot}`);
-        // Корректируем текущее значение к ожидаемому
-        state.inventory.snot = expectedSnot;
-      }
       
-      // Выполняем сбор ресурса с округлением
-      const newSnot = roundToPrecision(state.inventory.snot + amountToCollect);
+      // Используем ожидаемое значение, если оно задано и отличается от расчета
+      const finalSnot = expectedSnot !== undefined 
+        ? expectedSnot 
+        : newSnot;
       
-      console.log(`[gameReducer] COLLECT_CONTAINER_SNOT: ${state.inventory.snot} + ${amountToCollect} = ${newSnot} 
-      {время: '${new Date().toISOString()}', containerSnot: ${amountToCollect}}`);
+      console.log(`[gameReducer] COLLECT_CONTAINER_SNOT: currentSnot=${currentSnot}, amountToCollect=${validAmount}, newSnot=${newSnot}, finalSnot=${finalSnot}`);
       
+      // Обновляем состояние одним действием, гарантируя атомарность
       return {
         ...state,
         inventory: {
           ...state.inventory,
-          snot: newSnot,
-          containerSnot: 0
-        }
+          snot: finalSnot,
+          containerSnot: 0 // Всегда обнуляем контейнер при сборе
+        },
+        _lastActionTime: new Date().toISOString(),
+        _lastAction: action.type
       };
     }
 
@@ -366,31 +370,6 @@ export function gameReducer(state: any = initialState, action: any): any {
           console.log(`[GameReducer] Устанавливаем _userId из localStorage: ${storedUserId}`);
           loadedState._userId = storedUserId;
         }
-      }
-      
-      // Проверяем и нормализуем значения энергии в загружаемом состоянии
-      if (loadedState.inventory) {
-        // Убеждаемся, что значение энергии существует и валидно
-        if (typeof loadedState.inventory.energy === 'undefined' || 
-            loadedState.inventory.energy === null || 
-            isNaN(loadedState.inventory.energy)) {
-          console.log(`[GameReducer] Инициализируем отсутствующую энергию до максимального значения`);
-          loadedState.inventory.energy = 500; // Устанавливаем максимальное значение только если энергия отсутствует
-        } else {
-          console.log(`[GameReducer] Используем существующее значение энергии:`, loadedState.inventory.energy);
-        }
-        
-        // Убеждаемся, что время последнего обновления энергии существует и валидно
-        if (!loadedState.inventory.lastEnergyUpdateTime || 
-            isNaN(Number(loadedState.inventory.lastEnergyUpdateTime))) {
-          console.log(`[GameReducer] Устанавливаем текущее время для lastEnergyUpdateTime`);
-          loadedState.inventory.lastEnergyUpdateTime = Date.now();
-        }
-        
-        console.log(`[GameReducer] Загружено состояние энергии:`, {
-          energy: loadedState.inventory.energy,
-          lastUpdate: new Date(loadedState.inventory.lastEnergyUpdateTime).toISOString()
-        });
       }
       
       // Проверяем и восстанавливаем критически важные части состояния
@@ -588,61 +567,6 @@ export function gameReducer(state: any = initialState, action: any): any {
         containers: (state.containers || []).map((container: any) =>
           container.id === updatedContainer.id ? updatedContainer : container
         )
-      };
-    }
-
-    case "RESTORE_ENERGY": {
-      // Деструктурируем параметры из пэйлоада
-      const { energy, timestamp, forceUpdateTimestamp = true } = action.payload as RestoreEnergyPayload;
-      
-      // Проверка валидности входных данных
-      if (typeof energy !== 'number' || isNaN(energy) || energy < 0) {
-        console.error('[gameReducer] Некорректное значение energy:', energy);
-        return state;
-      }
-      
-      // Логируем изменение энергии
-      console.log('[gameReducer] RESTORE_ENERGY:', {
-        было: state.inventory.energy,
-        стало: energy,
-        разница: energy - (state.inventory.energy || 0),
-        timestamp: new Date(timestamp).toISOString(),
-        forceUpdateTimestamp
-      });
-      
-      // Если forceUpdateTimestamp=false, обновляем только энергию, сохраняя timestamp
-      if (forceUpdateTimestamp === false) {
-        return {
-          ...state,
-          inventory: {
-            ...state.inventory,
-            energy: energy
-          }
-        };
-      }
-      
-      // Иначе обновляем и энергию, и timestamp (стандартное поведение)
-      return {
-        ...state,
-        inventory: {
-          ...state.inventory,
-          energy: energy,
-          lastEnergyUpdateTime: timestamp
-        }
-      };
-    }
-
-    case "UPDATE_ENERGY_TIMESTAMP": {
-      const { timestamp } = action.payload;
-      
-      console.log(`[gameReducer] UPDATE_ENERGY_TIMESTAMP: ${new Date(timestamp).toISOString()}`);
-      
-      return {
-        ...state,
-        inventory: {
-          ...state.inventory,
-          lastEnergyUpdateTime: timestamp
-        }
       };
     }
 

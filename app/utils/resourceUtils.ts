@@ -22,72 +22,50 @@ export function getSafeInventory(gameState: any): Inventory {
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
-      energy: 500,
-      lastEnergyUpdateTime: Date.now()
+      lastUpdateTimestamp: Date.now()
     };
   }
   
   const inventory = gameState.inventory;
   
-  // Проверяем и исправляем некорректные значения
+  // Создаем объект с безопасными значениями
   const safeInventory: Inventory = {
-    snot: typeof inventory.snot === 'number' && !isNaN(inventory.snot) ? inventory.snot : 0,
-    snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) ? inventory.snotCoins : 0,
-    containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) ? inventory.containerSnot : 0,
-    containerCapacity: typeof inventory.containerCapacity === 'number' && !isNaN(inventory.containerCapacity) ? 
-      Math.max(1, inventory.containerCapacity) : 1,
-    containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' && !isNaN(inventory.containerCapacityLevel) ? 
-      Math.max(1, inventory.containerCapacityLevel) : 1,
-    fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) ? 
-      Math.max(1, inventory.fillingSpeed) : 1,
-    fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) ? 
-      Math.max(1, inventory.fillingSpeedLevel) : 1,
-    collectionEfficiency: typeof inventory.collectionEfficiency === 'number' && !isNaN(inventory.collectionEfficiency) ? 
-      Math.max(1, inventory.collectionEfficiency) : 1,
-    energy: 500,
-    lastEnergyUpdateTime: Date.now()
+    snot: typeof inventory.snot === 'number' && !isNaN(inventory.snot) 
+      ? inventory.snot 
+      : 0,
+      
+    snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) 
+      ? inventory.snotCoins 
+      : 0,
+      
+    containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) 
+      ? inventory.containerSnot 
+      : 0,
+      
+    containerCapacity: typeof inventory.containerCapacity === 'number' && !isNaN(inventory.containerCapacity) && inventory.containerCapacity > 0
+      ? inventory.containerCapacity 
+      : 1,
+      
+    containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' && !isNaN(inventory.containerCapacityLevel) && inventory.containerCapacityLevel > 0
+      ? inventory.containerCapacityLevel 
+      : 1,
+      
+    fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) && inventory.fillingSpeed > 0
+      ? inventory.fillingSpeed 
+      : 1,
+      
+    fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) && inventory.fillingSpeedLevel > 0
+      ? inventory.fillingSpeedLevel 
+      : 1,
+      
+    collectionEfficiency: typeof inventory.collectionEfficiency === 'number' && !isNaN(inventory.collectionEfficiency) && inventory.collectionEfficiency > 0
+      ? inventory.collectionEfficiency 
+      : 1,
+      
+    lastUpdateTimestamp: typeof inventory.lastUpdateTimestamp === 'number' && !isNaN(inventory.lastUpdateTimestamp)
+      ? inventory.lastUpdateTimestamp
+      : Date.now()
   };
-  
-  // Специальная проверка для энергии
-  if (typeof inventory.energy === 'number' && !isNaN(inventory.energy)) {
-    // Проверяем границы
-    if (inventory.energy < 0) {
-      console.warn('[resourceUtils] getSafeInventory: Отрицательное значение энергии:', inventory.energy);
-      safeInventory.energy = 0;
-    } else if (inventory.energy > 500) {
-      console.warn('[resourceUtils] getSafeInventory: Превышение максимального значения энергии:', inventory.energy);
-      safeInventory.energy = 500;
-    } else {
-      safeInventory.energy = inventory.energy;
-    }
-  } else {
-    console.warn('[resourceUtils] getSafeInventory: Некорректное значение энергии:', inventory.energy);
-    safeInventory.energy = 500; // Безопасное значение по умолчанию
-  }
-  
-  // Специальная проверка для временной метки обновления энергии
-  if (typeof inventory.lastEnergyUpdateTime === 'number' && 
-      !isNaN(inventory.lastEnergyUpdateTime) && 
-      inventory.lastEnergyUpdateTime > 0) {
-    // Проверяем, что метка времени находится в разумных пределах
-    const now = Date.now();
-    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
-    
-    if (inventory.lastEnergyUpdateTime > now) {
-      // Метка времени в будущем
-      console.warn('[resourceUtils] getSafeInventory: Метка времени энергии в будущем:', new Date(inventory.lastEnergyUpdateTime).toISOString());
-      safeInventory.lastEnergyUpdateTime = now;
-    } else if ((now - inventory.lastEnergyUpdateTime) > oneYearMs) {
-      // Слишком старая метка времени
-      console.warn('[resourceUtils] getSafeInventory: Слишком старая метка времени энергии:', new Date(inventory.lastEnergyUpdateTime).toISOString());
-      safeInventory.lastEnergyUpdateTime = now;
-    } else {
-      safeInventory.lastEnergyUpdateTime = inventory.lastEnergyUpdateTime;
-    }
-  } else {
-    console.warn('[resourceUtils] getSafeInventory: Некорректная метка времени энергии:', inventory.lastEnergyUpdateTime);
-    safeInventory.lastEnergyUpdateTime = Date.now(); // Безопасное значение по умолчанию
-  }
   
   return safeInventory;
 }
@@ -157,35 +135,18 @@ export function getAvailableContainerSpace(containerSnot: number, containerCapac
 }
 
 /**
- * Вычисляет процент заполнения контейнера снотом
- * @param state - Состояние игры или объект инвентаря
- * @returns Процент заполнения от 0 до 100
+ * Вычисляет процент заполнения контейнера
+ * @param inventory Инвентарь
+ * @returns Процент заполнения контейнера
  */
-export const calculateFillingPercentage = (state?: ExtendedGameState | any): number => {
-  if (!state) return 0;
+export function calculateFillingPercentage(inventory: Inventory): number {
+  if (!inventory) return 0;
   
-  // Проверяем, получили ли мы инвентарь напрямую или состояние игры
-  const inventory = state.inventory || state;
+  const containerCapacity = Math.max(1, inventory.containerCapacity || 1);
+  const containerSnot = Math.max(0, inventory.containerSnot || 0);
   
-  const containerSnot = inventory.containerSnot;
-  const containerCapacity = inventory.containerCapacity;
-  
-  // Проверяем наличие и корректность данных
-  if (typeof containerSnot !== 'number' || 
-      typeof containerCapacity !== 'number' || 
-      containerCapacity <= 0 || 
-      isNaN(containerSnot) || 
-      isNaN(containerCapacity)) {
-    return 0;
-  }
-  
-  // Убеждаемся, что containerSnot не отрицательный
-  const safeContainerSnot = Math.max(0, containerSnot);
-  
-  // Вычисляем процент заполнения и ограничиваем его от 0 до 100
-  const percentage = (safeContainerSnot / containerCapacity) * 100;
-  return Math.min(Math.max(percentage, 0), 100);
-};
+  return (containerSnot / containerCapacity) * 100;
+}
 
 /**
  * Вычисляет процент заполнения контейнера
@@ -362,4 +323,14 @@ export function updateResourcesBasedOnTimePassed(
   }
   
   return result;
+}
+
+/**
+ * Проверяет наличие необходимого количества snotCoins для покупки
+ * @param inventory Инвентарь игрока
+ * @param cost Стоимость покупки
+ * @returns Хватает ли snotCoins
+ */
+export function hasEnoughSnotCoins(inventory: Inventory, cost: number): boolean {
+  return (inventory?.snotCoins || 0) >= cost;
 } 

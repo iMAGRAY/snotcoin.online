@@ -116,7 +116,7 @@ export function secureLocalSave(userId: string, gameState: GameState | ExtendedG
     }
     
     // Глубокая проверка критичных полей перед сохранением
-    const { snot, snotCoins, containerSnot, energy, lastEnergyUpdateTime } = gameState.inventory;
+    const { snot, snotCoins, containerSnot } = gameState.inventory;
     
     // Проверяем и корректируем критичные поля
     let modifiedState = { ...gameState };
@@ -127,8 +127,6 @@ export function secureLocalSave(userId: string, gameState: GameState | ExtendedG
       snot,
       snotCoins,
       containerSnot,
-      energy,
-      lastEnergyUpdateTime: lastEnergyUpdateTime ? new Date(lastEnergyUpdateTime).toISOString() : 'не задано',
       userId,
       времяСохранения: new Date().toISOString()
     });
@@ -170,74 +168,6 @@ export function secureLocalSave(userId: string, gameState: GameState | ExtendedG
         }
       };
       wasFixed = true;
-    }
-    
-    // Проверка energy - улучшенная, чтобы сохранять текущее значение энергии
-    if (typeof energy === 'undefined' || energy === null || isNaN(energy)) {
-      console.warn('[localSaveProtection] Обнаружено некорректное значение energy:', energy);
-      // Устанавливаем безопасное значение только если энергия отсутствует или некорректна
-      modifiedState = {
-        ...modifiedState,
-        inventory: {
-          ...modifiedState.inventory,
-          energy: 500 // По умолчанию полная энергия при отсутствии значения
-        }
-      };
-      wasFixed = true;
-    } else {
-      // Проверяем, что энергия находится в допустимом диапазоне
-      if (energy < 0) {
-        console.warn('[localSaveProtection] Отрицательное значение энергии:', energy);
-        modifiedState = {
-          ...modifiedState,
-          inventory: {
-            ...modifiedState.inventory,
-            energy: 0
-          }
-        };
-        wasFixed = true;
-      } else if (energy > 500) {
-        console.warn('[localSaveProtection] Превышение максимального значения энергии:', energy);
-        modifiedState = {
-          ...modifiedState,
-          inventory: {
-            ...modifiedState.inventory,
-            energy: 500 // Максимальное значение
-          }
-        };
-        wasFixed = true;
-      }
-    }
-    
-    // Проверка lastEnergyUpdateTime - улучшенная с дополнительными проверками
-    if (!lastEnergyUpdateTime || isNaN(Number(lastEnergyUpdateTime))) {
-      console.warn('[localSaveProtection] Обнаружено некорректное значение lastEnergyUpdateTime:', lastEnergyUpdateTime);
-      // Устанавливаем текущее время
-      modifiedState = {
-        ...modifiedState,
-        inventory: {
-          ...modifiedState.inventory,
-          lastEnergyUpdateTime: Date.now()
-        }
-      };
-      wasFixed = true;
-    } else {
-      // Проверяем, что временная метка находится в разумных пределах
-      const now = Date.now();
-      const oneYearMs = 365 * 24 * 60 * 60 * 1000;
-      
-      // Если временная метка в будущем или слишком старая, корректируем
-      if (lastEnergyUpdateTime > now || (now - lastEnergyUpdateTime) > oneYearMs) {
-        console.warn('[localSaveProtection] Некорректное значение lastEnergyUpdateTime:', new Date(lastEnergyUpdateTime).toISOString());
-        modifiedState = {
-          ...modifiedState,
-          inventory: {
-            ...modifiedState.inventory,
-            lastEnergyUpdateTime: now
-          }
-        };
-        wasFixed = true;
-      }
     }
     
     // Проверка _lastCollectOperation
@@ -385,140 +315,73 @@ export function secureLocalSave(userId: string, gameState: GameState | ExtendedG
 }
 
 /**
- * Загружает защищенное игровое состояние из localStorage
+ * Дешифрует и загружает данные из защищенного локального хранилища
  * @param userId ID пользователя
  * @returns Загруженное состояние игры или null при ошибке
  */
 export function secureLocalLoad(userId: string): GameState | null {
   try {
-    if (!userId) {
-      console.error('[localSaveProtection] Отсутствует userId для загрузки');
+    if (!userId || typeof window === 'undefined' || !window.localStorage) {
       return null;
     }
-    
-    // Получаем зашифрованные данные из localStorage
-    const encryptedData = localStorage.getItem(`${STORAGE_PREFIX}${userId}`);
-    if (!encryptedData) {
-      return null; // Нет сохранений для этого пользователя
+
+    const storageKey = `${STORAGE_PREFIX}${userId}`;
+    const data = localStorage.getItem(storageKey);
+
+    if (!data) {
+      console.log(`[localSaveProtection] Нет сохраненных данных для ${userId}`);
+      return null;
     }
+
+    // Дешифруем данные
+    const decrypted = decryptFromLocalStorage(data, userId);
     
-    let loadFailed = false;
-    let gameState: GameState | null = null;
-    
+    if (!decrypted) {
+      console.error(`[localSaveProtection] Не удалось дешифровать данные для ${userId}`);
+      return null;
+    }
+
+    // Парсим JSON
+    let gameState: GameState;
     try {
-      // Дешифруем данные
-      const decryptedData = decryptFromLocalStorage(encryptedData, userId);
-      if (!decryptedData) {
-        console.error('[localSaveProtection] Ошибка дешифрования данных');
-        loadFailed = true;
-      } else {
-        // Парсим данные и получаем игровое состояние с хешем
-        const parsedData = JSON.parse(decryptedData);
-        const { data, hash, timestamp } = parsedData;
-        
-        // Проверяем целостность данных
-        const computedHash = createIntegrityHash(data, userId);
-        if (computedHash !== hash) {
-          console.error('[localSaveProtection] Нарушена целостность данных');
-          loadFailed = true;
-        } else {
-          // Парсим игровое состояние
-          gameState = JSON.parse(data) as GameState;
-          
-          // Проверяем наличие критичных полей
-          if (!gameState.inventory || typeof gameState.inventory.snot !== 'number') {
-            console.error('[localSaveProtection] Загруженное состояние некорректно');
-            loadFailed = true;
-            gameState = null;
-          }
-          
-          // Проверяем и корректируем энергию
-          if (gameState && gameState.inventory) {
-            const { energy, lastEnergyUpdateTime } = gameState.inventory;
-            const now = Date.now();
-            
-            // Проверяем энергию
-            if (typeof energy === 'undefined' || energy === null || isNaN(energy)) {
-              console.warn('[localSaveProtection] Обнаружено некорректное значение энергии при загрузке:', energy);
-              gameState.inventory.energy = 500; // Устанавливаем максимальное значение
-              loadFailed = true;
-            }
-            
-            // Проверяем время последнего обновления энергии
-            if (!lastEnergyUpdateTime || isNaN(Number(lastEnergyUpdateTime))) {
-              console.warn('[localSaveProtection] Обнаружено некорректное значение lastEnergyUpdateTime при загрузке:', lastEnergyUpdateTime);
-              gameState.inventory.lastEnergyUpdateTime = now;
-              loadFailed = true;
-            } else {
-              // Проверяем, что временная метка находится в разумных пределах
-              const oneYearMs = 365 * 24 * 60 * 60 * 1000;
-              
-              // Если временная метка в будущем или слишком старая, корректируем
-              if (lastEnergyUpdateTime > now || (now - lastEnergyUpdateTime) > oneYearMs) {
-                console.warn('[localSaveProtection] Некорректное значение lastEnergyUpdateTime при загрузке:', new Date(lastEnergyUpdateTime).toISOString());
-                gameState.inventory.lastEnergyUpdateTime = now;
-                loadFailed = true;
-              } else {
-                // Вычисляем восстановленную энергию на основе прошедшего времени
-                try {
-                  const MAX_ENERGY = 500;
-                  const HOURS_TO_FULL_RESTORE = 8; // 8 часов для полного восстановления
-                  const ENERGY_PER_HOUR = MAX_ENERGY / HOURS_TO_FULL_RESTORE;
-                  
-                  const elapsedHours = (now - lastEnergyUpdateTime) / (1000 * 60 * 60);
-                  const restoredEnergy = elapsedHours * ENERGY_PER_HOUR;
-                  
-                  // Обновляем энергию, но не меняем временную метку
-                  if (restoredEnergy > 0 && energy < MAX_ENERGY) {
-                    const newEnergy = Math.min(MAX_ENERGY, energy + restoredEnergy);
-                    
-                    console.log('[localSaveProtection] Восстановлена энергия на основе прошедшего времени:', {
-                      было: energy,
-                      стало: newEnergy,
-                      восстановлено: restoredEnergy.toFixed(2),
-                      прошлоЧасов: elapsedHours.toFixed(2)
-                    });
-                    
-                    gameState.inventory.energy = newEnergy;
-                    
-                    // Обновляем timestamp только если энергия полностью восстановлена
-                    if (newEnergy >= MAX_ENERGY) {
-                      gameState.inventory.lastEnergyUpdateTime = now;
-                    }
-                  }
-                } catch (energyError) {
-                  console.error('[localSaveProtection] Ошибка при расчете восстановления энергии:', energyError);
-                }
-              }
-            }
-            
-            // Логируем состояние энергии
-            console.log('[localSaveProtection] Загружено состояние энергии:', {
-              энергия: gameState.inventory.energy,
-              времяОбновления: new Date(gameState.inventory.lastEnergyUpdateTime).toISOString(),
-              прошлоВремени: `${((now - gameState.inventory.lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`
-            });
-          }
-        }
+      gameState = JSON.parse(decrypted);
+    } catch (parseError) {
+      console.error(`[localSaveProtection] Ошибка парсинга JSON:`, parseError);
+      return null;
+    }
+
+    // Проверяем базовую структуру данных
+    if (!gameState || typeof gameState !== 'object') {
+      console.error(`[localSaveProtection] Некорректная структура загруженных данных`);
+      return null;
+    }
+
+    // Проверяем хеш целостности, если он есть
+    if (gameState._integrityHash) {
+      const originalHash = gameState._integrityHash;
+      
+      // Временно удаляем хеш для проверки (чтобы не включать его в новый расчет)
+      delete gameState._integrityHash;
+      
+      // Создаем новый хеш из текущих данных
+      const jsonStr = JSON.stringify(gameState);
+      const calculatedHash = createIntegrityHash(jsonStr, userId);
+      
+      // Восстанавливаем оригинальный хеш в объекте
+      gameState._integrityHash = originalHash;
+      
+      // Проверяем совпадение хешей
+      if (originalHash !== calculatedHash) {
+        console.warn(`[localSaveProtection] Нарушена целостность данных для ${userId}. Оригинальный хеш: ${originalHash}, рассчитанный: ${calculatedHash}`);
+        // Но продолжаем загрузку с пометкой
+        gameState._integrityFailed = true;
       }
-    } catch (loadError) {
-      console.error('[localSaveProtection] Ошибка при чтении сохранения:', loadError);
-      loadFailed = true;
     }
-    
-    // Если не удалось загрузить - пробуем восстановиться из резервной копии
-    if (loadFailed || !gameState) {
-      console.warn('[localSaveProtection] Не удалось загрузить сохранение, пытаемся восстановить из резервной копии');
-      return recoverFromBackup(userId);
-    }
-    
+
     return gameState;
   } catch (error) {
-    console.error('[localSaveProtection] Ошибка при загрузке из localStorage:', error);
-    
-    // При любой критической ошибке пытаемся восстановиться из резервной копии
-    console.warn('[localSaveProtection] Критическая ошибка загрузки, пытаемся восстановить из резервной копии');
-    return recoverFromBackup(userId);
+    console.error(`[localSaveProtection] Ошибка загрузки из localStorage:`, error);
+    return null;
   }
 }
 
@@ -577,33 +440,6 @@ export function needsServerSync(userId: string, syncThreshold: number = 10 * 60 
     const localData = secureLocalLoad(userId);
     if (!localData) return true; // Если нет локальных данных, синхронизация нужна
     
-    // Проверяем критичные поля
-    if (localData.inventory) {
-      const { energy, lastEnergyUpdateTime } = localData.inventory;
-      
-      // Проверяем энергию
-      if (typeof energy === 'undefined' || energy === null || isNaN(energy)) {
-        console.warn('[localSaveProtection] Синхронизация нужна из-за некорректной энергии:', energy);
-        return true;
-      }
-      
-      // Проверяем время последнего обновления энергии
-      if (!lastEnergyUpdateTime || isNaN(Number(lastEnergyUpdateTime))) {
-        console.warn('[localSaveProtection] Синхронизация нужна из-за некорректного времени обновления энергии:', lastEnergyUpdateTime);
-        return true;
-      }
-      
-      // Проверяем, не слишком ли давно обновлялась энергия
-      const timeSinceLastEnergyUpdate = Date.now() - lastEnergyUpdateTime;
-      if (timeSinceLastEnergyUpdate > syncThreshold) {
-        console.log('[localSaveProtection] Синхронизация нужна из-за давнего обновления энергии:', {
-          прошлоМинут: (timeSinceLastEnergyUpdate / (60 * 1000)).toFixed(2),
-          порогМинут: (syncThreshold / (60 * 1000)).toFixed(2)
-        });
-        return true;
-      }
-    }
-    
     return false;
   } catch (error) {
     console.error('[localSaveProtection] Ошибка при проверке необходимости синхронизации:', error);
@@ -630,27 +466,14 @@ export function updateSyncMetadata(userId: string, serverSaveTime: number | stri
     // Обновляем версию сохранения
     metadata.saveVersion = saveVersion;
     
-    // Получаем текущее состояние для записи информации об энергии
+    // Получаем текущее состояние для записи информации
     const currentState = secureLocalLoad(userId);
     if (currentState && currentState.inventory) {
-      const { energy, lastEnergyUpdateTime } = currentState.inventory;
-      
-      // Записываем информацию об энергии
-      metadata.energyInfo = {
-        value: energy,
-        lastUpdateTime: lastEnergyUpdateTime,
-        timeSinceLastUpdate: Date.now() - lastEnergyUpdateTime,
-        timestamp: Date.now()
-      };
-      
       // Логируем обновление метаданных
       console.log('[localSaveProtection] Обновлены метаданные синхронизации:', {
         userId,
         времяСинхронизации: new Date(metadata.lastServerSyncTime).toISOString(),
-        версия: metadata.saveVersion,
-        энергия: metadata.energyInfo.value,
-        времяОбновленияЭнергии: new Date(metadata.energyInfo.lastUpdateTime).toISOString(),
-        прошлоВремени: `${(metadata.energyInfo.timeSinceLastUpdate / (60 * 1000)).toFixed(2)} минут`
+        версия: metadata.saveVersion
       });
     }
     
@@ -704,30 +527,6 @@ export function recoverFromBackup(userId: string): GameState | null {
         // Парсим игровое состояние
         const gameState = JSON.parse(data) as GameState;
         
-        // Проверяем и корректируем энергию
-        if (gameState && gameState.inventory) {
-          const { energy, lastEnergyUpdateTime } = gameState.inventory;
-          
-          // Проверяем энергию
-          if (typeof energy === 'undefined' || energy === null || isNaN(energy)) {
-            console.warn('[localSaveProtection] Обнаружено некорректное значение энергии в аварийной копии:', energy);
-            gameState.inventory.energy = 500; // Устанавливаем максимальное значение
-          }
-          
-          // Проверяем время последнего обновления энергии
-          if (!lastEnergyUpdateTime || isNaN(Number(lastEnergyUpdateTime))) {
-            console.warn('[localSaveProtection] Обнаружено некорректное значение lastEnergyUpdateTime в аварийной копии:', lastEnergyUpdateTime);
-            gameState.inventory.lastEnergyUpdateTime = Date.now();
-          }
-          
-          // Логируем состояние энергии
-          console.log('[localSaveProtection] Восстановлено состояние энергии из аварийной копии:', {
-            энергия: gameState.inventory.energy,
-            времяОбновления: new Date(gameState.inventory.lastEnergyUpdateTime).toISOString(),
-            прошлоВремени: `${((Date.now() - gameState.inventory.lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`
-          });
-        }
-        
         // Сохраняем восстановленное состояние как основное
         secureLocalSave(userId, gameState);
         
@@ -760,30 +559,6 @@ export function recoverFromBackup(userId: string): GameState | null {
       
       // Парсим игровое состояние
       const gameState = JSON.parse(data) as GameState;
-      
-      // Проверяем и корректируем энергию
-      if (gameState && gameState.inventory) {
-        const { energy, lastEnergyUpdateTime } = gameState.inventory;
-        
-        // Проверяем энергию
-        if (typeof energy === 'undefined' || energy === null || isNaN(energy)) {
-          console.warn('[localSaveProtection] Обнаружено некорректное значение энергии в резервной копии:', energy);
-          gameState.inventory.energy = 500; // Устанавливаем максимальное значение
-        }
-        
-        // Проверяем время последнего обновления энергии
-        if (!lastEnergyUpdateTime || isNaN(Number(lastEnergyUpdateTime))) {
-          console.warn('[localSaveProtection] Обнаружено некорректное значение lastEnergyUpdateTime в резервной копии:', lastEnergyUpdateTime);
-          gameState.inventory.lastEnergyUpdateTime = Date.now();
-        }
-        
-        // Логируем состояние энергии
-        console.log('[localSaveProtection] Восстановлено состояние энергии из резервной копии:', {
-          энергия: gameState.inventory.energy,
-          времяОбновления: new Date(gameState.inventory.lastEnergyUpdateTime).toISOString(),
-          прошлоВремени: `${((Date.now() - gameState.inventory.lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`
-        });
-      }
       
       // Сохраняем восстановленное состояние как основное
       secureLocalSave(userId, gameState);

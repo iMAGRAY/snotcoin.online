@@ -13,6 +13,7 @@ import * as storageService from '../../../services/storageService'
 import { StorageType } from '../../../services/storageService'
 import { secureLocalLoad, secureLocalSave } from '../../../utils/localSaveProtection'
 import { compareSaves } from '../../../utils/localSaveChecker'
+import { updateResourcesBasedOnTimePassed } from '../../../utils/resourceUtils'
 
 interface GameProviderProps {
   children: React.ReactNode
@@ -64,13 +65,11 @@ function createDefaultGameState(userId: string): GameState {
       containerCapacityLevel: 1, // Начальный уровень вместимости
       fillingSpeedLevel: 1, // Начальный уровень скорости наполнения
       collectionEfficiency: 1, // Начальная эффективность сбора
-      energy: 500, // Инициализация энергии
       lastUpdateTimestamp: Date.now()
     },
     containers: [],
     resources: {
-      water: 0,
-      energy: 0
+      water: 0
     },
     stats: {
       totalSnot: 0,
@@ -99,8 +98,6 @@ function validateGameState(state: GameState): GameState {
       fillingSpeed: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      energy: 500,
-      lastEnergyUpdateTime: Date.now(),
       lastUpdateTimestamp: Date.now()
     };
   } else {
@@ -114,8 +111,6 @@ function validateGameState(state: GameState): GameState {
       fillingSpeed: Number(validatedState.inventory.fillingSpeed || 1),
       fillingSpeedLevel: Number(validatedState.inventory.fillingSpeedLevel || 1),
       collectionEfficiency: Number(validatedState.inventory.collectionEfficiency || 1),
-      energy: Number(validatedState.inventory.energy || 500),
-      lastEnergyUpdateTime: validatedState.inventory.lastEnergyUpdateTime || Date.now(),
       lastUpdateTimestamp: validatedState.inventory.lastUpdateTimestamp || Date.now()
     };
   }
@@ -283,6 +278,16 @@ export function GameProvider({
       let serverGameData = null;
       let dataSource = 'default'; // Явно объявляем тип
       
+      // Дополнительная проверка: обнаруживаем, есть ли уже сохраненные данные
+      try {
+        const currentState = secureLocalLoad(userId);
+        if (currentState) {
+          console.log('[GameProvider] Найдены сохраненные данные для пользователя:', userId);
+        }
+      } catch (error) {
+        console.error('[GameProvider] Ошибка при проверке текущего состояния:', error);
+      }
+      
       // 1. Загружаем данные из защищенного локального хранилища
       try {
         localGameData = secureLocalLoad(userId);
@@ -396,119 +401,7 @@ export function GameProvider({
       // 8. Обновляем ресурсы на основе прошедшего времени
       try {
         // Импортируем функцию обновления ресурсов
-        const { updateResourcesBasedOnTimePassed } = await import('../../../utils/resourceUtils');
-        const { calculateRestoredEnergy } = await import('../../../hooks/useEnergyRestoration');
-        
-        // Получаем текущее время
-        const now = Date.now();
-        
-        // Сохраняем исходные значения для сравнения
-        const originalContainerSnot = gameData?.inventory?.containerSnot || 0;
-        const originalEnergy = gameData?.inventory?.energy || 0;
-        
-        // Сначала проверяем и инициализируем энергию и время обновления энергии, если они не установлены
-        if (gameData.inventory.energy === undefined || gameData.inventory.energy === null || isNaN(gameData.inventory.energy)) {
-          console.log('[GameProvider] Инициализируем отсутствующую энергию:', {
-            было: gameData.inventory.energy,
-            стало: 500
-          });
-          gameData.inventory.energy = 500; // Максимальное значение только если энергия отсутствует или некорректна
-        } else {
-          console.log('[GameProvider] Используем существующее значение энергии:', gameData.inventory.energy);
-        }
-        
-        // Инициализируем lastEnergyUpdateTime только если его нет или он некорректный
-        if (!gameData.inventory.lastEnergyUpdateTime || isNaN(Number(gameData.inventory.lastEnergyUpdateTime))) {
-          console.log('[GameProvider] Инициализируем отсутствующий lastEnergyUpdateTime:', {
-            было: gameData.inventory.lastEnergyUpdateTime,
-            стало: now
-          });
-          gameData.inventory.lastEnergyUpdateTime = now;
-        } else {
-          // Логируем существующее значение для отладки
-          console.log('[GameProvider] Используем существующий lastEnergyUpdateTime:', {
-            время: new Date(gameData.inventory.lastEnergyUpdateTime).toISOString(),
-            прошлоВремени: `${((now - gameData.inventory.lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`
-          });
-        }
-        
-        // Обновляем контейнер снота с учетом прошедшего времени
-        gameData = updateResourcesBasedOnTimePassed(gameData, now);
-        
-        // Обновляем энергию с учетом прошедшего времени
-        const maxEnergy = 500; // Максимальная энергия
-        const hoursToFullRestore = 8; // Часов для полного восстановления
-        const lastEnergyUpdateTime = gameData.inventory.lastEnergyUpdateTime;
-        
-        // Запоминаем исходное время обновления для сохранения в состоянии
-        const originalLastEnergyUpdateTime = lastEnergyUpdateTime;
-        
-        // Рассчитываем восстановленную энергию
-        const newEnergy = calculateRestoredEnergy(
-          gameData.inventory.energy,
-          maxEnergy,
-          lastEnergyUpdateTime,
-          hoursToFullRestore,
-          now
-        );
-        
-        // Обновляем энергию в состоянии, но НЕ обновляем lastEnergyUpdateTime
-        // если энергия еще не полностью восстановлена - сохраняем старое значение для
-        // корректного расчета восстановления в будущем
-        const shouldUpdateTimestamp = newEnergy >= maxEnergy;
-        gameData = {
-          ...gameData,
-          inventory: {
-            ...gameData.inventory,
-            energy: newEnergy,
-            // Обновляем timestamp только если энергия полностью восстановлена
-            lastEnergyUpdateTime: shouldUpdateTimestamp ? now : originalLastEnergyUpdateTime
-          }
-        };
-        
-        // Логируем изменения энергии
-        if (Math.abs(newEnergy - originalEnergy) > 0.5) {
-          console.log('[GameProvider] Обновлена энергия на основе прошедшего времени:', {
-            было: originalEnergy,
-            стало: newEnergy,
-            разница: newEnergy - originalEnergy,
-            прошлоВремени: `${((now - lastEnergyUpdateTime) / (1000 * 60)).toFixed(2)} минут`,
-            lastEnergyUpdateTime: shouldUpdateTimestamp ? 
-              new Date(now).toISOString() : 
-              new Date(originalLastEnergyUpdateTime).toISOString(),
-            обновленTimestamp: shouldUpdateTimestamp
-          });
-          
-          // После обновления энергии сохраняем состояние локально,
-          // чтобы гарантировать сохранение между сессиями
-          try {
-            const { secureLocalSave } = await import('../../../utils/localSaveProtection');
-            if (userId) {
-              secureLocalSave(userId, gameData);
-              console.log('[GameProvider] Сохранено обновленное состояние энергии:', {
-                userId,
-                энергия: newEnergy,
-                timestamp: shouldUpdateTimestamp ? now : originalLastEnergyUpdateTime
-              });
-            }
-          } catch (savingError) {
-            console.error('[GameProvider] Ошибка при сохранении обновленного состояния энергии:', savingError);
-          }
-        }
-        
-        // Логируем изменения контейнера
-        if (Math.abs(gameData?.inventory?.containerSnot - originalContainerSnot) > 0.001) {
-          console.log('[GameProvider] Обновлен containerSnot на основе прошедшего времени:', {
-            было: originalContainerSnot,
-            стало: gameData.inventory.containerSnot,
-            разница: gameData.inventory.containerSnot - originalContainerSnot
-          });
-          
-          // Добавляем информацию в dataSource, только если строка
-          if (typeof dataSource === 'string') {
-            dataSource += '+timeCalculated';
-          }
-        }
+        gameData = updateResourcesBasedOnTimePassed(gameData, Date.now());
       } catch (timeUpdateError) {
         console.error('[GameProvider] Ошибка при обновлении ресурсов на основе времени:', timeUpdateError);
       }
