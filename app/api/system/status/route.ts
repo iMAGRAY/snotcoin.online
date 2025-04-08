@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServicesStatus, ENV } from '../../../lib/env';
-import { prisma } from '../../../lib/prisma';
+import prisma from '../../../lib/prisma';
 
 // Запрос на получение статуса системы
 export async function GET(request: NextRequest) {

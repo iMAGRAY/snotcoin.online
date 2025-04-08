@@ -67,16 +67,12 @@ const StatusDisplay: React.FC<StatusDisplayProps> = React.memo(({
   
   // Расчет времени заполнения контейнера с использованием корректной скорости
   const fillingTimeInfo = useMemo(() => {
-    return calculateFillingTime(
-      validatedParams.containerSnot, 
-      validatedParams.containerCapacity, 
-      correctFillingSpeed
-    );
-  }, [
-    validatedParams.containerSnot, 
-    validatedParams.containerCapacity, 
-    correctFillingSpeed
-  ]);
+    return calculateFillingTime({
+      containerSnot: validatedParams.containerSnot,
+      containerCapacity: validatedParams.containerCapacity,
+      fillingSpeed: correctFillingSpeed
+    });
+  }, [validatedParams.containerSnot, validatedParams.containerCapacity, correctFillingSpeed]);
   
   // Форматирование времени в человекочитаемый формат
   const formattedTime = useMemo(() => {

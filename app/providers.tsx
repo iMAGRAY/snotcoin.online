@@ -5,6 +5,9 @@ import { GameProvider } from './contexts';
 import { FarcasterProvider, useFarcaster } from './contexts/FarcasterContext';
 import LoadingScreen from './components/LoadingScreen';
 import { ErrorDisplay } from './components/ErrorBoundary';
+import { initFarcasterPatches } from './utils/farcasterPatches';
+import { initWagmiPatches } from './utils/wagmiPatches';
+import AudioController from './components/AudioController';
 
 // Ключ для localStorage
 const USER_ID_STORAGE_KEY = 'snotcoin_persistent_user_id';
@@ -68,7 +71,7 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
   // Если произошла ошибка SDK и нет persistentUserId
   if (sdkStatus === 'error') {
     console.error(`[GameProviderWrapper] SDK Error: ${sdkError}. Rendering error display.`);
-    return <ErrorDisplay message={sdkError || 'Failed to initialize Farcaster connection.'} />;
+    return <ErrorDisplay message={sdkError instanceof Error ? sdkError.message : String(sdkError) || 'Failed to initialize Farcaster connection.'} />;
   }
 
   // Если SDK готов, но нет пользователя (маловероятно в Mini App, но для полноты)
@@ -99,10 +102,17 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
   return <ErrorDisplay message='An unexpected error occurred during initialization.' />;
 };
 
+// Инициализируем патчи для Farcaster и Wagmi
+if (typeof window !== 'undefined') {
+  initFarcasterPatches();
+  initWagmiPatches();
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <FarcasterProvider>
       <GameProviderWrapper>
+        <AudioController />
         {children}
       </GameProviderWrapper>
     </FarcasterProvider>

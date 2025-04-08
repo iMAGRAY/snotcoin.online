@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { ResourceManager, GameResources, ResourceOperationResult } from '../services/resourceManager';
 import { useGameState, useGameDispatch } from './game/hooks';
 import { ANIMATION_DURATIONS } from '../constants/uiConstants';
+import { saveGameState } from '../services/storage';
+import { ExtendedGameState } from '../types/gameTypes';
 
 // Константы для хранения
 const STORAGE_PREFIX = 'snotcoin_';
@@ -111,12 +113,13 @@ export const ResourceProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     // Обновляем состояние игры из ресурсов
     setState(prevState => {
-      const updatedState = resourceManager.updateGameState(prevState);
+      const updatedState = resourceManager.updateGameState(prevState) as ExtendedGameState;
+      // Сохраняем обновленное состояние
+      saveGameState(updatedState);
       return updatedState;
     });
     
-    // Система сохранений отключена - только обновляем состояние в памяти
-    console.log('[ResourceContext] Система сохранений отключена - данные хранятся только в памяти');
+    console.log('[ResourceContext] Состояние синхронизировано и сохранено');
   }, [resourceManager, gameState, setState]);
   
   // Запускаем синхронизацию после любой операции

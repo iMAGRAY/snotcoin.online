@@ -50,6 +50,10 @@ const Merge = dynamic(() => import("./game/merge/Merge"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Merge..." />,
 })
 
+const SaveIndicator = dynamic(() => import("./game/SaveIndicator"), {
+  ssr: false,
+})
+
 const HomeContent: React.FC = () => {
   const dispatch = useGameDispatch();
   const gameState = useGameState();
@@ -131,13 +135,14 @@ const HomeContent: React.FC = () => {
           snot={gameState.inventory?.snot || 0}
           snotCoins={gameState.inventory?.snotCoins || 0}
           containerCapacity={gameState.inventory?.containerCapacity}
-          containerLevel={gameState.container?.level}
+          containerLevel={gameState.container?.level ?? 0}
           containerSnot={gameState.inventory?.containerSnot}
           containerFillingSpeed={gameState.inventory?.fillingSpeed}
           fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}          
         />
         {renderActiveTab()} 
         {!gameState.hideInterface && <TabBar />}
+        {!gameState.hideInterface && <SaveIndicator />}
       </MotionDiv>
     </ErrorBoundary>
   );

@@ -8,7 +8,14 @@ export interface FarcasterUser {
   fid: number
   username: string
   displayName?: string
-  pfp?: string
+  pfp?: {
+    url?: string
+  }
+  pfpUrl?: string
+  bio?: string
+  location?: {
+    description?: string
+  }
 }
 
 // Пользователь
@@ -69,27 +76,38 @@ export interface Inventory {
  * Состояние контейнера
  */
 export interface Container {
-  level: number;
+  level?: number;
+  capacity: number;
   currentAmount: number;
-  fillRate: number;
+  fillRate?: number;
   currentFill?: number;
+  fillingSpeed: number;
+  lastUpdateTimestamp: number;
 }
 
 /**
  * Улучшения
  */
 export interface Upgrades {
-  clickPower: {
+  clickPower?: {
     level: number;
     value: number;
   };
-  passiveIncome: {
+  passiveIncome?: {
     level: number;
     value: number;
   };
-  collectionEfficiencyLevel: number;
-  containerLevel: number;
-  fillingSpeedLevel: number;
+  containerCapacity: {
+    level: number;
+    cost: number;
+  };
+  fillingSpeed: {
+    level: number;
+    cost: number;
+  };
+  collectionEfficiencyLevel?: number;
+  containerLevel?: number;
+  fillingSpeedLevel?: number;
 }
 
 /**
@@ -186,8 +204,13 @@ export interface GameState {
   lastValidation: string;
   gameStarted: boolean;
   isLoading: boolean;
+  // Метод для ручного сохранения прогресса
+  saveProgress?: () => void;
 }
 
+/**
+ * Расширенное состояние игры
+ */
 export interface ExtendedGameState extends GameState {
   _decompressedAt?: string;
   _compressedAt?: string;
@@ -370,57 +393,45 @@ export interface GameStateUpdate {
  */
 export function createDefaultGameState(): GameState {
   const now = new Date().toISOString();
-  // Получаем текущее время в миллисекундах
-  const currentTimeMs = Date.now();
-  
-  // Базовые значения по умолчанию
+  // Рассчитываем начальное количество соплей и snotCoins
   const initialSnot = 0;
   const initialSnotCoins = 0;
-  const initialContainerSnot = 0.05;
-  
-  // Создаем случайный идентификатор для нового пользователя
-  const generatedUserId = `user_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
-  
-  console.log('[createDefaultGameState] Создаем новое состояние игры');
-  
+
   return {
     user: null,
     inventory: {
       snot: initialSnot,
       snotCoins: initialSnotCoins,
-      containerSnot: initialContainerSnot,
       containerCapacity: 1,
-      containerCapacityLevel: 1,
+      containerSnot: 0.05,
       fillingSpeed: 0.01,
+      containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
-      collectionEfficiency: 1.0,
-      lastUpdateTimestamp: currentTimeMs
+      collectionEfficiency: 1,
+      lastUpdateTimestamp: Date.now()
     },
     container: {
-      level: 1,
-      currentAmount: initialContainerSnot,
-      fillRate: 0.01,
-      currentFill: initialContainerSnot
+      capacity: 1,
+      currentAmount: 0,
+      fillingSpeed: 0.01,
+      lastUpdateTimestamp: Date.now()
     },
     upgrades: {
-      clickPower: {
+      containerCapacity: {
         level: 1,
-        value: 0.1
+        cost: 10
       },
-      passiveIncome: {
+      fillingSpeed: {
         level: 1,
-        value: 0.01
-      },
-      collectionEfficiencyLevel: 1,
-      containerLevel: 1,
-      fillingSpeedLevel: 1
+        cost: 15
+      }
     },
-    _userId: generatedUserId,
-    _lastModified: currentTimeMs,
+    _userId: 'unknown',
+    _lastModified: Date.now(),
     _createdAt: now,
     _tempData: null,
     _lastActionTime: now,
-    _lastAction: 'create_default_state',
+    _lastAction: 'initialize',
     logs: [],
     analytics: null,
     items: [],
@@ -453,7 +464,7 @@ export function createDefaultGameState(): GameState {
       notificationVolume: 0.7,
       clickVolume: 0.4,
       effectsVolume: 0.6,
-      backgroundMusicVolume: 0.3,
+      backgroundMusicVolume: 0.25,
       isMuted: false,
       isEffectsMuted: false,
       isBackgroundMusicMuted: false

@@ -82,15 +82,15 @@ export function calculateFillingTime({
     : 1;
 
   // Базовая скорость заполнения в секунду
-  // При скорости 1 контейнер заполняется за 12 часов
+  // При скорости 1 контейнер заполняется за 24 часов
   const baseIncreasePerSecond = FILL_RATES.BASE_CONTAINER_FILL_RATE;
   
   // Сколько ещё осталось до полного заполнения
   const remainingCapacity = Math.max(0, safeContainerCapacity - safeContainerSnot);
   
   // Сколько ресурса добавляется в час при данной скорости заполнения
-  // При fillingSpeed = 1 добавляется 0.08333 в час (1/12 от полного контейнера)
-  const fillPerHour = safeFillingSpeed / 12;
+  // При fillingSpeed = 1 добавляется 0.04167 в час (1/24 от полного контейнера)
+  const fillPerHour = safeFillingSpeed / 24;
   
   // Рассчитываем заполнение за минуту
   const fillPerMinute = fillPerHour / 60;

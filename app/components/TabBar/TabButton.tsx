@@ -6,9 +6,19 @@ import { cn } from "../../lib/utils"
 import { useTranslation } from "../../i18n"
 import { TabButtonProps } from "./types"
 import type { TranslationKeys } from "../../i18n/types/translationTypes"
+import audioService from "../../services/audioService"
 
 const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClick }) => {
   const { t } = useTranslation()
+  
+  // Функция для обработки клика с воспроизведением звука
+  const handleClick = () => {
+    // Воспроизводим звук при клике на кнопку
+    audioService.playSound('tabbarSound');
+    
+    // Вызываем оригинальный обработчик клика
+    onClick();
+  };
   
   // Обработка иконок: для неактивных состояний используем вариант с "1" в названии
   const getIconSrc = () => {
@@ -46,7 +56,7 @@ const TabButton: React.FC<TabButtonProps> = ({ id, icon, label, isActive, onClic
       )}
     >
       <motion.button
-        onClick={onClick}
+        onClick={handleClick}
         aria-label={t(label as keyof TranslationKeys)}
         aria-selected={isActive}
         role="tab"

@@ -4,7 +4,6 @@ import React, { useCallback, useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useGameState, useGameDispatch } from "../../../contexts"
-import type { Chest } from "../../../types/storage"
 import { ChestCarousel } from "./ChestCarousel"
 import { useTranslation } from "../../../i18n"
 import FallingRewards from "../../effects/FallingRewards"
@@ -16,6 +15,23 @@ import { useInventory } from "@/app/hooks/useInventory"
 import { SnotCoinRewardModal } from "./SnotCoinRewardModal"
 import { SwipeButtons } from "./SwipeButtons"
 import BackgroundImage from "@/app/components/common/BackgroundImage"
+import audioService from "../../../services/audioService"
+
+// Дополняем интерфейс Chest
+interface Chest {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  cost: number;
+  requiredSnot: number; 
+  contents: {
+    min: number;
+    max: number;
+  };
+  reward: () => number;
+}
 
 const ArrowButton: React.FC<{ direction: "left" | "right"; onClick: () => void }> = React.memo(
   ({ direction, onClick }) => (
@@ -144,7 +160,7 @@ const Storage: React.FC = () => {
   // Создаем массив сундуков внутри компонента, с правильными начальными значениями
   const chests: Chest[] = [
     {
-      id: 1,
+      id: "1",
       name: "Common",
       image: ICONS.STORAGE.LEVELS.LEVEL1,
       requiredSnot: level1ChestCost,
@@ -162,9 +178,15 @@ const Storage: React.FC = () => {
         return Math.floor(Math.random() * (level1ChestCost - minReward) + minReward);
       },
       description: "commonChestDescription",
+      rarity: 'common',
+      cost: level1ChestCost,
+      contents: {
+        min: level1ChestCost * 0.5,
+        max: level1ChestCost * 1.5,
+      },
     },
     {
-      id: 2,
+      id: "2",
       name: "Uncommon",
       image: ICONS.STORAGE.LEVELS.LEVEL2,
       requiredSnot: level2ChestCost,
@@ -182,9 +204,15 @@ const Storage: React.FC = () => {
         return Math.floor(Math.random() * (level2ChestCost - minReward) + minReward);
       },
       description: "rareChestDescription",
+      rarity: 'rare',
+      cost: level2ChestCost,
+      contents: {
+        min: level1ChestCost * 1.0,
+        max: level1ChestCost * 3.0,
+      },
     },
     {
-      id: 3,
+      id: "3",
       name: "Rare",
       image: ICONS.STORAGE.LEVELS.LEVEL3,
       requiredSnot: level3ChestCost,
@@ -202,6 +230,12 @@ const Storage: React.FC = () => {
         return Math.floor(Math.random() * (level3ChestCost - minReward) + minReward);
       },
       description: "legendaryChestDescription",
+      rarity: 'epic',
+      cost: level3ChestCost,
+      contents: {
+        min: level1ChestCost * 3.0,
+        max: level1ChestCost * 7.0,
+      },
     },
   ];
 
@@ -230,30 +264,35 @@ const Storage: React.FC = () => {
     if (!currentChest) return
 
     if (gameState.inventory.snot >= currentChest.requiredSnot) {
+      // Воспроизводим звук открытия сундука
+      if (typeof window !== 'undefined') {
+        audioService.playSound('chestOpenSound');
+      }
+      
       setIsChestOpening(true)
       setTimeout(() => {
         const reward = currentChest.reward()
         setRewardAmount(reward)
         setIsChestOpening(false)
-        gameDispatch({ 
-          type: "SET_RESOURCE", 
-          payload: { 
-            resource: "snot", 
-            value: gameState.inventory.snot - currentChest.requiredSnot 
-          } 
-        })
-        gameDispatch({ 
-          type: "SET_RESOURCE", 
-          payload: { 
-            resource: "snotCoins", 
-            value: gameState.inventory.snotCoins + reward 
-          } 
-        })
+        gameDispatch((prevState) => ({
+          ...prevState,
+          inventory: {
+            ...prevState.inventory,
+            snot: prevState.inventory.snot - currentChest.requiredSnot
+          }
+        }))
+        gameDispatch((prevState) => ({
+          ...prevState,
+          inventory: {
+            ...prevState.inventory,
+            snotCoins: prevState.inventory.snotCoins + reward
+          }
+        }))
       }, 1000)
     } else {
       // Недостаточно SNOT для открытия сундука
     }
-  }, [activeChestIndex, gameState.inventory.snot, gameDispatch])
+  }, [activeChestIndex, gameState.inventory.snot, gameDispatch, chests])
 
   React.useEffect(() => {
     // Сброс состояния при размонтировании
@@ -295,7 +334,7 @@ const Storage: React.FC = () => {
         {/* Описание */}
         <p className="text-white text-base mb-3 
                     opacity-90 font-medium">
-          {t(currentChest.description)}
+          {t(currentChest.description as keyof typeof t)}
         </p>
         
         {/* Разделитель */}

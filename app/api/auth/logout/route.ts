@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 
 /**
  * Указываем Next.js, что этот маршрут должен быть динамическим

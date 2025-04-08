@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, X, GamepadIcon, MapIcon, CoinsIcon, InfoIcon, LogOut } from "lucide-react"
+import { ChevronDown, X, GamepadIcon, MapIcon, CoinsIcon, InfoIcon, LogOut, Volume2, VolumeX, Music } from "lucide-react"
 import { XIcon } from "../../../components/icons/SocialIcons"
 import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import { useTranslation } from "../../../i18n"
@@ -14,12 +14,42 @@ import { useRouter } from "next/navigation"
 import MenuItem from "../../../components/ui/menu-item"
 import { authService } from '../../../services/auth/authService'
 import Link from "next/link"
-import { createInitialGameState } from '../../../types/gameTypes'
+import { createInitialGameState } from '../../../constants/gameConstants'
+import audioService from '../../../services/audioService'
 
 interface SettingsProps {
   isOpen?: boolean
   onClose: () => void
 }
+
+// Компонент ползунка громкости
+const VolumeSlider: React.FC<{
+  value: number;
+  onChange: (value: number) => void;
+  label: string;
+  icon: React.ReactNode;
+}> = ({ value, onChange, label, icon }) => {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center">
+          {icon}
+          <span className="ml-2 text-white text-sm">{label}</span>
+        </div>
+        <span className="text-white text-xs">{Math.round(value * 100)}%</span>
+      </div>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-[#5889ae] bg-[#1a2b3d] h-2 rounded-lg appearance-none cursor-pointer"
+      />
+    </div>
+  );
+};
 
 const SettingsToggle: React.FC<{ icon: React.ReactNode; text: string; isOn: boolean; onToggle: () => void }> = ({
   icon,
@@ -54,10 +84,53 @@ export const WarpcastIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
 
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const gameState = useGameState()
+  const gameDispatch = useGameDispatch()
   const { language, t } = useTranslation()
-  const [currentPage, setCurrentPage] = useState<"main" | "games" | "roadmap" | "tokenomic" | "about">("main")
+  const [currentPage, setCurrentPage] = useState<"main" | "games" | "roadmap" | "tokenomic" | "about" | "sound">("main")
   const router = useRouter()
   const setState = useGameDispatch()
+
+  // Состояния для настроек звука
+  const [musicEnabled, setMusicEnabled] = useState(gameState.settings?.musicEnabled ?? true)
+  const [soundEnabled, setSoundEnabled] = useState(gameState.settings?.soundEnabled ?? true)
+  const [backgroundMusicVolume, setBackgroundMusicVolume] = useState(
+    gameState.soundSettings?.backgroundMusicVolume ?? 0.25
+  )
+  const [soundVolume, setSoundVolume] = useState(
+    gameState.soundSettings?.soundVolume ?? 0.5
+  )
+  const [effectsVolume, setEffectsVolume] = useState(
+    gameState.soundSettings?.effectsVolume ?? 0.5
+  )
+
+  // Обновление настроек звука в gameState при изменении
+  useEffect(() => {
+    gameDispatch(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        musicEnabled,
+        soundEnabled,
+      },
+      soundSettings: {
+        ...prev.soundSettings,
+        backgroundMusicVolume,
+        soundVolume,
+        effectsVolume,
+        isBackgroundMusicMuted: !musicEnabled,
+        isEffectsMuted: !soundEnabled,
+      }
+    }))
+
+    // Применяем настройки к аудио сервису
+    audioService.applySettings({
+      musicEnabled,
+      soundEnabled,
+      backgroundMusicVolume,
+      soundVolume,
+      effectsVolume
+    })
+  }, [musicEnabled, soundEnabled, backgroundMusicVolume, soundVolume, effectsVolume, gameDispatch])
 
   const handleOutsideClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -72,14 +145,14 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     window.dispatchEvent(new Event("logout"))
 
     // Сбрасываем состояние игры и очищаем данные пользователя
-    setState(createInitialGameState())
+    setState(createInitialGameState(gameState._userId || ''))
 
     // Close settings
     onClose()
 
     // Redirect to the home page, which will show the authentication screen
     router.push("/")
-  }, [setState, router, onClose])
+  }, [setState, router, onClose, gameState._userId])
 
   return (
     <motion.div
@@ -141,6 +214,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
                       <div className="space-y-2">
                         <MenuItem
+                          icon={<Volume2 size={20} />}
+                          text={t("sound")}
+                          onClick={() => setCurrentPage("sound")}
+                          className="hover:bg-[#4a7a9e]/50"
+                          textClassName="text-white"
+                        />
+                        <MenuItem
                           icon={<GamepadIcon size={20} />}
                           text={t("game")}
                           onClick={() => setCurrentPage("games")}
@@ -195,6 +275,98 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                           <WarpcastIcon className="w-6 h-6" />
                           <span className="ml-2">Warpcast</span>
                         </Link>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              case "sound":
+                return (
+                  <motion.div
+                    key="sound"
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
+                  >
+                    <div className="flex items-center mb-6">
+                      <motion.button
+                        onClick={() => setCurrentPage("main")}
+                        className="mr-4 p-2 rounded-full bg-[#4a7a9e] text-white hover:bg-[#5889ae] transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <ChevronDown className="w-5 h-5 transform rotate-90" />
+                      </motion.button>
+                      <h2 className="text-2xl font-bold text-white">{t("sound")}</h2>
+                    </div>
+
+                    <div className="space-y-6 bg-[#2a3b4d]/50 p-4 rounded-xl border border-[#4a7a9e]/30">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Music className="w-5 h-5 text-white" />
+                            <span className="text-white">{t("music")}</span>
+                          </div>
+                          <motion.button
+                            onClick={() => setMusicEnabled(!musicEnabled)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 ${
+                              musicEnabled ? "bg-emerald-500 justify-end" : "bg-gray-600 justify-start"
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <motion.div
+                              className="w-4 h-4 bg-white rounded-full shadow-md"
+                              layout
+                              transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                            />
+                          </motion.button>
+                        </div>
+
+                        {musicEnabled && (
+                          <VolumeSlider
+                            value={backgroundMusicVolume}
+                            onChange={setBackgroundMusicVolume}
+                            label={t("backgroundMusic")}
+                            icon={<Music className="w-4 h-4 text-white" />}
+                          />
+                        )}
+
+                        <div className="flex items-center justify-between mt-6">
+                          <div className="flex items-center space-x-2">
+                            <Volume2 className="w-5 h-5 text-white" />
+                            <span className="text-white">{t("soundEffects")}</span>
+                          </div>
+                          <motion.button
+                            onClick={() => setSoundEnabled(!soundEnabled)}
+                            className={`w-12 h-6 flex items-center rounded-full p-1 ${
+                              soundEnabled ? "bg-emerald-500 justify-end" : "bg-gray-600 justify-start"
+                            }`}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <motion.div
+                              className="w-4 h-4 bg-white rounded-full shadow-md"
+                              layout
+                              transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                            />
+                          </motion.button>
+                        </div>
+
+                        {soundEnabled && (
+                          <>
+                            <VolumeSlider
+                              value={soundVolume}
+                              onChange={setSoundVolume}
+                              label={t("soundVolume")}
+                              icon={<Volume2 className="w-4 h-4 text-white" />}
+                            />
+                            <VolumeSlider
+                              value={effectsVolume}
+                              onChange={setEffectsVolume}
+                              label={t("effectsVolume")}
+                              icon={<Volume2 className="w-4 h-4 text-white" />}
+                            />
+                          </>
+                        )}
                       </div>
                     </div>
                   </motion.div>

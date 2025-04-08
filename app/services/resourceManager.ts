@@ -562,49 +562,72 @@ export class ResourceManager {
 
   /**
    * Создать ресурсы из состояния игры
-   * @param state Состояние игры
+   * @param gameState Состояние игры
    * @returns Ресурсы игры
    */
-  public static fromGameState(state: ExtendedGameState): GameResources {
-    const inventory = state.inventory || {};
-    
-    console.log('[ResourceManager.fromGameState] Создание ресурсов из состояния игры');
-    console.log('[ResourceManager.fromGameState] Система сохранений отключена');
-    
-    // Создаем текущее время как число для lastUpdateTimestamp
-    const currentTime: number = Date.now();
-    
-    // Гарантируем, что все значения будут числами и имеют значения по умолчанию
+  public static fromGameState(gameState: ExtendedGameState): GameResources {
     return {
-      snot: typeof inventory.snot === 'number' && !isNaN(inventory.snot) ? inventory.snot : 0,
-      snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) ? inventory.snotCoins : 0,
-      containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) ? inventory.containerSnot : 0.05,
-      containerCapacity: typeof inventory.containerCapacity === 'number' && !isNaN(inventory.containerCapacity) ? inventory.containerCapacity : 1,
-      containerCapacityLevel: typeof inventory.containerCapacityLevel === 'number' && !isNaN(inventory.containerCapacityLevel) ? inventory.containerCapacityLevel : 1,
-      fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) ? inventory.fillingSpeed : 0.01,
-      fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) ? inventory.fillingSpeedLevel : 1,
-      collectionEfficiency: typeof inventory.collectionEfficiency === 'number' && !isNaN(inventory.collectionEfficiency) ? inventory.collectionEfficiency : 1.0,
-      lastUpdateTimestamp: typeof inventory.lastUpdateTimestamp === 'number' && !isNaN(inventory.lastUpdateTimestamp) ? inventory.lastUpdateTimestamp : currentTime
+      snot: gameState.inventory.snot || 0,
+      snotCoins: gameState.inventory.snotCoins || 0,
+      containerSnot: gameState.inventory.containerSnot || 0.05,
+      containerCapacity: gameState.inventory.containerCapacity || 1,
+      containerCapacityLevel: gameState.inventory.containerCapacityLevel || 1,
+      fillingSpeed: gameState.inventory.fillingSpeed || 0.01,
+      fillingSpeedLevel: gameState.inventory.fillingSpeedLevel || 1,
+      collectionEfficiency: gameState.inventory.collectionEfficiency || 1.0,
+      lastUpdateTimestamp: gameState.inventory.lastUpdateTimestamp || Date.now()
     };
   }
 
   /**
    * Обновить состояние игры ресурсами
-   * @param state Состояние игры для обновления
+   * @param gameState Состояние игры для обновления
    * @returns Обновленное состояние игры
    */
-  public updateGameState(state: ExtendedGameState): ExtendedGameState {
-    const updatedState = {
-      ...state,
-      inventory: {
-        ...state.inventory,
-        ...this.resources
+  public updateGameState(gameState: ExtendedGameState): ExtendedGameState {
+    const updatedState = { ...gameState };
+    
+    // Обновляем инвентарь
+    updatedState.inventory = {
+      ...updatedState.inventory,
+      snot: this.resources.snot,
+      snotCoins: this.resources.snotCoins,
+      containerSnot: this.resources.containerSnot,
+      containerCapacity: this.resources.containerCapacity,
+      containerCapacityLevel: this.resources.containerCapacityLevel,
+      fillingSpeed: this.resources.fillingSpeed,
+      fillingSpeedLevel: this.resources.fillingSpeedLevel,
+      collectionEfficiency: this.resources.collectionEfficiency,
+      lastUpdateTimestamp: this.resources.lastUpdateTimestamp
+    };
+    
+    // Обновляем контейнер
+    updatedState.container = {
+      ...updatedState.container,
+      currentAmount: this.resources.containerSnot,
+      capacity: this.resources.containerCapacity,
+      fillingSpeed: this.resources.fillingSpeed,
+      lastUpdateTimestamp: this.resources.lastUpdateTimestamp
+    };
+    
+    // Обновляем улучшения
+    updatedState.upgrades = {
+      ...updatedState.upgrades,
+      containerCapacity: {
+        level: this.resources.containerCapacityLevel,
+        cost: updatedState.upgrades.containerCapacity?.cost || 0
+      },
+      fillingSpeed: {
+        level: this.resources.fillingSpeedLevel,
+        cost: updatedState.upgrades.fillingSpeed?.cost || 0
       }
     };
-
-    // Логируем, что система сохранений отключена
-    console.log('[ResourceManager] Система сохранений отключена');
-
+    
+    // Обновляем метаданные
+    updatedState._lastModified = Date.now();
+    updatedState._lastAction = 'resource_update';
+    updatedState._lastActionTime = new Date().toISOString();
+    
     return updatedState;
   }
 

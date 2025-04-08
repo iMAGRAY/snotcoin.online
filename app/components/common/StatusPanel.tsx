@@ -7,9 +7,6 @@ import { useTranslation } from "../../i18n"
 import { formatTime, formatSnotValue } from "../../utils/formatters"
 import { calculateFillingTime, getFillingSpeedByLevel } from "../../utils/gameUtils"
 import { Database, Zap, Clock, ArrowUp } from "lucide-react"
-import { useSelector } from "react-redux"
-import { RootState } from "../../redux/rootReducer"
-import { checkIfContainerFull } from "../../utils/inventory"
 import StatInfo from "./StatInfo"
 
 interface StatusPanelProps {
@@ -30,7 +27,6 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
   className,
 }) => {
   const { t } = useTranslation()
-  const inventory = useSelector((state: RootState) => state.game.inventory)
   
   const safeContainerCapacity = isNaN(containerCapacity) || containerCapacity <= 0 ? 100 : containerCapacity
   const safeContainerLevel = isNaN(containerLevel) || containerLevel <= 0 ? 1 : containerLevel
@@ -39,6 +35,11 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
   // Получаем корректное значение скорости заполнения на основе уровня
   const correctFillingSpeed = getFillingSpeedByLevel(fillingSpeedLevel ?? 1)
   
+  // Определяем функцию локально
+  const checkIfContainerFull = (snot: number, capacity: number): boolean => {
+    return snot >= capacity;
+  }
+  
   // Проверяем, заполнен ли контейнер полностью
   const isContainerFull = checkIfContainerFull(containerSnot, containerCapacity)
   
@@ -46,7 +47,7 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
     {
       id: "snotcoins",
       label: t("snotcoins"),
-      value: formatSnotValue(inventory?.snotcoins || 0, 2),
+      value: formatSnotValue(containerSnot, 2),
       tooltip: t("snotcoinsTooltip")
     },
     {
@@ -62,7 +63,11 @@ const StatusPanel: React.FC<StatusPanelProps> = ({
     stats.push({
       id: "timeToFill",
       label: t("timeToFill"),
-      value: formatTime(calculateFillingTime(containerSnot, containerCapacity, correctFillingSpeed).timeInSeconds),
+      value: formatTime(calculateFillingTime({
+        containerSnot, 
+        containerCapacity,
+        fillingSpeed: correctFillingSpeed
+      }).timeInSeconds),
       tooltip: t("timeToFillTooltip")
     })
   }

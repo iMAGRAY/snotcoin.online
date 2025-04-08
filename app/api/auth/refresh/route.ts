@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { sign } from '@/app/utils/jwt';
-import { prisma } from '@/app/lib/prisma';
+import prisma from '@/app/lib/prisma';
 import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
 import * as jwt from 'jsonwebtoken';
 
@@ -11,7 +11,6 @@ import * as jwt from 'jsonwebtoken';
  */
 export const dynamic = 'force-dynamic';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-do-not-use-in-production';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your-refresh-secret-do-not-use-in-production';
 
 // Срок действия JWT токена: 1 час

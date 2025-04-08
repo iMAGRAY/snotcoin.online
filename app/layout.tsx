@@ -53,7 +53,10 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {/* Добавляем компонент для управления звуком */}
+          {children}
+        </Providers>
       </body>
     </html>
   );

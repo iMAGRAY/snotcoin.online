@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import prisma from '../lib/prisma';
 
 // Тип для хранения игрового состояния
 export type GameStateData = Record<string, any>;

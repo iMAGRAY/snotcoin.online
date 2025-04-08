@@ -13,7 +13,7 @@ export const useForceSave = () => {
   /**
    * Функция-заглушка, имитирующая принудительное сохранение
    */
-  const forceSave = useCallback(async (delay?: number): Promise<any> => {
+  const forceSave = useCallback(async (delay?: number) => {
     console.log('[useForceSave] Функция сохранения отключена (система сохранений удалена)')
     return {
       success: true,

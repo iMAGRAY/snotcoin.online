@@ -15,6 +15,7 @@ import { ICONS } from "../../../constants/uiConstants"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs"
 import { FaChartLine, FaStore, FaTrophy } from "react-icons/fa"
 import { useFarcaster } from "../../../contexts/FarcasterContext"
+import { createInitialGameState } from '../../../constants/gameConstants'
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
@@ -92,39 +93,26 @@ const ProfilePage: React.FC = () => {
   }
 
   const getUserBio = () => {
-    // Проверяем данные в разных местах
-    if (sdkUser?.bio) return sdkUser.bio
-    if (!gameState.user?.metadata) return null
-    
-    const metadata = gameState.user.metadata
-    
-    // Проверяем все возможные места, где может быть биография
-    return metadata.profile?.bio?.text || 
-           metadata.profile?.bio || 
-           metadata.bio || 
-           null
+    // Проверяем данные только в metadata пользователя
+    if (!gameState.user?.metadata) return null;
+    return gameState.user.metadata.bio as string || null;
   }
 
   const getUserLocation = () => {
-    // Проверяем данные в разных местах
-    if (sdkUser?.location?.description) return sdkUser.location.description
-    if (!gameState.user?.metadata) return null
-    
-    const metadata = gameState.user.metadata
-    
-    // Проверяем все возможные места, где может быть местоположение
-    if (typeof metadata.profile?.location === 'string') return metadata.profile.location
-    if (typeof metadata.location === 'string') return metadata.location
-    return metadata.profile?.location?.description || 
-           metadata.location?.description || 
-           null
+    // Проверяем данные только в metadata пользователя
+    if (!gameState.user?.metadata) return null;
+    return gameState.user.metadata.location as string || null;
   }
 
   const handleLogout = useCallback(() => {
     authService.logout()
     
-    gameDispatch({ type: "SET_USER", payload: null })
-    gameDispatch({ type: "RESET_GAME_STATE" })
+    gameDispatch((prev) => ({ ...prev, user: null }));
+    gameDispatch((prev) => {
+      // Создаем новое состояние, используя функциональный формат
+      const initialState = createInitialGameState(prev._userId);
+      return initialState;
+    });
     
     const logoutEvent = new Event('logout')
     window.dispatchEvent(logoutEvent)
@@ -305,7 +293,7 @@ const ProfilePage: React.FC = () => {
                 <Tab
                   key={section.label}
                   className={({ selected }) =>
-                    `w-full rounded-lg py-3 text-sm font-medium leading-5 text-white transition-all duration-300
+                    `w-full rounded-2xl py-3 text-sm font-medium leading-5 text-white transition-all duration-300
                     ${
                       selected
                         ? "bg-gradient-to-r from-[#4a7a9e] to-[#5889ae] shadow-lg"

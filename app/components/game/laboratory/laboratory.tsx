@@ -10,6 +10,7 @@ import { formatSnotValue } from "../../../utils/formatters"
 import { ANIMATION_DURATIONS, LAYOUT } from "../../../constants/uiConstants"
 import { getSafeInventory, calculateFillingPercentage } from "../../../utils/resourceUtils"
 import { FILL_RATES } from "../../../constants/gameConstants"
+import { clearAllData } from '../../../services/storage'
 
 // Порог заполнения localStorage, при котором запускается очистка (в процентах)
 const LOCAL_STORAGE_CLEANUP_THRESHOLD = 75;
@@ -225,6 +226,14 @@ const Laboratory: React.FC = () => {
     trackContainerClick
   ]);
 
+  // Функция для сброса всех сохраненных данных
+  const handleResetData = useCallback(() => {
+    if (window.confirm('Вы уверены, что хотите сбросить все данные? Это необходимо для применения исправления скорости заполнения контейнера.')) {
+      clearAllData();
+      window.location.reload();
+    }
+  }, []);
+
   return (
     <div className="laboratory">
       <div className="background-container">
@@ -255,6 +264,18 @@ const Laboratory: React.FC = () => {
             )}
           </div>
         </div>
+        
+        {/* Кнопка сброса данных (только для локальной разработки) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 mx-auto w-full px-4">
+            <button 
+              onClick={handleResetData}
+              className="w-full h-10 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md text-sm"
+            >
+              Сбросить данные (для тестирования)
+            </button>
+          </div>
+        )}
         
         {/* Кнопка Collect размещена ниже, но выше tabbar */}
         <div className="collect-button-container">

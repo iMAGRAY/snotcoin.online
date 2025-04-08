@@ -1,20 +1,13 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { createInitialGameState } from '../constants/gameConstants';
-
-// Тип для состояния игры
-export interface GameState {
-  _userId?: string;
-  _provider?: string;
-  _lastModified?: number;
-  _createdAt?: string;
-  [key: string]: any;
-}
+import { ExtendedGameState } from '../types/gameTypes';
+import { saveGameState, loadGameState } from '../services/storage';
 
 // Интерфейс контекста игры
 interface GameContextType {
-  gameState: GameState;
-  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
-  updateGameState: (updates: Partial<GameState>) => void;
+  gameState: ExtendedGameState;
+  setGameState: React.Dispatch<React.SetStateAction<ExtendedGameState>>;
+  updateGameState: (updates: Partial<ExtendedGameState>) => void;
   resetGameState: () => void;
 }
 
@@ -33,7 +26,7 @@ export const useGameState = (): GameContextType => {
 // Пропсы для провайдера
 interface GameProviderProps {
   children: ReactNode;
-  initialState?: GameState;
+  initialState?: ExtendedGameState;
   userId?: string;
   provider?: string;
 }
@@ -46,9 +39,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   provider
 }) => {
   // Инициализируем состояние игры
-  const [gameState, setGameState] = useState<GameState>(() => {
+  const [gameState, setGameState] = useState<ExtendedGameState>(() => {
+    // Пытаемся загрузить сохраненное состояние
+    const savedState = loadGameState();
+    if (savedState) {
+      return savedState;
+    }
+    
     // Используем переданное начальное состояние или создаем новое
-    const state = initialState || createInitialGameState(userId || 'unknown');
+    const state = initialState || createInitialGameState(userId || 'unknown') as ExtendedGameState;
     
     // Добавляем userId и provider, если они предоставлены
     if (userId && !state._userId) {
@@ -63,17 +62,26 @@ export const GameProvider: React.FC<GameProviderProps> = ({
   });
   
   // Функция для частичного обновления состояния
-  const updateGameState = (updates: Partial<GameState>) => {
-    setGameState(currentState => ({
-      ...currentState,
-      ...updates,
-      _lastModified: Date.now()
-    }));
+  const updateGameState = (updates: Partial<ExtendedGameState>) => {
+    setGameState((currentState: ExtendedGameState) => {
+      const updatedState = {
+        ...currentState,
+        ...updates,
+        _lastModified: Date.now()
+      };
+      
+      // Сохраняем обновленное состояние
+      saveGameState(updatedState);
+      
+      return updatedState;
+    });
   };
   
   // Функция для сброса состояния
   const resetGameState = () => {
-    setGameState(createInitialGameState(userId || 'unknown'));
+    const newState = createInitialGameState(userId || 'unknown') as ExtendedGameState;
+    setGameState(newState);
+    saveGameState(newState);
   };
   
   // Обновляем userId в состоянии игры при его изменении

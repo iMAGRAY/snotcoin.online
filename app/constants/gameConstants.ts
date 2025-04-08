@@ -2,103 +2,78 @@
  * Константы и начальные состояния для игры
  */
 
-import { GameState } from '../context/GameContext';
+import { GameState, ExtendedGameState } from '../types/gameTypes';
 import { Inventory } from '../types/inventory';
 
 /**
  * Создает начальное состояние игры
- * @param userId ID пользователя
- * @returns Начальное состояние игры
  */
-export function createInitialGameState(userId: string): GameState {
-  const now = new Date();
-  const currentTimeMs = now.getTime();
-  
-  // Базовые значения для нового пользователя
-  const initialSnot = 0;
-  const initialSnotCoins = 0;
-  const initialContainerSnot = 0.05;
-  
-  console.log('[createInitialGameState] Создаем новое состояние игры');
+export const createInitialGameState = (userId: string): ExtendedGameState => {
+  const now = new Date().toISOString();
   
   return {
-    // Мета-информация
-    _userId: userId,
-    _lastModified: currentTimeMs,
-    _createdAt: now.toISOString(),
-    _tempData: null,
-    _lastActionTime: now.toISOString(),
-    _lastAction: 'create_initial_state',
-    
-    // Пользовательские данные
     user: null,
-    
-    // Игровой инвентарь
     inventory: {
-      snot: initialSnot,
-      snotCoins: initialSnotCoins,
+      snot: 0,
+      snotCoins: 0,
+      containerSnot: 0.05,
       containerCapacity: 1,
-      containerSnot: initialContainerSnot,
-      fillingSpeed: 0.01,
       containerCapacityLevel: 1,
+      fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
-      lastUpdateTimestamp: currentTimeMs
+      lastUpdateTimestamp: Date.now()
     },
-    
-    // Контейнер
     container: {
       level: 1,
-      currentAmount: initialContainerSnot,
+      capacity: 1,
+      currentAmount: 0.05,
       fillRate: 0.01,
-      currentFill: initialContainerSnot
+      currentFill: 0.05,
+      fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
+      lastUpdateTimestamp: Date.now()
     },
-    
-    // Улучшения
     upgrades: {
-      clickPower: {
+      containerCapacity: {
         level: 1,
-        value: 0.1
+        cost: 0
       },
-      passiveIncome: {
+      fillingSpeed: {
         level: 1,
-        value: 0.01
+        cost: 0
       },
       collectionEfficiencyLevel: 1,
       containerLevel: 1,
-      fillingSpeedLevel: 1
+      fillingSpeedLevel: 1,
+      clickPower: { level: 1, value: 1 },
+      passiveIncome: { level: 1, value: 0.1 }
     },
-    
-    // Логи
+    _userId: userId,
+    _provider: userId !== 'unknown' ? 'local' as const : '',
+    _lastModified: Date.now(),
+    _createdAt: now,
+    _tempData: null,
+    _lastActionTime: now,
+    _lastAction: 'init',
+    _dataSource: 'new',
+    _loadedAt: now,
     logs: [],
-    
-    // Аналитика
     analytics: null,
-    
-    // Предметы
     items: [],
-    
-    // Достижения
     achievements: {
       unlockedAchievements: []
     },
-    
-    // Статистика
     highestLevel: 1,
     stats: {
       clickCount: 0,
       playTime: 0,
-      startDate: now.toISOString(),
+      startDate: now,
       highestLevel: 1,
-      totalSnot: initialSnot,
-      totalSnotCoins: initialSnotCoins,
-      consecutiveLoginDays: 1
+      totalSnot: 0,
+      totalSnotCoins: 0,
+      consecutiveLoginDays: 0
     },
-    
-    // Последовательные дни входа
-    consecutiveLoginDays: 1,
-    
-    // Настройки
+    consecutiveLoginDays: 0,
     settings: {
       language: 'ru',
       theme: 'light',
@@ -108,33 +83,30 @@ export function createInitialGameState(userId: string): GameState {
       soundEnabled: true,
       notificationsEnabled: true
     },
-    
-    // Настройки звука
     soundSettings: {
       musicVolume: 0.5,
       soundVolume: 0.5,
-      notificationVolume: 0.7,
-      clickVolume: 0.4,
-      effectsVolume: 0.6,
-      backgroundMusicVolume: 0.3,
+      notificationVolume: 0.5,
+      clickVolume: 0.5,
+      effectsVolume: 0.5,
+      backgroundMusicVolume: 0.25,
       isMuted: false,
       isEffectsMuted: false,
       isBackgroundMusicMuted: false
     },
-    
-    // Игровой интерфейс
     hideInterface: false,
-    activeTab: 'game',
-    fillingSpeed: 0.01,
+    activeTab: 'main',
+    fillingSpeed: 1, // Общая скорость заполнения на уровне 1
     containerLevel: 1,
     isPlaying: false,
     isGameInstanceRunning: false,
-    validationStatus: 'none',
-    lastValidation: now.toISOString(),
+    validationStatus: 'valid',
+    lastValidation: now,
     gameStarted: false,
-    isLoading: false
+    isLoading: false,
+    saveProgress: null as unknown as (() => void)
   };
-}
+};
 
 /**
  * Константы для игры
@@ -152,7 +124,7 @@ export const initialState: GameState = {
     containerSnot: 0.05,
     containerCapacity: 1,
     containerCapacityLevel: 1,
-    fillingSpeed: 0.01,
+    fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
     lastUpdateTimestamp: Date.now()
@@ -162,14 +134,24 @@ export const initialState: GameState = {
     capacity: 1,
     currentAmount: 0,
     fillRate: 1,
-    currentFill: 0
+    currentFill: 0,
+    fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
+    lastUpdateTimestamp: Date.now()
   },
   upgrades: {
     containerLevel: 1,
     fillingSpeedLevel: 1,
     clickPower: { level: 1, value: 1 },
     passiveIncome: { level: 1, value: 0.1 },
-    collectionEfficiencyLevel: 1
+    collectionEfficiencyLevel: 1,
+    containerCapacity: {
+      level: 1,
+      cost: 0
+    },
+    fillingSpeed: {
+      level: 1,
+      cost: 0
+    }
   },
   _userId: '',
   _lastModified: Date.now(),
@@ -207,7 +189,7 @@ export const initialState: GameState = {
     notificationVolume: 0.5,
     clickVolume: 0.5,
     effectsVolume: 0.5,
-    backgroundMusicVolume: 0.5,
+    backgroundMusicVolume: 0.25,
     isMuted: false,
     isEffectsMuted: false,
     isBackgroundMusicMuted: false
@@ -217,6 +199,7 @@ export const initialState: GameState = {
   fillingSpeed: 1,
   containerLevel: 1,
   isPlaying: false,
+  isGameInstanceRunning: false,
   validationStatus: 'pending',
   lastValidation: new Date().toISOString(),
   gameStarted: false,
@@ -315,7 +298,7 @@ export const DEFAULT_INVENTORY: Inventory = {
   containerSnot: 0.05,
   containerCapacity: 1,
   containerCapacityLevel: 1,
-  fillingSpeed: 0.01, // Обновлено для соответствия начальным значениям
+  fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
   fillingSpeedLevel: 1,
   collectionEfficiency: 1,
   lastUpdateTimestamp: Date.now()
@@ -323,22 +306,22 @@ export const DEFAULT_INVENTORY: Inventory = {
 
 // Константы для обновления ресурсов
 export const FILL_RATES = {
-  // На уровне 1 заполняем 1 единицу snotа за 12 часов
-  BASE_FILL_RATE: 1, // Базовый уровень, при котором 1 единица snot заполняется за 12 часов
+  // На уровне 1 заполняем 1 единицу snotа за 24 часов
+  BASE_FILL_RATE: 0.5, // Базовый уровень, при котором 1 единица snot заполняется за 24 часов
   
   // Базовая скорость заполнения в единицах в секунду для уровня 1
-  // 1 snot за 12 часов = 1 / (12 * 3600) snot в секунду
-  BASE_CONTAINER_FILL_RATE: 1 / (7.2 * 360), // Увеличено в 100 раз для более быстрого заполнения
+  // 1 snot за 24 часов = 1 / (24 * 3600) snot в секунду
+  BASE_CONTAINER_FILL_RATE: 1 / (24 * 3600), // Точная формула для заполнения за 24 часа
   
   // Коэффициент улучшения на каждом уровне (значение fillingSpeed)
-  LEVEL_1_FILL_SPEED: 1,    // 1 snot за 12 часов
-  LEVEL_2_FILL_SPEED: 1.5,  // 1 snot за 8 часов
-  LEVEL_3_FILL_SPEED: 2,    // 1 snot за 6 часов
-  LEVEL_4_FILL_SPEED: 3,    // 1 snot за 4 часа
-  LEVEL_5_FILL_SPEED: 4,    // 1 snot за 3 часа
+  LEVEL_1_FILL_SPEED: 1,    // 1 snot за 24 часов
+  LEVEL_2_FILL_SPEED: 1.5,  // 1 snot за 16 часов
+  LEVEL_3_FILL_SPEED: 2,    // 1 snot за 12 часов
+  LEVEL_4_FILL_SPEED: 3,    // 1 snot за 8 часов
+  LEVEL_5_FILL_SPEED: 4,    // 1 snot за 6 часов
   
   // Время полного заполнения на 1 уровне в часах
-  FULL_CONTAINER_FILL_TIME_HOURS: 12
+  FULL_CONTAINER_FILL_TIME_HOURS: 24
 };
 
 /**

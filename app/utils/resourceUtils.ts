@@ -19,7 +19,7 @@ export function getSafeInventory(gameState: any): Inventory {
       containerSnot: 0,
       containerCapacity: 1, // Уровень 1 соответствует емкости 1
       containerCapacityLevel: 1,
-      fillingSpeed: 1, // 1 snot за 12 часов на уровне 1
+      fillingSpeed: 1, // 1 snot за 24 часов на уровне 1
       fillingSpeedLevel: 1,
       collectionEfficiency: 1,
       lastUpdateTimestamp: Date.now()
@@ -52,7 +52,7 @@ export function getSafeInventory(gameState: any): Inventory {
       
     fillingSpeed: typeof inventory.fillingSpeed === 'number' && !isNaN(inventory.fillingSpeed) && inventory.fillingSpeed > 0
       ? inventory.fillingSpeed 
-      : 1, // 1 snot за 12 часов на уровне 1
+      : 1, // 1 snot за 24 часов на уровне 1
       
     fillingSpeedLevel: typeof inventory.fillingSpeedLevel === 'number' && !isNaN(inventory.fillingSpeedLevel) && inventory.fillingSpeedLevel > 0
       ? inventory.fillingSpeedLevel 

@@ -48,45 +48,42 @@ const Merge: React.FC = () => {
     nextRecoveryTime: 0
   });
   const [remainingTime, setRemainingTime] = useState<string>("");
-
-  // Загрузка данных о попытках из localStorage при монтировании компонента
+  
+  // Главный хук для системы попыток
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedData) {
-        try {
-          const parsedData = JSON.parse(savedData) as MergeGameAttemptsData;
-          
-          // Проверяем корректность данных
-          if (parsedData.attemptsLeft === undefined || 
-              parsedData.lastAttemptTime === undefined ||
-              parsedData.nextRecoveryTime === undefined) {
-            // Если данные некорректны, сбрасываем до начальных значений
-            resetAttemptsToMax();
-          } else {
-            // Если данные корректны, проверяем, не нужно ли сбросить попытки
-            const now = Date.now();
-            // Если прошло больше 24 часов с последнего сохранения, сбрасываем попытки до максимума
-            if (now - parsedData.lastAttemptTime > 24 * 60 * 60 * 1000) {
-              resetAttemptsToMax();
-            } else {
-              // Иначе загружаем сохраненные данные
-              setAttemptsData(parsedData);
-            }
-          }
-        } catch (e) {
-          // При ошибке парсинга, сбрасываем до начальных значений
-          resetAttemptsToMax();
-        }
-      } else {
-        // Если данных нет, инициализируем с максимальным количеством попыток
-        resetAttemptsToMax();
+    const savedAttemptsDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+    
+    if (savedAttemptsDataString) {
+      try {
+        const savedAttemptsData: MergeGameAttemptsData = JSON.parse(savedAttemptsDataString);
+        setAttemptsData(savedAttemptsData);
+      } catch (error) {
+        console.error("Ошибка при загрузке данных о попытках:", error);
+        resetAttemptsData();
       }
+    } else {
+      resetAttemptsData();
     }
   }, []);
 
-  // Функция для сброса попыток до максимального значения
-  const resetAttemptsToMax = () => {
+  // Функция для восстановления попытки
+  const handleAttemptRecovery = () => {
+    const now = Date.now();
+    const newAttemptsLeft = Math.min(attemptsData.attemptsLeft + 1, MAX_MERGE_ATTEMPTS);
+    const newNextRecoveryTime = newAttemptsLeft < MAX_MERGE_ATTEMPTS ? now + MERGE_ATTEMPT_RECOVERY_TIME : 0;
+    
+    const updatedData: MergeGameAttemptsData = {
+      attemptsLeft: newAttemptsLeft,
+      lastAttemptTime: now,
+      nextRecoveryTime: newNextRecoveryTime
+    };
+    
+    setAttemptsData(updatedData);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+  };
+
+  // Функция для сброса данных о попытках
+  const resetAttemptsData = () => {
     const initialData: MergeGameAttemptsData = {
       attemptsLeft: MAX_MERGE_ATTEMPTS,
       lastAttemptTime: Date.now(),
@@ -96,50 +93,30 @@ const Merge: React.FC = () => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
   };
 
-  // Обновление таймера и проверка восстановления попыток
+  // Обновление таймера для восстановления попыток
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      
-      // Если есть время восстановления и оно пришло
-      if (attemptsData.nextRecoveryTime > 0 && now >= attemptsData.nextRecoveryTime && attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS) {
-        // Рассчитываем, сколько попыток должно восстановиться
-        const timeSinceLastAttempt = now - attemptsData.lastAttemptTime;
-        const recoveredAttempts = Math.min(
-          Math.floor(timeSinceLastAttempt / MERGE_ATTEMPT_RECOVERY_TIME),
-          MAX_MERGE_ATTEMPTS - attemptsData.attemptsLeft
-        );
+    const updateRemainingTime = () => {
+      if (attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && attemptsData.nextRecoveryTime > 0) {
+        const timeRemaining = Math.max(0, attemptsData.nextRecoveryTime - Date.now());
         
-        if (recoveredAttempts > 0) {
-          const newAttemptsLeft = Math.min(attemptsData.attemptsLeft + recoveredAttempts, MAX_MERGE_ATTEMPTS);
-          const newLastAttemptTime = attemptsData.lastAttemptTime + (recoveredAttempts * MERGE_ATTEMPT_RECOVERY_TIME);
-          const newNextRecoveryTime = newAttemptsLeft < MAX_MERGE_ATTEMPTS ? newLastAttemptTime + MERGE_ATTEMPT_RECOVERY_TIME : 0;
-          
-          const updatedData: MergeGameAttemptsData = {
-            attemptsLeft: newAttemptsLeft,
-            lastAttemptTime: newLastAttemptTime,
-            nextRecoveryTime: newNextRecoveryTime
-          };
-          
-          setAttemptsData(updatedData);
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+        if (timeRemaining <= 0) {
+          // Если время восстановления истекло, добавляем попытку
+          handleAttemptRecovery();
+        } else {
+          // Форматируем оставшееся время
+          const minutes = Math.floor(timeRemaining / 60000);
+          const seconds = Math.floor((timeRemaining % 60000) / 1000);
+          setRemainingTime(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
         }
-      }
-      
-      // Обновляем отображение оставшегося времени до восстановления попытки
-      if (attemptsData.nextRecoveryTime > 0 && now < attemptsData.nextRecoveryTime) {
-        const timeLeft = attemptsData.nextRecoveryTime - now;
-        const hours = Math.floor(timeLeft / (60 * 60 * 1000));
-        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-        const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000);
-        
-        setRemainingTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
       } else {
         setRemainingTime("");
       }
-    }, 1000);
-    
-    return () => clearInterval(interval);
+    };
+
+    const intervalId = setInterval(updateRemainingTime, 1000);
+    updateRemainingTime(); // Сразу обновляем после монтирования
+
+    return () => clearInterval(intervalId);
   }, [attemptsData]);
 
   const handlePlayClick = () => {
@@ -160,22 +137,23 @@ const Merge: React.FC = () => {
     setAttemptsData(updatedData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
     
-    // Сохраняем состояние игры принудительно после использования попытки
-    forceSave(300).then(success => {
-      if (success) {
-        console.log('[MergeGame] Состояние игры сохранено после использования попытки');
-      } else {
-        console.warn('[MergeGame] Не удалось сохранить состояние игры после использования попытки');
-      }
-    });
+    // Логируем что система сохранений отключена
+    forceSave(300);
+    console.log('[MergeGame] Система сохранений отключена');
     
     // Скрываем интерфейс при запуске игры
-    dispatch({ type: "SET_HIDE_INTERFACE", payload: true })
+    dispatch(prevState => ({
+      ...prevState,
+      hideInterface: true
+    }));
     setIsGameLaunched(true)
   }
 
   const handleBackToMenu = () => {
-    dispatch({ type: "SET_HIDE_INTERFACE", payload: false })
+    dispatch(prevState => ({
+      ...prevState,
+      hideInterface: false
+    }));
     setIsGameLaunched(false)
   }
 

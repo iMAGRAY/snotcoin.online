@@ -1,4 +1,5 @@
 import type { GameState, Action, ExtendedGameState } from "../types/gameTypes";
+import type { User } from "../types/userTypes";
 
 // Экшен для загрузки состояния игры
 export const loadGameState = (state: GameState): Action => ({
@@ -24,16 +25,16 @@ export const setActiveTab = (tab: string): Action => ({
 });
 
 // Экшен для установки пользователя
-export const setUser = (user: any): Action => ({
+export const setUser = (user: User | null): Action => ({
   type: "SET_USER",
   payload: user
 });
 
 // Экшен для инициализации нового пользователя
-export const initializeNewUser = (initialData?: Partial<ExtendedGameState>) => {
+export const initializeNewUser = (initialData?: Partial<ExtendedGameState>): Action => {
   return {
     type: "INITIALIZE_NEW_USER",
-    payload: initialData as ExtendedGameState
+    payload: initialData || {}
   };
 };
 
