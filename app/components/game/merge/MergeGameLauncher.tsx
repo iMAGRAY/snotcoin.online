@@ -61,8 +61,6 @@ class MergeGameScene extends Phaser.Scene {
   isGameOver: boolean = false // Флаг окончания игры
   recentlyShot: Record<string, number> = {}
   newBallGracePeriod: number = 320 // Уменьшаю с 1500 до 320 мс для более короткого игнорирования новых шаров
-  verticalGuideLine: Phaser.GameObjects.Graphics | null = null; // Вертикальная направляющая линия
-  verticalGuideX: number = 0; // Позиция X вертикальной направляющей линии
 
   constructor() {
     super({ key: 'MergeGameScene' })
@@ -169,26 +167,15 @@ class MergeGameScene extends Phaser.Scene {
     this.gameOverText.setAlpha(0); // Делаем текст прозрачным (скрываем)
     this.gameOverText.setDepth(200); // Ставим поверх всех элементов
     
-    // Добавляем вертикальную направляющую линию
-    this.verticalGuideLine = this.add.graphics();
-    this.verticalGuideX = width / 2;
-    
-    // Рисуем вертикальную линию от горизонтальной до самого низа экрана
-    // Используем точную высоту холста без смещения
-    this.updateVerticalGuideLine(width / 2, lineY, height);
-    
     // Генерируем уровень для следующего шара (до 6 уровня)
     this.generateNextBallLevel();
     
     // Создаем следующий шар для броска
     this.createNextBall();
     
-    console.log('Merge Game инициализирована с унифицированным управлением для всех устройств');
-    
     // Добавляем флаг определения типа устройства - добавляем console.log для отладки
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    console.log('Тип устройства:', isMobile ? 'Мобильное' : 'Десктоп', 'Управление: ' + 
-      (isMobile ? 'зажать для перемещения, отпустить для броска' : 'движение мыши и клик'));
+    console.log('Тип устройства:', isMobile ? 'Мобильное' : 'Десктоп', navigator.userAgent);
     
     // Добавляем обработчики для перемещения CoinKing
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -205,7 +192,7 @@ class MergeGameScene extends Phaser.Scene {
             this.nextBall.x = newX;
           }
           
-          // Обновляем только линию прицеливания, но не изменяем вертикальную направляющую
+          // Обновляем линию прицеливания
           this.updateAimLine(newX, height);
         }
       }
@@ -227,22 +214,24 @@ class MergeGameScene extends Phaser.Scene {
     // Правая внутренняя стена
     this.createBoundary(width / SCALE - wallOffset, 0, width / SCALE - wallOffset, height / SCALE);
     
-    // Обработка кликов/тапов 
+    // Добавляем визуальные индикаторы положения внутренних стен (только для отладки, можно удалить)
+    /* 
+    this.add.line(0, 0, wallOffset * SCALE, 0, wallOffset * SCALE, height, 0xff0000)
+      .setOrigin(0, 0)
+      .setAlpha(0.3);
+    this.add.line(0, 0, width - wallOffset * SCALE, 0, width - wallOffset * SCALE, height, 0xff0000)
+      .setOrigin(0, 0)
+      .setAlpha(0.3);
+    */
+    
+    // Обработка кликов/тапов
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.isPointerDown = true;
       console.log('Pointerdown event');
       
-      // Запоминаем позицию короля для вертикальной линии до выстрела
-      if (this.coinKing) {
-        this.verticalGuideX = this.coinKing.x;
-        // Обновляем линию с зафиксированной позицией
-        this.updateVerticalGuideLine(this.verticalGuideX, 75, this.game.canvas.height);
-      }
-      
       // На компьютере стреляем сразу при клике, на мобильных - только при отпускании
       if (!isMobile) {
-        console.log('Стреляем на десктопе при клике');
-        
+        console.log('Стреляем на десктопе');
         // Выстрел из CoinKing
         const currentTime = this.time.now;
         if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
@@ -257,15 +246,7 @@ class MergeGameScene extends Phaser.Scene {
       
       // На мобильных устройствах стреляем при отпускании пальца
       if (isMobile && this.isPointerDown) {
-        console.log('Стреляем на мобильном при отпускании');
-        
-        // Запоминаем позицию короля для вертикальной линии до выстрела
-        if (this.coinKing) {
-          this.verticalGuideX = this.coinKing.x;
-          // Обновляем линию с зафиксированной позицией
-          this.updateVerticalGuideLine(this.verticalGuideX, 75, this.game.canvas.height);
-        }
-        
+        console.log('Пытаемся стрелять на мобильном');
         // Выстрел из CoinKing при отпускании пальца
         const currentTime = this.time.now;
         if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
@@ -466,44 +447,26 @@ class MergeGameScene extends Phaser.Scene {
     // Очищаем предыдущую линию
     this.aimLine.clear();
     
-    // Вертикальные линии теперь обрабатываются только в методе updateVerticalGuideLine
-    // Метод updateAimLine больше не рисует вертикальную линию
+    // Задаем стиль пунктирной линии
+    this.aimLine.lineStyle(2, 0xFFFFFF, 0.5);
     
-    // Обновляем только вертикальную направляющую линию при движении, 
-    // если король перемещается, но не при выстреле
-    const gameIsPaused = this.scene.isPaused();
-    if (!gameIsPaused && !this.isGameOver && this.coinKing) {
-      this.updateVerticalGuideLine(x, 75, this.game.canvas.height);
-    }
-  }
-
-  // Метод для обновления вертикальной направляющей линии
-  updateVerticalGuideLine(x: number, startY: number, endY: number) {
-    if (!this.verticalGuideLine) return;
+    // Рисуем пунктирную линию от CoinKing до пола
+    const startY = 80; // Чуть ниже CoinKing
+    const endY = height - 70; // До пола (с учетом нижнего бара)
     
-    // Очищаем предыдущую линию
-    this.verticalGuideLine.clear();
-    
-    // Задаем стиль пунктирной линии - меняем на белый цвет и увеличиваем непрозрачность
-    this.verticalGuideLine.lineStyle(2, 0xFFFFFF, 0.8);
-    
-    // Рисуем пунктирную линию от горизонтальной линии до самого низа экрана
-    const vSegmentLength = 12;
-    const vGapLength = 8;
+    // Рисуем пунктирную линию сегментами
+    const segmentLength = 10;
+    const gapLength = 5;
     let currentY = startY;
     
-    // Используем точное значение высоты без смещения, чтобы дойти до самого края
     while (currentY < endY) {
-      const segmentEnd = Math.min(currentY + vSegmentLength, endY);
-      this.verticalGuideLine.beginPath();
-      this.verticalGuideLine.moveTo(x, currentY);
-      this.verticalGuideLine.lineTo(x, segmentEnd);
-      this.verticalGuideLine.strokePath();
-      currentY = segmentEnd + vGapLength;
+      const segmentEnd = Math.min(currentY + segmentLength, endY);
+      this.aimLine.beginPath();
+      this.aimLine.moveTo(x, currentY);
+      this.aimLine.lineTo(x, segmentEnd);
+      this.aimLine.strokePath();
+      currentY = segmentEnd + gapLength;
     }
-    
-    // Сохраняем текущую позицию X
-    this.verticalGuideX = x;
   }
 
   // Создаем следующий шар для броска
@@ -545,15 +508,6 @@ class MergeGameScene extends Phaser.Scene {
     }
     
     console.log('Все проверки прошли, создаем шар для выстрела');
-    
-    // Сохраняем текущую позицию вертикальной линии перед выстрелом
-    const currentGuideX = this.verticalGuideX || this.coinKing.x;
-    
-    // Сначала перерисовываем вертикальную направляющую линию с текущей позицией
-    // до самого низа экрана, чтобы она не исчезала при выстреле
-    if (this.verticalGuideLine) {
-      this.updateVerticalGuideLine(currentGuideX, 75, this.game.canvas.height);
-    }
     
     // Конвертация физических координат в пиксели и обратно
     const worldToCanon = (value: number) => value / SCALE;
@@ -771,15 +725,6 @@ class MergeGameScene extends Phaser.Scene {
     if (this.coinKing && this.aimLine && this.isPointerDown) {
       const pointer = this.input.activePointer;
       this.updateAimLine(pointer.x, pointer.y);
-    }
-    
-    // Проверяем и обновляем вертикальную линию, если она должна быть видна,
-    // но исчезла или изменила позицию
-    if (this.verticalGuideLine && !this.isGameOver && !this.isGameOverCountdownActive) {
-      const currentX = this.verticalGuideX;
-      if (currentX > 0) {
-        this.updateVerticalGuideLine(currentX, 75, this.game.canvas.height);
-      }
     }
   }
   
@@ -2213,64 +2158,6 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
     }
   }
 
-  // Улучшенная кнопка для тач-устройств
-  const TouchButton = ({
-    onClick,
-    className,
-    disabled = false,
-    title,
-    children
-  }: {
-    onClick: () => void,
-    className?: string,
-    disabled?: boolean,
-    title?: string,
-    children: React.ReactNode
-  }) => {
-    const [isPressed, setIsPressed] = useState(false);
-    
-    const handleTouchStart = (e: React.TouchEvent) => {
-      if (disabled) return;
-      e.preventDefault();
-      setIsPressed(true);
-    };
-    
-    const handleTouchMove = (e: React.TouchEvent) => {
-      if (disabled) return;
-      e.preventDefault();
-    };
-    
-    const handleTouchEnd = (e: React.TouchEvent) => {
-      if (disabled) return;
-      e.preventDefault();
-      if (isPressed) {
-        onClick();
-      }
-      setIsPressed(false);
-    };
-    
-    const handleTouchCancel = () => {
-      setIsPressed(false);
-    };
-    
-    const pressedClass = isPressed ? "transform scale-95 opacity-90" : "";
-    
-    return (
-      <button
-        onClick={onClick}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchCancel}
-        disabled={disabled}
-        className={`${className} ${pressedClass}`}
-        title={title}
-      >
-        {children}
-      </button>
-    );
-  };
-
   return (
     <div 
       className="w-full h-screen relative flex flex-col"
@@ -2295,7 +2182,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       >
         {/* Левая часть с кнопкой паузы */}
         <div className="flex items-center z-10">
-          <TouchButton
+          <button 
             onClick={handlePauseClick}
             className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105 active:scale-[0.98] mr-4"
           >
@@ -2306,7 +2193,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
               height={48}
               className="w-full h-full object-cover"
             />
-          </TouchButton>
+          </button>
         </div>
 
         {/* Правая часть - ресурсы игрока */}
@@ -2351,114 +2238,144 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
         <div className="relative w-full px-6">
           {/* Кнопки способностей подняты выше за счет отрицательного margin-top */}
           <div className="flex justify-around items-center w-full -mt-6">
-            {/* Кнопки способностей с улучшенным обработчиком тач-событий */}
+            {/* Кнопка способности Bull */}
             {(() => {
-              const containerCapacity = inventory.containerCapacity || 1;
-              const bullCost = containerCapacity * 0.3;
-              const bombCost = containerCapacity * 0.1;
-              const earthquakeCost = containerCapacity * 0.2;
-              
+              // Рассчитываем стоимость Bull (30% от вместимости контейнера) без минимального порога
+              const bullCost = (inventory.containerCapacity || 1) * 0.3;
+              const bullCostDisplay = bullCost.toFixed(1);
               return (
-                <>
-                  {/* Кнопка способности Bull */}
-                  <div className="relative flex flex-col items-center">
-                    <div className="relative">
-                      <TouchButton
-                        onClick={() => handleAbilityClick('Bull')}
-                        className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                          ${selectedAbility === 'Bull' 
-                            ? `ring-4 ring-yellow-400 shadow-[0_0_18px_rgba(255,204,0,0.8)] scale-110` 
-                            : inventory.snotCoins >= bullCost
-                              ? `ring-2 ring-yellow-600 hover:ring-yellow-400 shadow-lg hover:shadow-[0_0_15px_rgba(255,204,0,0.5)] hover:scale-105`
-                              : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                          transition-all duration-200 active:scale-[0.98] bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-700`}
-                        title={`Стоимость: ${bullCost.toFixed(1)} SnotCoin`}
-                        disabled={inventory.snotCoins < bullCost}
-                      >
-                        <div className={`w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-600 flex items-center justify-center`}>
-                          <Image
-                            src="/images/merge/abilities/bull.webp"
-                            alt="Bull"
-                            width={42}
-                            height={42}
-                            className="w-full h-full object-cover rounded-full"
-                            priority
-                          />
-                        </div>
-                      </TouchButton>
-                      {/* Индикатор стоимости Bull - независимый элемент */}
-                      <div className="absolute -top-3 -left-3 bg-gradient-to-br from-yellow-500 to-amber-600 text-white text-sm font-bold rounded-full h-8 w-8 flex items-center justify-center shadow-lg border-2 border-yellow-300 z-20">
-                        {bullCost.toFixed(1)}
-                      </div>
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Bull')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Bull' 
+                        ? 'ring-4 ring-yellow-400 shadow-[0_0_15px_rgba(255,215,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= bullCost
+                          ? 'ring-2 ring-yellow-700 hover:ring-yellow-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,215,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-yellow-500 to-amber-700`}
+                    title={`Стоимость: ${bullCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < bullCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-amber-200 to-amber-600 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/bull.webp"
+                        alt="Bull"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
                     </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-yellow-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-yellow-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {bullCostDisplay}
                   </div>
-                  
-                  {/* Кнопка способности Bomb */}
-                  <div className="relative flex flex-col items-center">
-                    <div className="relative">
-                      <TouchButton
-                        onClick={() => handleAbilityClick('Bomb')}
-                        className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                          ${selectedAbility === 'Bomb' 
-                            ? `ring-4 ring-red-400 shadow-[0_0_18px_rgba(255,0,0,0.8)] scale-110` 
-                            : inventory.snotCoins >= bombCost
-                              ? `ring-2 ring-red-700 hover:ring-red-400 shadow-lg hover:shadow-[0_0_15px_rgba(255,0,0,0.5)] hover:scale-105`
-                              : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                          transition-all duration-200 active:scale-[0.98] bg-gradient-to-br from-red-400 via-red-500 to-rose-700`}
-                        title={`Стоимость: ${bombCost.toFixed(1)} SnotCoin`}
-                        disabled={inventory.snotCoins < bombCost}
-                      >
-                        <div className={`w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-br from-red-300 via-red-500 to-rose-600 flex items-center justify-center`}>
-                          <Image
-                            src="/images/merge/abilities/bomb.webp"
-                            alt="Bomb"
-                            width={42}
-                            height={42}
-                            className="w-full h-full object-cover rounded-full"
-                            priority
-                          />
-                        </div>
-                      </TouchButton>
-                      {/* Индикатор стоимости Bomb - независимый элемент */}
-                      <div className="absolute -top-3 -left-3 bg-gradient-to-br from-red-500 to-rose-600 text-white text-sm font-bold rounded-full h-8 w-8 flex items-center justify-center shadow-lg border-2 border-red-300 z-20">
-                        {bombCost.toFixed(1)}
-                      </div>
+                </div>
+              );
+            })()}
+            
+            {/* Кнопка способности Bomb */}
+            {(() => {
+              // Рассчитываем стоимость Bomb (10% от вместимости контейнера) без минимального порога
+              const bombCost = (inventory.containerCapacity || 1) * 0.1;
+              const bombCostDisplay = bombCost.toFixed(1);
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Bomb')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Bomb' 
+                        ? 'ring-4 ring-red-500 shadow-[0_0_15px_rgba(255,0,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= bombCost
+                          ? 'ring-2 ring-red-800 hover:ring-red-500 shadow-lg hover:shadow-[0_0_12px_rgba(255,0,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-red-500 to-red-900`}
+                    title={`Стоимость: ${bombCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < bombCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-red-300 to-red-700 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/bomb.webp"
+                        alt="Bomb"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
                     </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-red-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-red-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {bombCostDisplay}
                   </div>
-                  
-                  {/* Кнопка способности Earthquake - новый фиолетовый цвет */}
-                  <div className="relative flex flex-col items-center">
-                    <div className="relative">
-                      <TouchButton
-                        onClick={() => handleAbilityClick('Earthquake')}
-                        className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
-                          ${selectedAbility === 'Earthquake' 
-                            ? `ring-4 ring-purple-400 shadow-[0_0_18px_rgba(147,51,234,0.8)] scale-110` 
-                            : inventory.snotCoins >= earthquakeCost
-                              ? `ring-2 ring-purple-700 hover:ring-purple-400 shadow-lg hover:shadow-[0_0_15px_rgba(147,51,234,0.5)] hover:scale-105`
-                              : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
-                          transition-all duration-200 active:scale-[0.98] bg-gradient-to-br from-purple-400 via-purple-500 to-violet-700`}
-                        title={`Стоимость: ${earthquakeCost.toFixed(1)} SnotCoin`}
-                        disabled={inventory.snotCoins < earthquakeCost}
-                      >
-                        <div className={`w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-br from-purple-300 via-purple-500 to-violet-600 flex items-center justify-center`}>
-                          <Image
-                            src="/images/merge/abilities/eatherquake.webp"
-                            alt="Earthquake"
-                            width={42}
-                            height={42}
-                            className="w-full h-full object-cover rounded-full"
-                            priority
-                          />
-                        </div>
-                      </TouchButton>
-                      {/* Индикатор стоимости Earthquake - независимый элемент */}
-                      <div className="absolute -top-3 -left-3 bg-gradient-to-br from-purple-500 to-violet-600 text-white text-sm font-bold rounded-full h-8 w-8 flex items-center justify-center shadow-lg border-2 border-purple-300 z-20">
-                        {earthquakeCost.toFixed(1)}
-                      </div>
+                </div>
+              );
+            })()}
+            
+            {/* Кнопка способности Earthquake */}
+            {(() => {
+              // Рассчитываем стоимость Earthquake (20% от вместимости контейнера) без минимального порога
+              const earthquakeCost = (inventory.containerCapacity || 1) * 0.2;
+              const earthquakeCostDisplay = earthquakeCost.toFixed(1);
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => handleAbilityClick('Earthquake')}
+                    className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+                      ${selectedAbility === 'Earthquake' 
+                        ? 'ring-4 ring-emerald-400 shadow-[0_0_15px_rgba(0,200,0,0.7)] scale-110' 
+                        : inventory.snotCoins >= earthquakeCost
+                          ? 'ring-2 ring-emerald-800 hover:ring-emerald-500 shadow-lg hover:shadow-[0_0_12px_rgba(0,200,0,0.4)] hover:scale-105'
+                          : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
+                      transition-all duration-200 active:scale-[0.98] bg-gradient-to-b from-emerald-500 to-emerald-900`}
+                    title={`Стоимость: ${earthquakeCostDisplay} SnotCoin`}
+                    disabled={inventory.snotCoins < earthquakeCost}
+                  >
+                    <div className="w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-b from-emerald-300 to-emerald-700 flex items-center justify-center">
+                      {/* Используем указанное изображение */}
+                      <Image
+                        src="/images/merge/abilities/eatherquake.webp"
+                        alt="Earthquake"
+                        width={42}
+                        height={42}
+                        className="w-full h-full object-cover rounded-full"
+                        priority
+                      />
                     </div>
+                  </button>
+                  {/* Индикатор стоимости */}
+                  <div className="absolute -top-3 -right-3 bg-emerald-500 rounded-full px-1.5 py-0.5 text-xs font-bold text-black border-2 border-emerald-600 flex items-center shadow-md z-10">
+                    <Image
+                      src="/images/common/icons/snotcoin-icon.webp"
+                      alt="SnotCoin"
+                      width={12}
+                      height={12}
+                      className="mr-1"
+                      priority
+                    />
+                    {earthquakeCostDisplay}
                   </div>
-                </>
+                </div>
               );
             })()}
           </div>
@@ -2518,11 +2435,16 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
             </div>
             <div className="flex flex-col space-y-3">
               {attemptsData.attemptsLeft > 0 && (
-                <TouchButton 
+                <motion.button 
                   onClick={handleRestartClick}
                   className="relative w-full px-6 py-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl font-bold 
                     text-white shadow-lg border-2 border-blue-300 focus:outline-none focus:ring-2 
-                    focus:ring-blue-300 focus:ring-opacity-50 h-14 hover:scale-105 hover:shadow-lg"
+                    focus:ring-blue-300 focus:ring-opacity-50 h-14"
+                  whileHover={{ 
+                    scale: 1.05,
+                    boxShadow: "0 0 12px rgba(59, 130, 246, 0.7)",
+                  }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <div className="flex items-center justify-center space-x-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2530,25 +2452,30 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
                     </svg>
                     <span className="text-lg font-bold">Начать заново</span>
                   </div>
-                </TouchButton>
+                </motion.button>
               )}
-              <TouchButton 
+              <motion.button 
                 onClick={onBack}
                 className="relative w-full px-6 py-4 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-2xl font-bold 
                   text-black shadow-lg border-2 border-yellow-300 focus:outline-none focus:ring-2 
-                  focus:ring-yellow-300 focus:ring-opacity-50 h-16 hover:scale-105 hover:shadow-lg"
+                  focus:ring-yellow-300 focus:ring-opacity-50 h-16"
+                whileHover={{ 
+                  scale: 1.05,
+                  boxShadow: "0 0 12px rgba(250, 204, 21, 0.7)",
+                }}
+                whileTap={{ scale: 0.95 }}
               >
                 <div className="flex items-center justify-center space-x-2">
                   <Image 
                     src="/images/laboratory/buttons/claim-button.webp" 
                     width={28} 
                     height={28} 
-                    alt="Back" 
-                    className="h-7 w-7 mr-1" 
+                    alt="Вернуться в меню" 
+                    className="inline-block" 
                   />
-                  <span className="text-lg font-bold">Выйти в меню</span>
+                  <span className="text-lg font-bold">Вернуться в меню</span>
                 </div>
-              </TouchButton>
+              </motion.button>
             </div>
           </motion.div>
         </div>

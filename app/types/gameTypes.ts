@@ -69,38 +69,27 @@ export interface Inventory {
  * Состояние контейнера
  */
 export interface Container {
-  level?: number;
-  capacity: number;
+  level: number;
   currentAmount: number;
-  fillRate?: number;
+  fillRate: number;
   currentFill?: number;
-  fillingSpeed: number;
-  lastUpdateTimestamp: number;
 }
 
 /**
  * Улучшения
  */
 export interface Upgrades {
-  clickPower?: {
+  clickPower: {
     level: number;
     value: number;
   };
-  passiveIncome?: {
+  passiveIncome: {
     level: number;
     value: number;
   };
-  containerCapacity: {
-    level: number;
-    cost: number;
-  };
-  fillingSpeed: {
-    level: number;
-    cost: number;
-  };
-  collectionEfficiencyLevel?: number;
-  containerLevel?: number;
-  fillingSpeedLevel?: number;
+  collectionEfficiencyLevel: number;
+  containerLevel: number;
+  fillingSpeedLevel: number;
 }
 
 /**
@@ -197,8 +186,6 @@ export interface GameState {
   lastValidation: string;
   gameStarted: boolean;
   isLoading: boolean;
-  // Метод для ручного сохранения прогресса
-  saveProgress?: () => void;
 }
 
 export interface ExtendedGameState extends GameState {
@@ -383,45 +370,57 @@ export interface GameStateUpdate {
  */
 export function createDefaultGameState(): GameState {
   const now = new Date().toISOString();
-  // Рассчитываем начальное количество соплей и snotCoins
+  // Получаем текущее время в миллисекундах
+  const currentTimeMs = Date.now();
+  
+  // Базовые значения по умолчанию
   const initialSnot = 0;
   const initialSnotCoins = 0;
-
+  const initialContainerSnot = 0.05;
+  
+  // Создаем случайный идентификатор для нового пользователя
+  const generatedUserId = `user_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+  
+  console.log('[createDefaultGameState] Создаем новое состояние игры');
+  
   return {
     user: null,
     inventory: {
       snot: initialSnot,
       snotCoins: initialSnotCoins,
+      containerSnot: initialContainerSnot,
       containerCapacity: 1,
-      containerSnot: 0.05,
-      fillingSpeed: 0.01,
       containerCapacityLevel: 1,
+      fillingSpeed: 0.01,
       fillingSpeedLevel: 1,
-      collectionEfficiency: 1,
-      lastUpdateTimestamp: Date.now()
+      collectionEfficiency: 1.0,
+      lastUpdateTimestamp: currentTimeMs
     },
     container: {
-      capacity: 1,
-      currentAmount: 0,
-      fillingSpeed: 0.01,
-      lastUpdateTimestamp: Date.now()
+      level: 1,
+      currentAmount: initialContainerSnot,
+      fillRate: 0.01,
+      currentFill: initialContainerSnot
     },
     upgrades: {
-      containerCapacity: {
+      clickPower: {
         level: 1,
-        cost: 10
+        value: 0.1
       },
-      fillingSpeed: {
+      passiveIncome: {
         level: 1,
-        cost: 15
-      }
+        value: 0.01
+      },
+      collectionEfficiencyLevel: 1,
+      containerLevel: 1,
+      fillingSpeedLevel: 1
     },
-    _userId: 'unknown',
-    _lastModified: Date.now(),
+    _userId: generatedUserId,
+    _lastModified: currentTimeMs,
     _createdAt: now,
     _tempData: null,
     _lastActionTime: now,
-    _lastAction: 'initialize',
+    _lastAction: 'create_default_state',
     logs: [],
     analytics: null,
     items: [],

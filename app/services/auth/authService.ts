@@ -104,14 +104,14 @@ class AuthService {
    */
   getUser(): User | null {
     if (typeof localStorage === 'undefined') {
-        return null;
-      }
-      
+      return null;
+    }
+    
     const userJson = localStorage.getItem(USER_KEY);
     if (!userJson) {
-        return null;
-      }
-      
+      return null;
+    }
+    
     try {
       return JSON.parse(userJson);
     } catch (error) {
@@ -119,13 +119,13 @@ class AuthService {
       return null;
     }
   }
-  
+
   /**
    * Установка информации о пользователе
    */
   setUser(user: User): void {
     if (typeof localStorage === 'undefined') {
-        return;
+      return;
     }
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
