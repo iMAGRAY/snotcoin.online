@@ -1,6 +1,9 @@
 /**
- * Типы для работы с API
+ * Типы для API и аутентификации
+ * @module
  */
+
+import { FarcasterContext } from './farcaster';
 
 /**
  * Коды ошибок для API
@@ -50,12 +53,69 @@ export interface ApiDataResponse<T> extends ApiResponse {
 }
 
 /**
- * Информация об аутентификации
+ * Результат операции API
  */
-export interface AuthResult {
+export interface AuthResult<T = unknown> {
+  /** Флаг успешности операции */
   success: boolean;
-  userId?: string;
+  /** Данные при успешной операции */
+  data?: T;
+  /** Сообщение об ошибке */
   error?: string;
+  /** Код ошибки */
+  errorCode?: string;
+}
+
+/**
+ * Данные пользователя
+ */
+export interface UserData {
+  /** Идентификатор пользователя */
+  id: string;
+  /** Имя пользователя */
+  username: string;
+  /** Email пользователя */
+  email?: string | undefined;
+  /** Аватар пользователя */
+  avatar?: string | undefined;
+  /** URL профильного изображения */
+  pfpUrl?: string | undefined;
+  /** Farcaster ID */
+  fid: number;
+  /** Отображаемое имя */
+  displayName?: string | undefined;
+  /** Верификация */
+  verified?: boolean | undefined;
+  /** Дополнительные данные */
+  metadata?: Record<string, any> | undefined;
+}
+
+/**
+ * Состояния процесса авторизации
+ */
+export enum AuthState {
+  /** Начальное состояние */
+  IDLE = 'IDLE',
+  /** Загрузка SDK */
+  LOADING_SDK = 'LOADING_SDK',
+  /** Процесс авторизации */
+  AUTHENTICATING = 'AUTHENTICATING',
+  /** Успешная авторизация */
+  SUCCESS = 'SUCCESS',
+  /** Ошибка авторизации */
+  ERROR = 'ERROR'
+}
+
+/**
+ * Опции авторизации
+ */
+export interface AuthOptions {
+  /** Таймаут операции в миллисекундах */
+  timeout?: number;
+  /** Количество попыток */
+  retries?: number;
+  /** Дополнительные параметры */
+  params?: Record<string, unknown>;
 }
 
 /**

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sign, verify } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { sign } from '@/app/utils/jwt';
 import { prisma } from '@/app/lib/prisma';
 import { logAuth, AuthStep, AuthLogType } from '@/app/utils/auth-logger';
+import * as jwt from 'jsonwebtoken';
 
 /**
  * Указываем Next.js, что этот маршрут должен быть динамическим
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Декодируем refresh токен для получения fid пользователя
     try {
-      const decoded = verify(refreshToken, REFRESH_SECRET) as { fid?: string; userId?: string };
+      const decoded = jwt.verify(refreshToken, REFRESH_SECRET) as { fid?: string; userId?: string };
       
       if (!decoded.fid && !decoded.userId) {
         logAuth(
@@ -88,28 +89,20 @@ export async function POST(request: NextRequest) {
       }
       
       // Генерируем новый JWT токен
-      const newToken = sign(
-        {
-          userId: user.id,
-          fid: user.farcaster_fid,
-          username: user.farcaster_username,
-          displayName: user.farcaster_displayname,
-          provider: 'farcaster'
-        },
-        JWT_SECRET,
-        { expiresIn: TOKEN_EXPIRY }
-      );
+      const newToken = sign({
+        userId: user.id,
+        fid: user.farcaster_fid,
+        username: user.farcaster_username,
+        displayName: user.farcaster_displayname,
+        provider: 'farcaster'
+      }, TOKEN_EXPIRY);
       
       // Генерируем новый refresh токен
-      const newRefreshToken = sign(
-        {
-          userId: user.id,
-          fid: user.farcaster_fid,
-          provider: 'farcaster'
-        },
-        REFRESH_SECRET,
-        { expiresIn: REFRESH_EXPIRY }
-      );
+      const newRefreshToken = sign({
+        userId: user.id,
+        fid: user.farcaster_fid,
+        provider: 'farcaster'
+      }, REFRESH_EXPIRY);
       
       // Обновляем токены в cookies
       cookieStore.set({
@@ -132,15 +125,8 @@ export async function POST(request: NextRequest) {
         maxAge: 30 * 24 * 60 * 60 // 30 дней в секундах
       });
       
-      // Обновляем токены в базе данных
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          jwt_token: newToken,
-          refresh_token: newRefreshToken,
-          token_expires_at: new Date(Date.now() + 60 * 60 * 1000) // 1 час
-        }
-      });
+      // Не обновляем токены в базе данных, чтобы упростить систему
+      // и избежать дублирования информации
       
       logAuth(
         AuthStep.TOKEN_REFRESH, 

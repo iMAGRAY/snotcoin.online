@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { sign } from 'jsonwebtoken';
-import { verifyJWT } from '@/app/utils/jwt';
+import { sign, verifyJWT } from '@/app/utils/jwt';
+import { validateFarcasterUser, verifyFarcasterSignature } from '@/app/utils/neynarApi';
+import { ENV } from '@/app/lib/env';
 
 // Константы для JWT и refresh токена
-const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-do-not-use-in-production';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your-refresh-secret-do-not-use-in-production';
+const JWT_SECRET = ENV.JWT_SECRET;
+const REFRESH_SECRET = ENV.REFRESH_SECRET || JWT_SECRET;
 
 // Срок действия JWT токена: 1 час
 const TOKEN_EXPIRY = '1h';
@@ -24,19 +25,16 @@ const BASE_URL = process.env.NEXT_PUBLIC_DOMAIN || 'https://snotcoin.online';
  */
 function generateJWT(userId: string, fid: number, username: string, displayName?: string) {
   try {
-    // Создаем токен с информацией о пользователе
-    const token = sign(
-      {
-        fid: String(fid),
-        username,
-        displayName: displayName || username,
-        userId,
-      },
-      JWT_SECRET,
-      { expiresIn: TOKEN_EXPIRY }
-    );
+    // Создаем токен с минимальной необходимой информацией о пользователе
+    const payload = {
+      fid: String(fid),
+      username,
+      displayName: displayName || username,
+      userId,
+      provider: 'farcaster'
+    };
     
-    return token;
+    return sign(payload, TOKEN_EXPIRY);
   } catch (error) {
     console.error('[API][Auth] Ошибка при генерации JWT:', error);
     throw error;
@@ -52,16 +50,13 @@ function generateJWT(userId: string, fid: number, username: string, displayName?
 function generateRefreshToken(userId: string, fid: number) {
   try {
     // Создаем refresh токен
-    const token = sign(
-      {
-        fid: String(fid),
-        userId,
-      },
-      REFRESH_SECRET,
-      { expiresIn: REFRESH_EXPIRY }
-    );
+    const payload = {
+      fid: String(fid),
+      userId,
+      provider: 'farcaster'
+    };
     
-    return token;
+    return sign(payload, REFRESH_EXPIRY);
   } catch (error) {
     console.error('[API][Auth] Ошибка при генерации refresh токена:', error);
     throw error;
@@ -75,7 +70,7 @@ export async function POST(request: NextRequest) {
   try {
     // Получаем данные из запроса
     const body = await request.json();
-    const { fid, username, displayName, pfp } = body;
+    const { fid, username, displayName, pfp, message, signature } = body;
 
     // Проверяем наличие обязательного поля fid
     if (!fid) {
@@ -95,19 +90,129 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Определяем, находимся ли мы в режиме разработки
+    // Если NODE_ENV не определен или пуст, считаем что это режим разработки
+    const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+    
+    // Логируем текущий режим
+    console.log('[API][Auth] Текущий режим:', isDevelopment ? 'development' : 'production');
+
+    // Режим разработки - упрощенная проверка
+    if (isDevelopment) {
+      console.log('[API][Auth] Режим разработки: пропускаем проверку Neynar');
+      
+      // Создаем стабильный ID пользователя на основе FID
+      const mockUserId = `user_${fid}`;
+      const validUsername = username || `user${fid}`;
+      const validDisplayName = displayName || `User ${fid}`;
+      const validPfp = pfp || 'https://warpcast.com/~/default-avatar.png';
+      
+      try {
+        // Генерируем JWT токен
+        const accessToken = generateJWT(mockUserId, fid, validUsername, validDisplayName);
+        
+        // Генерируем refresh токен
+        const refreshToken = generateRefreshToken(mockUserId, fid);
+        
+        console.log('[API][Auth] Режим разработки: Токены созданы для пользователя', {
+          userId: mockUserId,
+          username: validUsername,
+          accessTokenLength: accessToken.length,
+          refreshTokenLength: refreshToken.length
+        });
+        
+        // Устанавливаем куки для refresh токена
+        const cookieStore = cookies();
+        cookieStore.set({
+          name: 'refresh_token',
+          value: refreshToken,
+          httpOnly: true,
+          secure: !isDevelopment, // secure только если не в режиме разработки
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 30 * 24 * 60 * 60, // 30 дней в секундах
+        });
+        
+        // Возвращаем успешный ответ с токенами и данными пользователя
+        return NextResponse.json({
+          success: true,
+          token: accessToken,
+          user: {
+            id: mockUserId,
+            fid: fid,
+            username: validUsername,
+            displayName: validDisplayName,
+            pfp: validPfp,
+            verified: true // В режиме разработки всегда считаем пользователя верифицированным
+          }
+        });
+      } catch (tokenError) {
+        console.error('[API][Auth] Ошибка при создании токенов:', tokenError);
+        return NextResponse.json({
+          success: false,
+          message: 'Ошибка при создании токенов'
+        }, { status: 500 });
+      }
+    }
+
+    // Production режим - полная проверка через Neynar
+    // Проверяем валидность пользователя через Neynar API
+    const neynarValidation = await validateFarcasterUser(fid);
+    
+    // Если пользователь не прошел валидацию
+    if (!neynarValidation) {
+      console.error('[API][Auth] Пользователь не прошел валидацию Neynar');
+      return NextResponse.json({
+        success: false,
+        message: 'Не удалось подтвердить аккаунт Farcaster'
+      }, { status: 401 });
+    }
+    
+    // Проверяем подпись, если она предоставлена
+    if (message && signature) {
+      const isSignatureValid = await verifyFarcasterSignature(fid, message, signature);
+      
+      if (!isSignatureValid) {
+        console.error('[API][Auth] Невалидная подпись Farcaster');
+        return NextResponse.json({
+          success: false,
+          message: 'Недействительная подпись Farcaster'
+        }, { status: 401 });
+      }
+      
+      console.log('[API][Auth] Подпись Farcaster успешно проверена');
+    } else {
+      console.warn('[API][Auth] Подпись не предоставлена, пропускаем проверку');
+    }
+    
+    // Проверяем, что имя пользователя совпадает с валидированным
+    const validUsername = neynarValidation.user.username;
+    if (username && username !== validUsername) {
+      console.warn('[API][Auth] Несоответствие имени пользователя:', { 
+        provided: username, 
+        validated: validUsername 
+      });
+      // Используем валидированные данные вместо предоставленных
+    }
+
     // Создаем стабильный ID пользователя на основе FID
     const mockUserId = `user_${fid}`;
     console.log('[API][Auth] Используется стабильный ID пользователя:', mockUserId);
 
     try {
+      // Используем валидированные данные для создания токенов
+      const validDisplayName = neynarValidation.user.displayName || validUsername;
+      const validPfp = neynarValidation.user.pfp?.url;
+      
       // Генерируем JWT токен
-      const accessToken = generateJWT(mockUserId, fid, username || `user${fid}`, displayName);
+      const accessToken = generateJWT(mockUserId, fid, validUsername, validDisplayName);
       
       // Генерируем refresh токен
       const refreshToken = generateRefreshToken(mockUserId, fid);
       
       console.log('[API][Auth] Токены созданы для пользователя', {
         userId: mockUserId,
+        username: validUsername,
         accessTokenLength: accessToken.length,
         refreshTokenLength: refreshToken.length
       });
@@ -118,11 +223,14 @@ export async function POST(request: NextRequest) {
         name: 'refresh_token',
         value: refreshToken,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: !isDevelopment, // secure только если не в режиме разработки
         sameSite: 'strict',
         path: '/',
         maxAge: 30 * 24 * 60 * 60, // 30 дней в секундах
       });
+      
+      // Не сохраняем токены в базе данных, т.к. они уже в куки
+      // Это упрощает систему и уменьшает зависимость от БД
       
       // Возвращаем успешный ответ с токенами и данными пользователя
       return NextResponse.json({
@@ -131,9 +239,10 @@ export async function POST(request: NextRequest) {
         user: {
           id: mockUserId,
           fid: fid,
-          username: username || `user${fid}`,
-          displayName: displayName || `User ${fid}`,
-          pfp: pfp || 'https://snotcoin.online/images/profile/avatar/default.webp'
+          username: validUsername,
+          displayName: validDisplayName,
+          pfp: validPfp || 'https://snotcoin.online/images/profile/avatar/default.webp',
+          verified: true // Пользователь прошел валидацию
         }
       });
     } catch (tokenError) {

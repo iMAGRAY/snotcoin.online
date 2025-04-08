@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { FarcasterUser, FarcasterContext as SDKContext } from '@/app/types/farcaster';
 import { logAuth, AuthStep, AuthLogType, logAuthInfo, logAuthError } from '@/app/utils/auth-logger';
+import { api, FarcasterLoginParams } from '@/app/lib/api';
 
 // Импортируем SDK для Mini Apps
 import { sdk as miniAppSdk } from '@farcaster/frame-sdk';
@@ -14,6 +15,7 @@ interface FarcasterContextProps {
   sdkUser: FarcasterUser | null;
   sdkStatus: SdkStatus;
   sdkError: string | null;
+  validateAndLogin: (message?: string, signature?: string) => Promise<boolean>;
 }
 
 const FarcasterContext = createContext<FarcasterContextProps | undefined>(
@@ -96,6 +98,44 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
   const [sdkStatus, setSdkStatus] = useState<SdkStatus>('idle');
   const [sdkError, setSdkError] = useState<string | null>(null);
 
+  // Функция для валидации пользователя через Neynar API и авторизации
+  const validateAndLogin = async (message?: string, signature?: string): Promise<boolean> => {
+    if (!sdkUser || !sdkUser.fid) {
+      console.error('[FarcasterContext] validateAndLogin: No user data available');
+      return false;
+    }
+    
+    try {
+      // Формируем параметры для аутентификации с правильными типами
+      const loginParams: FarcasterLoginParams = {
+        fid: sdkUser.fid,
+        username: sdkUser.username || undefined,
+        displayName: sdkUser.displayName || undefined,
+        pfp: sdkUser.pfpUrl
+      };
+      
+      // Добавляем параметры проверки подписи, если они предоставлены
+      if (message && signature) {
+        loginParams.message = message;
+        loginParams.signature = signature;
+      }
+      
+      // Отправляем запрос на валидацию и авторизацию
+      const loginResult = await api.loginWithFarcaster(loginParams);
+      
+      if (!loginResult.success) {
+        console.error('[FarcasterContext] Ошибка валидации через Neynar:', loginResult.error);
+        return false;
+      }
+      
+      console.log('[FarcasterContext] Пользователь успешно валидирован через Neynar');
+      return true;
+    } catch (error) {
+      console.error('[FarcasterContext] Ошибка при валидации пользователя:', error);
+      return false;
+    }
+  };
+  
   useEffect(() => {
     let isMounted = true;
     console.log('[FarcasterContext] useEffect for SDK context RUNNING.');
@@ -177,6 +217,7 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
     sdkUser,
     sdkStatus,
     sdkError,
+    validateAndLogin
   };
 
   return (

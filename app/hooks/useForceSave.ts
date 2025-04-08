@@ -3,70 +3,82 @@
  * Полезен для защиты от потери данных при закрытии страницы
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSaveManager, SavePriority } from '../contexts/SaveManagerProvider';
-import { useGameState } from '../contexts/game/hooks';
+import { useCallback, useEffect, useState } from "react"
+import { useSaveManager } from "../contexts/SaveManagerProvider"
+import type { SaveResult } from "../services/saveSystem"
+import { useGameState } from "../contexts/game/hooks/useGameState"
 
 /**
  * Хук для принудительного сохранения состояния игры
- * @returns функция для принудительного сохранения, принимает опциональную задержку в мс
+ * Возвращает функцию, которая сохраняет состояние с опциональной задержкой
+ * @returns {(delay?: number) => Promise<SaveResult>} Функция сохранения с опциональной задержкой в миллисекундах
  */
-export const useForceSave = (): ((delay?: number) => void) => {
-  const [isSaving, setIsSaving] = useState(false);
-  const gameState = useGameState();
-  const saveManager = useSaveManager();
+export const useForceSave = () => {
+  const saveManager = useSaveManager()
+  const gameState = useGameState()
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Функция для принудительного сохранения с опциональной задержкой
-  const forceSave = useCallback((delay?: number) => {
-    if (isSaving) return;
-    
-    const userId = gameState._userId;
-    if (!userId) return;
-    
-    setIsSaving(true);
-    
-    const saveAction = () => {
-      try {
-        // Используем createEmergencyBackup для быстрого сохранения
-        saveManager.createEmergencyBackup(userId, gameState);
-        
-        // Также запускаем полноценное сохранение
-        saveManager.save(userId, gameState, SavePriority.CRITICAL)
-          .finally(() => {
-            setIsSaving(false);
-          });
-      } catch (error) {
-        setIsSaving(false);
+  // Создаем функцию сохранения
+  const forceSave = useCallback(
+    async (delay?: number): Promise<SaveResult> => {
+      // Если сохранение уже идет, возвращаем ошибку
+      if (isSaving) {
+        return {
+          success: false,
+          error: "Already saving",
+          timestamp: Date.now()
+        }
       }
-    };
-    
-    // Если указана задержка, используем setTimeout
-    if (delay && delay > 0) {
-      setTimeout(saveAction, delay);
-    } else {
-      saveAction();
-    }
-  }, [gameState, isSaving, saveManager]);
 
-  // Регистрируем обработчики событий для перехвата закрытия страницы
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      forceSave();
+      // Получаем ID пользователя
+      const userId = gameState?.user?.id
       
-      // Старый способ предотвращения закрытия - оставляем для совместимости
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-    
-    // Добавляем обработчик события закрытия страницы
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // Удаляем обработчик при размонтировании компонента
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [forceSave]);
+      // Если нет ID пользователя, возвращаем ошибку
+      if (!userId) {
+        console.error("[useForceSave] User ID not found")
+        return {
+          success: false,
+          error: "User ID not found",
+          timestamp: Date.now()
+        }
+      }
 
-  return forceSave;
-}; 
+      // Если задержка указана, ждем указанное время
+      if (delay && delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+
+      try {
+        setIsSaving(true)
+        // Сохраняем состояние
+        const result = await saveManager.save(userId, gameState)
+        return result
+      } catch (error) {
+        console.error("[useForceSave] Error saving state:", error)
+        return {
+          success: false,
+          error: String(error),
+          timestamp: Date.now()
+        }
+      } finally {
+        setIsSaving(false)
+      }
+    },
+    [saveManager, isSaving, gameState]
+  )
+
+  // Добавляем обработчик события перед закрытием страницы
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Вызываем функцию сохранения без задержки
+      forceSave()
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [forceSave])
+
+  return forceSave
+} 

@@ -35,7 +35,25 @@ export interface NeynarUserResponse {
  * @returns Данные пользователя если пользователь валиден, null иначе
  */
 export async function validateFarcasterUser(fid: number): Promise<NeynarUserResponse | null> {
+  // Определяем режим разработки - если NODE_ENV не определен или пуст, считаем что это режим разработки
+  const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+  
   try {
+    // В режиме разработки всегда возвращаем успешный результат
+    if (isDevelopment) {
+      console.log(`[neynarApi] Режим разработки: имитация успешной валидации для FID ${fid}`);
+      return {
+        user: {
+          fid: fid,
+          username: `user${fid}`,
+          displayName: `User ${fid}`,
+          pfp: {
+            url: 'https://warpcast.com/~/default-avatar.png'
+          }
+        }
+      };
+    }
+
     // Используем API v1, так как v2 не работает с текущими эндпоинтами
     const url = `${NEYNAR_API_URL}/v1/farcaster/user?fid=${fid}`;
     
@@ -81,6 +99,22 @@ export async function validateFarcasterUser(fid: number): Promise<NeynarUserResp
     return null;
   } catch (error) {
     console.error('Error validating Farcaster user:', error);
+    
+    // В режиме разработки при ошибках тоже возвращаем данные
+    if (isDevelopment) {
+      console.warn('[neynarApi] Режим разработки: возвращаем данные пользователя при ошибке');
+      return {
+        user: {
+          fid: fid,
+          username: `user${fid}`,
+          displayName: `User ${fid}`,
+          pfp: {
+            url: 'https://warpcast.com/~/default-avatar.png'
+          }
+        }
+      };
+    }
+    
     return null;
   }
 }
@@ -97,16 +131,17 @@ export async function verifyFarcasterSignature(
   message: string, 
   signature: string
 ): Promise<boolean> {
+  // Определяем режим разработки - если NODE_ENV не определен или пуст, считаем что это режим разработки
+  const isDevelopment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+  
   try {
-    // Заглушка для проверки подписи, так как API эндпоинты не найдены
-    console.log('[neynarApi] Используется заглушка для проверки подписи, считаем подпись валидной');
-    console.log(`[neynarApi] FID: ${fid}, Сообщение: ${message}, Подпись: ${signature}`);
-    
-    // В режиме разработки всегда считаем подпись валидной
-    return true;
-    
-    // В реальном проекте нужно найти работающий API эндпоинт
-    /*
+    // В режиме разработки всегда возвращаем true
+    if (isDevelopment) {
+      console.log(`[neynarApi] Режим разработки: имитация успешной проверки подписи для FID ${fid}`);
+      return true;
+    }
+
+    // Используем реальную проверку подписи через Neynar API
     const url = `${NEYNAR_API_URL}/v2/farcaster/signature/verify`;
     
     // Выполняем запрос к Neynar API
@@ -125,19 +160,47 @@ export async function verifyFarcasterSignature(
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       console.error('Neynar API signature verification error:', errorData);
+      
+      // В режиме разработки можно разрешить вход даже при ошибке проверки подписи
+      if (isDevelopment) {
+        console.warn('[neynarApi] Режим разработки: возвращаем true несмотря на ошибку проверки подписи');
+        return true;
+      }
+      
       return false;
     }
     
-    const data = await response.json();
-    
-    // Проверяем результат верификации
-    return data.valid === true;
-    */
+    try {
+      const data = await response.json();
+      
+      // Более надежная проверка результата верификации
+      // Проверяем наличие поля valid и его значение
+      const isValid = data && (data.valid === true || data.result?.valid === true);
+      console.log(`[neynarApi] Результат проверки подписи: ${isValid ? 'валидна' : 'невалидна'}`);
+      
+      return isValid;
+    } catch (parseError) {
+      console.error('Error parsing Neynar API response:', parseError);
+      
+      // В режиме разработки при ошибках парсинга считаем подпись валидной
+      if (isDevelopment) {
+        console.warn('[neynarApi] Режим разработки: возвращаем true при ошибке парсинга');
+        return true;
+      }
+      
+      return false;
+    }
   } catch (error) {
     console.error('Error verifying Farcaster signature:', error);
+    
     // В режиме разработки при ошибках тоже считаем подпись валидной
-    return true;
+    if (isDevelopment) {
+      console.warn('[neynarApi] Режим разработки: возвращаем true при ошибке проверки подписи');
+      return true;
+    }
+    
+    return false;
   }
 } 

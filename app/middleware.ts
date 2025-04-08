@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { authService } from '@/app/services/auth/authService';
-import { verifyJWT } from './utils/auth';
+import { verify } from './utils/jwt';
 import { ENV } from './lib/env';
-import { verify } from "./utils/jwt";
 import { AuthLogger } from "./utils/auth-logger";
 import { AuthStep } from "./utils/auth-logger";
 
@@ -16,7 +15,7 @@ const isProductionMode = true;
  * Пути, которые не требуют аутентификации
  */
 const publicPaths = [
-  '/api/farcaster/auth',
+  '/api/auth/providers/farcaster',
   '/api/frame',
   '/api/auth/logout',
   '/api/auth/refresh',

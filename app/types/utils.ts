@@ -1,4 +1,4 @@
-import { UserData } from './auth';
+import { UserData } from './apiTypes';
 import { FarcasterContext } from './farcaster';
 
 /**
@@ -37,12 +37,7 @@ export const FARCASTER_CONSTANTS = {
 /**
  * Утилитные типы для работы с пользователями
  */
-export type SafeUser = Required<Pick<UserData, 'id' | 'username' | 'fid'>> & {
-  displayName?: string;
-  avatar?: string;
-  verified?: boolean;
-  metadata?: Record<string, any>;
-};
+export type SafeUser = Omit<UserData, 'password' | 'token' | 'refreshToken'>;
 export type UserProfile = Omit<UserData, 'metadata'> & {
   metadata: Record<string, string | number | boolean>;
 };

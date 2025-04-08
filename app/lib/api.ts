@@ -2,8 +2,19 @@
  * API клиент для взаимодействия с серверными эндпоинтами
  */
 
-import { GameState } from '../context/GameContext';
-import { User } from '../context/AuthContext';
+import { GameState } from '../types/gameTypes';
+
+// Определение типа User внутри файла
+interface User {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  fid?: number | null;
+  provider?: string;
+  profileImage?: string | null;
+  verified?: boolean | null;
+  metadata?: Record<string, any>;
+}
 
 // Типы ответов
 export interface ApiResponse {
@@ -29,6 +40,16 @@ export interface LoginResponse extends ApiResponse {
 
 export interface ProfileResponse extends ApiResponse {
   user?: User;
+}
+
+// Интерфейс для параметров входа через Farcaster
+export interface FarcasterLoginParams {
+  fid: number;
+  username?: string | undefined;
+  displayName?: string | undefined;
+  pfp?: string | undefined;
+  message?: string | undefined;
+  signature?: string | undefined;
 }
 
 // Класс для работы с API
@@ -136,6 +157,35 @@ class ApiClient {
       });
     } catch (error) {
       console.error(`API error (login/${provider}):`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+  
+  /**
+   * Авторизация пользователя через Farcaster с поддержкой проверки подписи
+   */
+  async loginWithFarcaster(params: FarcasterLoginParams): Promise<LoginResponse> {
+    try {
+      // Проверяем обязательные поля
+      if (!params.fid) {
+        throw new Error('FID обязателен для входа через Farcaster');
+      }
+      
+      console.log('Попытка входа через Farcaster с параметрами:', {
+        fid: params.fid,
+        username: params.username,
+        hasSignature: !!params.signature
+      });
+      
+      return await this.request<LoginResponse>('/api/auth/providers/farcaster', {
+        method: 'POST',
+        body: params
+      });
+    } catch (error) {
+      console.error('API error (loginWithFarcaster):', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)

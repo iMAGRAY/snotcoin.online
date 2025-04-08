@@ -1,7 +1,15 @@
 import * as jwt from 'jsonwebtoken';
+import { jwtVerify } from 'jose';
 
 // Секрет для подписи JWT, должен быть в переменных окружения
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Интерфейс для результата проверки JWT через jose
+export interface JoseAuthResult {
+  success: boolean;
+  userId?: string;
+  error?: string;
+}
 
 /**
  * Интерфейс для результата верификации токена
@@ -10,6 +18,7 @@ export interface TokenVerificationResult {
   valid: boolean;
   userId?: string;
   error?: string;
+  provider?: string;  // Провайдер аутентификации (e.g., 'farcaster', 'local', 'google', etc.)
 }
 
 /**
@@ -17,8 +26,12 @@ export interface TokenVerificationResult {
  */
 export interface TokenPayload {
   userId: string;
-  exp?: number;
-  iat?: number;
+  fid?: string;      // Farcaster ID
+  username?: string; // Имя пользователя
+  displayName?: string; // Отображаемое имя
+  exp?: number;      // Время истечения токена
+  iat?: number;      // Время выдачи токена
+  provider?: string; // Провайдер аутентификации
 }
 
 /**
@@ -86,7 +99,22 @@ export async function verifyJWT(token: string): Promise<TokenVerificationResult>
       return { valid: false, error: 'TOKEN_EXPIRED' };
     }
 
-    return { valid: true, userId: payload.userId };
+    // Определяем провайдер на основе информации в токене
+    let provider = payload.provider || 'unknown';
+    
+    // Если провайдер не указан явно, пытаемся определить его из userId
+    if (provider === 'unknown' && payload.userId) {
+      if (payload.userId.startsWith('farcaster_') || payload.userId.startsWith('user_')) {
+        provider = 'farcaster';
+      } else if (payload.userId.startsWith('google_')) {
+        provider = 'google';
+      } else if (payload.userId.startsWith('local_')) {
+        provider = 'local';
+      }
+      // Можно добавить другие провайдеры по мере необходимости
+    }
+
+    return { valid: true, userId: payload.userId, provider };
   } catch (error) {
     // Обрабатываем различные ошибки JWT
     if (error instanceof jwt.JsonWebTokenError) {
@@ -115,4 +143,63 @@ export function extractToken(authHeader?: string | null, tokenFromUrl?: string |
     return tokenFromUrl;
   }
   return null;
+}
+
+/**
+ * Проверяет JWT токен с использованием библиотеки jose
+ * @param token JWT токен для проверки
+ * @returns Результат проверки с данными пользователя
+ */
+export async function verifyJWTJose(token: string): Promise<JoseAuthResult> {
+  try {
+    // Декодируем секрет
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    
+    // Проверяем токен
+    const { payload } = await jwtVerify(token, secret);
+    
+    // Проверяем наличие userId в payload
+    if (!payload || !payload.userId) {
+      return { 
+        success: false, 
+        error: 'Invalid token payload' 
+      };
+    }
+    
+    // Возвращаем успешный результат с данными пользователя
+    return { 
+      success: true, 
+      userId: payload.userId as string 
+    };
+  } catch (error) {
+    // Обрабатываем ошибки проверки токена
+    console.error('[JWT] JWT verification error:', error);
+    
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during token verification' 
+    };
+  }
+}
+
+/**
+ * Подписывает данные для создания токена JWT
+ * @param payload Данные для подписи
+ * @param expiresIn Время истечения токена (например, '1h', '30d')
+ * @returns Подписанный токен JWT
+ */
+export function sign(payload: Record<string, any>, expiresIn?: string | number): string {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('[JWT] JWT_SECRET не найден в переменных окружения');
+    throw new Error('JWT_SECRET is required');
+  }
+  
+  // Создаем объект настроек вручную, вместо inline-объекта
+  const options: Record<string, any> = {};
+  if (expiresIn !== undefined) {
+    options.expiresIn = expiresIn;
+  }
+  
+  return jwt.sign(payload, jwtSecret, options);
 } 
