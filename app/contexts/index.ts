@@ -7,5 +7,4 @@ export * from './game/hooks';
 export * from './game/providers';
 
 // Другие контексты
-export * from './FarcasterContext';
-export * from './SaveManagerProvider'; 
+export * from './FarcasterContext'; 

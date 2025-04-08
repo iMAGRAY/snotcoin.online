@@ -156,29 +156,15 @@ export interface GameState {
   inventory: Inventory;
   container: Container;
   upgrades: Upgrades;
-  _saveVersion: number;
-  _lastSaved: string;
   _userId: string;
   _provider?: string;
   _lastModified: number;
   _createdAt: string;
-  _wasRepaired: boolean;
-  _repairedAt: number;
-  _repairedFields: string[];
   _tempData: any | null;
-  _isSavingInProgress: boolean;
-  _skipSave: boolean;
-  _lastSaveError: string | null;
-  _isBeforeUnloadSave: boolean;
-  _isRestoredFromBackup: boolean;
-  _isInitialState: boolean;
   _lastActionTime: string;
   _lastAction: string;
   _dataSource?: string; // Источник данных: 'local', 'server', 'new', 'default'
   _loadedAt?: string;   // Время загрузки данных
-  // Служебные поля для целостности данных
-  _integrityHash?: string;   // Хеш для проверки целостности данных
-  _integrityFailed?: boolean; // Флаг нарушения целостности данных
   logs: any[];
   analytics: any | null;
   items: Item[];
@@ -227,7 +213,13 @@ export interface ExtendedGameState extends GameState {
     resolved: number;
     duration: number;
   };
-  _savedAt?: string;
+  repairData?: {
+    timestamp: number;
+    strategy: string;
+    conflicts: number;
+    resolved: number;
+    duration: number;
+  };
   _dataSource?: string; // Источник данных: 'local', 'server', 'new'
   _loadedAt?: string;   // Время загрузки данных
   score?: number;
@@ -243,11 +235,6 @@ export interface ExtendedGameState extends GameState {
     metadata?: Record<string, any>;
   }>;
   _isEncrypted?: boolean;
-  _encryptionMetadata?: {
-    timestamp: number;
-    version: number;
-    saveId: string;
-  };
   _integrityVerified?: boolean;
   _integrityWarning?: boolean;
 }
@@ -257,13 +244,8 @@ export type ActionType =
   | "SET_INVENTORY"
   | "SET_CONTAINER"
   | "SET_UPGRADES"
-  | "SET_SAVE_VERSION"
-  | "SET_LAST_SAVED"
   | "SET_USER_ID"
   | "SET_LAST_MODIFIED"
-  | "SET_WAS_REPAIRED"
-  | "SET_REPAIRED_AT"
-  | "SET_REPAIRED_FIELDS"
   | "SET_TEMP_DATA"
   | "SET_LOGS"
   | "SET_ANALYTICS"
@@ -279,9 +261,7 @@ export type ActionType =
   | "UPGRADE_CONTAINER_CAPACITY"
   | "UPGRADE_FILLING_SPEED"
   | "LOAD_GAME_STATE"
-  | "SAVE_STATE"
   | "RESET_GAME_STATE"
-  | "FORCE_SAVE_GAME_STATE"
   | "LOGIN"
   | "UPDATE_CONTAINER_LEVEL"
   | "UPDATE_CONTAINER_SNOT"
@@ -386,75 +366,22 @@ export interface GameStateUpdate {
 }
 
 /**
- * Создает дефолтное состояние игры
+ * Создает объект состояния игры по умолчанию
  */
 export function createDefaultGameState(): GameState {
   const now = new Date().toISOString();
   // Получаем текущее время в миллисекундах
   const currentTimeMs = Date.now();
   
-  // Значения по умолчанию
-  let initialSnot = 0.1;
-  let initialSnotCoins = 0;
-  let initialContainerSnot = 0.05;
-  let hadPreviousSaves = false;
+  // Базовые значения по умолчанию
+  const initialSnot = 0;
+  const initialSnotCoins = 0;
+  const initialContainerSnot = 0.05;
   
-  // Функция выполняется только в браузере
-  if (typeof window !== 'undefined') {
-    // Проверка sessionStorage на наличие резервных копий
-    try {
-      if (window.sessionStorage) {
-        // Ищем все ключи с префиксом snot_backup_
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && key.startsWith('snot_backup_')) {
-            const backupData = sessionStorage.getItem(key);
-            if (backupData) {
-              try {
-                const backup = JSON.parse(backupData);
-                // Проверяем, что значение snot в backup - число
-                if (backup && typeof backup.snot === 'number' && !isNaN(backup.snot)) {
-                  initialSnot = backup.snot;
-                  hadPreviousSaves = true;
-                  console.log('[createDefaultGameState] Найдена резервная копия snot:', {
-                    snot: initialSnot,
-                    key: key
-                  });
-                  break;
-                }
-              } catch (e) {
-                // Игнорируем ошибки при разборе JSON
-              }
-            }
-          }
-        }
-      }
-      
-      // Поиск сохранений в localStorage если не найдено в sessionStorage
-      if (!hadPreviousSaves) {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.includes('snotcoin_') && (key.includes('_backup') || key.includes('game_state_'))) {
-            hadPreviousSaves = true;
-            // Если найдены предыдущие сохранения, устанавливаем начальное значение containerSnot
-            initialContainerSnot = 0.05; // Базовое значение
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      // Игнорируем ошибки при проверке сохранений
-      console.warn('[createDefaultGameState] Ошибка при проверке сохранений:', error);
-    }
-  }
+  // Создаем случайный идентификатор для нового пользователя
+  const generatedUserId = `user_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
   
-  // Гарантируем, что все значения являются числами
-  initialSnot = Number(initialSnot) || 0.1;
-  initialSnotCoins = Number(initialSnotCoins) || 0;
-  initialContainerSnot = Number(initialContainerSnot) || 0.05;
-  
-  // Создаем tempData с информацией о предыдущих сохранениях
-  const tempData = hadPreviousSaves ? { hadPreviousSaves: true } : null;
+  console.log('[createDefaultGameState] Создаем новое состояние игры');
   
   return {
     user: null,
@@ -464,48 +391,36 @@ export function createDefaultGameState(): GameState {
       containerSnot: initialContainerSnot,
       containerCapacity: 1,
       containerCapacityLevel: 1,
-      fillingSpeed: 0.01, // Синхронизировано с другими местами создания начальных состояний
+      fillingSpeed: 0.01,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
       lastUpdateTimestamp: currentTimeMs
     },
     container: {
       level: 1,
-      currentAmount: 0,
-      fillRate: 1,
-      currentFill: 0
+      currentAmount: initialContainerSnot,
+      fillRate: 0.01,
+      currentFill: initialContainerSnot
     },
     upgrades: {
       clickPower: {
         level: 1,
-        value: 1
+        value: 0.1
       },
       passiveIncome: {
-        level: 0,
-        value: 0
+        level: 1,
+        value: 0.01
       },
-      collectionEfficiencyLevel: 0,
+      collectionEfficiencyLevel: 1,
       containerLevel: 1,
       fillingSpeedLevel: 1
     },
-    _saveVersion: 1,
-    _lastSaved: now,
-    _userId: '',
-    _provider: '',
+    _userId: generatedUserId,
     _lastModified: currentTimeMs,
     _createdAt: now,
-    _wasRepaired: false,
-    _repairedAt: currentTimeMs,
-    _repairedFields: [],
-    _tempData: tempData,
-    _isSavingInProgress: false,
-    _skipSave: false,
-    _lastSaveError: null,
-    _isBeforeUnloadSave: false,
-    _isRestoredFromBackup: false,
-    _isInitialState: true,
+    _tempData: null,
     _lastActionTime: now,
-    _lastAction: 'RESET_GAME_STATE',
+    _lastAction: 'create_default_state',
     logs: [],
     analytics: null,
     items: [],
@@ -518,13 +433,13 @@ export function createDefaultGameState(): GameState {
       playTime: 0,
       startDate: now,
       highestLevel: 1,
-      totalSnot: 0,
-      totalSnotCoins: 0,
-      consecutiveLoginDays: 0
+      totalSnot: initialSnot,
+      totalSnotCoins: initialSnotCoins,
+      consecutiveLoginDays: 1
     },
-    consecutiveLoginDays: 0,
+    consecutiveLoginDays: 1,
     settings: {
-      language: 'en',
+      language: 'ru',
       theme: 'light',
       notifications: true,
       tutorialCompleted: false,
@@ -535,34 +450,24 @@ export function createDefaultGameState(): GameState {
     soundSettings: {
       musicVolume: 0.5,
       soundVolume: 0.5,
-      notificationVolume: 0.5,
-      clickVolume: 0.5,
-      effectsVolume: 0.5,
-      backgroundMusicVolume: 0.5,
+      notificationVolume: 0.7,
+      clickVolume: 0.4,
+      effectsVolume: 0.6,
+      backgroundMusicVolume: 0.3,
       isMuted: false,
       isEffectsMuted: false,
       isBackgroundMusicMuted: false
     },
     hideInterface: false,
-    activeTab: 'laboratory',
-    fillingSpeed: 0.01, // Синхронизировано с inventory.fillingSpeed
+    activeTab: 'game',
+    fillingSpeed: 0.01,
     containerLevel: 1,
     isPlaying: false,
     isGameInstanceRunning: false,
-    validationStatus: 'pending',
+    validationStatus: 'none',
     lastValidation: now,
     gameStarted: false,
-    isLoading: false,
-  };
-}
-
-/**
- * Создает расширенное состояние игры с метаданными сохранения
- */
-export function createDefaultExtendedGameState(userId: string): ExtendedGameState {
-  return {
-    ...createDefaultGameState(),
-    _userId: userId,
+    isLoading: false
   };
 }
 

@@ -5,7 +5,6 @@ import { ReactNode } from 'react';
 import { PortalProvider } from '@/app/contexts/PortalContext';
 import { GameProviderWrapper } from '@/app/components/GameProviderWrapper';
 import { FarcasterContextProvider } from '@/app/components/FarcasterContext';
-import { SaveManagerProvider } from '@/app/contexts/SaveManagerProvider';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,13 +19,11 @@ export function Providers({ children }: { children: ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <PortalProvider>
-          <SaveManagerProvider>
-            <FarcasterContextProvider>
-              <GameProviderWrapper>
-                {children}
-              </GameProviderWrapper>
-            </FarcasterContextProvider>
-          </SaveManagerProvider>
+          <FarcasterContextProvider>
+            <GameProviderWrapper>
+              {children}
+            </GameProviderWrapper>
+          </FarcasterContextProvider>
         </PortalProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>

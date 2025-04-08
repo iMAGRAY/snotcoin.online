@@ -1,26 +1,24 @@
 "use client"
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
-import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
 import CollectButton from "./CollectButton"
 import BackgroundImage from "./BackgroundImage"
 import FlyingNumber from "./flying-number"
-import ContainerFlyingNumber from "./ContainerFlyingNumber"
-import UpgradeButton from "./UpgradeButton"
 import { formatSnotValue } from "../../../utils/formatters"
 import { ANIMATION_DURATIONS, LAYOUT } from "../../../constants/uiConstants"
 import { getSafeInventory, calculateFillingPercentage } from "../../../utils/resourceUtils"
 import { FILL_RATES } from "../../../constants/gameConstants"
-import { useSaveManager } from "../../../contexts/SaveManagerProvider"
-import { SavePriority } from "../../../services/saveSystem/types"
-import { useForceSave } from "../../../hooks/useForceSave"
 
 // Порог заполнения localStorage, при котором запускается очистка (в процентах)
 const LOCAL_STORAGE_CLEANUP_THRESHOLD = 75;
 // Максимальное количество локальных сохранений для пользователя
 const MAX_LOCAL_SAVES = 3;
+
+// Константы для хранения
+const STORAGE_PREFIX = 'snotcoin_';
+const GAME_STATE_KEY = 'game_state_';
 
 /**
  * Компонент лаборатории - основная игровая страница
@@ -32,24 +30,10 @@ const Laboratory: React.FC = () => {
   const [isCollecting, setIsCollecting] = useState(false)
   const [flyingNumberValue, setFlyingNumberValue] = useState<number | null>(null)
   
-  // Используем SaveManager
-  const saveManager = useSaveManager();
-  
-  // Состояние для анимации числа при клике на контейнер
-  const [containerClickNumbers, setContainerClickNumbers] = useState<Array<{
-    id: number;
-    value: number;
-    x: number;
-    y: number;
-  }>>([])
-  
   const timerRef = useRef<NodeJS.Timeout | null>(null)
-  // Ссылка на счетчик для уникальных ID анимаций
-  const counterRef = useRef(0)
   
   // Ссылка на текущее состояние и функцию обновления для доступа в интервалах без перерендера
   const gameStateRef = useRef(gameState)
-  const setStateRef = useRef(setState)
   
   // Предотвращаем контекстное меню для защиты изображений от сохранения
   const preventContextMenu = useCallback((e: React.MouseEvent) => {
@@ -60,8 +44,7 @@ const Laboratory: React.FC = () => {
   // Обновляем ссылки при изменении
   useEffect(() => {
     gameStateRef.current = gameState
-    setStateRef.current = setState
-  }, [gameState, setState])
+  }, [gameState])
 
   // Безопасно получаем данные инвентаря
   const inventory = useMemo(() => 
@@ -131,7 +114,7 @@ const Laboratory: React.FC = () => {
       
       // Обновляем состояние только при реальном изменении
       if (Math.abs(newContainerSnot - currentContainerSnot) > 0.00001) {
-        setStateRef.current(prevState => ({
+        setState(prevState => ({
           ...prevState,
           inventory: {
             ...prevState.inventory,
@@ -161,8 +144,8 @@ const Laboratory: React.FC = () => {
   // Состояние для хранения последнего нажатия на контейнер
   const lastContainerClickRef = useRef<number>(0);
   
-  // Функция для сохранения состояния игры локально
-  const saveGameLocally = useCallback(() => {
+  // Функция для локального отслеживания нажатий на контейнер
+  const trackContainerClick = useCallback(() => {
     const userId = gameState._userId;
     if (!userId) return;
     
@@ -179,18 +162,10 @@ const Laboratory: React.FC = () => {
       
       // Обновляем время последнего сохранения
       lastContainerClickRef.current = now;
-      
-      // Используем SaveManager для сохранения состояния
-      saveManager.save(userId, gameState).then(result => {
-        // Можно добавить дополнительную логику при успешном сохранении
-      });
     } catch (error) {
       // Обработка ошибок без логирования
     }
-  }, [gameState, saveManager]);
-  
-  // Используем хук для принудительного сохранения
-  const forceSave = useForceSave();
+  }, [gameState]);
   
   /**
    * Обработчик сбора ресурсов
@@ -230,50 +205,29 @@ const Laboratory: React.FC = () => {
       };
     });
     
-    // Сразу запускаем сохранение, но с небольшой задержкой для обновления состояния
-    forceSave(100);
-    
-    // Очищаем предыдущий таймер если он есть
+    // Сбрасываем состояние сбора через некоторое время
     if (timerRef.current) {
       clearTimeout(timerRef.current)
     }
     
-    // Устанавливаем таймер для скрытия анимации
     timerRef.current = setTimeout(() => {
-      setFlyingNumberValue(null)
       setIsCollecting(false)
-      timerRef.current = null
-    }, ANIMATION_DURATIONS.FLYING_NUMBER)
+      setFlyingNumberValue(null)
+    }, 2000);
     
-  }, [setState, inventory.containerSnot, isCollecting, forceSave, gameState])
-
-  /**
-   * Переход на страницу улучшений
-   */
-  const handleUpgradeClick = useCallback(() => {
-    // Вместо диспатча напрямую обновляем состояние
-    setState(prevState => ({
-      ...prevState,
-      _activeTab: "laboratory"
-    }));
-    // Сразу переходим на страницу улучшений
-    router.push("/upgrade", { scroll: false });
-  }, [router, setState]);
-
-  // Предварительно загружаем страницу улучшений при монтировании компонента
-  useEffect(() => {
-    router.prefetch('/upgrade');
-  }, [router]);
+    // Отслеживаем нажатие на контейнер
+    trackContainerClick();
+  }, [
+    gameState, 
+    inventory.containerSnot, 
+    isCollecting, 
+    setState, 
+    trackContainerClick
+  ]);
 
   return (
-    <motion.div
-      className="relative w-full h-full flex flex-col items-center justify-between"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onContextMenu={preventContextMenu}
-    >
-      <div className="w-full md:w-4/5 lg:w-3/4 xl:w-2/3 mx-auto flex-1 flex flex-col justify-center overflow-hidden" style={{ maxHeight: '70vh' }}>
+    <div className="laboratory">
+      <div className="background-container">
         <BackgroundImage 
           store={gameState}
           onContainerClick={() => {}}
@@ -285,38 +239,35 @@ const Laboratory: React.FC = () => {
         />
       </div>
       
-      <div className="w-full px-4 py-4 flex flex-row items-center justify-center space-x-4 absolute bottom-24 left-0 right-0 z-10">
-        <CollectButton 
-          onCollect={handleCollect} 
-          containerSnot={inventory.containerSnot} 
-          isCollecting={isCollecting} 
-        />
-        <UpgradeButton onClick={handleUpgradeClick} />
+      <div className="gameplay-container" onContextMenu={preventContextMenu}>
+        <div className="resource-section">
+          <div className="resource-display">
+            <div className="resource-icon snot-icon" />
+            <div className="resource-amount">
+              {formatSnotValue(inventory.snot)}
+            </div>
+            
+            {/* Анимация летящего числа при сборе */}
+            {flyingNumberValue !== null && (
+              <FlyingNumber 
+                value={flyingNumberValue} 
+              />
+            )}
+          </div>
+        </div>
+        
+        {/* Кнопка Collect размещена ниже, но выше tabbar */}
+        <div className="collect-button-container">
+          <CollectButton 
+            onCollect={handleCollect}
+            containerSnot={inventory.containerSnot}
+            isCollecting={isCollecting}
+          />
+        </div>
       </div>
-      
-      {flyingNumberValue !== null && (
-        <FlyingNumber value={flyingNumberValue} />
-      )}
-      
-      {/* Отображаем все активные анимации чисел при клике на контейнер */}
-      {containerClickNumbers.map(item => (
-        <ContainerFlyingNumber 
-          key={item.id}
-          value={item.value}
-          positionX={item.x}
-          positionY={item.y}
-        />
-      ))}
-      
-      {/* Отладочная панель для проверки заполнения контейнера */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs p-2 font-mono max-h-[70px] overflow-y-auto z-5">
-        <div>Контейнер: {(inventory?.containerSnot ?? 0).toFixed(6)} / {inventory?.containerCapacity ?? 1} = {((inventory?.containerSnot ?? 0) / (inventory?.containerCapacity ?? 1) * 100).toFixed(2)}%</div>
-        <div>Скорость: {(FILL_RATES.BASE_CONTAINER_FILL_RATE * (inventory?.fillingSpeed ?? 1) * 3600 * 24).toFixed(5)} в сутки</div>
-        <div>Заполнится через: {(((inventory?.containerCapacity ?? 1) - (inventory?.containerSnot ?? 0)) / (FILL_RATES.BASE_CONTAINER_FILL_RATE * (inventory?.fillingSpeed ?? 1)) / 60).toFixed(1)} мин</div>
-      </div>
-    </motion.div>
+    </div>
   )
 }
 
-export default React.memo(Laboratory)
+export default Laboratory
 

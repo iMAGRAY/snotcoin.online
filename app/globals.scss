@@ -12,4 +12,19 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
+}
+
+/* Удаляем стили для контейнера кнопки в нижней части экрана */
+
+/* Стили для контейнера кнопки Collect */
+.collect-button-container {
+  position: fixed;
+  bottom: 120px; /* Расположение на том же уровне, что и кнопка OpenChest */
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 10;
 } 

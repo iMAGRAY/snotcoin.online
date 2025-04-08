@@ -269,9 +269,7 @@ export function updateResourcesBasedOnTimePassed(
   
   // Находим последнее время обновления (от самого нового к старому)
   const lastLoadTime = inventory.lastUpdateTimestamp || 
-                     state._localSaveTimestamp || 
                      state._lastModified || 
-                     (state._lastSaved ? new Date(state._lastSaved).getTime() : null) || 
                      (currentTime - 1000); // Если нет данных, используем текущее время - 1 секунда
   
   // Получаем необходимые данные с валидацией
@@ -326,8 +324,8 @@ export function updateResourcesBasedOnTimePassed(
     }
   };
   
-  // Добавляем метаданные об обновлении через приведение типа
-  (result as any)._lastTimeBasedUpdate = currentTime;
+  // Логируем, что система сохранений отключена
+  console.log('[updateResourcesBasedOnTimePassed] Система сохранений отключена - данные только в памяти');
   
   return result;
 }

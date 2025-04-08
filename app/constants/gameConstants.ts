@@ -14,75 +14,24 @@ export function createInitialGameState(userId: string): GameState {
   const now = new Date();
   const currentTimeMs = now.getTime();
   
-  // Попытка восстановить сохраненное значение snot из sessionStorage
-  let initialSnot = 0.1; // Значение по умолчанию
-  let initialSnotCoins = 0;
-  let initialContainerSnot = 0.05;
+  // Базовые значения для нового пользователя
+  const initialSnot = 0;
+  const initialSnotCoins = 0;
+  const initialContainerSnot = 0.05;
   
-  // Функция выполняется только в браузере
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    try {
-      // Проверяем наличие резервной копии в sessionStorage
-      const backupKey = `snot_backup_${userId}`;
-      const backupData = sessionStorage.getItem(backupKey);
-      
-      if (backupData) {
-        const backup = JSON.parse(backupData);
-        
-        // Проверяем, что значение snot в backup - число
-        if (backup && typeof backup.snot === 'number' && !isNaN(backup.snot)) {
-          console.log('[createInitialGameState] Найдена резервная копия snot:', {
-            snot: backup.snot,
-            backupTime: new Date(backup.timestamp).toISOString()
-          });
-          
-          initialSnot = backup.snot;
-        }
-      }
-    } catch (error) {
-      // Игнорируем ошибки при проверке сохранений
-      console.warn('[createInitialGameState] Ошибка при проверке резервной копии:', error);
-    }
-  }
-  
-  // Гарантируем, что все значения являются числами
-  initialSnot = Number(initialSnot) || 0.1;
-  initialSnotCoins = Number(initialSnotCoins) || 0;
-  initialContainerSnot = Number(initialContainerSnot) || 0.05;
+  console.log('[createInitialGameState] Создаем новое состояние игры');
   
   return {
     // Мета-информация
     _userId: userId,
-    _saveVersion: 1,
-    _lastSaved: now.toISOString(),
     _lastModified: currentTimeMs,
     _createdAt: now.toISOString(),
-    _wasRepaired: false,
-    _repairedAt: currentTimeMs,
-    _repairedFields: [],
     _tempData: null,
-    _isSavingInProgress: false,
-    _skipSave: false,
-    _lastSaveError: null,
-    _isBeforeUnloadSave: false,
-    _isRestoredFromBackup: false,
-    _isInitialState: true,
     _lastActionTime: now.toISOString(),
-    _lastAction: null,
+    _lastAction: 'create_initial_state',
     
     // Пользовательские данные
-    user: {
-      username: null,
-      displayName: null,
-      farcaster_fid: null,
-      farcaster_username: null,
-      farcaster_displayname: null,
-      farcaster_pfp: null,
-      pfp: null,
-      fid: null,
-      verified: null,
-      metadata: {}
-    },
+    user: null,
     
     // Игровой инвентарь
     inventory: {
@@ -90,7 +39,7 @@ export function createInitialGameState(userId: string): GameState {
       snotCoins: initialSnotCoins,
       containerCapacity: 1,
       containerSnot: initialContainerSnot,
-      fillingSpeed: 0.01, // Изменено с 1 на 0.01, чтобы соответствовало createDefaultGameState
+      fillingSpeed: 0.01,
       containerCapacityLevel: 1,
       fillingSpeedLevel: 1,
       collectionEfficiency: 1.0,
@@ -100,23 +49,22 @@ export function createInitialGameState(userId: string): GameState {
     // Контейнер
     container: {
       level: 1,
-      capacity: 1,
-      currentAmount: 0,
-      fillRate: 1,
-      currentFill: 0
+      currentAmount: initialContainerSnot,
+      fillRate: 0.01,
+      currentFill: initialContainerSnot
     },
     
     // Улучшения
     upgrades: {
       clickPower: {
         level: 1,
-        value: 1
+        value: 0.1
       },
       passiveIncome: {
-        level: 0,
-        value: 0
+        level: 1,
+        value: 0.01
       },
-      collectionEfficiencyLevel: 0,
+      collectionEfficiencyLevel: 1,
       containerLevel: 1,
       fillingSpeedLevel: 1
     },
@@ -142,17 +90,17 @@ export function createInitialGameState(userId: string): GameState {
       playTime: 0,
       startDate: now.toISOString(),
       highestLevel: 1,
-      totalSnot: 0,
-      totalSnotCoins: 0,
-      consecutiveLoginDays: 0
+      totalSnot: initialSnot,
+      totalSnotCoins: initialSnotCoins,
+      consecutiveLoginDays: 1
     },
     
     // Последовательные дни входа
-    consecutiveLoginDays: 0,
+    consecutiveLoginDays: 1,
     
     // Настройки
     settings: {
-      language: 'en',
+      language: 'ru',
       theme: 'light',
       notifications: true,
       tutorialCompleted: false,
@@ -165,10 +113,10 @@ export function createInitialGameState(userId: string): GameState {
     soundSettings: {
       musicVolume: 0.5,
       soundVolume: 0.5,
-      notificationVolume: 0.5,
-      clickVolume: 0.5,
-      effectsVolume: 0.5,
-      backgroundMusicVolume: 0.5,
+      notificationVolume: 0.7,
+      clickVolume: 0.4,
+      effectsVolume: 0.6,
+      backgroundMusicVolume: 0.3,
       isMuted: false,
       isEffectsMuted: false,
       isBackgroundMusicMuted: false
@@ -176,26 +124,17 @@ export function createInitialGameState(userId: string): GameState {
     
     // Игровой интерфейс
     hideInterface: false,
-    activeTab: 'laboratory',
-    fillingSpeed: 0.01, // Синхронизировано с inventory.fillingSpeed
+    activeTab: 'game',
+    fillingSpeed: 0.01,
     containerLevel: 1,
     isPlaying: false,
-    validationStatus: 'pending',
+    isGameInstanceRunning: false,
+    validationStatus: 'none',
     lastValidation: now.toISOString(),
     gameStarted: false,
     isLoading: false
   };
 }
-
-/**
- * Время автосохранения в миллисекундах
- */
-export const AUTO_SAVE_INTERVAL = 15000;
-
-/**
- * Минимальный интервал между ручными сохранениями
- */
-export const MIN_SAVE_INTERVAL = 2000;
 
 /**
  * Константы для игры
@@ -208,12 +147,12 @@ export const GAME_VERSION = 1;
 export const initialState: GameState = {
   user: null,
   inventory: {
-    snot: 0.1,
+    snot: 0,
     snotCoins: 0,
     containerSnot: 0.05,
     containerCapacity: 1,
     containerCapacityLevel: 1,
-    fillingSpeed: 0.01, // Обновлено для соответствия с createInitialGameState
+    fillingSpeed: 0.01,
     fillingSpeedLevel: 1,
     collectionEfficiency: 1,
     lastUpdateTimestamp: Date.now()
@@ -232,21 +171,10 @@ export const initialState: GameState = {
     passiveIncome: { level: 1, value: 0.1 },
     collectionEfficiencyLevel: 1
   },
-  _saveVersion: 1,
-  _lastSaved: new Date().toISOString(),
   _userId: '',
   _lastModified: Date.now(),
   _createdAt: new Date().toISOString(),
-  _wasRepaired: false,
-  _repairedAt: Date.now(),
-  _repairedFields: [],
   _tempData: null,
-  _isSavingInProgress: false,
-  _skipSave: false,
-  _lastSaveError: null,
-  _isBeforeUnloadSave: false,
-  _isRestoredFromBackup: false,
-  _isInitialState: true,
   _lastActionTime: new Date().toISOString(),
   _lastAction: 'RESET_GAME_STATE',
   logs: [],
@@ -265,7 +193,7 @@ export const initialState: GameState = {
   },
   consecutiveLoginDays: 0,
   settings: {
-    language: 'en',
+    language: 'ru',
     theme: 'light',
     notifications: true,
     tutorialCompleted: false,
@@ -285,7 +213,7 @@ export const initialState: GameState = {
     isBackgroundMusicMuted: false
   },
   hideInterface: false,
-  activeTab: 'laboratory',
+  activeTab: 'game',
   fillingSpeed: 1,
   containerLevel: 1,
   isPlaying: false,
@@ -364,14 +292,6 @@ export const ACHIEVEMENTS = [
   { id: 'max_efficiency', name: 'Максимальная эффективность', description: 'Улучшите эффективность до максимума', requirement: 5 }
 ];
 
-export const SAVE_INTERVALS = {
-  MIN_SAVE_INTERVAL: 10000,
-  MIN_FORCE_SAVE_INTERVAL: 5000,
-  MIN_LOAD_INTERVAL: 2000,
-  SAVE_RETRY_DELAY: 3000,
-  SAVE_DEBOUNCE_DELAY: 10000
-};
-
 export const THRESHOLDS = {
   snot: 10,
   snotCoins: 1,
@@ -390,7 +310,7 @@ export const RESOURCES = {
 };
 
 export const DEFAULT_INVENTORY: Inventory = {
-  snot: 0.1,
+  snot: 0,
   snotCoins: 0,
   containerSnot: 0.05,
   containerCapacity: 1,

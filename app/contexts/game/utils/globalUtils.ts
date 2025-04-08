@@ -34,16 +34,9 @@ export function safeGetGlobalObject<T>(key: string, defaultValue: T = {} as T): 
 }
 
 /**
- * Подготавливает состояние для сохранения, удаляя циклические ссылки
+ * Подготавливает состояние для сохранения (система сохранений отключена)
  */
 export function prepareStateForSaving(state: any): any {
-  const stateToSave = { ...state };
-  
-  // Удаляем временные поля
-  delete stateToSave._isSavingInProgress;
-  delete stateToSave._skipSave;
-  delete stateToSave._lastSaveError;
-  delete stateToSave._isBeforeUnloadSave;
-  
-  return stateToSave;
+  // Система сохранений отключена, возвращаем исходное состояние
+  return state;
 } 

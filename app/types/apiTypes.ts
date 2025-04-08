@@ -31,7 +31,6 @@ export enum ErrorCodes {
   
   // Игровые ошибки
   GAME_STATE_INVALID = 'GAME_STATE_INVALID',
-  SAVE_CONFLICT = 'SAVE_CONFLICT',
   VERSION_MISMATCH = 'VERSION_MISMATCH'
 }
 

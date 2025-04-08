@@ -2053,16 +2053,10 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
   }, [])
 
   const handleBackClick = () => {
-    // Сохраняем состояние игры перед возвратом в меню
-    forceSave(300).then(success => {
-      if (success) {
-        console.log('[MergeGame] Состояние игры сохранено при выходе из игры');
-      } else {
-        console.warn('[MergeGame] Не удалось сохранить состояние игры при выходе');
-      }
-      // Возвращаемся в меню после сохранения
-      onBack();
-    });
+    // Система сохранений отключена - выводим лог и продолжаем выполнение
+    console.log('[MergeGame] Система сохранений отключена');
+    // Возвращаемся в меню
+    onBack();
   }
 
   const handlePauseClick = () => {
@@ -2089,33 +2083,24 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
   const handleRestartClick = () => {
     if (!gameRef.current) return;
 
-    // Сначала сохраняем текущее состояние игры
-    forceSave(300).then(success => {
-      if (success) {
-        console.log('[MergeGame] Состояние игры сохранено перед рестартом');
-      } else {
-        console.warn('[MergeGame] Не удалось сохранить состояние игры перед рестартом');
-      }
-      
-      if (!gameRef.current) return;
-
-      // Останавливаем текущую игру
-      gameRef.current.scene.stop('MergeGameScene');
-      
-      // Удаляем сцену перед добавлением новой
-      gameRef.current.scene.remove('MergeGameScene');
-      
-      // Создаем новую сцену
-      gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
-      
-      // Обновляем состояния
-      setIsGameOver(false);
-      setScore(0);
-      setIsPaused(false);
-      
-      // Сохраняем время начала игры
-      gameRef.current.registry.set('gameStartTime', Date.now());
-    });
+    console.log('[MergeGame] Система сохранений отключена');
+    
+    // Останавливаем текущую игру
+    gameRef.current.scene.stop('MergeGameScene');
+    
+    // Удаляем сцену перед добавлением новой
+    gameRef.current.scene.remove('MergeGameScene');
+    
+    // Создаем новую сцену
+    gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
+    
+    // Обновляем состояния
+    setIsGameOver(false);
+    setScore(0);
+    setIsPaused(false);
+    
+    // Сохраняем время начала игры
+    gameRef.current.registry.set('gameStartTime', Date.now());
   }
 
   const handleAbilityClick = (ability: string) => {

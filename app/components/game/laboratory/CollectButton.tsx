@@ -1,13 +1,15 @@
 "use client"
 
-import React, { useMemo, useCallback, useState } from "react"
+import React, { useMemo, useCallback, useState, useContext } from "react"
 import Image from "next/image"
 import { useTranslation } from "../../../i18n"
 import type { CollectButtonProps } from "../../../types/laboratory-types"
 import { formatSnotValue } from "../../../utils/formatters"
 import { ICONS } from "../../../constants/uiConstants"
-import { useGameState, useGameDispatch } from "../../../contexts/game/hooks"
-import { useForceSave } from "../../../hooks/useForceSave"
+import { useGameState } from "../../../contexts/game/hooks"
+import { useContainer } from "../../../hooks/useContainer"
+import { useResources } from "../../../contexts/ResourceContext"
+import { GameContext } from "../../../contexts/game/GameContext"
 
 // Длительность анимации сбора ресурсов
 const ANIMATION_DURATION = 800; // Уменьшаем с 1000 до 800 мс
@@ -17,17 +19,40 @@ const ANIMATION_DURATION = 800; // Уменьшаем с 1000 до 800 мс
  */
 const CollectButton: React.FC<CollectButtonProps> = React.memo(({ 
   onCollect, 
-  containerSnot, 
-  isCollecting 
+  containerSnot: propContainerSnot,
+  isCollecting: propIsCollecting
 }) => {
   const { t } = useTranslation()
   const store = useGameState()
-  const setState = useGameDispatch()
-  const forceSave = useForceSave()
+  const gameContext = useContext(GameContext);
+  const { 
+    collect, 
+    containerSnot: contextContainerSnot, 
+    isCollecting: contextIsCollecting,
+    lastCollectError
+  } = useContainer()
+  
+  // Получаем ресурсы, обрабатывая возможные ошибки
+  let resources = null;
+  try {
+    resources = useResources();
+  } catch (e) {
+    console.warn('[CollectButton] Не удалось получить ResourceContext:', e);
+  }
+  
+  const containerSnot = propContainerSnot !== undefined ? propContainerSnot : contextContainerSnot;
+  const storeSnot = store?.inventory?.snot || 0;
+  
   const [collectAnimationActive, setCollectAnimationActive] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [collectError, setCollectError] = useState<string | null>(null)
   
-  const isDisabled = typeof containerSnot !== 'number' || isNaN(containerSnot) || containerSnot <= 0 || isCollecting || collectAnimationActive
+  const isCollecting = propIsCollecting || contextIsCollecting;
+  const isDisabled = typeof containerSnot !== 'number' || 
+                     isNaN(containerSnot) || 
+                     containerSnot <= 0 || 
+                     isCollecting || 
+                     collectAnimationActive;
 
   const containerSnotValue = useMemo(() => {
     if (typeof containerSnot !== 'number' || isNaN(containerSnot)) {
@@ -36,50 +61,81 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
     return formatSnotValue(Math.max(0, containerSnot));
   }, [containerSnot]);
 
-  const handleCollect = useCallback(() => {
+  const handleCollect = useCallback(async () => {
     if (isDisabled) return;
     
-    // Проверяем, что store и inventory существуют
-    if (!store || !store.inventory) return;
-    
-    // Сразу обновляем анимацию, чтобы заблокировать повторные нажатия
     setCollectAnimationActive(true);
     
-    const currentSnot = store?.inventory?.snot ?? 0;
-    const validAmount = Math.max(0, containerSnot);
-    const expectedFinalSnot = currentSnot + validAmount;
-    
-    // Вместо диспатча напрямую обновляем состояние
-    setState(prevState => {
-      if (!prevState || !prevState.inventory) return prevState;
+    try {
+      // Логируем информацию о состоянии
+      console.log("[CollectButton] Сбор ресурсов:", {
+        containerSnot,
+        isCollecting,
+        isDisabled
+      });
       
-      return {
-        ...prevState,
-        inventory: {
-          ...prevState.inventory,
-          snot: expectedFinalSnot,
-          containerSnot: 0 // Обнуляем контейнер при сборе
-        },
-        _lastAction: 'COLLECT_CONTAINER_SNOT'
-      };
-    });
-    
-    // Запускаем сохранение сразу после обновления состояния
-    forceSave(100);
-    
-    // Вызываем внешний обработчик для анимации полета чисел, если он есть
-    if (onCollect) {
-      onCollect();
+      // Передаем containerSnot в функцию collect
+      let success = await collect(containerSnot);
+      
+      // Если не удалось собрать через основной метод, используем fallback
+      if (!success && store && store.inventory && containerSnot > 0) {
+        console.log("[CollectButton] Основной метод сбора не сработал, пробуем fallback");
+        
+        try {
+          const oldSnot = store.inventory.snot || 0;
+          const newSnot = oldSnot + containerSnot;
+          
+          // Используем dispatch из контекста игры
+          if (gameContext && gameContext.dispatch) {
+            gameContext.dispatch({
+              type: 'UPDATE_INVENTORY',
+              payload: {
+                snot: newSnot,
+                containerSnot: 0
+              }
+            });
+            
+            // Считаем операцию успешной
+            success = true;
+            setCollectError(null);
+          } else {
+            console.warn("[CollectButton] GameContext недоступен для fallback");
+            throw new Error("GameContext dispatch недоступен");
+          }
+        } catch (fallbackError) {
+          console.error("[CollectButton] Ошибка в fallback сборе:", fallbackError);
+          setCollectError(`Ошибка при сборе: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+        }
+      }
+      
+      if (success) {
+        console.log("[CollectButton] Сбор успешно выполнен");
+        setCollectError(null);
+      } else {
+        console.warn("[CollectButton] Ошибка при сборе ресурсов", {
+          error: lastCollectError || "Неизвестная ошибка"
+        });
+        setCollectError(lastCollectError || "Ошибка при сборе ресурсов");
+      }
+    } catch (error) {
+      console.error("[CollectButton] Критическая ошибка при сборе:", error);
+      setCollectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (onCollect) {
+        try {
+          onCollect();
+        } catch (e) {
+          console.warn("[CollectButton] Ошибка в onCollect:", e);
+        }
+      }
+      
+      setTimeout(() => {
+        setCollectAnimationActive(false);
+      }, ANIMATION_DURATION);
     }
     
-    // Разблокируем кнопку после завершения анимации
-    setTimeout(() => {
-      setCollectAnimationActive(false);
-    }, ANIMATION_DURATION);
-    
-  }, [isDisabled, containerSnot, store?.inventory?.snot, setState, onCollect, forceSave]);
+  }, [isDisabled, containerSnot, store, collect, lastCollectError, onCollect, gameContext, isCollecting]);
 
-  // Стили для эффекта при наведении
   const buttonStyles = {
     transform: isHovered && !isDisabled ? 'scale(1.05)' : 'scale(1)',
     boxShadow: isHovered && !isDisabled ? "0 0 12px rgba(250, 204, 21, 0.7)" : "0 0 0px rgba(250, 204, 21, 0)",
@@ -87,25 +143,34 @@ const CollectButton: React.FC<CollectButtonProps> = React.memo(({
   };
 
   return (
-    <button
-      className={`flex items-center justify-center px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 to-yellow-600 text-white font-bold border-2 border-yellow-300 w-3/5 h-16 z-50 ${
-        isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-400'
-      }`}
-      onClick={handleCollect}
-      disabled={isDisabled}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={buttonStyles}
-    >
-      <Image 
-        src={ICONS.LABORATORY.BUTTONS.CLAIM}
-        alt="Collect"
-        width={24}
-        height={24}
-        className="mr-2"
-      />
-      <span>{t('Collect')}</span>
-    </button>
+    <div className="w-full px-4 mt-4 flex flex-col items-center">
+      {collectError && (
+        <div className="bg-red-100 text-red-700 p-2 rounded mb-2 text-xs text-center">
+          Ошибка: {collectError}
+        </div>
+      )}
+      <button
+        disabled={isDisabled}
+        onClick={handleCollect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`w-full h-14 rounded-xl font-semibold text-black text-lg flex items-center justify-center gap-2 
+          ${isDisabled 
+            ? 'bg-gray-400 opacity-50 cursor-not-allowed' 
+            : 'bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 cursor-pointer'
+          }`}
+        style={buttonStyles}
+      >
+        <Image
+          src={ICONS.LABORATORY.BUTTONS.CLAIM}
+          width={24}
+          height={24}
+          alt="Collect icon"
+          className="mr-1"
+        />
+        Collect
+      </button>
+    </div>
   );
 });
 

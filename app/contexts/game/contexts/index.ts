@@ -11,9 +11,4 @@ export const GameStateContext = createContext<GameState | null>(null)
 /**
  * Контекст для установки нового состояния игры (заменяет диспетчер)
  */
-export const SetGameStateContext = createContext<((newStateOrFunction: GameState | ((prevState: GameState) => GameState)) => void) | null>(null)
-
-/**
- * Контекст для отслеживания процесса сохранения
- */
-export const IsSavingContext = createContext<boolean>(false) 
+export const SetGameStateContext = createContext<((newStateOrFunction: GameState | ((prevState: GameState) => GameState)) => void) | null>(null) 

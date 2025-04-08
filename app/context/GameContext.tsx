@@ -5,14 +5,8 @@ import { createInitialGameState } from '../constants/gameConstants';
 export interface GameState {
   _userId?: string;
   _provider?: string;
-  _saveVersion?: number;
-  _lastSaved?: string;
-  _saveReason?: string;
   _lastModified?: number;
   _createdAt?: string;
-  _batchId?: string;
-  _batchSize?: number;
-  _isBeforeUnloadSave?: boolean;
   [key: string]: any;
 }
 
