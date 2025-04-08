@@ -5,6 +5,8 @@ import { GameStateContext, SetGameStateContext } from '../contexts'
 import { GameState, ExtendedGameState, createInitialGameState } from '../../../types/gameTypes'
 import { updateResourcesBasedOnTimePassed } from '../../../utils/resourceUtils'
 import { getFillingSpeedByLevel } from '../../../utils/gameUtils'
+import { getGameProgressService } from '../../../services/gameProgressService'
+import DebugPanel from '@/app/components/DebugPanel'
 
 interface GameProviderProps {
   children: React.ReactNode
@@ -46,13 +48,29 @@ function createDefaultGameState(userId: string): GameState {
 
 export function GameProvider({
   children,
-  userId
+  userId = 'anonymous'
 }: GameProviderProps) {
+  // Получаем сервис для работы с прогрессом игры
+  const progressService = userId ? getGameProgressService(userId) : null;
+  
   // Инициализируем состояние игры
-  const [state, setState] = useState<GameState>(createInitialGameState(userId || ''));
+  const [state, setState] = useState<GameState>(() => {
+    // Пытаемся загрузить сохраненное состояние, если есть userId
+    if (userId && progressService) {
+      const savedState = progressService.loadGameState();
+      console.log('[GameProvider] Загружено сохраненное состояние игры:', savedState._dataSource || 'unknown');
+      return savedState;
+    }
+    
+    // Иначе создаем новое состояние
+    return createInitialGameState(userId);
+  });
   
   // Создаем ref для хранения предыдущего значения containerSnot
   const prevContainerSnotRef = useRef(state?.inventory?.containerSnot ?? 0);
+
+  // Флаг, указывающий, что произошли изменения, которые нужно сохранить
+  const stateChangedRef = useRef(false);
 
   // Обновление состояния игры каждый тик
   useEffect(() => {
@@ -96,7 +114,7 @@ export function GameProvider({
         prevContainerSnotRef.current = newContainerSnot;
 
         // Обновляем только состояние игры без обновления ресурсов
-        return {
+        const updatedState = {
           ...prevState,
           inventory: {
             ...prevState.inventory,
@@ -105,17 +123,53 @@ export function GameProvider({
             lastUpdateTimestamp: currentTime
           }
         };
+        
+        // Отмечаем, что произошли изменения в игре
+        stateChangedRef.current = true;
+        
+        return updatedState;
       });
     };
 
     // Создаем интервал для обновления состояния игры
     const gameUpdateInterval = setInterval(updateGameState, 1000);
+    
+    // Создаем интервал для сохранения прогресса
+    const saveProgressInterval = setInterval(() => {
+      // Если произошли изменения и есть сервис прогресса - сохраняем
+      if (stateChangedRef.current && progressService) {
+        setState(currentState => {
+          // Сохраняем текущее состояние игры
+          const savedState = progressService.saveGameState(currentState);
+          // Сбрасываем флаг изменений
+          stateChangedRef.current = false;
+          
+          console.log('[GameProvider] Автоматическое сохранение прогресса');
+          return savedState;
+        });
+      }
+    }, 30000); // Каждые 30 секунд
 
     // Очистка при размонтировании
     return () => {
       clearInterval(gameUpdateInterval);
+      clearInterval(saveProgressInterval);
     };
-  }, []);
+  }, [progressService]);
+  
+  // Обработчик для ручного сохранения прогресса
+  const saveProgress = useCallback(() => {
+    if (progressService) {
+      setState(currentState => {
+        const savedState = progressService.saveGameState(currentState);
+        console.log('[GameProvider] Ручное сохранение прогресса');
+        return savedState;
+      });
+      
+      // Запускаем синхронизацию с базой данных
+      progressService.syncWithDatabase(true);
+    }
+  }, [progressService]);
 
   // Обработчик для обновления состояния 
   const handleSetState = useCallback((newStateOrFunction: GameState | ((prevState: GameState) => GameState)) => {
@@ -128,15 +182,37 @@ export function GameProvider({
         newState = newStateOrFunction;
       }
       
+      // Отмечаем, что произошли изменения
+      stateChangedRef.current = true;
+      
+      // Немедленно сохраняем прогресс при изменении состояния
+      if (progressService) {
+        const savedState = progressService.saveGameState(newState);
+        console.log('[GameProvider] Автоматическое сохранение при изменении состояния');
+        return savedState;
+      }
+      
       return newState;
     });
-  }, []);
+  }, [progressService]);
+  
+  // Добавляем функцию сохранения в контекст
+  const contextState = {
+    ...state,
+    saveProgress
+  };
 
+  // Возвращаем провайдер с компонентами игры
   return (
-    <GameStateContext.Provider value={state}>
-      <SetGameStateContext.Provider value={handleSetState}>
-        {children}
-      </SetGameStateContext.Provider>
-    </GameStateContext.Provider>
+    <>
+      <GameStateContext.Provider value={contextState}>
+        <SetGameStateContext.Provider value={handleSetState}>
+          {children}
+        </SetGameStateContext.Provider>
+      </GameStateContext.Provider>
+      
+      {/* Добавляем отладочную панель для мониторинга синхронизации */}
+      {userId !== 'anonymous' && <DebugPanel userId={userId} />}
+    </>
   );
-} 
+}

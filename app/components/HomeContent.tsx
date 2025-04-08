@@ -50,6 +50,10 @@ const Merge = dynamic(() => import("./game/merge/Merge"), {
   loading: () => <LoadingScreen progress={25} statusMessage="Loading Merge..." />,
 })
 
+const SaveIndicator = dynamic(() => import("./game/SaveIndicator"), {
+  ssr: false,
+})
+
 const HomeContent: React.FC = () => {
   const dispatch = useGameDispatch();
   const gameState = useGameState();
@@ -138,6 +142,7 @@ const HomeContent: React.FC = () => {
         />
         {renderActiveTab()} 
         {!gameState.hideInterface && <TabBar />}
+        {!gameState.hideInterface && <SaveIndicator />}
       </MotionDiv>
     </ErrorBoundary>
   );

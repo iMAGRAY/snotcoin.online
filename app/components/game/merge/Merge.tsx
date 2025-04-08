@@ -48,6 +48,11 @@ const Merge: React.FC = () => {
     nextRecoveryTime: 0
   });
   const [remainingTime, setRemainingTime] = useState<string>("");
+  
+  // Состояние для отображения всплывающего уведомления
+  const [showNotification, setShowNotification] = useState(false);
+  // Состояние для анимации кнопки восстановления
+  const [animating, setAnimating] = useState(false);
 
   // Загрузка данных о попытках из localStorage при монтировании компонента
   useEffect(() => {
@@ -160,27 +165,48 @@ const Merge: React.FC = () => {
     setAttemptsData(updatedData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
     
-    // Сохраняем состояние игры принудительно после использования попытки
-    forceSave(300).then(success => {
-      if (success) {
-        console.log('[MergeGame] Состояние игры сохранено после использования попытки');
-      } else {
-        console.warn('[MergeGame] Не удалось сохранить состояние игры после использования попытки');
-      }
-    });
+    // Логируем что система сохранений отключена
+    forceSave(300);
+    console.log('[MergeGame] Система сохранений отключена');
     
     // Скрываем интерфейс при запуске игры
-    dispatch({ type: "SET_HIDE_INTERFACE", payload: true })
+    dispatch(prevState => ({
+      ...prevState,
+      hideInterface: true
+    }));
     setIsGameLaunched(true)
   }
 
   const handleBackToMenu = () => {
-    dispatch({ type: "SET_HIDE_INTERFACE", payload: false })
+    dispatch(prevState => ({
+      ...prevState,
+      hideInterface: false
+    }));
     setIsGameLaunched(false)
   }
 
   const handleToggleOnline = () => {
     setIsOnline(!isOnline)
+  }
+  
+  // Функция для мгновенного восполнения попыток
+  const handleRestoreAttempts = () => {
+    resetAttemptsToMax();
+    
+    console.log('[MergeGame] Попытки восстановлены вручную');
+    // Показываем уведомление
+    setShowNotification(true);
+    
+    // Анимируем кнопку
+    setAnimating(true);
+    setTimeout(() => {
+      setAnimating(false);
+    }, 1000);
+    
+    // Скрываем уведомление через 3 секунды
+    setTimeout(() => {
+      setShowNotification(false);
+    }, 3000);
   }
 
   if (isGameLaunched) {
@@ -202,6 +228,33 @@ const Merge: React.FC = () => {
         backgroundRepeat: "no-repeat"
       }}
     >
+      {/* Кнопка восполнения попыток */}
+      <motion.button
+        onClick={handleRestoreAttempts}
+        className={`absolute top-4 right-4 w-12 h-12 ${animating ? 'bg-green-500' : 'bg-yellow-500 hover:bg-yellow-600'} rounded-lg shadow-lg flex items-center justify-center z-10 transition-colors duration-300`}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        animate={animating ? { rotate: [0, 360], scale: [1, 1.2, 1] } : {}}
+        transition={animating ? { duration: 1 } : {}}
+        title="Восполнить попытки"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </motion.button>
+      
+      {/* Всплывающее уведомление */}
+      {showNotification && (
+        <motion.div 
+          className="absolute top-20 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-20"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+        >
+          Попытки восстановлены!
+        </motion.div>
+      )}
+      
       <div className="w-full max-w-md bg-black bg-opacity-60 rounded-xl p-6 text-center">
         <h1 className="text-3xl font-bold text-yellow-400 mb-4">Merge Game</h1>
         <p className="text-white mb-6">Объединяй шары и зарабатывай SnotCoin!</p>
