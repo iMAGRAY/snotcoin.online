@@ -1,94 +1,114 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { saveManager } from '../services/saveSystem/index';
-import { LoadResult, SaveResult } from '../services/saveSystem/types';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { SaveSystem, SaveResult, SaveInfo } from '../services/saveSystem';
 import { ExtendedGameState } from '../types/gameTypes';
 
-// Создаем контекст для менеджера сохранений
-interface SaveManagerContextType {
-  isInitialized: boolean;
-  isSaving: boolean;
-  isLoading: boolean;
-  lastSaveResult: SaveResult | null;
-  lastLoadResult: LoadResult | null;
-  save: (userId: string, state: ExtendedGameState) => Promise<SaveResult>;
-  load: (userId: string) => Promise<LoadResult>;
-  createEmergencyBackup: (userId: string, state: ExtendedGameState) => void;
-  deleteUserData: (userId: string) => Promise<boolean>;
+// Расширим тип SaveResult для внутреннего использования
+type EnhancedSaveResult = SaveResult & {
+  source?: string;
+  isNewUser?: boolean;
+  wasRepaired?: boolean;
+  dataSize?: number;
+  duration?: number;
+};
+
+// Приоритеты сохранения (определим здесь, чтобы избежать проблем с импортом)
+export enum SavePriority {
+  LOW = 'low',           // Низкий приоритет
+  MEDIUM = 'medium',     // Средний приоритет
+  HIGH = 'high',         // Высокий приоритет
+  CRITICAL = 'critical'  // Критический приоритет
 }
 
-// Значение контекста по умолчанию
-const SaveManagerContext = createContext<SaveManagerContextType>({
-  isInitialized: false,
-  isSaving: false,
-  isLoading: false,
-  lastSaveResult: null,
-  lastLoadResult: null,
-  save: async () => ({ success: false, timestamp: Date.now(), error: 'Система сохранений не инициализирована' }),
-  load: async () => ({ success: false, timestamp: Date.now(), error: 'Система сохранений не инициализирована' }),
-  createEmergencyBackup: () => {},
-  deleteUserData: async () => false
-});
+// Интерфейс контекста менеджера сохранений
+interface SaveManagerContextType {
+  // Состояние
+  isInitialized: boolean;
+  isLoading: boolean;
+  isSaving: boolean;
+  lastSaveResult: EnhancedSaveResult | null;
+  lastLoadResult: EnhancedSaveResult | null;
 
-// Хук для использования контекста
-export const useSaveManager = () => useContext(SaveManagerContext);
+  // Методы для управления сохранениями
+  save: (userId: string, state: ExtendedGameState, priority?: SavePriority) => Promise<EnhancedSaveResult>;
+  load: (userId: string) => Promise<EnhancedSaveResult>;
+  createEmergencyBackup: (userId: string, state: ExtendedGameState) => void;
+  exportToString: (userId: string, state: ExtendedGameState) => Promise<string | null>;
+  importFromString: (userId: string, saveData: string) => Promise<EnhancedSaveResult>;
+}
 
-// Провайдер контекста
-export const SaveManagerProvider: React.FC<{
-  children: React.ReactNode;
-}> = ({ children }) => {
-  // Используем глобальный экземпляр saveManager
-  const saveManagerRef = useRef(saveManager);
-  
-  // Состояние для отслеживания инициализации и операций
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
+// Создаем контекст
+const SaveManagerContext = createContext<SaveManagerContextType | null>(null);
+
+// Свойства провайдера
+interface SaveManagerProviderProps {
+  children: ReactNode;
+}
+
+// Префикс для экстренных сохранений
+const EMERGENCY_SAVE_PREFIX = 'emergency_save_';
+
+/**
+ * Провайдер для управления сохранениями игры
+ */
+export const SaveManagerProvider: React.FC<SaveManagerProviderProps> = ({ children }) => {
+  // Состояние операций сохранения
+  const [isInitialized, setIsInitialized] = useState<boolean>(true); // Всегда инициализировано при использовании localStorage
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [lastSaveResult, setLastSaveResult] = useState<SaveResult | null>(null);
-  const [lastLoadResult, setLastLoadResult] = useState<LoadResult | null>(null);
-  
-  // Инициализация менеджера сохранений при монтировании
-  useEffect(() => {
-    let mounted = true;
-    const saveManager = saveManagerRef.current;
-    
-    const initialize = async () => {
-      try {
-        const result = await saveManager.initialize();
-        if (mounted) {
-          setIsInitialized(result);
-        }
-      } catch (error) {
-        console.error('Ошибка инициализации системы сохранений:', error);
-        if (mounted) {
-          setIsInitialized(false);
-        }
-      }
-    };
-    
-    initialize();
-    
-    // Очистка при размонтировании
-    return () => {
-      mounted = false;
-    };
-  }, []);
-  
-  // Функция сохранения с отслеживанием состояния
-  const save = async (userId: string, state: ExtendedGameState): Promise<SaveResult> => {
-    setIsSaving(true);
-    const saveManager = saveManagerRef.current;
-    
-    try {
-      const result = await saveManager.save(userId, state);
-      setLastSaveResult(result);
-      return result;
-    } catch (error) {
-      const errorResult: SaveResult = {
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [lastSaveResult, setLastSaveResult] = useState<EnhancedSaveResult | null>(null);
+  const [lastLoadResult, setLastLoadResult] = useState<EnhancedSaveResult | null>(null);
+
+  // Создаем локальные экземпляры SaveSystem по требованию
+  const getSaveSystem = (userId: string) => {
+    return new SaveSystem(userId);
+  };
+
+  /**
+   * Сохраняет состояние игры
+   */
+  const save = async (
+    userId: string, 
+    state: ExtendedGameState, 
+    priority: SavePriority = SavePriority.MEDIUM
+  ): Promise<EnhancedSaveResult> => {
+    if (!userId) {
+      return {
         success: false,
+        error: "ID пользователя не указан",
+        message: "Невозможно сохранить: не указан ID пользователя",
         timestamp: Date.now(),
-        error: error instanceof Error ? error.message : String(error)
+        metrics: { duration: 0 },
+        source: "none"
+      };
+    }
+
+    try {
+      setIsSaving(true);
+      const startTime = Date.now();
+      const saveSystem = getSaveSystem(userId);
+      const result = await saveSystem.save(state);
+      const duration = Date.now() - startTime;
+      
+      // Добавляем дополнительные поля для совместимости
+      const enhancedResult: EnhancedSaveResult = {
+        ...result,
+        source: "localStorage",
+        duration: duration,
+        dataSize: result.metrics?.dataSize || 0
+      };
+      
+      setLastSaveResult(enhancedResult);
+      return enhancedResult;
+    } catch (error) {
+      const errorResult: EnhancedSaveResult = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        message: "Ошибка при сохранении",
+        timestamp: Date.now(),
+        metrics: { duration: 0 },
+        source: "error"
       };
       setLastSaveResult(errorResult);
       return errorResult;
@@ -96,21 +116,51 @@ export const SaveManagerProvider: React.FC<{
       setIsSaving(false);
     }
   };
-  
-  // Функция загрузки с отслеживанием состояния
-  const load = async (userId: string): Promise<LoadResult> => {
-    setIsLoading(true);
-    const saveManager = saveManagerRef.current;
-    
-    try {
-      const result = await saveManager.load(userId);
-      setLastLoadResult(result);
-      return result;
-    } catch (error) {
-      const errorResult: LoadResult = {
+
+  /**
+   * Загружает состояние игры
+   */
+  const load = async (userId: string): Promise<EnhancedSaveResult> => {
+    if (!userId) {
+      return {
         success: false,
+        error: "ID пользователя не указан",
+        message: "Невозможно загрузить: не указан ID пользователя",
         timestamp: Date.now(),
-        error: error instanceof Error ? error.message : String(error)
+        metrics: { duration: 0 },
+        source: "none",
+        isNewUser: true
+      };
+    }
+
+    try {
+      setIsLoading(true);
+      const startTime = Date.now();
+      const saveSystem = getSaveSystem(userId);
+      const result = await saveSystem.load();
+      const duration = Date.now() - startTime;
+      
+      // Добавляем дополнительные поля для совместимости
+      const enhancedResult: EnhancedSaveResult = {
+        ...result,
+        source: "localStorage",
+        isNewUser: !result.success || !result.data,
+        wasRepaired: false,
+        duration: duration,
+        dataSize: result.metrics?.dataSize || 0
+      };
+      
+      setLastLoadResult(enhancedResult);
+      return enhancedResult;
+    } catch (error) {
+      const errorResult: EnhancedSaveResult = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        message: "Ошибка при загрузке",
+        timestamp: Date.now(),
+        metrics: { duration: 0 },
+        source: "error",
+        isNewUser: true
       };
       setLastLoadResult(errorResult);
       return errorResult;
@@ -118,43 +168,111 @@ export const SaveManagerProvider: React.FC<{
       setIsLoading(false);
     }
   };
-  
-  // Функция создания экстренной резервной копии
+
+  /**
+   * Создаёт экстренную резервную копию состояния игры
+   */
   const createEmergencyBackup = (userId: string, state: ExtendedGameState): void => {
-    const saveManager = saveManagerRef.current;
-    
+    if (!userId) {
+      console.error("[SaveManager] Не удалось создать экстренную копию: не указан ID пользователя");
+      return;
+    }
+
     try {
-      saveManager.createEmergencyBackup(userId, state);
+      if (typeof localStorage !== 'undefined') {
+        // Создаем ключ для экстренного сохранения
+        const emergencyKey = `${EMERGENCY_SAVE_PREFIX}${userId}`;
+        
+        // Сохраняем состояние с временной меткой
+        localStorage.setItem(emergencyKey, JSON.stringify({
+          state,
+          timestamp: Date.now()
+        }));
+      }
     } catch (error) {
-      console.error('Ошибка при создании экстренной копии:', error);
+      console.error("[SaveManager] Ошибка при создании экстренной копии:", error);
     }
   };
-  
-  // Функция удаления данных пользователя
-  const deleteUserData = async (userId: string): Promise<boolean> => {
-    const saveManager = saveManagerRef.current;
-    
+
+  /**
+   * Экспортирует состояние игры в строку
+   */
+  const exportToString = async (userId: string, state: ExtendedGameState): Promise<string | null> => {
+    if (!userId) {
+      return null;
+    }
+
     try {
-      return await saveManager.deleteUserData(userId);
+      const saveSystem = getSaveSystem(userId);
+      return saveSystem.exportToString();
     } catch (error) {
-      console.error('Ошибка при удалении данных:', error);
-      return false;
+      console.error("[SaveManager] Ошибка при экспорте:", error);
+      return null;
     }
   };
-  
+
+  /**
+   * Импортирует состояние игры из строки
+   */
+  const importFromString = async (userId: string, saveData: string): Promise<EnhancedSaveResult> => {
+    if (!userId) {
+      return {
+        success: false,
+        error: "ID пользователя не указан",
+        message: "Невозможно импортировать: не указан ID пользователя",
+        timestamp: Date.now(),
+        metrics: { duration: 0 },
+        source: "none"
+      };
+    }
+
+    try {
+      setIsLoading(true);
+      const startTime = Date.now();
+      const saveSystem = getSaveSystem(userId);
+      const result = await saveSystem.importFromString(saveData);
+      const duration = Date.now() - startTime;
+      
+      // Добавляем дополнительные поля для совместимости
+      const enhancedResult: EnhancedSaveResult = {
+        ...result,
+        source: "import",
+        duration: duration,
+        dataSize: result.metrics?.dataSize || 0
+      };
+      
+      setLastLoadResult(enhancedResult);
+      return enhancedResult;
+    } catch (error) {
+      const errorResult: EnhancedSaveResult = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        message: "Ошибка при импорте",
+        timestamp: Date.now(),
+        metrics: { duration: 0 },
+        source: "error"
+      };
+      setLastLoadResult(errorResult);
+      return errorResult;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Значение контекста
   const contextValue: SaveManagerContextType = {
     isInitialized,
-    isSaving,
     isLoading,
+    isSaving,
     lastSaveResult,
     lastLoadResult,
     save,
     load,
     createEmergencyBackup,
-    deleteUserData
+    exportToString,
+    importFromString
   };
-  
+
   return (
     <SaveManagerContext.Provider value={contextValue}>
       {children}
@@ -162,4 +280,15 @@ export const SaveManagerProvider: React.FC<{
   );
 };
 
-export default SaveManagerProvider; 
+/**
+ * Хук для использования менеджера сохранений
+ */
+export const useSaveManager = (): SaveManagerContextType => {
+  const context = useContext(SaveManagerContext);
+  
+  if (!context) {
+    throw new Error('useSaveManager должен использоваться внутри SaveManagerProvider');
+  }
+  
+  return context;
+}; 

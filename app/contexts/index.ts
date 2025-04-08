@@ -8,4 +8,4 @@ export * from './game/providers';
 
 // Другие контексты
 export * from './FarcasterContext';
-export * from './SaveContext'; 
+export * from './SaveManagerProvider'; 

@@ -1,7 +1,4 @@
-/**
- * @type {import('next').NextConfig}
- */
-
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   // Указываем, что будем использовать файл .env.local для всех режимов
   env: {
@@ -19,7 +16,6 @@ const nextConfig = {
 
   // Настройки изображений
   images: {
-    domains: ['images.neynar.com', 'cloudflare-ipfs.com', 'snotcoin.online', 'imagedelivery.net'],
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       {
@@ -34,12 +30,53 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.neynar.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cloudflare-ipfs.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'snotcoin.online',
+      },
+      {
+        protocol: 'https',
+        hostname: 'imagedelivery.net',
+      },
     ],
   },
 
-  // Настройки вебпака
-  webpack: (config, { dev, isServer }) => {
-    // Кастомные настройки вебпака можно добавить здесь
+  // Настройка webpack для правильной обработки CSS
+  webpack: (config) => {
+    // Находим правило для CSS
+    const cssRule = config.module.rules.find(
+      (rule) => rule.test && rule.test.toString().includes('css')
+    );
+
+    if (cssRule) {
+      // Добавляем loaders если они отсутствуют
+      const hasPostCSSLoader = cssRule.use.some(
+        (loader) => loader.loader && loader.loader.includes('postcss-loader')
+      );
+
+      if (!hasPostCSSLoader) {
+        console.log('Adding PostCSS loader to CSS processing pipeline');
+        cssRule.use.push({
+          loader: 'postcss-loader',
+          options: {
+            postcssOptions: {
+              plugins: ['tailwindcss', 'autoprefixer'],
+            },
+          },
+        });
+      }
+    } else {
+      console.log('CSS rule not found in webpack config');
+    }
+
     return config;
   },
 
@@ -57,19 +94,9 @@ const nextConfig = {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
           },
-          // Убираем ограничение X-Frame-Options, чтобы разрешить отображение в фрейме
-          // {
-          //   key: 'X-Frame-Options',
-          //   value: 'SAMEORIGIN',
-          // },
         ],
       },
     ];
-  },
-
-  // Переопределяем фазы сборки для всегда использования .env.local
-  experimental: {
-    // Включаем экспериментальные функции, если нужно
   },
 };
 

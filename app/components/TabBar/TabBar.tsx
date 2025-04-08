@@ -15,6 +15,23 @@ const TabBar: React.FC<TabBarProps> = () => {
   const dispatch = useGameDispatch()
   const { t } = useTranslation()
   const router = useRouter()
+  
+  // Установка значения по умолчанию, если activeTab не определен или некорректен
+  useEffect(() => {
+    // Создаем массив допустимых идентификаторов вкладок
+    const validTabIds = tabs.map(tab => tab.id);
+    
+    // Проверяем, является ли activeTab допустимым TabId
+    const isValidTab = activeTab && validTabIds.includes(activeTab as TabId);
+    
+    if (!isValidTab) {
+      console.log(`[TabBar] Некорректное значение activeTab: "${activeTab}". Устанавливаем "laboratory"`);
+      dispatch(prevState => ({
+        ...prevState,
+        activeTab: "laboratory"
+      }));
+    }
+  }, [activeTab, dispatch]);
 
   // Предварительно загружаем страницу улучшений для быстрого перехода
   useEffect(() => {

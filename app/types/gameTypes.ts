@@ -544,7 +544,7 @@ export function createDefaultGameState(): GameState {
       isBackgroundMusicMuted: false
     },
     hideInterface: false,
-    activeTab: 'game',
+    activeTab: 'laboratory',
     fillingSpeed: 0.01, // Синхронизировано с inventory.fillingSpeed
     containerLevel: 1,
     isPlaying: false,

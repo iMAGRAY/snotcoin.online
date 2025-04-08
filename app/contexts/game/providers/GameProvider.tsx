@@ -3,16 +3,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GameStateContext, SetGameStateContext, IsSavingContext } from '../contexts'
 import { GameState, ExtendedGameState, createInitialGameState } from '../../../types/gameTypes'
-import { 
-  cleanupLocalStorage, 
-  safeSetItem, 
-  getLocalStorageSize 
-} from '../../../services/localStorageManager'
-import { SaveManager } from '../../../services/saveSystem/SaveManager'
-import { StorageType, SavePriority } from '../../../services/saveSystem/types'
 import { updateResourcesBasedOnTimePassed } from '../../../utils/resourceUtils'
 import { getFillingSpeedByLevel } from '../../../utils/gameUtils'
-import { useSaveManager } from '../../../contexts/SaveManagerProvider'
+import { useSaveManager, SavePriority } from '@/app/contexts/SaveManagerProvider'
 
 interface GameProviderProps {
   children: React.ReactNode

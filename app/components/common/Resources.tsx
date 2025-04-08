@@ -163,7 +163,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     }, [snotCoins, snot, showOnlySnotCoin, showOnlySnot]);
 
     // Проверка условий для отображения StatusDisplay - перенесено сюда
-    const isLaboratoryTab = activeTab === 'laboratory';
+    const isLaboratoryTab = (activeTab || 'laboratory') === 'laboratory';
     const hasAllRequiredProps = 
       containerCapacity !== undefined && 
       containerLevel !== undefined && 

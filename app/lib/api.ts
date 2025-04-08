@@ -13,18 +13,12 @@ export interface ApiResponse {
   processingTime?: number;
 }
 
-export interface SaveGameResponse extends ApiResponse {
-  metrics?: Record<string, any>;
-  isBatched?: boolean;
-  batchId?: string;
-  totalRequests?: number;
-}
-
-export interface LoadGameResponse extends ApiResponse {
-  data?: {
-    gameState: GameState;
-    metadata?: Record<string, any>;
-  };
+// Опции API запросов
+interface RequestOptions {
+  headers?: Record<string, string>;
+  body?: any;
+  method?: string;
+  timeout?: number;
 }
 
 export interface LoginResponse extends ApiResponse {
@@ -35,19 +29,6 @@ export interface LoginResponse extends ApiResponse {
 
 export interface ProfileResponse extends ApiResponse {
   user?: User;
-}
-
-// Опции API запросов
-interface RequestOptions {
-  headers?: Record<string, string>;
-  body?: any;
-  method?: string;
-  timeout?: number;
-}
-
-interface SaveGameOptions {
-  isCritical?: boolean;
-  reason?: string;
 }
 
 // Класс для работы с API
@@ -145,62 +126,7 @@ class ApiClient {
   }
   
   /**
-   * Сохраняет прогресс игры
-   */
-  async saveGameProgress(
-    gameState: GameState, 
-    options: SaveGameOptions = {}
-  ): Promise<SaveGameResponse> {
-    try {
-      const token = localStorage.getItem('auth_token');
-      
-      if (!token) {
-        throw new Error('Требуется авторизация');
-      }
-      
-      return await this.request<SaveGameResponse>('/api/game/save-progress', {
-        method: 'POST',
-        headers: this.withAuthToken(token),
-        body: {
-          gameState,
-          isCritical: options.isCritical || false,
-          reason: options.reason || 'manual'
-        }
-      });
-    } catch (error) {
-      console.error('API error (saveGameProgress):', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-  
-  /**
-   * Загружает прогресс игры
-   */
-  async loadGameProgress(): Promise<LoadGameResponse> {
-    try {
-      const token = localStorage.getItem('auth_token');
-      
-      if (!token) {
-        throw new Error('Требуется авторизация');
-      }
-      
-      return await this.request<LoadGameResponse>('/api/game/load-progress', {
-        headers: this.withAuthToken(token)
-      });
-    } catch (error) {
-      console.error('API error (loadGameProgress):', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-  
-  /**
-   * Выполняет вход в систему
+   * Авторизация пользователя через провайдер
    */
   async login(provider: string, credentials?: any): Promise<LoginResponse> {
     try {
@@ -209,7 +135,7 @@ class ApiClient {
         body: credentials
       });
     } catch (error) {
-      console.error('API error (login):', error);
+      console.error(`API error (login/${provider}):`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -218,7 +144,7 @@ class ApiClient {
   }
   
   /**
-   * Обновляет токен авторизации
+   * Обновляет токен доступа
    */
   async refreshToken(refreshToken: string): Promise<LoginResponse> {
     try {
@@ -240,7 +166,7 @@ class ApiClient {
    */
   async getUserProfile(token: string): Promise<ProfileResponse> {
     try {
-      return await this.request<ProfileResponse>('/api/user/profile', {
+      return await this.request<ProfileResponse>('/api/users/profile', {
         headers: this.withAuthToken(token)
       });
     } catch (error) {

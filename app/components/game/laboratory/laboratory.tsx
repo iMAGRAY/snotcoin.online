@@ -15,7 +15,6 @@ import { getSafeInventory, calculateFillingPercentage } from "../../../utils/res
 import { FILL_RATES } from "../../../constants/gameConstants"
 import { useSaveManager } from "../../../contexts/SaveManagerProvider"
 import { SavePriority } from "../../../services/saveSystem/types"
-import { cleanupLocalStorage, getLocalStorageSize, cleanupUserBackups } from "../../../services/localStorageManager"
 import { useForceSave } from "../../../hooks/useForceSave"
 
 // Порог заполнения localStorage, при котором запускается очистка (в процентах)
@@ -181,20 +180,9 @@ const Laboratory: React.FC = () => {
       // Обновляем время последнего сохранения
       lastContainerClickRef.current = now;
       
-      // Проверяем заполнение localStorage
-      const { percent } = getLocalStorageSize();
-      
-      // Если заполнение выше порога, запускаем очистку
-      if (percent > LOCAL_STORAGE_CLEANUP_THRESHOLD) {
-        cleanupLocalStorage(LOCAL_STORAGE_CLEANUP_THRESHOLD, userId);
-      }
-      
       // Используем SaveManager для сохранения состояния
       saveManager.save(userId, gameState).then(result => {
-        if (result.success) {
-          // После успешного сохранения очищаем старые копии, оставляя только MAX_LOCAL_SAVES последних
-          const removedCount = cleanupUserBackups(userId, MAX_LOCAL_SAVES);
-        }
+        // Можно добавить дополнительную логику при успешном сохранении
       });
     } catch (error) {
       // Обработка ошибок без логирования

@@ -1,13 +1,12 @@
-import type { Metadata } from "next"
-import "./globals.css"
-import { Providers } from "./providers"
+import type { Metadata } from "next";
+import "./globals.scss";
+import { Providers } from "./providers";
 // import Script from "next/script";
 
-// Используем системные шрифты вместо локальных или Google шрифтов
-const fontClass = "font-sans"; // Tailwind CSS класс для sans-serif шрифтов
-
-// Open Graph данные
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
+// Данные для SEO
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://snotcoin.online";
+const title = "SnotCoin";
+const description = "PLAY 2 SNOT";
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
@@ -15,32 +14,26 @@ export const metadata: Metadata = {
   description: "PLAY 2 SNOT",
   icons: {
     icon: [
-      { url: '/favicon/favicon.png', type: 'image/png' },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
     ],
-    shortcut: '/favicon/favicon.png',
-    apple: '/favicon/favicon.png',
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
   },
   openGraph: {
-    type: 'website',
+    type: "website",
     url: siteUrl,
-    title: 'Snotcoin - Фарми, зарабатывай, выводи!',
-    description: 'Присоединяйся к экосистеме Snotcoin в Farcaster прямо сейчас!',
-    images: [
-      {
-        url: imageUrl,
-        width: 1200,
-        height: 630,
-        alt: 'Snotcoin Logo',
-      }
-    ],
+    title,
+    description,
+    siteName: title,
+    images: [{ url: imageUrl }],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Snotcoin - Фарми, зарабатывай, выводи!',
-    description: 'Присоединяйся к экосистеме Snotcoin в Farcaster прямо сейчас!',
+    card: "summary_large_image",
+    title,
+    description,
     images: [imageUrl],
-  }
-}
+  },
+};
 
 export default function RootLayout({
   children
@@ -50,14 +43,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* CSP директивы устанавливаются через HTTP заголовки в middleware */}
+        {/* <meta name="darkreader-lock" /> */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+        />
+        {/* Отключить автоматическое определение телефонных номеров */}
+        <meta name="format-detection" content="telephone=no" />
+        <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className={fontClass}>
-        <Providers>
-          {children}
-        </Providers>
-        {/* Удалили подключение JS файла, который мог вызывать ошибку */}
+      <body>
+        <Providers>{children}</Providers>
       </body>
     </html>
-  )
+  );
 }

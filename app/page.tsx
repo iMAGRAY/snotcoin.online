@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import LoadingScreen from "./components/LoadingScreen"
 import { useEffect } from "react"
-import { useGameDispatch } from "./contexts"
+import { useGameDispatch, useGameState } from "./contexts"
 
 // Динамический импорт HomeContent без SSR
 const HomeContent = dynamic(() => import("./components/HomeContent"), {
@@ -22,6 +22,21 @@ const FarcasterFrameHandler = dynamic(
 
 export default function Home() {
   const dispatch = useGameDispatch();
+  const gameState = useGameState();
+  
+  // Проверка активной вкладки при загрузке страницы
+  useEffect(() => {
+    const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
+    const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
+    
+    if (!isValidTab) {
+      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
+      dispatch(prevState => ({
+        ...prevState,
+        activeTab: "laboratory"
+      }));
+    }
+  }, [dispatch, gameState.activeTab]);
   
   return (
     <main>

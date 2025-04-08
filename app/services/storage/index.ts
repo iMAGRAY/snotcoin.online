@@ -1,1 +1,4 @@
-export * from './gameStorageService'; 
+/**
+ * Экспорт сервисов хранения данных
+ */
+export * from './localStorageService'; 

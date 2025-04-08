@@ -29,7 +29,6 @@ const publicPaths = [
  * Защищенные пути API, которые требуют аутентификации
  */
 const protectedApiPaths = [
-  '/api/game',
   '/api/user',
   // Добавьте другие защищенные пути API здесь
 ];

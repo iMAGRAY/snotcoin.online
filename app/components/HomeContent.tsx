@@ -57,6 +57,21 @@ const HomeContent: React.FC = () => {
   
   const readyCalledRef = useRef(false);
   
+  // Проверка и установка активной вкладки при монтировании
+  useEffect(() => {
+    const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
+    const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
+    
+    if (!isValidTab) {
+      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
+      // Устанавливаем лабораторию как активную вкладку по умолчанию
+      dispatch(prevState => ({
+        ...prevState,
+        activeTab: "laboratory"
+      }));
+    }
+  }, [gameState.activeTab, dispatch]);
+  
   useEffect(() => {
     if (!gameState.isLoading && !readyCalledRef.current) {
       // Только один вызов для SDK Ready
@@ -85,7 +100,10 @@ const HomeContent: React.FC = () => {
   }, []);
 
   const renderActiveTab = useCallback(() => {
-    switch (gameState.activeTab) {
+    // Используем явную проверку на наличие activeTab с установкой дефолтного значения
+    const currentTab = gameState.activeTab || "laboratory";
+    
+    switch (currentTab) {
       case "merge":
         return <Merge />;
       case "storage":
