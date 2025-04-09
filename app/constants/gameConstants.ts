@@ -95,7 +95,7 @@ export const createInitialGameState = (userId: string): ExtendedGameState => {
       isBackgroundMusicMuted: false
     },
     hideInterface: false,
-    activeTab: 'main',
+    activeTab: 'laboratory',
     fillingSpeed: 1, // Общая скорость заполнения на уровне 1
     containerLevel: 1,
     isPlaying: false,
@@ -195,7 +195,7 @@ export const initialState: GameState = {
     isBackgroundMusicMuted: false
   },
   hideInterface: false,
-  activeTab: 'game',
+  activeTab: 'laboratory',
   fillingSpeed: 1,
   containerLevel: 1,
   isPlaying: false,

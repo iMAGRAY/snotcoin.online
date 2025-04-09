@@ -61,20 +61,53 @@ const HomeContent: React.FC = () => {
   
   const readyCalledRef = useRef(false);
   
+  // Добавляем логирование при монтировании компонента
+  useEffect(() => {
+    console.log('[HomeContent] Компонент смонтирован', {
+      isLoading: gameState.isLoading,
+      hideInterface: gameState.hideInterface,
+      activeTab: gameState.activeTab,
+      dataSource: gameState._dataSource,
+      lastAction: gameState._lastAction
+    });
+
+    // Если интерфейс скрыт, показываем его
+    if (gameState.hideInterface) {
+      console.log('[HomeContent] Принудительно показываем интерфейс');
+      dispatch(prevState => ({
+        ...prevState,
+        hideInterface: false
+      }));
+    }
+  }, []);
+  
   // Проверка и установка активной вкладки при монтировании
   useEffect(() => {
     const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
     const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
     
-    if (!isValidTab) {
-      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
+    // Проверяем, является ли это первым входом (нет сохраненного состояния)
+    const isFirstEntry = gameState._dataSource === 'new' || !gameState._lastAction;
+    
+    console.log('[HomeContent] Проверка активной вкладки:', {
+      currentTab: gameState.activeTab,
+      isValidTab,
+      isFirstEntry,
+      dataSource: gameState._dataSource,
+      hideInterface: gameState.hideInterface
+    });
+    
+    // Устанавливаем лабораторию как активную вкладку только при первом входе
+    // или если текущая вкладка некорректна
+    if (!isValidTab || isFirstEntry) {
+      console.log(`[HomeContent] ${isFirstEntry ? 'Первый вход' : 'Некорректное значение activeTab'}. Устанавливаем "laboratory"`);
       // Устанавливаем лабораторию как активную вкладку по умолчанию
       dispatch(prevState => ({
         ...prevState,
         activeTab: "laboratory"
       }));
     }
-  }, [gameState.activeTab, dispatch]);
+  }, [gameState.activeTab, gameState._dataSource, gameState._lastAction, dispatch]);
   
   useEffect(() => {
     if (!gameState.isLoading && !readyCalledRef.current) {
@@ -103,9 +136,30 @@ const HomeContent: React.FC = () => {
     return () => window.removeEventListener("resize", fixViewportHeight);
   }, []);
 
+  // Добавляем эффект для отслеживания изменений hideInterface
+  useEffect(() => {
+    console.log('[HomeContent] Изменение состояния интерфейса:', {
+      hideInterface: gameState.hideInterface,
+      activeTab: gameState.activeTab,
+      isLoading: gameState.isLoading,
+      dataSource: gameState._dataSource,
+      lastAction: gameState._lastAction,
+      gameStarted: gameState.gameStarted,
+      isGameInstanceRunning: gameState.isGameInstanceRunning
+    });
+  }, [gameState.hideInterface, gameState.activeTab, gameState.isLoading, gameState._dataSource, gameState._lastAction, gameState.gameStarted, gameState.isGameInstanceRunning]);
+
   const renderActiveTab = useCallback(() => {
     // Используем явную проверку на наличие activeTab с установкой дефолтного значения
     const currentTab = gameState.activeTab || "laboratory";
+    
+    console.log('[HomeContent] Рендеринг активной вкладки:', {
+      currentTab,
+      hideInterface: gameState.hideInterface,
+      isLoading: gameState.isLoading,
+      dataSource: gameState._dataSource,
+      lastAction: gameState._lastAction
+    });
     
     switch (currentTab) {
       case "merge":
@@ -123,26 +177,46 @@ const HomeContent: React.FC = () => {
   }, [gameState.activeTab]);
 
   if (gameState.isLoading) {
+    console.log('[HomeContent] Игровое состояние загружается, возвращаем null');
     return null;
   }
+
+  console.log('[HomeContent] Рендеринг компонента:', {
+    hideInterface: gameState.hideInterface,
+    activeTab: gameState.activeTab,
+    shouldShowTabBar: !gameState.hideInterface,
+    shouldShowResources: !gameState.hideInterface
+  });
 
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
       <MotionDiv className='main-game-container' style={{ height: viewportHeight }}>
-        <Resources 
-          isVisible={!gameState.hideInterface}
-          activeTab={gameState.activeTab || "laboratory"}
-          snot={gameState.inventory?.snot || 0}
-          snotCoins={gameState.inventory?.snotCoins || 0}
-          containerCapacity={gameState.inventory?.containerCapacity}
-          containerLevel={gameState.container?.level ?? 0}
-          containerSnot={gameState.inventory?.containerSnot}
-          containerFillingSpeed={gameState.inventory?.fillingSpeed}
-          fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}          
-        />
+        {!gameState.hideInterface ? (
+          <Resources 
+            isVisible={!gameState.hideInterface}
+            activeTab={gameState.activeTab || "laboratory"}
+            snot={gameState.inventory?.snot || 0}
+            snotCoins={gameState.inventory?.snotCoins || 0}
+            containerCapacity={gameState.inventory?.containerCapacity}
+            containerLevel={gameState.container?.level ?? 0}
+            containerSnot={gameState.inventory?.containerSnot}
+            containerFillingSpeed={gameState.inventory?.fillingSpeed}
+            fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}          
+          />
+        ) : (
+          <div style={{ display: 'none' }}>Resources hidden</div>
+        )}
         {renderActiveTab()} 
-        {!gameState.hideInterface && <TabBar />}
-        {!gameState.hideInterface && <SaveIndicator />}
+        {!gameState.hideInterface ? (
+          <TabBar />
+        ) : (
+          <div style={{ display: 'none' }}>TabBar hidden</div>
+        )}
+        {!gameState.hideInterface ? (
+          <SaveIndicator />
+        ) : (
+          <div style={{ display: 'none' }}>SaveIndicator hidden</div>
+        )}
       </MotionDiv>
     </ErrorBoundary>
   );
