@@ -107,8 +107,8 @@ export function middleware(request: NextRequest) {
 
   // Перенаправление для авторизованных пользователей с авторизационных маршрутов
   if (isAuthenticated && authRoutes.some(route => pathname.startsWith(route))) {
-    logger.info(`Redirecting authenticated user from auth route: ${pathname} to /`);
-    return NextResponse.redirect(new URL("/", request.url));
+    logger.info(`Redirecting authenticated user from auth route: ${pathname} to /profile`);
+    return NextResponse.redirect(new URL("/profile", request.url));
   }
 
   return NextResponse.next();

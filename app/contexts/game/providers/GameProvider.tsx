@@ -59,31 +59,12 @@ export function GameProvider({
     // Пытаемся загрузить сохраненное состояние, если есть userId
     if (userId && progressService) {
       const savedState = progressService.loadGameState();
-      console.log('[GameProvider] Загружено сохраненное состояние игры:', {
-        dataSource: savedState._dataSource || 'unknown',
-        hideInterface: savedState.hideInterface,
-        activeTab: savedState.activeTab,
-        isLoading: savedState.isLoading
-      });
-      // Принудительно показываем интерфейс при загрузке состояния
-      return {
-        ...savedState,
-        hideInterface: false
-      };
+      console.log('[GameProvider] Загружено сохраненное состояние игры:', savedState._dataSource || 'unknown');
+      return savedState;
     }
     
     // Иначе создаем новое состояние
-    const initialState = createInitialGameState(userId);
-    console.log('[GameProvider] Создано новое состояние игры:', {
-      dataSource: initialState._dataSource,
-      hideInterface: initialState.hideInterface,
-      activeTab: initialState.activeTab,
-      isLoading: initialState.isLoading
-    });
-    return {
-      ...initialState,
-      hideInterface: false
-    };
+    return createInitialGameState(userId);
   });
   
   // Создаем ref для хранения предыдущего значения containerSnot
@@ -91,16 +72,6 @@ export function GameProvider({
 
   // Флаг, указывающий, что произошли изменения, которые нужно сохранить
   const stateChangedRef = useRef(false);
-
-  // Добавляем эффект для отслеживания изменений важных свойств состояния
-  useEffect(() => {
-    console.log('[GameProvider] Изменение состояния игры:', {
-      hideInterface: state.hideInterface,
-      activeTab: state.activeTab,
-      isLoading: state.isLoading,
-      dataSource: state._dataSource
-    });
-  }, [state.hideInterface, state.activeTab, state.isLoading, state._dataSource]);
 
   // Обновление состояния игры каждый тик
   useEffect(() => {
