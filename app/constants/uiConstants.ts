@@ -59,7 +59,7 @@ export const ICONS = {
   AUTH: {
     BACKGROUND: '/images/auth/authentication.webp',
   },
-} as const;
+};
 
 // Цветовые классы
 export const COLORS = {
