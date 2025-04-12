@@ -51,6 +51,25 @@ export default function RootLayout({
         {/* Отключить автоматическое определение телефонных номеров */}
         <meta name="format-detection" content="telephone=no" />
         <link rel="icon" href="/favicon.ico" />
+        
+        {/* Farcaster Frame Meta Tags */}
+        <meta 
+          name="fc:frame" 
+          content={JSON.stringify({
+            version: "next",
+            imageUrl: `${siteUrl}/game/cast.webp`,
+            button: {
+              title: "Play Game",
+              action: {
+                type: "launch_frame",
+                name: "Snotcoin",
+                url: siteUrl,
+                splashImageUrl: `${siteUrl}/game/Splashimage.webp`,
+                splashBackgroundColor: "#0F172A"
+              }
+            }
+          })}
+        />
       </head>
       <body>
         <Providers>

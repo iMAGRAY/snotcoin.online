@@ -24,6 +24,7 @@ export default function Home() {
   const dispatch = useGameDispatch();
   const gameState = useGameState();
   const [isClient, setIsClient] = useState(false);
+  const [isFarcasterInitializing, setIsFarcasterInitializing] = useState(false);
   
   // Проверка активной вкладки при загрузке страницы
   useEffect(() => {
@@ -32,6 +33,35 @@ export default function Home() {
     
     // Устанавливаем заголовок страницы для всех устройств
     document.title = "SnotCoin - Merge Game";
+    
+    // Проверяем, открыты ли мы из Farcaster фрейма
+    const isFromFrame = typeof window !== 'undefined' && (
+      window.location.search.includes('embed=') || 
+      window.location.search.includes('frame=') ||
+      window.location.search.includes('fc=')
+    );
+    
+    if (isFromFrame) {
+      console.log('[Home] Opened from Farcaster frame');
+      
+      // Отмечаем, что мы находимся в процессе инициализации Farcaster
+      setIsFarcasterInitializing(true);
+      
+      // Устанавливаем приоритет для загрузки Farcaster-компонентов
+      // Это может помочь быстрее отобразить контент в Farcaster клиенте
+      if (typeof window !== 'undefined') {
+        try {
+          // Предзагрузка критических ресурсов для Farcaster
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'script';
+          link.href = 'https://esm.sh/@farcaster/frame-sdk';
+          document.head.appendChild(link);
+        } catch (e) {
+          console.error('[Home] Error preloading Farcaster SDK:', e);
+        }
+      }
+    }
     
     const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
     const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);

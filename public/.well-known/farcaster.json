@@ -1,0 +1,19 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI1Mzc5OCwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDRGZWQ0YTcxQmY5NzY4QzU0YzIzN2Q4NzQxZTQ1MDlCNWNiNEM5MzcifQ",
+    "payload": "eyJkb21haW4iOiJzbm90Y29pbi5vbmxpbmUifQ",
+    "signature": "MHg1NGI5NmFhN2Q1OWYwNDFmNGY4OTBkYzA4NTBiN2I5ODViMWEyNGM1YmZlOGNkNTdiZjljNDE2M2FjNzg5MGY5MGM5N2NlMjRkNjkyODBjZmE0YjNhNTg0MjExZjM2YjMyMDRlODE2ZTAxNTUxNGMzNTI4ZDhmMWFkOTA4MWY0MzFj"
+  },
+  "frame": {
+    "version": "1",
+    "name": "Snotcoin",
+    "description": "PLAY 2 SNOT - Merge, earn and progress in this addictive Farcaster game",
+    "homeUrl": "https://snotcoin.online",
+    "iconUrl": "https://snotcoin.online/icon.png",
+    "imageUrl": "https://snotcoin.online/game/cast.webp",
+    "buttonTitle": "Play Game",
+    "splashImageUrl": "https://snotcoin.online/game/Splashimage.webp",
+    "splashBackgroundColor": "#0F172A",
+    "webhookUrl": "https://snotcoin.online/api/farcaster/webhook"
+  }
+} 

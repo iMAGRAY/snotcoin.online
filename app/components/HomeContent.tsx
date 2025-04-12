@@ -13,6 +13,8 @@ import { ErrorBoundary, ErrorDisplay } from "./ErrorBoundary"
 
 // Импортируем SDK для Mini Apps
 import { sdk } from '@farcaster/frame-sdk'
+// Импортируем компонент с кнопками Farcaster
+import FarcasterButtons from './FarcasterButtons'
 
 // Dynamically import components that use browser APIs
 const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
@@ -70,8 +72,10 @@ const HomeContent: React.FC = () => {
   const [isClient, setIsClient] = useState(false);
   const [viewportHeight, setViewportHeight] = React.useState("100vh");
   const [forceLoaded, setForceLoaded] = useState(false);
+  const [interfaceReady, setInterfaceReady] = useState(false);
   
   const readyCalledRef = useRef(false);
+  const allComponentsLoadedRef = useRef(false);
   
   // Проверка и установка активной вкладки при монтировании
   useEffect(() => {
@@ -126,23 +130,35 @@ const HomeContent: React.FC = () => {
     return undefined;
   }, [gameState.isLoading, dispatch]);
   
+  // Оптимизированный вызов sdk.actions.ready()
   useEffect(() => {
-    if (!gameState.isLoading && !readyCalledRef.current) {
-      // Только один вызов для SDK Ready
-      const callReady = async () => {
+    // Вызываем ready() только когда все условия загрузки выполнены
+    const callReady = async () => {
+      // Проверяем, что ready() еще не был вызван
+      if (readyCalledRef.current) return;
+      
+      // Проверяем, что все условия для отображения интерфейса выполнены
+      if (!gameState.isLoading && isClient && interfaceReady) {
         try {
-          await sdk.actions.ready();
+          console.log('[HomeContent] Calling sdk.actions.ready() - interface is ready');
+          
+          // Вызываем ready() с настройками для лучшего UX
+          await sdk.actions.ready({
+            // Если в игре есть жесты, конфликтующие с нативными,
+            // можно включить эту опцию
+            // disableNativeGestures: true
+          });
+          
+          // Отмечаем, что ready() был вызван
           readyCalledRef.current = true;
         } catch (error) {
           console.error('[HomeContent] Error calling sdk.actions.ready():', error);
         }
-      };
-      callReady();
-    }
+      }
+    };
     
-    // Явно возвращаем undefined для путей, где нет функции очистки
-    return undefined;
-  }, [gameState.isLoading]);
+    callReady();
+  }, [gameState.isLoading, isClient, interfaceReady]);
 
   useEffect(() => {
     const fixViewportHeight = () => {
@@ -159,6 +175,20 @@ const HomeContent: React.FC = () => {
   useEffect(() => {
     setIsClient(true);
   }, []);
+  
+  // Отметка о готовности интерфейса, когда все условия выполнены
+  useEffect(() => {
+    if (!gameState.isLoading && isClient && !interfaceReady) {
+      // Устанавливаем небольшую задержку для уверенности,
+      // что все компоненты отрендерились
+      const readyTimeout = setTimeout(() => {
+        console.log('[HomeContent] Interface is ready for display');
+        setInterfaceReady(true);
+      }, 100);
+      
+      return () => clearTimeout(readyTimeout);
+    }
+  }, [gameState.isLoading, isClient, interfaceReady]);
 
   // Отображаем экран загрузки вместо возврата null
   if (gameState.isLoading && !forceLoaded) {
@@ -176,7 +206,18 @@ const HomeContent: React.FC = () => {
   
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
-      <MotionDiv className='main-game-container' style={{ height: viewportHeight }}>
+      <MotionDiv 
+        className='main-game-container' 
+        style={{ height: viewportHeight }}
+        onLoad={() => {
+          // Помечаем, что все компоненты загружены
+          if (!allComponentsLoadedRef.current) {
+            allComponentsLoadedRef.current = true;
+            // Эта установка приведет к вызову ready() через useEffect
+            setInterfaceReady(true);
+          }
+        }}
+      >
         <Resources 
           isVisible={!gameState.hideInterface}
           activeTab={gameState.activeTab || "laboratory"}
@@ -191,6 +232,14 @@ const HomeContent: React.FC = () => {
         {Component} 
         {!gameState.hideInterface && <TabBar />}
         {!gameState.hideInterface && <SaveIndicator />}
+        
+        {/* Farcaster Mini App интеграция */}
+        <div className="farcaster-buttons fixed top-4 right-4 z-50">
+          <FarcasterButtons 
+            favoriteButtonLabel="В избранное" 
+            notificationButtonLabel="Уведомления" 
+          />
+        </div>
       </MotionDiv>
     </ErrorBoundary>
   );

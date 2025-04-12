@@ -37,6 +37,7 @@ export const farcasterStore = {
   sdk: null as any,
   userContext: null as any,
   _isAuthenticated: false, // Флаг состояния аутентификации
+  _sdkInitializing: false, // Флаг, указывающий что SDK инициализируется
   
   // Метод для получения SDK
   getSDK() {
@@ -116,6 +117,7 @@ export const farcasterStore = {
   setSDK(sdk: any) {
     this.sdk = sdk;
     this.isInitialized = true;
+    this._sdkInitializing = false;
   },
   
   // Метод для установки контекста пользователя
@@ -132,6 +134,57 @@ export const farcasterStore = {
   // Метод для установки состояния аутентификации
   setIsAuthenticated(value: boolean) {
     this._isAuthenticated = value;
+  },
+  
+  // Метод для добавления приложения в избранное
+  async addToFavorites() {
+    try {
+      if (!this.sdk || !this.sdk.actions || !this.sdk.actions.addToHomeScreen) {
+        console.warn('addToHomeScreen not available in SDK');
+        return false;
+      }
+      
+      const result = await this.sdk.actions.addToHomeScreen();
+      return result;
+    } catch (error) {
+      console.error('Error adding to favorites:', error);
+      return false;
+    }
+  },
+  
+  // Метод для отправки уведомления пользователю
+  async requestNotificationPermission() {
+    try {
+      if (!this.sdk || !this.sdk.actions || !this.sdk.actions.requestNotificationPermission) {
+        console.warn('requestNotificationPermission not available in SDK');
+        return false;
+      }
+      
+      const result = await this.sdk.actions.requestNotificationPermission();
+      return result;
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      return false;
+    }
+  },
+  
+  // Метод для проверки, находимся ли мы внутри Farcaster клиента
+  isFarcasterClient() {
+    return typeof window !== 'undefined' && (
+      !!(window as any).farcaster || // Нативный SDK
+      this.isInitialized // Инициализированный модульный SDK
+    );
+  },
+  
+  // Метод запуска инициализации SDK
+  startInitializing() {
+    if (this.isInitialized || this._sdkInitializing) return;
+    this._sdkInitializing = true;
+  },
+  
+  // Метод проверки, идет ли инициализация
+  isInitializing() {
+    return this._sdkInitializing;
   }
 };
 
@@ -168,6 +221,9 @@ const FarcasterFrameHandler = () => {
     isMountedRef.current = true;
     sdkInitializedRef.current = false;
     
+    // Начинаем процесс инициализации
+    farcasterStore.startInitializing();
+    
     // Проверяем наличие нативного SDK в window
     if (typeof window !== 'undefined' && (window as any).farcaster) {
       try {
@@ -176,7 +232,9 @@ const FarcasterFrameHandler = () => {
         
         // Если есть метод ready(), вызываем его
         if (typeof nativeSdk.ready === 'function') {
-          nativeSdk.ready();
+          console.log('[FarcasterFrameHandler] Native SDK found, marking as initialized');
+          // ВАЖНО: сам ready() мы здесь НЕ вызываем, его вызов происходит в HomeContent
+          // после полной загрузки интерфейса
         }
         
         // Пытаемся получить контекст пользователя
@@ -202,6 +260,7 @@ const FarcasterFrameHandler = () => {
       
       try {
         // Динамический импорт SDK только на клиенте
+        console.log('[FarcasterFrameHandler] Dynamically importing Farcaster Frame SDK');
         const sdkModule = await import('@farcaster/frame-sdk');
         const sdk = sdkModule.default;
         
@@ -230,25 +289,21 @@ const FarcasterFrameHandler = () => {
           // Проверяем, что компонент все еще смонтирован
           if (!isMountedRef.current) return;
           
-          // Вызываем метод ready() для уведомления Farcaster, что фрейм готов
-          sdk.actions.ready();
+          // Отмечаем что SDK полностью инициализирован
+          // ВАЖНО: сам ready() мы здесь НЕ вызываем, его вызов происходит в HomeContent
+          // после полной загрузки интерфейса
+          console.log('[FarcasterFrameHandler] SDK initialized successfully');
           
           // Обновляем состояние только если компонент смонтирован
           safeSetState(setIsLoaded, true);
           safeSetState(setSdkInitialized, true);
         } catch (contextError) {
-          console.warn('Failed to get Farcaster context, but will still call ready()', contextError);
+          console.warn('Failed to get Farcaster context, continuing initialization', contextError);
           
-          // Даже при ошибке контекста пытаемся вызвать ready()
+          // Даже при ошибке контекста отмечаем SDK как инициализированный
           if (isMountedRef.current) {
-            try {
-              sdk.actions.ready();
-              
-              safeSetState(setIsLoaded, true);
-              safeSetState(setSdkInitialized, true);
-            } catch (readyError) {
-              console.error('Failed to call ready()', readyError);
-            }
+            safeSetState(setIsLoaded, true);
+            safeSetState(setSdkInitialized, true);
           }
         }
       } catch (error) {
@@ -262,22 +317,19 @@ const FarcasterFrameHandler = () => {
       if (isMountedRef.current && !sdkInitializedRef.current) {
         initFarcaster();
       }
-    }, 300);
-    
-    // Функция очистки при размонтировании компонента
+    }, 200);
+
     return () => {
-      // Обновляем флаг монтирования
+      // Очистка при размонтировании
       isMountedRef.current = false;
       
-      // Очищаем таймер, если он был установлен
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
       }
     };
   }, []);
 
-  // Компонент не рендерит UI
+  // Ничего не рендерим, компонент служит только для инициализации SDK
   return null;
 };
 
