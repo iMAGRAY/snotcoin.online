@@ -1,115 +1,117 @@
 "use client"
 
-import { useState, useEffect } from 'react';
-import { addAppToFavorites, isRunningInsideFarcaster, requestNotificationPermission } from '../utils/farcaster';
+import { useState, useCallback, useEffect } from 'react';
+import { sdk } from '@farcaster/frame-sdk';
 
 interface FarcasterButtonsProps {
-  className?: string;
-  favoriteButtonLabel?: string;
   notificationButtonLabel?: string;
 }
 
-export default function FarcasterButtons({
-  className = '',
-  favoriteButtonLabel = 'Добавить в избранное',
-  notificationButtonLabel = 'Включить уведомления'
-}: FarcasterButtonsProps) {
-  const [isFarcaster, setIsFarcaster] = useState(false);
-  const [addedToFavorites, setAddedToFavorites] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
-  // Проверяем окружение при загрузке компонента
+/**
+ * Компонент с кнопками для взаимодействия с функциями Farcaster
+ */
+const FarcasterButtons: React.FC<FarcasterButtonsProps> = ({
+  notificationButtonLabel = 'Enable Notifications'
+}) => {
+  const [isFarcasterClient, setIsFarcasterClient] = useState(false);
+  const [isRequestingNotifications, setIsRequestingNotifications] = useState(false);
+  const [isAppAdded, setIsAppAdded] = useState(false);
+  
+  // Проверяем, находимся ли в Farcaster клиенте и добавлено ли приложение в избранное
   useEffect(() => {
-    const checkEnvironment = async () => {
-      const isInsideFarcaster = isRunningInsideFarcaster();
-      setIsFarcaster(isInsideFarcaster);
+    const checkClientAndAppStatus = async () => {
+      // Проверяем доступность SDK или нативного window.farcaster
+      const hasFarcasterSDK = typeof sdk !== 'undefined' && 
+                             !!sdk.actions && 
+                             typeof sdk.actions.ready === 'function';
+      
+      const hasNativeFarcaster = typeof window !== 'undefined' && 
+                               (window as any).farcaster && 
+                               typeof (window as any).farcaster.ready === 'function';
+      
+      const isFarcaster = hasFarcasterSDK || hasNativeFarcaster;
+      setIsFarcasterClient(isFarcaster);
+      
+      if (isFarcaster && sdk) {
+        try {
+          // Проверяем статус приложения в избранном
+          const context = await sdk.context;
+          const added = context?.client?.added || false;
+          setIsAppAdded(added);
+          console.log('[FarcasterButtons] App added status:', added);
+        } catch (error) {
+          console.error('[FarcasterButtons] Error checking app status:', error);
+        }
+      }
     };
     
-    checkEnvironment();
+    checkClientAndAppStatus();
+    
+    // Добавляем слушатель события добавления приложения
+    if (typeof sdk?.on === 'function') {
+      // Когда приложение добавлено
+      sdk.on('frameAdded', () => {
+        console.log('[FarcasterButtons] App added event received');
+        setIsAppAdded(true);
+      });
+      
+      // Когда приложение удалено
+      sdk.on('frameRemoved', () => {
+        console.log('[FarcasterButtons] App removed event received');
+        setIsAppAdded(false);
+      });
+    }
+    
+    // Очищаем слушатели при размонтировании
+    return () => {
+      if (typeof sdk?.removeAllListeners === 'function') {
+        sdk.removeAllListeners();
+      }
+    };
   }, []);
-
-  // Отображаем компонент только если находимся внутри Farcaster
-  if (!isFarcaster) {
+  
+  // Обработчик запроса разрешения на уведомления - вызывает системный диалог
+  const handleRequestNotifications = useCallback(async () => {
+    if (!sdk?.actions?.addFrame) {
+      console.warn('[FarcasterButtons] addFrame method not available');
+      return;
+    }
+    
+    try {
+      setIsRequestingNotifications(true);
+      
+      console.log('[FarcasterButtons] Showing system add app dialog');
+      const result = await sdk.actions.addFrame();
+      console.log('[FarcasterButtons] System add app result:', result);
+    } catch (error) {
+      console.error('[FarcasterButtons] Error showing system add app dialog:', error);
+    } finally {
+      setIsRequestingNotifications(false);
+    }
+  }, []);
+  
+  // Если мы не в Farcaster клиенте, не отображаем кнопки
+  if (!isFarcasterClient) {
     return null;
   }
-
-  // Обработчик добавления в избранное
-  const handleAddToFavorites = async () => {
-    try {
-      const result = await addAppToFavorites();
-      
-      if (result) {
-        setAddedToFavorites(true);
-        
-        // Сбрасываем состояние через 3 секунды
-        setTimeout(() => {
-          setAddedToFavorites(false);
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Ошибка при добавлении в избранное:', error);
-    }
-  };
-
-  // Обработчик запроса разрешений на уведомления
-  const handleRequestNotifications = async () => {
-    try {
-      const result = await requestNotificationPermission();
-      
-      if (result) {
-        setNotificationsEnabled(true);
-        
-        // Сбрасываем состояние через 3 секунды
-        setTimeout(() => {
-          setNotificationsEnabled(false);
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Ошибка при запросе разрешений на уведомления:', error);
-    }
-  };
-
-  // Стили для кнопок
-  const buttonStyle = `
-    px-4 py-2 
-    rounded-md 
-    font-medium 
-    text-sm 
-    transition-all 
-    duration-200
-    mr-2
-    last:mr-0
-  `;
   
-  const favoriteButtonStyle = `
-    ${buttonStyle} 
-    ${addedToFavorites 
-      ? 'bg-green-500 text-white' 
-      : 'bg-blue-500 hover:bg-blue-600 text-white'}
-  `;
+  // Если приложение уже добавлено, не показываем кнопку добавления
+  if (isAppAdded) {
+    return null;
+  }
   
-  const notificationButtonStyle = `
-    ${buttonStyle} 
-    ${notificationsEnabled 
-      ? 'bg-green-500 text-white' 
-      : 'bg-purple-500 hover:bg-purple-600 text-white'}
-  `;
-
   return (
-    <div className={`flex items-center ${className}`}>
-      <button 
-        className={favoriteButtonStyle}
-        onClick={handleAddToFavorites}
-      >
-        {addedToFavorites ? 'Добавлено' : favoriteButtonLabel}
-      </button>
-      
+    <div className="flex flex-col space-y-2">
       <button
-        className={notificationButtonStyle}
         onClick={handleRequestNotifications}
+        disabled={isRequestingNotifications}
+        className={`px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm
+                  ${isRequestingNotifications ? 'opacity-70 cursor-not-allowed' : 'opacity-100'}`}
       >
-        {notificationsEnabled ? 'Уведомления включены' : notificationButtonLabel}
+        {isRequestingNotifications ? 'Подключение...' : notificationButtonLabel}
       </button>
     </div>
   );
-} 
+};
+
+export default FarcasterButtons; 

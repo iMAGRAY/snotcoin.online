@@ -42,6 +42,34 @@ export interface FarcasterUser {
 }
 
 /**
+ * Типы для уведомлений Farcaster
+ */
+export interface FrameNotificationDetails {
+  url: string;
+  token: string;
+}
+
+/**
+ * Причины отклонения добавления фрейма
+ */
+export type AddFrameRejectedReason =
+  | 'invalid_domain_manifest'
+  | 'rejected_by_user';
+
+/**
+ * Результат добавления фрейма
+ */
+export type AddFrameResult =
+  | {
+      added: true;
+      notificationDetails?: FrameNotificationDetails;
+    }
+  | {
+      added: false;
+      reason: AddFrameRejectedReason;
+    };
+
+/**
  * Типы для клиента Farcaster
  */
 export interface FarcasterClient {
@@ -53,10 +81,7 @@ export interface FarcasterClient {
     left: number;
     right: number;
   };
-  notificationDetails?: {
-    url: string;
-    token: string;
-  };
+  notificationDetails?: FrameNotificationDetails;
 }
 
 /**
@@ -80,6 +105,8 @@ export interface FarcasterSDKActions {
   viewProfile: (options: { fid: number }) => Promise<void>;
   openUrl: (options: { url: string }) => Promise<void>;
   sendNotification: (options: { message: string; receiverFid: number }) => Promise<void>;
+  addFrame: () => Promise<AddFrameResult>;
+  requestNotificationPermission: () => Promise<boolean>;
 }
 
 /**
@@ -118,6 +145,20 @@ export interface FarcasterSDK {
   context: Promise<FarcasterContext>;
   /** Actions API */
   actions: FarcasterSDKActions;
+  /** События */
+  on: <T extends keyof EventMap>(event: T, listener: EventMap[T]) => void;
+  removeAllListeners: () => void;
+}
+
+/**
+ * Типы для событий Farcaster
+ */
+export interface EventMap {
+  frameAdded: ({ notificationDetails }: { notificationDetails?: FrameNotificationDetails }) => void;
+  frameAddRejected: ({ reason }: { reason: AddFrameRejectedReason }) => void;
+  frameRemoved: () => void;
+  notificationsEnabled: ({ notificationDetails }: { notificationDetails: FrameNotificationDetails }) => void;
+  notificationsDisabled: () => void;
 }
 
 declare global {

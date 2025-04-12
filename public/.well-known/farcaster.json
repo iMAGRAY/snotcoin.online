@@ -14,6 +14,7 @@
     "buttonTitle": "Play Game",
     "splashImageUrl": "https://snotcoin.online/game/Splashimage.webp",
     "splashBackgroundColor": "#0F172A",
+    "permissions": ["notifications"],
     "webhookUrl": "https://snotcoin.online/api/farcaster/webhook"
   }
 } 

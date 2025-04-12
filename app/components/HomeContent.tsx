@@ -73,6 +73,8 @@ const HomeContent: React.FC = () => {
   const [viewportHeight, setViewportHeight] = React.useState("100vh");
   const [forceLoaded, setForceLoaded] = useState(false);
   const [interfaceReady, setInterfaceReady] = useState(false);
+  // Флаг для отслеживания, было ли уже показано системное окно
+  const addAppModalShownRef = useRef(false);
   
   const readyCalledRef = useRef(false);
   const allComponentsLoadedRef = useRef(false);
@@ -151,6 +153,34 @@ const HomeContent: React.FC = () => {
           
           // Отмечаем, что ready() был вызван
           readyCalledRef.current = true;
+          
+          // Проверяем, добавлено ли приложение в избранное
+          try {
+            const context = await sdk.context;
+            const isAppAdded = context?.client?.added || false;
+            
+            console.log('[HomeContent] App already added to favorites:', isAppAdded);
+            
+            // Если приложение еще не добавлено, вызываем системное окно добавления
+            if (!isAppAdded && !addAppModalShownRef.current) {
+              // Отмечаем, что запрос был показан
+              addAppModalShownRef.current = true;
+              
+              // Небольшая задержка перед показом системного диалога
+              setTimeout(async () => {
+                try {
+                  console.log('[HomeContent] Showing system add app dialog');
+                  // Вызываем системное окно добавления приложения
+                  const result = await sdk.actions.addFrame();
+                  console.log('[HomeContent] System add app result:', result);
+                } catch (error) {
+                  console.error('[HomeContent] Error showing system add app dialog:', error);
+                }
+              }, 1000);
+            }
+          } catch (error) {
+            console.error('[HomeContent] Error checking if app is added:', error);
+          }
         } catch (error) {
           console.error('[HomeContent] Error calling sdk.actions.ready():', error);
         }
@@ -188,6 +218,8 @@ const HomeContent: React.FC = () => {
       
       return () => clearTimeout(readyTimeout);
     }
+    // Явно возвращаем undefined для путей, где нет функции очистки
+    return undefined;
   }, [gameState.isLoading, isClient, interfaceReady]);
 
   // Отображаем экран загрузки вместо возврата null
@@ -233,10 +265,9 @@ const HomeContent: React.FC = () => {
         {!gameState.hideInterface && <TabBar />}
         {!gameState.hideInterface && <SaveIndicator />}
         
-        {/* Farcaster Mini App интеграция */}
+        {/* Farcaster Mini App интеграция - только кнопка уведомлений */}
         <div className="farcaster-buttons fixed top-4 right-4 z-50">
           <FarcasterButtons 
-            favoriteButtonLabel="В избранное" 
             notificationButtonLabel="Уведомления" 
           />
         </div>
