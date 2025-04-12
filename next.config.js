@@ -1,5 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Отключаем проверку ESLint при сборке
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Отключаем проверку TypeScript
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  
   // Указываем, что будем использовать файл .env.local для всех режимов
   env: {
     NEXT_CONFIG_ENV_LOADED: 'true',

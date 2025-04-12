@@ -12,94 +12,149 @@ import AudioController from './components/AudioController';
 // Ключ для localStorage
 const USER_ID_STORAGE_KEY = 'snotcoin_persistent_user_id';
 
+// Компонент для предотвращения ошибок гидратации
+const ClientOnly = ({ children }: { children: React.ReactNode }) => {
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  if (!isClient) {
+    return null;
+  }
+  
+  return <>{children}</>;
+};
+
 // Обертка для управления состоянием загрузки SDK и отображения заглушки
 const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
-  const { sdkStatus, sdkUser, sdkError } = useFarcaster();
-  const [loggedStatus, setLoggedStatus] = useState<string | null>(null);
+  const { sdkUser, sdkStatus, sdkError } = useFarcaster();
+  const [isClient, setIsClient] = useState(false);
+  const [forceContinue, setForceContinue] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  
+  // Сохраняем userId в localStorage для последующих сессий
   const [persistentUserId, setPersistentUserId] = useState<string | null>(null);
-
-  // При монтировании компонента проверяем localStorage на наличие сохраненного userId
+  
+  // При первом рендере на клиенте
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedUserId = localStorage.getItem(USER_ID_STORAGE_KEY);
-      if (savedUserId) {
-        console.log(`[GameProviderWrapper] Найден сохраненный userId: ${savedUserId}`);
-        setPersistentUserId(savedUserId);
+    setIsClient(true);
+    
+    // Определяем, запущено ли на десктопе
+    const desktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+    setIsDesktop(desktop);
+    
+    console.log(`[GameProviderWrapper] Platform: ${desktop ? 'desktop' : 'mobile'}`);
+    
+    // На десктопе сразу активируем принудительное продолжение для ускорения загрузки
+    if (desktop) {
+      setForceContinue(true);
+    }
+    
+    // Проверяем наличие сохраненного userId в localStorage
+    try {
+      const storedUserId = localStorage.getItem('snot_user_id');
+      if (storedUserId) {
+        setPersistentUserId(storedUserId);
+        console.log(`[GameProviderWrapper] Loaded persistent userId: ${storedUserId}`);
+      } else if (desktop) {
+        // На десктопе сразу создаем анонимный ID, если нет сохраненного
+        const anonymousId = `anonymous_${Date.now()}`;
+        localStorage.setItem('snot_user_id', anonymousId);
+        setPersistentUserId(anonymousId);
+        console.log(`[GameProviderWrapper] Created desktop anonymous userId: ${anonymousId}`);
+      }
+    } catch (e) {
+      console.warn('[GameProviderWrapper] Error accessing localStorage:', e);
+      
+      // В случае ошибки localStorage на десктопе всё равно создаем ID в памяти
+      if (desktop) {
+        const fallbackId = `fallback_${Date.now()}`;
+        setPersistentUserId(fallbackId);
+        console.log(`[GameProviderWrapper] Created fallback userId due to localStorage error: ${fallbackId}`);
       }
     }
+    
+    // Устанавливаем таймаут только для мобильных устройств
+    if (!desktop) {
+      const forceTimeout = setTimeout(() => {
+        console.log('[GameProviderWrapper] Принудительное продолжение после таймаута');
+        setForceContinue(true);
+      }, 5000);
+      
+      return () => clearTimeout(forceTimeout);
+    }
+    
+    // Явно возвращаем undefined для путей выполнения без функции очистки
+    return undefined;
   }, []);
 
-  // Сохраняем userId если получен новый и нет сохраненного
+  // Обработка обновления persistentUserId при получении данных пользователя
   useEffect(() => {
-    if (sdkStatus === 'ready' && sdkUser?.fid && !persistentUserId) {
+    if (sdkUser?.fid && isClient) {
       const newUserId = String(sdkUser.fid);
-      console.log(`[GameProviderWrapper] Сохраняем новый userId: ${newUserId}`);
-      
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(USER_ID_STORAGE_KEY, newUserId);
-      }
-      
       setPersistentUserId(newUserId);
+      
+      try {
+        localStorage.setItem('snot_user_id', newUserId);
+        console.log(`[GameProviderWrapper] Saved userId to localStorage: ${newUserId}`);
+      } catch (e) {
+        console.warn('[GameProviderWrapper] Error saving userId to localStorage:', e);
+      }
     }
-  }, [sdkStatus, sdkUser, persistentUserId]);
+    
+    // Явно возвращаем undefined, так как нет функции очистки
+    return undefined;
+  }, [sdkUser?.fid, isClient]);
 
-  // Логирование изменений статуса
-  useEffect(() => {
-    const currentStatusSignature = `${sdkStatus}-${sdkUser?.fid}-${sdkError}`;
-    if (currentStatusSignature !== loggedStatus) {
-      console.log(`[GameProviderWrapper] Status Update: sdkStatus=${sdkStatus}, sdkUserFid=${sdkUser?.fid}, persistentUserId=${persistentUserId}, sdkError=${sdkError}`);
-      setLoggedStatus(currentStatusSignature);
+  // Для SSR или до гидратации - показываем базовый экран загрузки только на мобильных
+  if (!isClient) {
+    return (
+      <ClientOnly>
+        <LoadingScreen progress={30} statusMessage="Connecting to Farcaster..." />
+      </ClientOnly>
+    );
+  }
+
+  // Если у нас есть сохраненный userId или включен forceContinue,
+  // пропускаем экран загрузки и сразу переходим к игре
+  if (persistentUserId || forceContinue) {
+    // Используем persistentUserId если есть, иначе создаем временный анонимный ID
+    const userId = persistentUserId || `tmp_anonymous_${Date.now()}`;
+    
+    if (!persistentUserId) {
+      console.log(`[GameProviderWrapper] Using temporary anonymous userId: ${userId}`);
+    } else {
+      console.log(`[GameProviderWrapper] Rendering GameProvider with userId: ${userId}`);
     }
-  }, [sdkStatus, sdkUser, sdkError, loggedStatus, persistentUserId]);
+    
+    return (
+      <GameProvider userId={userId}>
+        {children}
+      </GameProvider>
+    );
+  }
 
-  // Пока SDK не готов или не произошла ошибка, показываем заглушку
-  if (sdkStatus === 'idle' || sdkStatus === 'loading') {
+  // Последний шанс - показываем экран загрузки для мобильных устройств
+  if ((sdkStatus === 'idle' || sdkStatus === 'loading')) {
     console.log(`[GameProviderWrapper] Showing loading placeholder: SDK Status=${sdkStatus}`);
-    return <LoadingScreen progress={50} statusMessage="Connecting to Farcaster..." />;
-  }
-
-  // Если у нас есть сохраненный userId, используем его даже если SDK не готов
-  if (persistentUserId) {
-    console.log(`[GameProviderWrapper] Rendering GameProvider with persistentUserId: ${persistentUserId}`);
     return (
-      <GameProvider userId={persistentUserId}>
-        {children}
-      </GameProvider>
+      <ClientOnly>
+        <LoadingScreen progress={30} statusMessage="Connecting to Farcaster..." />
+      </ClientOnly>
     );
   }
 
-  // Если произошла ошибка SDK и нет persistentUserId
-  if (sdkStatus === 'error') {
-    console.error(`[GameProviderWrapper] SDK Error: ${sdkError}. Rendering error display.`);
-    return <ErrorDisplay message={sdkError instanceof Error ? sdkError.message : String(sdkError) || 'Failed to initialize Farcaster connection.'} />;
-  }
-
-  // Если SDK готов, но нет пользователя (маловероятно в Mini App, но для полноты)
-  if (sdkStatus === 'ready' && !sdkUser?.fid) {
-     console.warn('[GameProviderWrapper] SDK ready but no user FID found. Rendering error display.');
-     return <ErrorDisplay message={'Farcaster user data not available.'} />;
-  }
-
-  // SDK готов и есть пользователь, но persistentUserId еще не установлен
-  // Это должно выполниться только один раз при первом входе пользователя
-  if (sdkStatus === 'ready' && sdkUser?.fid) {
-    const newUserId = String(sdkUser.fid);
-    console.log(`[GameProviderWrapper] First time setup - Using SDK FID as userId: ${newUserId}`);
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_ID_STORAGE_KEY, newUserId);
-    }
-    
-    return (
-      <GameProvider userId={newUserId}>
-        {children}
-      </GameProvider>
-    );
-  }
-
-  // Непредвиденное состояние
-  console.error(`[GameProviderWrapper] Unexpected state: sdkStatus=${sdkStatus}, sdkUser=${sdkUser}, persistentUserId=${persistentUserId}, sdkError=${sdkError}`);
-  return <ErrorDisplay message='An unexpected error occurred during initialization.' />;
+  // Для всех остальных случаев создаем запасной анонимный ID
+  const fallbackId = `fallback_${Date.now()}`;
+  console.warn(`[GameProviderWrapper] Using fallback userId in unexpected state: ${fallbackId}`);
+  
+  return (
+    <GameProvider userId={fallbackId}>
+      {children}
+    </GameProvider>
+  );
 };
 
 // Инициализируем патчи для Farcaster и Wagmi

@@ -10,7 +10,9 @@
     "start:prod": "dotenv -e .env.local NODE_ENV=production next start",
     "start:prod:ssl": "dotenv -e .env.local NODE_ENV=production sudo node server.js",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "dev:nolint": "DISABLE_ESLINT_PLUGIN=true next dev",
+    "build:nolint": "DISABLE_ESLINT_PLUGIN=true next build"
   },
   "dependencies": {
     "@coinbase/onchainkit": "^0.38.0",

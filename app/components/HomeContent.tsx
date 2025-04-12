@@ -54,10 +54,22 @@ const SaveIndicator = dynamic(() => import("./game/SaveIndicator"), {
   ssr: false,
 })
 
+// Маппинг активных вкладок на соответствующие компоненты
+const TABS: Record<string, JSX.Element> = {
+  laboratory: <Laboratory />,
+  merge: <Merge />,
+  storage: <Storage />,
+  profile: <ProfilePage />,
+  quests: <Quests />
+};
+
 const HomeContent: React.FC = () => {
-  const dispatch = useGameDispatch();
   const gameState = useGameState();
+  const dispatch = useGameDispatch();
+  const { sdkUser, sdkStatus } = useFarcaster();
+  const [isClient, setIsClient] = useState(false);
   const [viewportHeight, setViewportHeight] = React.useState("100vh");
+  const [forceLoaded, setForceLoaded] = useState(false);
   
   const readyCalledRef = useRef(false);
   
@@ -76,6 +88,44 @@ const HomeContent: React.FC = () => {
     }
   }, [gameState.activeTab, dispatch]);
   
+  // Принудительно устанавливаем флаг загрузки при монтировании компонента
+  useEffect(() => {
+    console.log("[HomeContent] Компонент смонтирован, проверка состояния загрузки:", gameState.isLoading);
+    
+    // Принудительно завершаем загрузку после монтирования компонента
+    const initialLoadTimeout = setTimeout(() => {
+      console.log("[HomeContent] Принудительная загрузка сразу после монтирования");
+      setForceLoaded(true);
+      dispatch(prevState => ({
+        ...prevState,
+        isLoading: false
+      }));
+    }, 1000);
+    
+    return () => clearTimeout(initialLoadTimeout);
+  }, [dispatch]);
+  
+  // Добавляем таймер для принудительной загрузки, если gameState.isLoading остается true слишком долго
+  useEffect(() => {
+    if (gameState.isLoading) {
+      console.log("[HomeContent] Обнаружено состояние gameState.isLoading=true, запускаем таймаут");
+      const forceLoadTimeout = setTimeout(() => {
+        console.log("[HomeContent] Принудительная загрузка после таймаута");
+        setForceLoaded(true);
+        // Дополнительно пытаемся обновить состояние загрузки в gameState
+        dispatch(prevState => ({
+          ...prevState,
+          isLoading: false
+        }));
+      }, 3000); // Уменьшаем до 3 секунд ожидания
+      
+      return () => clearTimeout(forceLoadTimeout);
+    }
+    
+    // Явно возвращаем undefined для путей, где нет функции очистки
+    return undefined;
+  }, [gameState.isLoading, dispatch]);
+  
   useEffect(() => {
     if (!gameState.isLoading && !readyCalledRef.current) {
       // Только один вызов для SDK Ready
@@ -89,6 +139,9 @@ const HomeContent: React.FC = () => {
       };
       callReady();
     }
+    
+    // Явно возвращаем undefined для путей, где нет функции очистки
+    return undefined;
   }, [gameState.isLoading]);
 
   useEffect(() => {
@@ -103,29 +156,24 @@ const HomeContent: React.FC = () => {
     return () => window.removeEventListener("resize", fixViewportHeight);
   }, []);
 
-  const renderActiveTab = useCallback(() => {
-    // Используем явную проверку на наличие activeTab с установкой дефолтного значения
-    const currentTab = gameState.activeTab || "laboratory";
-    
-    switch (currentTab) {
-      case "merge":
-        return <Merge />;
-      case "storage":
-        return <Storage />;
-      case "profile":
-        return <ProfilePage />;
-      case "quests":
-        return <Quests />;
-      case "laboratory":
-      default:
-        return <Laboratory />;
-    }
-  }, [gameState.activeTab]);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
-  if (gameState.isLoading) {
-    return null;
+  // Отображаем экран загрузки вместо возврата null
+  if (gameState.isLoading && !forceLoaded) {
+    console.log("[HomeContent] Показываем экран загрузки с прогрессом 90%");
+    return <LoadingScreen progress={90} statusMessage="Preparing game..." />;
+  }
+  
+  // Если мы на сервере или до гидратации, показываем общий экран загрузки
+  if (!isClient) {
+    return <LoadingScreen progress={80} statusMessage="Preparing UI..." />;
   }
 
+  console.log("[HomeContent] Рендерим основной контент, activeTab:", gameState.activeTab);
+  const Component = TABS[gameState.activeTab] || TABS.merge;
+  
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
       <MotionDiv className='main-game-container' style={{ height: viewportHeight }}>
@@ -140,7 +188,7 @@ const HomeContent: React.FC = () => {
           containerFillingSpeed={gameState.inventory?.fillingSpeed}
           fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}          
         />
-        {renderActiveTab()} 
+        {Component} 
         {!gameState.hideInterface && <TabBar />}
         {!gameState.hideInterface && <SaveIndicator />}
       </MotionDiv>

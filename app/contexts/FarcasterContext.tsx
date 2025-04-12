@@ -99,7 +99,16 @@ export const FarcasterProvider: React.FC<FarcasterProviderProps> = ({ children }
         if (farcasterSdk && typeof farcasterSdk.actions?.ready === 'function') {
           console.log('[FarcasterContext] Called miniAppSdk.actions.ready()');
           try {
-            await farcasterSdk.actions.ready();
+            await farcasterSdk.actions.ready().catch((e: Error | unknown) => {
+              // Игнорируем ошибки, связанные с endpoint inspect-miniapp-url
+              if (e && (e.toString().includes('inspect-miniapp-url') || 
+                        e.toString().includes('client.warpcast.com'))) {
+                console.log('[FarcasterContext] Игнорируем ошибку inspect-miniapp-url:', e.toString());
+                // Это не критическая ошибка, можно продолжить
+                return;
+              }
+              throw e; // Прокидываем другие ошибки для обработки
+            });
           } catch (readyError) {
             console.warn('[FarcasterContext] Ошибка при вызове actions.ready():', readyError);
           }
