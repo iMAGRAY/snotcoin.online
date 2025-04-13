@@ -68,4 +68,13 @@ export class BackgroundManager {
       currentX = segmentEnd + gapLength;
     }
   }
+
+  /**
+   * Получает позицию Y горизонтальной линии
+   * @returns Позиция Y линии или значение по умолчанию
+   */
+  public getLineY(): number {
+    // Возвращаем стандартное значение, то же что и в setupBackground
+    return 75;
+  }
 } 

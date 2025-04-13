@@ -178,17 +178,32 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
   const restartGame = () => {
     if (!gameRef.current) return;
     
-    // Останавливаем текущую игру
-    gameRef.current.scene.stop('MergeGameScene');
-    
-    // Удаляем сцену перед добавлением новой
-    gameRef.current.scene.remove('MergeGameScene');
-    
-    // Создаем новую сцену
-    gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
-    
-    // Сохраняем время начала игры
-    gameRef.current.registry.set('gameStartTime', Date.now());
+    try {
+      // Вызываем функцию перезапуска из gameActions
+      restartGameAction();
+      
+      // Регистрируем новое время начала игры
+      gameRef.current.registry.set('gameStartTime', Date.now());
+      
+      // Сбрасываем статус окончания игры и финальный счет
+      gameRef.current.registry.set('gameOver', false);
+      gameRef.current.registry.set('finalScore', 0);
+      gameRef.current.registry.set('gameScore', 0);
+    } catch (error) {
+      console.error('Ошибка при перезапуске игры:', error);
+      
+      // Резервный сценарий: останавливаем текущую игру
+      gameRef.current.scene.stop('MergeGameScene');
+      
+      // Удаляем сцену перед добавлением новой
+      gameRef.current.scene.remove('MergeGameScene');
+      
+      // Создаем новую сцену
+      gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
+      
+      // Сохраняем время начала игры
+      gameRef.current.registry.set('gameStartTime', Date.now());
+    }
   };
 
   return (

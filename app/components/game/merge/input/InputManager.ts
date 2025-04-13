@@ -97,4 +97,21 @@ export class InputManager {
   public setVerticalGuideX(x: number): void {
     this.verticalGuideX = x;
   }
+  
+  /**
+   * Включение ввода
+   */
+  public enableInput(): void {
+    // Включаем обработку ввода
+    this.scene.input.enabled = true;
+  }
+  
+  /**
+   * Отключение ввода
+   */
+  public disableInput(): void {
+    // Отключаем обработку ввода
+    this.scene.input.enabled = false;
+    this.isPointerDown = false;
+  }
 } 

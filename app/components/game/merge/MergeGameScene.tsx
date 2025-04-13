@@ -22,17 +22,17 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   bodies: { [key: string]: GameBody } = {};
   
   // Менеджеры для различных аспектов игры
-  physicsManager: PhysicsManager;
-  effectsManager: EffectsManager;
-  abilityManager: AbilityManager;
-  inputManager: InputManager;
-  gameOverManager: GameOverManager;
-  scoreManager: ScoreManager;
-  ballFactory: BallFactory;
-  shootingManager: ShootingManager;
-  mergeProcessor: MergeProcessor;
-  backgroundManager: BackgroundManager;
-  uiManager: UIManager;
+  physicsManager!: PhysicsManager;
+  effectsManager!: EffectsManager;
+  abilityManager!: AbilityManager;
+  inputManager!: InputManager;
+  gameOverManager!: GameOverManager;
+  scoreManager!: ScoreManager;
+  ballFactory!: BallFactory;
+  shootingManager!: ShootingManager;
+  mergeProcessor!: MergeProcessor;
+  backgroundManager!: BackgroundManager;
+  uiManager!: UIManager;
   
   // Состояние игры
   pendingDeletions: { id: string, type: string }[] = [];
@@ -257,21 +257,45 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
 
   // Метод для перезапуска игры
   restart() {
-    // Очищаем ресурсы текущей игры
-    this.cleanup();
-    
-    // Сбрасываем состояние игры
-    this.gameOverManager.reset();
-    this.isPaused = false;
-    
-    // Пересоздаем физический мир
-    this.world = planck.World({
-      gravity: planck.Vec2(0, 45)
-    });
-    this.world.on('begin-contact', this.handleContact.bind(this));
-    
-    // Заново запускаем сцену
-    this.scene.restart();
+    try {
+      // Очищаем ресурсы текущей игры
+      this.cleanup();
+      
+      // Сбрасываем состояние игры, проверяя наличие менеджеров
+      if (this.gameOverManager) {
+        this.gameOverManager.reset();
+      }
+      
+      if (this.mergeProcessor) {
+        this.mergeProcessor.reset();
+      }
+      
+      // Сбрасываем счет и флаги игры
+      this.score = 0;
+      this.isPaused = false;
+      this.nextBallLevel = 1;
+      
+      // Пересоздаем физический мир
+      this.world = planck.World({
+        gravity: planck.Vec2(0, 45)
+      });
+      this.world.on('begin-contact', this.handleContact.bind(this));
+      
+      // Обновляем регистр игры (с проверкой)
+      if (this.game && this.game.registry) {
+        this.game.registry.set('gameScore', 0);
+        this.game.registry.set('gameOver', false);
+        this.game.registry.set('finalScore', 0);
+        this.game.registry.set('gameStartTime', Date.now());
+      }
+      
+      // Перезапускаем текущую сцену (с проверкой)
+      if (this.scene) {
+        this.scene.restart();
+      }
+    } catch (error) {
+      console.error('Ошибка при перезапуске игры:', error);
+    }
   }
 
   // Метод для постановки игры на паузу

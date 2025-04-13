@@ -127,4 +127,12 @@ export class MergeProcessor {
   public hasPendingMerges(): boolean {
     return this.pendingMerges.length > 0;
   }
+
+  /**
+   * Сброс состояния менеджера
+   */
+  public reset(): void {
+    // Очищаем очередь слияний
+    this.pendingMerges = [];
+  }
 } 

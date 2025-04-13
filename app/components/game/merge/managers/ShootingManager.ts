@@ -165,4 +165,20 @@ export class ShootingManager {
       this.coinKing = null;
     }
   }
+
+  /**
+   * Сброс состояния менеджера
+   * @param width Ширина игрового холста
+   * @param lineY Позиция Y горизонтальной линии
+   */
+  public reset(width: number, lineY: number): void {
+    // Очищаем старые данные
+    this.cleanup();
+    
+    // Сбрасываем список недавно выстрелянных шаров
+    this.recentlyShot = {};
+    
+    // Заново инициализируем CoinKing и следующий шар
+    this.setup(width, lineY);
+  }
 } 
