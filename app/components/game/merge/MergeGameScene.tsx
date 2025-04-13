@@ -2,15 +2,15 @@
 
 import * as Phaser from 'phaser';
 import * as planck from "planck";
-import { GameBody, SCALE } from './types';
+import { GameBody, SCALE, MergeGameSceneType } from './utils/types';
 import { PhysicsManager } from './physics/PhysicsManager';
 import { EffectsManager } from './effects/EffectsManager';
 import { AbilityManager } from './abilities/AbilityManager';
-import { InputManager } from './InputManager';
-import { GameOverManager } from './GameOverManager';
-import { ScoreManager } from './ScoreManager';
-import { BallFactory } from './BallFactory';
-import * as gameUtils from './utils';
+import { InputManager } from './input/InputManager';
+import { GameOverManager } from './core/GameOverManager';
+import { ScoreManager } from './core/ScoreManager';
+import { BallFactory } from './core/BallFactory';
+import * as gameUtils from './utils/utils';
 
 class MergeGameScene extends Phaser.Scene {
   // Физический мир и тела

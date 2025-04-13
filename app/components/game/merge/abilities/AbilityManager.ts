@@ -1,6 +1,6 @@
 // AbilityManager.ts - Управление специальными способностями
 import * as Phaser from 'phaser';
-import { MergeGameSceneType } from '../types';
+import { MergeGameSceneType } from '../utils/types';
 import { Bull } from './Bull';
 import { Bomb } from './Bomb';
 import { Earthquake } from './Earthquake';

@@ -1,8 +1,8 @@
 // PhysicsManager.ts - Управление физикой в игре
 import * as Phaser from 'phaser';
 import * as planck from 'planck';
-import { GameBody, SCALE } from '../types';
-import * as gameUtils from '../utils';
+import { GameBody, SCALE } from '../utils/types';
+import * as gameUtils from '../utils/utils';
 
 export class PhysicsManager {
   private scene: Phaser.Scene;

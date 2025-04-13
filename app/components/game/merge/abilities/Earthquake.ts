@@ -1,7 +1,7 @@
 // Earthquake.ts - Способность "Землетрясение"
 import * as Phaser from 'phaser';
-import { GameBody, SCALE, MergeGameSceneType } from '../types';
-import * as gameUtils from '../utils';
+import { GameBody, SCALE, MergeGameSceneType } from '../utils/types';
+import * as gameUtils from '../utils/utils';
 import * as planck from 'planck';
 
 export class Earthquake {

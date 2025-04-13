@@ -11,7 +11,7 @@ import { useForceSave } from '../../../hooks/useForceSave';
 import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import audioService from '../../../services/audioService';
-import { MergeGameLauncherProps, MergeGameAttemptsData } from './types';
+import { MergeGameLauncherProps, MergeGameAttemptsData } from './utils/types';
 import MergeGameScene from './MergeGameScene';
 
 // Компонент TouchButton вынесен за пределы основного компонента

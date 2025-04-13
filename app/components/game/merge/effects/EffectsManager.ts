@@ -1,6 +1,6 @@
 // EffectsManager.ts - Управление визуальными эффектами
 import * as Phaser from 'phaser';
-import * as gameUtils from '../utils';
+import * as gameUtils from '../utils/utils';
 
 export class EffectsManager {
   private scene: Phaser.Scene;
