@@ -59,20 +59,22 @@ export class PhysicsManager {
   }
 
   createCircle(x: number, y: number, radius: number, level: number = 1) {
-    // Создаем физическое тело
+    // Создаем физическое тело с улучшенными параметрами
     const body = this.world.createBody({
       type: 'dynamic',
       position: planck.Vec2(x, y),
       angularDamping: 0.1,
-      linearDamping: 0.1
+      linearDamping: 0.1,
+      bullet: true, // Включаем улучшенное обнаружение столкновений для быстрых объектов
+      fixedRotation: false // Разрешаем вращение для реалистичной физики
     });
 
-    // Добавляем круглую форму
+    // Добавляем круглую форму с оптимизированными параметрами
     body.createFixture({
       shape: planck.Circle(radius),
       density: 1.0,
       friction: 0.3,
-      restitution: 0.6,
+      restitution: 0.6, // Коэффициент упругости при столкновениях
       userData: { level, type: 'ball' }
     });
 

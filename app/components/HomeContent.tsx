@@ -16,6 +16,29 @@ import { sdk } from '@farcaster/frame-sdk'
 // Импортируем компонент с кнопками Farcaster
 import FarcasterButtons from './FarcasterButtons'
 
+// Переменная для включения детальных логов (можно переключить в консоли браузера)
+const ENABLE_DETAILED_LOGS = false;
+
+/**
+ * Логгер с возможностью отключения логов
+ */
+const logger = {
+  log: (message: string, data?: any) => {
+    // Выводим логи только если включены детальные логи или это важное сообщение
+    if (ENABLE_DETAILED_LOGS || 
+        message.includes('Ошибка') || 
+        message.includes('Error') || 
+        message.includes('Первая инициализация') || 
+        (message.includes('ready()') && !message.includes('интерфейс'))) {
+      console.log(message, data || '');
+    }
+  },
+  error: (message: string, error?: any) => {
+    // Ошибки всегда выводим
+    console.error(message, error || '');
+  }
+};
+
 // Dynamically import components that use browser APIs
 const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
   ssr: false,
@@ -87,12 +110,12 @@ const HomeContent: React.FC = () => {
 
   // При первом монтировании компонента гарантируем, что hideInterface=false
   useEffect(() => {
-    console.log("[HomeContent] Первая инициализация, проверка интерфейса:", 
+    logger.log("[HomeContent] Первая инициализация, проверка интерфейса:", 
       {hideInterface: gameState.hideInterface, activeTab: gameState.activeTab});
       
     // Сбрасываем hideInterface при старте приложения
     if (gameState.hideInterface) {
-      console.log("[HomeContent] Обнаружено hideInterface=true при старте, устанавливаем false");
+      logger.log("[HomeContent] Обнаружено hideInterface=true при старте, устанавливаем false");
       dispatch(prevState => ({
         ...prevState,
         hideInterface: false
@@ -106,7 +129,7 @@ const HomeContent: React.FC = () => {
     const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
     
     if (!isValidTab) {
-      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
+      logger.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
       // Устанавливаем лабораторию как активную вкладку по умолчанию
       dispatch(prevState => ({
         ...prevState,
@@ -117,11 +140,11 @@ const HomeContent: React.FC = () => {
   
   // Принудительно устанавливаем флаг загрузки при монтировании компонента
   useEffect(() => {
-    console.log("[HomeContent] Компонент смонтирован, проверка состояния загрузки:", gameState.isLoading);
+    logger.log("[HomeContent] Компонент смонтирован, проверка состояния загрузки:", gameState.isLoading);
     
     // Принудительно завершаем загрузку после монтирования компонента
     const initialLoadTimeout = setTimeout(() => {
-      console.log("[HomeContent] Принудительная загрузка сразу после монтирования");
+      logger.log("[HomeContent] Принудительная загрузка сразу после монтирования");
       setForceLoaded(true);
       dispatch(prevState => ({
         ...prevState,
@@ -135,9 +158,9 @@ const HomeContent: React.FC = () => {
   // Добавляем таймер для принудительной загрузки, если gameState.isLoading остается true слишком долго
   useEffect(() => {
     if (gameState.isLoading) {
-      console.log("[HomeContent] Обнаружено состояние gameState.isLoading=true, запускаем таймаут");
+      logger.log("[HomeContent] Обнаружено состояние gameState.isLoading=true, запускаем таймаут");
       const forceLoadTimeout = setTimeout(() => {
-        console.log("[HomeContent] Принудительная загрузка после таймаута");
+        logger.log("[HomeContent] Принудительная загрузка после таймаута");
         setForceLoaded(true);
         // Дополнительно пытаемся обновить состояние загрузки в gameState
         dispatch(prevState => ({
@@ -163,7 +186,7 @@ const HomeContent: React.FC = () => {
       // Проверяем, что все условия для отображения интерфейса выполнены
       if (!gameState.isLoading && isClient && interfaceReady) {
         try {
-          console.log('[HomeContent] Calling sdk.actions.ready() - interface is ready');
+          logger.log('[HomeContent] Calling sdk.actions.ready() - interface is ready');
           
           // Вызываем ready() с настройками для лучшего UX
           await sdk.actions.ready({
@@ -180,7 +203,7 @@ const HomeContent: React.FC = () => {
             const context = await sdk.context;
             const isAppAdded = context?.client?.added || false;
             
-            console.log('[HomeContent] App already added to favorites:', isAppAdded);
+            logger.log('[HomeContent] App already added to favorites:', isAppAdded);
             
             // Если приложение еще не добавлено, вызываем системное окно добавления
             if (!isAppAdded && !addAppModalShownRef.current) {
@@ -190,20 +213,20 @@ const HomeContent: React.FC = () => {
               // Небольшая задержка перед показом системного диалога
               setTimeout(async () => {
                 try {
-                  console.log('[HomeContent] Showing system add app dialog');
+                  logger.log('[HomeContent] Showing system add app dialog');
                   // Вызываем системное окно добавления приложения
                   const result = await sdk.actions.addFrame();
-                  console.log('[HomeContent] System add app result:', result);
+                  logger.log('[HomeContent] System add app result:', result);
                 } catch (error) {
-                  console.error('[HomeContent] Error showing system add app dialog:', error);
+                  logger.error('[HomeContent] Error showing system add app dialog:', error);
                 }
               }, 1000);
             }
           } catch (error) {
-            console.error('[HomeContent] Error checking if app is added:', error);
+            logger.error('[HomeContent] Error checking if app is added:', error);
           }
         } catch (error) {
-          console.error('[HomeContent] Error calling sdk.actions.ready():', error);
+          logger.error('[HomeContent] Error calling sdk.actions.ready():', error);
         }
       }
     };
@@ -233,7 +256,7 @@ const HomeContent: React.FC = () => {
       // Устанавливаем небольшую задержку для уверенности,
       // что все компоненты отрендерились
       const readyTimeout = setTimeout(() => {
-        console.log('[HomeContent] Interface is ready for display');
+        logger.log('[HomeContent] Interface is ready for display');
         setInterfaceReady(true);
       }, 100);
       
@@ -248,17 +271,24 @@ const HomeContent: React.FC = () => {
     // Проверяем, активна ли сейчас игра Merge
     const isMergeTabActive = gameState.activeTab === "merge";
     
-    console.log("[HomeContent] Проверка активности игры Merge:", 
-      {isMergeTabActive, hideInterface: gameState.hideInterface});
-    
+    // Для отладки выводим текущее состояние при его изменении
+    if (ENABLE_DETAILED_LOGS) {
+      logger.log("[HomeContent] Рендерим основной контент:", {
+        activeTab: gameState.activeTab,
+        hideInterface: gameState.hideInterface,
+        isMergeGameActive,
+        shouldShowInterface: !gameState.hideInterface || forceShowInterface
+      });
+    }
+
     // Устанавливаем флаг активности игры в Merge
     setIsMergeGameActive(isMergeTabActive && gameState.hideInterface);
     
     // Если интерфейс скрыт и это НЕ режим игры Merge, восстанавливаем видимость интерфейса
     if (gameState.hideInterface && !isMergeTabActive) {
-      console.log("[HomeContent] Обнаружено скрытие интерфейса (не Merge), планируем восстановление");
+      logger.log("[HomeContent] Обнаружено скрытие интерфейса (не Merge), планируем восстановление");
       const showInterfaceTimeout = setTimeout(() => {
-        console.log("[HomeContent] Принудительно показываем интерфейс");
+        logger.log("[HomeContent] Принудительно показываем интерфейс");
         setForceShowInterface(true);
         // Также обновляем состояние для гарантии
         dispatch(prevState => ({
@@ -279,7 +309,7 @@ const HomeContent: React.FC = () => {
 
   // Отображаем экран загрузки вместо возврата null
   if (gameState.isLoading && !forceLoaded) {
-    console.log("[HomeContent] Показываем экран загрузки с прогрессом 90%");
+    logger.log("[HomeContent] Показываем экран загрузки с прогрессом 90%");
     return <LoadingScreen progress={90} statusMessage="Preparing game..." />;
   }
   
@@ -288,7 +318,7 @@ const HomeContent: React.FC = () => {
     return <LoadingScreen progress={80} statusMessage="Preparing UI..." />;
   }
 
-  console.log("[HomeContent] Рендерим основной контент:", 
+  logger.log("[HomeContent] Рендерим основной контент:", 
     {activeTab: gameState.activeTab, 
      hideInterface: gameState.hideInterface, 
      isMergeGameActive, 

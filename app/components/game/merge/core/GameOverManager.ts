@@ -9,6 +9,11 @@ export class GameOverManager {
   private gameOverZone: Phaser.GameObjects.Rectangle | null = null;
   private ballsInDangerZone: Record<string, number> = {};
   private dangerTime: number = 2000; // Время в мс, которое шар должен провести выше линии для Game Over
+  private dangerZone: Phaser.GameObjects.Rectangle;
+  private isGameOver: boolean = false;
+  private dangerZoneEnabled: boolean = true;
+  private gameOverTime: number = 0;
+  private readonly DANGER_DURATION: number = 5000;
 
   constructor(scene: MergeGameSceneType) {
     this.scene = scene;
@@ -245,5 +250,24 @@ export class GameOverManager {
   // Проверяет, завершена ли игра
   public isOver(): boolean {
     return this.gameOver;
+  }
+
+  // Метод для сброса состояния GameOverManager при перезапуске игры
+  public reset(): void {
+    this.gameOver = false;
+    this.isGameOver = false;
+    this.gameOverTime = 0;
+    this.ballsInDangerZone = {};
+    this.dangerZoneEnabled = true;
+    
+    // Удаляем все предупреждения
+    this.scene.children.getChildren()
+      .filter(child => child.getData && child.getData('type') === 'warning')
+      .forEach(child => {
+        if (this.scene.tweens) {
+          this.scene.tweens.killTweensOf(child);
+        }
+        child.destroy();
+      });
   }
 } 

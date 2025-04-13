@@ -58,4 +58,8 @@ export interface MergeGameSceneType extends Phaser.Scene {
   };
   destroyBombTarget: (targetId: string, targetBall: GameBody, bombId: string, bomb: GameBody) => void;
   increaseScore: (score: number) => void;
+  activateAbility: (abilityType: string) => void;
+  restart: () => void;
+  pause: () => void;
+  resume: () => void;
 } 

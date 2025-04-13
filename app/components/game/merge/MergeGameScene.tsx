@@ -10,9 +10,13 @@ import { InputManager } from './input/InputManager';
 import { GameOverManager } from './core/GameOverManager';
 import { ScoreManager } from './core/ScoreManager';
 import { BallFactory } from './core/BallFactory';
+import { ShootingManager } from './managers/ShootingManager';
+import { MergeProcessor } from './managers/MergeProcessor';
+import { BackgroundManager } from './managers/BackgroundManager';
+import { UIManager } from './managers/UIManager';
 import * as gameUtils from './utils/utils';
 
-class MergeGameScene extends Phaser.Scene {
+class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   // Физический мир и тела
   world: planck.World;
   bodies: { [key: string]: GameBody } = {};
@@ -25,19 +29,21 @@ class MergeGameScene extends Phaser.Scene {
   gameOverManager: GameOverManager;
   scoreManager: ScoreManager;
   ballFactory: BallFactory;
-  
-  // Игровые объекты
-  coinKing: Phaser.GameObjects.Image | null = null;
-  nextBall: Phaser.GameObjects.Sprite | null = null;
-  aimLine: Phaser.GameObjects.Graphics | null = null;
-  verticalGuideLine: Phaser.GameObjects.Graphics | null = null;
+  shootingManager: ShootingManager;
+  mergeProcessor: MergeProcessor;
+  backgroundManager: BackgroundManager;
+  uiManager: UIManager;
   
   // Состояние игры
-  pendingMerges: { idA: string, idB: string, levelA: number, positionA: planck.Vec2, positionB: planck.Vec2 }[] = [];
   pendingDeletions: { id: string, type: string }[] = [];
-  recentlyShot: Record<string, number> = {};
-  newBallGracePeriod: number = 320;
   score: number = 0;
+  audioService?: { playSound: (key: string) => void };
+  isPaused: boolean = false;
+  
+  // Необходимые свойства для MergeGameSceneType
+  nextBall: Phaser.GameObjects.Sprite | null = null;
+  nextBallLevel: number = 1;
+  coinKing: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super({ key: 'MergeGameScene' });
@@ -46,6 +52,9 @@ class MergeGameScene extends Phaser.Scene {
     this.world = planck.World({
       gravity: planck.Vec2(0, 45)
     });
+    
+    // Настраиваем обработчик контактов для обнаружения соприкосновений шаров
+    this.world.on('begin-contact', this.handleContact.bind(this));
   }
 
   preload() {
@@ -63,6 +72,9 @@ class MergeGameScene extends Phaser.Scene {
   }
 
   create() {
+    // Получаем размеры игрового холста
+    const { width, height } = this.game.canvas;
+    
     // Инициализируем менеджеры
     this.physicsManager = new PhysicsManager(this, this.world);
     this.effectsManager = new EffectsManager(this);
@@ -71,81 +83,45 @@ class MergeGameScene extends Phaser.Scene {
     this.gameOverManager = new GameOverManager(this);
     this.scoreManager = new ScoreManager(this);
     this.ballFactory = new BallFactory(this, this.physicsManager);
+    this.backgroundManager = new BackgroundManager(this);
+    this.uiManager = new UIManager(this);
     
-    // Получаем размеры игрового холста
-    const { width, height } = this.game.canvas;
+    // Инициализируем менеджеры, зависящие от других
+    this.shootingManager = new ShootingManager(
+      this, 
+      this.ballFactory, 
+      this.physicsManager, 
+      this.inputManager,
+      this.uiManager
+    );
     
-    // Добавляем фоновые изображения
-    // Основной фон (нижний слой)
-    const background = this.add.image(width / 2, height / 2, 'background');
-    background.setDisplaySize(width, height);
-    background.setDepth(-10);
+    this.mergeProcessor = new MergeProcessor(
+      this, 
+      this.ballFactory, 
+      this.physicsManager, 
+      this.effectsManager, 
+      this.bodies
+    );
     
-    // Деревья (верхний слой фона)
-    const trees = this.add.image(width / 2, height / 2, 'trees');
-    trees.setDisplaySize(width, height);
-    trees.setDepth(-5);
+    // Настраиваем фон и получаем позицию горизонтальной линии
+    const lineY = this.backgroundManager.setupBackground(width, height);
     
-    // Добавляем пунктирную линию прицеливания
-    this.aimLine = this.add.graphics();
-    this.updateAimLine(width / 2, height);
+    // Инициализируем UI элементы
+    this.uiManager.setupUI(width, height);
     
     // Инициализируем счет
     this.scoreManager.setup();
     
-    // Добавляем CoinKing в верхнюю часть игровой зоны
-    this.coinKing = this.add.image(width / 2, 45, 'coinKing');
-    this.coinKing.setScale(0.085);
-    
-    // Устанавливаем CoinKing в InputManager
-    this.inputManager.setCoinKing(this.coinKing);
-    
-    // Добавляем горизонтальную пунктирную линию желтого цвета под CoinKing
-    const horizontalLine = this.add.graphics();
-    horizontalLine.lineStyle(2, 0xFFFF00, 0.8);
-    
-    // Рисуем горизонтальную пунктирную линию
-    const lineY = 75;
-    const startX = 10;
-    const endX = width - 10;
-    
-    // Рисуем пунктирную линию сегментами
-    const segmentLength = 15;
-    const gapLength = 8;
-    let currentX = startX;
-    
-    while (currentX < endX) {
-      const segmentEnd = Math.min(currentX + segmentLength, endX);
-      horizontalLine.beginPath();
-      horizontalLine.moveTo(currentX, lineY);
-      horizontalLine.lineTo(segmentEnd, lineY);
-      horizontalLine.strokePath();
-      currentX = segmentEnd + gapLength;
-    }
-    
     // Настраиваем зону для определения Game Over
     this.gameOverManager.setupGameOverZone(width, lineY);
     
-    // Добавляем вертикальную направляющую линию
-    this.verticalGuideLine = this.add.graphics();
-    this.inputManager.setVerticalGuideX(width / 2);
+    // Настраиваем ShootingManager
+    this.shootingManager.setup(width, lineY);
     
-    // Рисуем вертикальную линию от горизонтальной до самого низа экрана
-    this.updateVerticalGuideLine(width / 2, lineY, height);
-    
-    // Генерируем уровень для следующего шара
-    this.ballFactory.generateNextBallLevel();
-    
-    // Создаем следующий шар для броска
-    this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
-    this.nextBall = this.ballFactory.getNextBall();
-    
-    // Настраиваем обработчики ввода
-    this.inputManager.setup(
-      this.updateAimLine.bind(this),
-      this.updateVerticalGuideLine.bind(this),
-      this.shootFromCoinKing.bind(this)
-    );
+    // Обновляем ссылки на игровые объекты для соответствия интерфейсу
+    this.coinKing = this.shootingManager.getCoinKing();
+    this.nextBall = this.shootingManager.getNextBall();
+    this.nextBallLevel = this.ballFactory.getNextBallLevel();
     
     // Создаем границы игрового мира
     this.createBoundaries(width, height);
@@ -170,162 +146,24 @@ class MergeGameScene extends Phaser.Scene {
     this.physicsManager.createBoundary(width / SCALE - wallOffset, 0, width / SCALE - wallOffset, height / SCALE);
   }
 
-  // Обновление линии прицеливания
-  updateAimLine(x: number, height: number) {
-    if (!this.aimLine) return;
-    
-    this.aimLine.clear();
-    this.aimLine.lineStyle(2, 0xFFFFFF, 0.5);
-    
-    // Рисуем пунктирную линию сегментами от CoinKing до нижней части экрана
-    const segmentLength = 10;
-    const gapLength = 10;
-    let currentY = 80; // Начинаем от линии под CoinKing
-    
-    while (currentY < height) {
-      const segmentEnd = Math.min(currentY + segmentLength, height);
-      this.aimLine.beginPath();
-      this.aimLine.moveTo(x, currentY);
-      this.aimLine.lineTo(x, segmentEnd);
-      this.aimLine.strokePath();
-      currentY = segmentEnd + gapLength;
-    }
+  // Метод для обработки слияний между шарами
+  increaseScore(points: number): void {
+    this.scoreManager.increaseScore(points);
+    this.score = this.scoreManager.getScore();
   }
 
-  // Обновление вертикальной направляющей линии
-  updateVerticalGuideLine(x: number, startY: number, endY: number) {
-    if (!this.verticalGuideLine) return;
+  // Метод для обработки уничтожения цели бомбой
+  destroyBombTarget(targetId: string, targetBall: GameBody, bombId: string, bomb: GameBody): void {
+    // Получаем позицию шара
+    const position = targetBall.body.getPosition();
+    const x = position.x * SCALE;
+    const y = position.y * SCALE;
     
-    this.verticalGuideLine.clear();
-    this.verticalGuideLine.lineStyle(2, 0xFFFFFF, 0.2);
+    // Добавляем эффект разрушения
+    this.effectsManager.addMiniExplosionEffect(x, y);
     
-    // Рисуем пунктирную вертикальную линию сегментами
-    const segmentLength = 10;
-    const gapLength = 10;
-    let currentY = startY;
-    
-    while (currentY < endY) {
-      const segmentEnd = Math.min(currentY + segmentLength, endY);
-      this.verticalGuideLine.beginPath();
-      this.verticalGuideLine.moveTo(x, currentY);
-      this.verticalGuideLine.lineTo(x, segmentEnd);
-      this.verticalGuideLine.strokePath();
-      currentY = segmentEnd + gapLength;
-    }
-  }
-
-  // Метод выстрела из CoinKing
-  shootFromCoinKing() {
-    const time = this.time.now;
-    
-    // Проверяем, прошло ли достаточно времени с последнего выстрела
-    if (!this.coinKing || !this.nextBall) return;
-    
-    // Запоминаем текущую позицию направляющей линии
-    const currentGuideX = this.inputManager.getVerticalGuideX();
-    
-    // Получаем данные шара для стрельбы
-    const nextBallLevel = this.ballFactory.getNextBallLevel();
-    const isSpecial = this.nextBall.getData('special');
-    
-    // Создаем шар в физическом мире
-    const radius = gameUtils.getRadiusByLevel(nextBallLevel);
-    const x = this.coinKing.x / SCALE;
-    const y = (this.coinKing.y + 20) / SCALE;
-    
-    // Создаем физическое тело шара
-    let id = '';
-    let newBall = null;
-    
-    if (isSpecial) {
-      // Создаем специальный шар (Bull, Bomb и т.д.)
-      const result = this.physicsManager.createSpecialCircle(x, y, radius, isSpecial);
-      id = String(result.id);
-      newBall = result;
-    } else {
-      // Создаем обычный шар соответствующего уровня
-      const result = this.physicsManager.createCircle(x, y, radius, nextBallLevel);
-      id = String(result.id);
-      newBall = result;
-    }
-    
-    // Добавляем созданный шар в список недавних с отметкой времени
-    this.recentlyShot[id] = time;
-    
-    // Генерируем новый шар для следующего выстрела
-    this.ballFactory.generateNextBallLevel();
-    this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
-    this.nextBall = this.ballFactory.getNextBall();
-    
-    // Обновляем фиксированную направляющую линию от CoinKing 
-    // до самого низа экрана, чтобы она не исчезала при выстреле
-    if (this.verticalGuideLine) {
-      this.updateVerticalGuideLine(currentGuideX, 75, this.game.canvas.height);
-    }
-  }
-
-  // Метод обработки слияния шаров
-  scheduleMerge(idA: string, idB: string) {
-    const bodyA = this.bodies[idA];
-    const bodyB = this.bodies[idB];
-    
-    if (!bodyA || !bodyB) return;
-    
-    const levelA = bodyA.sprite.getData('level');
-    const levelB = bodyB.sprite.getData('level');
-    
-    // Объединяем только шары одинакового уровня
-    if (levelA === levelB) {
-      // Получаем позиции шаров
-      const positionA = bodyA.body.getPosition();
-      const positionB = bodyB.body.getPosition();
-      
-      // Добавляем слияние в очередь для обработки
-      this.pendingMerges.push({
-        idA,
-        idB,
-        levelA,
-        positionA,
-        positionB
-      });
-    }
-  }
-
-  // Обработка отложенных слияний шаров
-  processPendingMerges() {
-    if (this.pendingMerges.length === 0) return;
-    
-    // Обрабатываем каждое слияние
-    this.pendingMerges.forEach(merge => {
-      // Проверяем, что оба шара все еще существуют
-      if (this.bodies[merge.idA] && this.bodies[merge.idB]) {
-        // Вычисляем среднюю позицию для нового шара
-        const newX = (merge.positionA.x + merge.positionB.x) / 2;
-        const newY = (merge.positionA.y + merge.positionB.y) / 2;
-        
-        // Новый уровень шара
-        const newLevel = merge.levelA + 1;
-        
-        // Добавляем эффект слияния
-        const effectX = newX * SCALE;
-        const effectY = newY * SCALE;
-        this.effectsManager.addMergeEffect(effectX, effectY, newLevel);
-        
-        // Удаляем оба шара, участвующих в слиянии
-        this.physicsManager.removeBody(merge.idA);
-        this.physicsManager.removeBody(merge.idB);
-        
-        // Создаем новый шар более высокого уровня на месте слияния
-        this.ballFactory.createMergedBall(newX, newY, newLevel);
-        
-        // Увеличиваем счет в зависимости от уровня созданного шара
-        // Чем выше уровень, тем больше очков
-        this.scoreManager.increaseScore(newLevel * 10);
-      }
-    });
-    
-    // Очищаем очередь слияний
-    this.pendingMerges = [];
+    // Добавляем шар в список на удаление
+    this.pendingDeletions.push({ id: targetId, type: 'bomb_target' });
   }
 
   // Обработка отложенных удалений шаров
@@ -363,7 +201,7 @@ class MergeGameScene extends Phaser.Scene {
         
         // Даем очки за уничтожение, если это специальный шар
         if (deletion.type.includes('target')) {
-          this.scoreManager.increaseScore(15);
+          this.increaseScore(15);
         }
       }
     });
@@ -374,8 +212,8 @@ class MergeGameScene extends Phaser.Scene {
 
   // Обновление игры (вызывается каждый кадр)
   update(time: number, delta: number) {
-    // Если игра завершена, не обновляем
-    if (this.gameOverManager.isOver()) return;
+    // Если игра завершена или на паузе, не обновляем
+    if (this.gameOverManager.isOver() || this.isPaused) return;
     
     // Обновляем физику мира
     this.world.step(1/60);
@@ -384,25 +222,30 @@ class MergeGameScene extends Phaser.Scene {
     this.physicsManager.update();
     
     // Обрабатываем отложенные слияния и удаления
-    this.processPendingMerges();
+    this.mergeProcessor.processPendingMerges(this.increaseScore.bind(this));
     this.processPendingDeletions();
     
     // Проверяем условие Game Over
     this.gameOverManager.checkBallsInDangerZone(this.bodies);
     
     // Обновляем линию прицеливания при нажатии
-    if (this.coinKing && this.aimLine && this.inputManager.getIsPointerDown()) {
+    if (this.inputManager.getIsPointerDown()) {
       const pointer = this.input.activePointer;
-      this.updateAimLine(pointer.x, pointer.y);
+      this.uiManager.updateAimLine(pointer.x, pointer.y);
     }
     
     // Обновляем вертикальную направляющую линию
-    if (this.verticalGuideLine && !this.gameOverManager.isOver()) {
+    if (!this.gameOverManager.isOver()) {
       const currentX = this.inputManager.getVerticalGuideX();
       if (currentX > 0) {
-        this.updateVerticalGuideLine(currentX, 75, this.game.canvas.height);
+        this.uiManager.updateVerticalGuideLine(currentX, 75, this.game.canvas.height);
       }
     }
+    
+    // Обновляем ссылки на объекты из менеджеров
+    this.nextBall = this.shootingManager.getNextBall();
+    this.coinKing = this.shootingManager.getCoinKing();
+    this.nextBallLevel = this.ballFactory.getNextBallLevel();
   }
 
   // Метод для активации способностей (Bull, Bomb, Earthquake)
@@ -412,36 +255,171 @@ class MergeGameScene extends Phaser.Scene {
     }
   }
 
+  // Метод для перезапуска игры
+  restart() {
+    // Очищаем ресурсы текущей игры
+    this.cleanup();
+    
+    // Сбрасываем состояние игры
+    this.gameOverManager.reset();
+    this.isPaused = false;
+    
+    // Пересоздаем физический мир
+    this.world = planck.World({
+      gravity: planck.Vec2(0, 45)
+    });
+    this.world.on('begin-contact', this.handleContact.bind(this));
+    
+    // Заново запускаем сцену
+    this.scene.restart();
+  }
+
+  // Метод для постановки игры на паузу
+  pause() {
+    if (this.gameOverManager && !this.gameOverManager.isOver()) {
+      this.isPaused = true;
+      
+      // Отображаем оверлей паузы (если метод существует)
+      if (this.uiManager && typeof this.uiManager.showPauseOverlay === 'function') {
+        try {
+          this.uiManager.showPauseOverlay();
+        } catch (error) {
+          console.error('Ошибка при показе оверлея паузы:', error);
+        }
+      }
+      
+      // Останавливаем твины и таймеры (но не уничтожаем их)
+      if (this.tweens && typeof this.tweens.pauseAll === 'function') {
+        this.tweens.pauseAll();
+      }
+      
+      // Отключаем ввод
+      if (this.inputManager && typeof this.inputManager.disableInput === 'function') {
+        try {
+          this.inputManager.disableInput();
+        } catch (error) {
+          console.error('Ошибка при отключении ввода:', error);
+        }
+      }
+      
+      // Оповещаем о паузе, если есть аудио сервис
+      if (this.audioService && typeof this.audioService.playSound === 'function') {
+        try {
+          this.audioService.playSound('pause');
+        } catch (error) {
+          console.error('Ошибка при воспроизведении звука паузы:', error);
+        }
+      }
+    }
+  }
+
+  // Метод для возобновления игры
+  resume() {
+    if (this.gameOverManager && !this.gameOverManager.isOver() && this.isPaused) {
+      this.isPaused = false;
+      
+      // Скрываем оверлей паузы
+      if (this.uiManager && typeof this.uiManager.hidePauseOverlay === 'function') {
+        try {
+          this.uiManager.hidePauseOverlay();
+        } catch (error) {
+          console.error('Ошибка при скрытии оверлея паузы:', error);
+        }
+      }
+      
+      // Возобновляем твины и таймеры
+      if (this.tweens && typeof this.tweens.resumeAll === 'function') {
+        this.tweens.resumeAll();
+      }
+      
+      // Включаем ввод
+      if (this.inputManager && typeof this.inputManager.enableInput === 'function') {
+        try {
+          this.inputManager.enableInput();
+        } catch (error) {
+          console.error('Ошибка при включении ввода:', error);
+        }
+      }
+      
+      // Оповещаем о возобновлении, если есть аудио сервис
+      if (this.audioService && typeof this.audioService.playSound === 'function') {
+        try {
+          this.audioService.playSound('resume');
+        } catch (error) {
+          console.error('Ошибка при воспроизведении звука возобновления:', error);
+        }
+      }
+    }
+  }
+
   // Метод для очистки ресурсов перед уничтожением сцены
   cleanup() {
     // Остановка всех таймеров и твинов
-    this.tweens.killAll();
-    this.time.removeAllEvents();
+    if (this.tweens) {
+      this.tweens.killAll();
+    }
+    
+    if (this.time) {
+      this.time.removeAllEvents();
+    }
     
     // Удаление всех физических тел
-    Object.keys(this.bodies).forEach(id => {
-      this.physicsManager.removeBody(id);
-    });
+    if (this.bodies && this.physicsManager) {
+      Object.keys(this.bodies).forEach(id => {
+        this.physicsManager.removeBody(id);
+      });
+    }
     
-    // Очистка списков ожидающих слияний и удалений
-    this.pendingMerges = [];
+    // Очистка списка ожидающих удалений
     this.pendingDeletions = [];
     
     // Сброс счета и других игровых переменных
     this.score = 0;
-    this.recentlyShot = {};
-    
-    // Удаление игровых объектов
-    if (this.aimLine) this.aimLine.destroy();
-    if (this.verticalGuideLine) this.verticalGuideLine.destroy();
-    if (this.nextBall) this.nextBall.destroy();
-    if (this.coinKing) this.coinKing.destroy();
-    
-    // Обнуление ссылок
-    this.aimLine = null;
-    this.verticalGuideLine = null;
+    this.nextBallLevel = 1;
     this.nextBall = null;
     this.coinKing = null;
+    
+    // Очищаем ресурсы менеджеров (с проверкой существования)
+    if (this.uiManager && typeof this.uiManager.cleanup === 'function') {
+      this.uiManager.cleanup();
+    }
+    
+    if (this.shootingManager && typeof this.shootingManager.cleanup === 'function') {
+      this.shootingManager.cleanup();
+    }
+  }
+
+  // Обработчик контактов между телами
+  handleContact(contact: planck.Contact) {
+    const fixtureA = contact.getFixtureA();
+    const fixtureB = contact.getFixtureB();
+    
+    const bodyA = fixtureA.getBody();
+    const bodyB = fixtureB.getBody();
+    
+    const userDataA = bodyA.getUserData() as any;
+    const userDataB = bodyB.getUserData() as any;
+    
+    // Пропускаем контакты между специальными телами или границами
+    if (!userDataA || !userDataB || !userDataA.id || !userDataB.id) {
+      return;
+    }
+    
+    // Проверяем, что оба тела - шары (не спец. шары и не границы)
+    if (userDataA.type === 'ball' && userDataB.type === 'ball') {
+      // Если это недавно созданные шары, пропускаем их
+      const currentTime = this.time.now;
+      const recentlyShot = this.shootingManager.getRecentlyShot();
+      const gracePeriod = this.shootingManager.getNewBallGracePeriod();
+      
+      if (recentlyShot[userDataA.id] && currentTime - recentlyShot[userDataA.id] < gracePeriod) return;
+      if (recentlyShot[userDataB.id] && currentTime - recentlyShot[userDataB.id] < gracePeriod) return;
+      
+      // Планируем слияние шаров
+      this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);
+    }
+    // Дополнительная логика для специальных типов шаров...
+    // Обработка других типов контактов, если необходимо
   }
 }
 

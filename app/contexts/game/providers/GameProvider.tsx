@@ -9,6 +9,9 @@ import { getGameProgressService } from '../../../services/gameProgressService'
 import DebugPanel from '@/app/components/DebugPanel'
 import { initialState, FILL_RATES } from '../../../constants/gameConstants'
 
+// Переменная для включения детальных логов (можно переключить в консоли браузера)
+const ENABLE_DETAILED_LOGS = false;
+
 interface GameProviderProps {
   children: React.ReactNode
   userId?: string
@@ -47,6 +50,26 @@ function createDefaultGameState(userId: string): GameState {
   } as unknown as GameState;
 }
 
+/**
+ * Логгер с возможностью отключения логов
+ */
+const logger = {
+  log: (message: string, data?: any) => {
+    // Выводим логи только если включены детальные логи или это важное сообщение
+    if (ENABLE_DETAILED_LOGS || 
+        message.includes('сохранен') || 
+        message.includes('Загружено') || 
+        message.includes('ошибка') || 
+        message.includes('Error')) {
+      console.log(message, data || '');
+    }
+  },
+  error: (message: string, error?: any) => {
+    // Ошибки всегда выводим
+    console.error(message, error || '');
+  }
+};
+
 export function GameProvider({
   children,
   userId = 'anonymous'
@@ -59,7 +82,7 @@ export function GameProvider({
     // Пытаемся загрузить сохраненное состояние, если есть userId
     if (userId && progressService) {
       const savedState = progressService.loadGameState();
-      console.log('[GameProvider] Загружено сохраненное состояние игры:', savedState._dataSource || 'unknown');
+      logger.log('[GameProvider] Загружено сохраненное состояние игры:', savedState._dataSource || 'unknown');
       return savedState;
     }
     
@@ -112,9 +135,9 @@ export function GameProvider({
           newContainerSnot = prevState.inventory.containerCapacity;
         }
         
-        // Логируем информацию о накоплении для отладки
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[GameProvider] Накопление снота:', {
+        // Логируем информацию о накоплении снота только если включены детальные логи
+        if (ENABLE_DETAILED_LOGS && process.env.NODE_ENV === 'development') {
+          logger.log('[GameProvider] Накопление снота:', {
             timePassed,
             fillRatePerSecond,
             snotToAdd,
@@ -157,7 +180,7 @@ export function GameProvider({
           // Сбрасываем флаг изменений
           stateChangedRef.current = false;
           
-          console.log('[GameProvider] Автоматическое сохранение прогресса');
+          logger.log('[GameProvider] Автоматическое сохранение прогресса');
           return savedState;
         });
       }
@@ -175,7 +198,7 @@ export function GameProvider({
     if (progressService) {
       setState(currentState => {
         const savedState = progressService.saveGameState(currentState);
-        console.log('[GameProvider] Ручное сохранение прогресса');
+        logger.log('[GameProvider] Ручное сохранение прогресса');
         return savedState;
       });
       
@@ -201,7 +224,7 @@ export function GameProvider({
       // Немедленно сохраняем прогресс при изменении состояния
       if (progressService) {
         const savedState = progressService.saveGameState(newState);
-        console.log('[GameProvider] Автоматическое сохранение при изменении состояния');
+        logger.log('[GameProvider] Автоматическое сохранение при изменении состояния');
         return savedState;
       }
       
