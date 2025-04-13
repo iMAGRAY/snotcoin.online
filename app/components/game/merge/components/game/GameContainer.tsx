@@ -37,11 +37,13 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         onRestartComplete();
       }
     }
+    
+    return undefined;
   }, [shouldRestart, onRestartComplete]);
   
   // Стабильный обработчик обновления счета
   const handleGameUpdate = useCallback(() => {
-    if (!gameRef.current) return;
+    if (!gameRef.current) return undefined;
     
     const game = gameRef.current;
     
@@ -59,13 +61,15 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         onGameOver(finalGameScore);
       }
     }
+    
+    return undefined;
   }, [onScoreUpdate, onGameOver]);
   
   useEffect(() => {
-    if (!gameContainerRef.current) return;
+    if (!gameContainerRef.current) return undefined;
     
     // Предотвращаем повторную инициализацию игры
-    if (gameRef.current) return;
+    if (gameRef.current) return undefined;
 
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
@@ -147,6 +151,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     } catch (error) {
       console.error('Ошибка при инициализации Phaser:', error);
       setIsLoaded(true); // Помечаем как загруженный, чтобы скрыть экран загрузки
+      return undefined;
     }
   }, [onScoreUpdate, onGameOver, handleGameUpdate]);
 

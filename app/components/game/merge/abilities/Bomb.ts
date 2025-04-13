@@ -89,7 +89,7 @@ export class Bomb {
       const target = targetsToDestroy[i];
       
       this.scene.time.delayedCall(i * 60, () => {
-        if (this.scene.bodies[target.id]) {
+        if (target && this.scene.bodies[target.id]) {
           this.scene.destroyBombTarget(target.id, target.ball, bombId, bomb);
         }
       });

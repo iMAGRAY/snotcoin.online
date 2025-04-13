@@ -172,9 +172,10 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     
     // Обрабатываем каждое удаление
     this.pendingDeletions.forEach(deletion => {
-      if (this.bodies[deletion.id]) {
+      const bodyToDelete = this.bodies[deletion.id];
+      if (bodyToDelete && bodyToDelete.body) {
         // Получаем позицию шара для эффектов
-        const position = this.bodies[deletion.id].body.getPosition();
+        const position = bodyToDelete.body.getPosition();
         const x = position.x * SCALE;
         const y = position.y * SCALE;
         
@@ -436,8 +437,11 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       const recentlyShot = this.shootingManager.getRecentlyShot();
       const gracePeriod = this.shootingManager.getNewBallGracePeriod();
       
-      if (recentlyShot[userDataA.id] && currentTime - recentlyShot[userDataA.id] < gracePeriod) return;
-      if (recentlyShot[userDataB.id] && currentTime - recentlyShot[userDataB.id] < gracePeriod) return;
+      const shotTimeA = recentlyShot[userDataA.id];
+      const shotTimeB = recentlyShot[userDataB.id];
+      
+      if (shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) return;
+      if (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod) return;
       
       // Планируем слияние шаров
       this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);

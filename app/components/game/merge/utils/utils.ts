@@ -33,7 +33,9 @@ export function getColorByLevel(level: number): number {
     0xFFD700  // золотой (уровень 12)
   ];
   
-  return colors[(level - 1) % colors.length];
+  // Убедимся, что индекс находится в допустимых пределах
+  const index = (level - 1) % colors.length;
+  return colors[index] || 0xFFFFFF; // Возвращаем белый цвет по умолчанию
 }
 
 // Определение, является ли устройство мобильным

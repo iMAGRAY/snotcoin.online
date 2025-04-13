@@ -9,7 +9,7 @@ export class GameOverManager {
   private gameOverZone: Phaser.GameObjects.Rectangle | null = null;
   private ballsInDangerZone: Record<string, number> = {};
   private dangerTime: number = 2000; // Время в мс, которое шар должен провести выше линии для Game Over
-  private dangerZone: Phaser.GameObjects.Rectangle;
+  private dangerZone: Phaser.GameObjects.Rectangle | null = null;
   private isGameOver: boolean = false;
   private dangerZoneEnabled: boolean = true;
   private gameOverTime: number = 0;
@@ -116,9 +116,11 @@ export class GameOverManager {
   private updateDangerWarning(x: number, y: number, timeInDanger: number): void {
     // Находим все предупреждения в этой позиции
     const warnings = this.scene.children.getChildren().filter(child => {
-      return child.getData('type') === 'warning' && 
-             Math.abs(child.x - x) < 5 && 
-             Math.abs(child.y - y) < 5;
+      const gameObj = child as Phaser.GameObjects.GameObject & { x?: number, y?: number };
+      return gameObj.getData && gameObj.getData('type') === 'warning' && 
+             typeof gameObj.x === 'number' && typeof gameObj.y === 'number' &&
+             Math.abs(gameObj.x - x) < 5 && 
+             Math.abs(gameObj.y - y) < 5;
     });
     
     // Обновляем цвет в зависимости от времени
@@ -127,15 +129,17 @@ export class GameOverManager {
       const progress = Math.min(timeInDanger / this.dangerTime, 1);
       
       // От желтого к красному по мере приближения к Game Over
-      const color = Phaser.Display.Color.Interpolate.ColorWithRGB(
-        0xFFFF00, // Желтый
-        0xFF0000, // Красный
-        1,
-        progress
-      );
+      const startColor = 0xFFFF00; // Желтый
+      const endColor = 0xFF0000;   // Красный
+      
+      // Вычисляем промежуточный цвет
+      const r = Math.floor(255);
+      const g = Math.floor(255 * (1 - progress));
+      const b = Math.floor(0);
+      const interpolatedColor = (r << 16) | (g << 8) | b;
       
       if (warning instanceof Phaser.GameObjects.Shape) {
-        warning.setStrokeStyle(2 + progress * 3, color, 0.8);
+        warning.setStrokeStyle(2 + progress * 3, interpolatedColor, 0.8);
         
         // Ускоряем анимацию при приближении к Game Over
         const tween = this.scene.tweens.getTweensOf(warning)[0];
@@ -150,9 +154,11 @@ export class GameOverManager {
   private removeDangerWarning(x: number, y: number): void {
     // Находим все предупреждения в этой позиции
     const warnings = this.scene.children.getChildren().filter(child => {
-      return child.getData('type') === 'warning' && 
-             Math.abs(child.x - x) < 5 && 
-             Math.abs(child.y - y) < 5;
+      const gameObj = child as Phaser.GameObjects.GameObject & { x?: number, y?: number };
+      return gameObj.getData && gameObj.getData('type') === 'warning' && 
+             typeof gameObj.x === 'number' && typeof gameObj.y === 'number' &&
+             Math.abs(gameObj.x - x) < 5 && 
+             Math.abs(gameObj.y - y) < 5;
     });
     
     // Удаляем предупреждения
@@ -179,7 +185,7 @@ export class GameOverManager {
     this.scene.game.registry.set('gameOver', true);
     
     // Устанавливаем финальный счет
-    const finalScore = this.scene.score || 0;
+    const finalScore = this.scene.game.registry.get('gameScore') || 0;
     this.scene.game.registry.set('finalScore', finalScore);
     
     // Сохраняем лучший счет, если текущий превышает предыдущий

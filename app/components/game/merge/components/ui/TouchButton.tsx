@@ -31,6 +31,9 @@ const TouchButton: React.FC<TouchButtonProps> = ({
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     
+    // Проверяем, что touch существует
+    if (!touch) return;
+    
     const isOutside = 
       touch.clientX < rect.left || 
       touch.clientX > rect.right || 
