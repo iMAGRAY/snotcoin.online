@@ -1,45 +1,32 @@
 "use client"
 
-import React, { useState } from "react";
-import { TouchButtonProps } from "../utils/types";
+import React, { useState } from 'react';
+import { TouchButtonProps } from '../utils/types';
 
-export const TouchButton: React.FC<TouchButtonProps> = ({ 
+const TouchButton = ({
   onClick, 
-  className = "", 
+  className, 
   disabled = false, 
-  title = "",
-  children 
-}) => {
+  title, 
+  children
+}: TouchButtonProps) => {
   const [isPressed, setIsPressed] = useState(false);
   
-  const handleTouchStart = () => {
-    if (!disabled) {
-      setIsPressed(true);
-    }
+  const handleTouchStart = (e: any) => {
+    if (disabled) return;
+    e.preventDefault();
+    setIsPressed(true);
   };
   
-  const handleTouchMove = (e: React.TouchEvent) => {
-    // Логика для определения, покинул ли палец область кнопки
-    const touch = e.touches[0];
-    const target = e.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    
-    const isOutside = 
-      touch.clientX < rect.left || 
-      touch.clientX > rect.right || 
-      touch.clientY < rect.top || 
-      touch.clientY > rect.bottom;
-    
-    if (isOutside && !disabled) {
-      setIsPressed(false);
-    } else if (!isOutside && !isPressed && !disabled) {
-      setIsPressed(true);
-    }
+  const handleTouchMove = (e: any) => {
+    if (disabled) return;
+    e.preventDefault();
   };
   
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (isPressed && !disabled) {
-      // Предотвращаем клик после скролла, устанавливая порог перемещения
+  const handleTouchEnd = (e: any) => {
+    if (disabled) return;
+    e.preventDefault();
+    if (isPressed) {
       onClick();
     }
     setIsPressed(false);
@@ -65,4 +52,6 @@ export const TouchButton: React.FC<TouchButtonProps> = ({
       {children}
     </button>
   );
-}; 
+};
+
+export default TouchButton; 
