@@ -1,4 +1,3 @@
-
 "use client"
 
 // Утилиты для игры Merge
@@ -34,3 +33,12 @@ export function getColorByLevel(level: number): number {
   
   return colors[(level - 1) % colors.length];
 }
+
+// Определение, является ли устройство мобильным
+export function isMobile(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Масштаб для перевода между физическими единицами и пикселями
+export const SCALE = 30;

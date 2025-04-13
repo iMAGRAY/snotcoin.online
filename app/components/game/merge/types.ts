@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as Phaser from 'phaser';
@@ -23,7 +22,7 @@ export interface MergeGameLauncherProps {
 }
 
 // Тип для игрового тела в физическом мире
-export type GameBody = {
+export interface GameBody {
   body: planck.Body;
   sprite: Phaser.GameObjects.Sprite;
   lastTimeInDangerZone?: number | null; // Добавляем поле для отслеживания времени в опасной зоне
@@ -45,4 +44,18 @@ export interface MergeGameState {
   isPaused: boolean;
   finalScore: number;
   bestScore: number;
+}
+
+// Расширенный интерфейс для сцены MergeGameScene
+export interface MergeGameSceneType extends Phaser.Scene {
+  bodies: { [key: string]: GameBody };
+  nextBall: Phaser.GameObjects.Sprite | null;
+  nextBallLevel: number;
+  coinKing: Phaser.GameObjects.Image | null;
+  pendingDeletions: { id: string, type: string }[];
+  audioService?: {
+    playSound: (key: string) => void;
+  };
+  destroyBombTarget: (targetId: string, targetBall: GameBody, bombId: string, bomb: GameBody) => void;
+  increaseScore: (score: number) => void;
 }
