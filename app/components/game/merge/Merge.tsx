@@ -37,6 +37,7 @@ const Merge: React.FC = () => {
   const dispatch = useGameDispatch()
   const [isGameLaunched, setIsGameLaunched] = useState(false)
   const [isOnline, setIsOnline] = useState(false)
+  const [isRefillLoading, setIsRefillLoading] = useState(false)
   
   // Хук для принудительного сохранения
   const forceSave = useForceSave();
@@ -146,29 +147,64 @@ const Merge: React.FC = () => {
       ...prevState,
       hideInterface: true
     }));
-    setIsGameLaunched(true)
+    
+    setIsGameLaunched(true);
   }
 
   const handleBackToMenu = () => {
+    // При возврате в меню - показываем интерфейс
     dispatch(prevState => ({
       ...prevState,
       hideInterface: false
     }));
-    setIsGameLaunched(false)
+    
+    setIsGameLaunched(false);
   }
 
   const handleToggleOnline = () => {
     setIsOnline(!isOnline)
   }
 
+  // Функция для мгновенного восстановления всех попыток
+  const handleRefillAttempts = () => {
+    setIsRefillLoading(true);
+    
+    // Имитация задержки API запроса
+    setTimeout(() => {
+      // Создаем новый объект с максимальным количеством попыток
+      const updatedData: MergeGameAttemptsData = {
+        attemptsLeft: MAX_MERGE_ATTEMPTS,
+        lastAttemptTime: Date.now(),
+        nextRecoveryTime: 0
+      };
+      
+      // Обновляем состояние и сохраняем в localStorage
+      setAttemptsData(updatedData);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
+      
+      // Сбрасываем состояние загрузки
+      setIsRefillLoading(false);
+      
+      // Логируем успешное восстановление попыток
+      console.log('[MergeGame] Все попытки восстановлены');
+    }, 800);
+  };
+
+  // Проверяем, запущена ли игра
   if (isGameLaunched) {
-    return <MergeGameLauncher 
-      onBack={handleBackToMenu} 
-      attemptsData={attemptsData}
-      maxAttempts={MAX_MERGE_ATTEMPTS}
-      remainingTime={remainingTime}
-    />
+    // Возвращаем MergeGameLauncher с нужными пропсами
+    return (
+      <MergeGameLauncher 
+        onBack={handleBackToMenu}
+        attemptsData={attemptsData}
+        maxAttempts={MAX_MERGE_ATTEMPTS}
+        remainingTime={remainingTime}
+      />
+    );
   }
+
+  // Проверка, нужно ли показывать кнопку восстановления попыток
+  const showRefillButton = attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS;
 
   return (
     <div 
@@ -213,6 +249,41 @@ const Merge: React.FC = () => {
                 </div>
               )}
           </motion.button>
+          
+          {/* Кнопка восстановления попыток */}
+          {showRefillButton && (
+            <motion.button
+              onClick={handleRefillAttempts}
+              disabled={isRefillLoading}
+              className="w-full px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 relative overflow-hidden"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <div className="flex items-center justify-center">
+                {isRefillLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Восстановление...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    </svg>
+                    <span>Восстановить все попытки</span>
+                  </>
+                )}
+              </div>
+              {!isRefillLoading && (
+                <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
+                  <span className="absolute -top-1 left-0 w-full h-[2px] bg-white opacity-30 animate-pulse"></span>
+                </div>
+              )}
+            </motion.button>
+          )}
           
           {/* Кнопка PVP (Coming Soon) */}
           <motion.button

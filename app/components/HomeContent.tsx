@@ -73,11 +73,32 @@ const HomeContent: React.FC = () => {
   const [viewportHeight, setViewportHeight] = React.useState("100vh");
   const [forceLoaded, setForceLoaded] = useState(false);
   const [interfaceReady, setInterfaceReady] = useState(false);
+  
   // Флаг для отслеживания, было ли уже показано системное окно
   const addAppModalShownRef = useRef(false);
-  
   const readyCalledRef = useRef(false);
   const allComponentsLoadedRef = useRef(false);
+  
+  // Добавляем состояние для принудительного отображения интерфейса
+  const [forceShowInterface, setForceShowInterface] = useState(false);
+  
+  // Флаг для отслеживания активной игры в Merge - по умолчанию false
+  const [isMergeGameActive, setIsMergeGameActive] = useState(false);
+
+  // При первом монтировании компонента гарантируем, что hideInterface=false
+  useEffect(() => {
+    console.log("[HomeContent] Первая инициализация, проверка интерфейса:", 
+      {hideInterface: gameState.hideInterface, activeTab: gameState.activeTab});
+      
+    // Сбрасываем hideInterface при старте приложения
+    if (gameState.hideInterface) {
+      console.log("[HomeContent] Обнаружено hideInterface=true при старте, устанавливаем false");
+      dispatch(prevState => ({
+        ...prevState,
+        hideInterface: false
+      }));
+    }
+  }, []);
   
   // Проверка и установка активной вкладки при монтировании
   useEffect(() => {
@@ -222,6 +243,40 @@ const HomeContent: React.FC = () => {
     return undefined;
   }, [gameState.isLoading, isClient, interfaceReady]);
 
+  // Модифицируем useEffect для корректной обработки скрытия интерфейса при игре в Merge
+  useEffect(() => {
+    // Проверяем, активна ли сейчас игра Merge
+    const isMergeTabActive = gameState.activeTab === "merge";
+    
+    console.log("[HomeContent] Проверка активности игры Merge:", 
+      {isMergeTabActive, hideInterface: gameState.hideInterface});
+    
+    // Устанавливаем флаг активности игры в Merge
+    setIsMergeGameActive(isMergeTabActive && gameState.hideInterface);
+    
+    // Если интерфейс скрыт и это НЕ режим игры Merge, восстанавливаем видимость интерфейса
+    if (gameState.hideInterface && !isMergeTabActive) {
+      console.log("[HomeContent] Обнаружено скрытие интерфейса (не Merge), планируем восстановление");
+      const showInterfaceTimeout = setTimeout(() => {
+        console.log("[HomeContent] Принудительно показываем интерфейс");
+        setForceShowInterface(true);
+        // Также обновляем состояние для гарантии
+        dispatch(prevState => ({
+          ...prevState,
+          hideInterface: false
+        }));
+      }, 200);
+      
+      return () => clearTimeout(showInterfaceTimeout);
+    } else {
+      // Сбрасываем форсированный показ, если интерфейс и так видим
+      // или мы в режиме игры Merge (где интерфейс должен быть скрыт)
+      setForceShowInterface(false);
+    }
+    
+    return undefined;
+  }, [gameState.hideInterface, gameState.activeTab, dispatch]);
+
   // Отображаем экран загрузки вместо возврата null
   if (gameState.isLoading && !forceLoaded) {
     console.log("[HomeContent] Показываем экран загрузки с прогрессом 90%");
@@ -233,8 +288,19 @@ const HomeContent: React.FC = () => {
     return <LoadingScreen progress={80} statusMessage="Preparing UI..." />;
   }
 
-  console.log("[HomeContent] Рендерим основной контент, activeTab:", gameState.activeTab);
+  console.log("[HomeContent] Рендерим основной контент:", 
+    {activeTab: gameState.activeTab, 
+     hideInterface: gameState.hideInterface, 
+     isMergeGameActive, 
+     shouldShowInterface: isMergeGameActive ? false : (forceShowInterface || !gameState.hideInterface)
+    });
+  
   const Component = TABS[gameState.activeTab] || TABS.merge;
+  
+  // Модифицируем проверку видимости интерфейса
+  // Вычисляем, должен ли интерфейс быть видимым
+  // Для игры Merge мы всегда скрываем интерфейс, если hideInterface=true и активен таб Merge
+  const shouldShowInterface = isMergeGameActive ? false : (forceShowInterface || !gameState.hideInterface);
   
   return (
     <ErrorBoundary fallback={<ErrorDisplay message="Ошибка при отображении основного контента." />}>
@@ -251,7 +317,7 @@ const HomeContent: React.FC = () => {
         }}
       >
         <Resources 
-          isVisible={!gameState.hideInterface}
+          isVisible={shouldShowInterface}
           activeTab={gameState.activeTab || "laboratory"}
           snot={gameState.inventory?.snot || 0}
           snotCoins={gameState.inventory?.snotCoins || 0}
@@ -262,11 +328,15 @@ const HomeContent: React.FC = () => {
           fillingSpeedLevel={gameState.inventory?.fillingSpeedLevel}          
         />
         {Component} 
-        {!gameState.hideInterface && <TabBar />}
-        {!gameState.hideInterface && <SaveIndicator />}
+        
+        <div className={shouldShowInterface ? '' : 'opacity-0 pointer-events-none'}>
+          <TabBar />
+        </div>
+        
+        {shouldShowInterface && <SaveIndicator />}
         
         {/* Farcaster Mini App интеграция - только кнопка уведомлений */}
-        <div className="farcaster-buttons fixed top-4 right-4 z-50">
+        <div className={`farcaster-buttons fixed top-4 right-4 z-50 ${isMergeGameActive ? 'opacity-0 pointer-events-none' : ''}`}>
           <FarcasterButtons 
             notificationButtonLabel="Уведомления" 
           />
