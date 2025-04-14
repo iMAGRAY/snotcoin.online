@@ -88,11 +88,11 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     // Предотвращаем повторную инициализацию игры
     if (gameRef.current) return undefined;
 
-    // Определяем базовые размеры с соотношением 7:10
-    const BASE_WIDTH = 7 * 60;  // 420px
-    const BASE_HEIGHT = 10 * 60; // 600px
+    // Определяем базовые размеры с соотношением 85:112
+    const BASE_WIDTH = 85 * 5;  // 425px
+    const BASE_HEIGHT = 112 * 5; // 560px
     
-    // Рассчитываем новые размеры с учетом пропорций 7:10
+    // Рассчитываем новые размеры с учетом соотношения сторон 85:112
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight - 140;
     
@@ -100,18 +100,18 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     const scaleWidth = containerWidth / BASE_WIDTH;
     const scaleHeight = containerHeight / BASE_HEIGHT;
     
-    // Используем меньший масштаб для сохранения пропорций
+    // Используем меньший масштаб для сохранения соотношения сторон
     const scale = Math.min(scaleWidth, scaleHeight);
     
-    // Вычисляем итоговые размеры с сохранением пропорций
-    const gameWidth = Math.floor(BASE_WIDTH * scale);
-    const gameHeight = Math.floor(BASE_HEIGHT * scale);
+    // Вычисляем итоговые размеры с сохранением соотношения сторон
+    const newWidth = Math.floor(BASE_WIDTH * scale);
+    const newHeight = Math.floor(BASE_HEIGHT * scale);
 
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: gameWidth,
-      height: gameHeight,
+      width: newWidth,
+      height: newHeight,
       backgroundColor: 'transparent',
       parent: gameContainerRef.current,
       physics: {
@@ -150,7 +150,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       const handleResize = () => {
         try {
           if (game && game.scale) {
-            // Рассчитываем новые размеры с учетом пропорций
+            // Рассчитываем новые размеры с учетом соотношения сторон 85:112
             const containerWidth = window.innerWidth;
             const containerHeight = window.innerHeight - 140;
             
@@ -166,10 +166,10 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
               const scaleWidth = containerWidth / BASE_WIDTH;
               const scaleHeight = containerHeight / BASE_HEIGHT;
               
-              // Используем меньший масштаб для сохранения пропорций
+              // Используем меньший масштаб для сохранения соотношения сторон
               const scale = Math.min(scaleWidth, scaleHeight);
               
-              // Вычисляем итоговые размеры с сохранением пропорций
+              // Вычисляем итоговые размеры с сохранением соотношения сторон
               const newWidth = Math.floor(BASE_WIDTH * scale);
               const newHeight = Math.floor(BASE_HEIGHT * scale);
               
@@ -311,7 +311,9 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
           touchAction: 'none', // Предотвращает масштабирование и скролл на мобильных устройствах
           overflow: 'hidden',
           width: '100%',
-          height: 'calc(100vh - 140px)',
+          // Устанавливаем соотношение сторон 85:112
+          height: 'calc((100vw * 112 / 85) - 140px)',
+          maxHeight: 'calc(100vh - 140px)', // Ограничение максимальной высоты
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'

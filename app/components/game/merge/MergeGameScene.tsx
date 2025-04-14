@@ -72,10 +72,10 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   create() {
-    // Получаем размеры игрового холста с учетом пропорций 7:10
+    // Получаем размеры игрового холста с учетом соотношения сторон 85:112
     const { width, height } = this.game.canvas;
     
-    // Настраиваем физический мир и границы с учетом пропорций 7:10
+    // Настраиваем физический мир и границы с учетом соотношения сторон 85:112
     this.world.setGravity(planck.Vec2(0, 45));
     
     // Инициализируем менеджеры
@@ -109,16 +109,16 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     // Настраиваем фон и получаем позицию горизонтальной линии
     const lineY = this.backgroundManager.setupBackground(width, height);
     
-    // Инициализируем UI элементы с учетом пропорций
+    // Инициализируем UI элементы с учетом соотношения сторон
     this.uiManager.setupUI(width, height);
     
     // Инициализируем счет
     this.scoreManager.setup();
     
-    // Настраиваем зону для определения Game Over с учетом пропорций
+    // Настраиваем зону для определения Game Over с учетом соотношения сторон
     this.gameOverManager.setupGameOverZone(width, lineY);
     
-    // Настраиваем ShootingManager с учетом пропорций
+    // Настраиваем ShootingManager с учетом соотношения сторон
     this.shootingManager.setup(width, lineY);
     
     // Обновляем ссылки на игровые объекты для соответствия интерфейсу
@@ -126,7 +126,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.nextBall = this.shootingManager.getNextBall();
     this.nextBallLevel = this.ballFactory.getNextBallLevel();
     
-    // Создаем границы игрового мира с учетом пропорций
+    // Создаем границы игрового мира с учетом соотношения сторон
     this.createBoundaries(width, height);
     
     // Устанавливаем время начала игры
@@ -134,7 +134,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   createBoundaries(width: number, height: number) {
-    // Основные границы мира с учетом пропорций 7:10
+    // Основные границы мира с соотношением сторон 85:112
     this.physicsManager.createBoundary(0, height / SCALE, width / SCALE, height / SCALE, 'bottom');
     this.physicsManager.createBoundary(0, 0, 0, height / SCALE);
     this.physicsManager.createBoundary(width / SCALE, 0, width / SCALE, height / SCALE);
@@ -279,12 +279,12 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
         this.mergeProcessor.reset();
       }
 
-      // Получаем размеры игрового холста с учетом пропорций 7:10
+      // Получаем размеры игрового холста с учетом соотношения сторон 85:112
       const { width, height } = this.game.canvas;
       
-      // Рассчитываем позицию линии с учетом пропорций
-      // Используем примерно 10% от высоты как расстояние для линии от верха
-      const lineY = Math.round(height * 0.10);
+      // Рассчитываем позицию линии с учетом соотношения сторон
+      // Используем примерно 9% от высоты как расстояние для линии от верха
+      const lineY = Math.round(height * 0.09);
       
       // Сбрасываем shooting manager, если он существует
       if (this.shootingManager) {
@@ -296,7 +296,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this.isPaused = false;
       this.nextBallLevel = 1;
       
-      // Пересоздаем физический мир с сохранением пропорций
+      // Пересоздаем физический мир с сохранением соотношения сторон
       this.world = planck.World({
         gravity: planck.Vec2(0, 45)
       });
