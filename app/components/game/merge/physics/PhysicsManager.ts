@@ -35,13 +35,42 @@ export class PhysicsManager {
 
   public removeBody(id: string): void {
     if (this.bodies[id]) {
-      if (this.bodies[id].sprite) {
-        this.bodies[id].sprite.destroy();
+      try {
+        // Шаг 1: Пометить как удаляемое в userData
+        if (this.bodies[id].body) {
+          const userData = this.bodies[id].body.getUserData() as any;
+          if (userData) {
+            userData.markedForDeletion = true;
+          }
+        }
+        
+        // Шаг 2: Уничтожить спрайт и анимации
+        if (this.bodies[id].sprite) {
+          if (this.bodies[id].sprite.active) {
+            // Остановить все твины, связанные со спрайтом
+            this.scene.tweens.killTweensOf(this.bodies[id].sprite);
+            // Уничтожить спрайт
+            this.bodies[id].sprite.destroy();
+          }
+        }
+        
+        // Шаг 3: Уничтожить физическое тело
+        if (this.bodies[id].body) {
+          try {
+            this.world.destroyBody(this.bodies[id].body);
+          } catch (error) {
+            console.error(`Ошибка при уничтожении физического тела ${id}:`, error);
+          }
+        }
+        
+        // Шаг 4: Удалить из списка тел
+        delete this.bodies[id];
+      } catch (error) {
+        console.error(`Критическая ошибка при удалении тела ${id}:`, error);
+        
+        // В случае ошибки, все равно пытаемся удалить из списка
+        delete this.bodies[id];
       }
-      if (this.bodies[id].body) {
-        this.world.destroyBody(this.bodies[id].body);
-      }
-      delete this.bodies[id];
     }
   }
 
@@ -70,14 +99,30 @@ export class PhysicsManager {
         return null;
       }
       
+      // Изменяем радиус в зависимости от уровня
+      let actualRadius = radius;
+      if (level === 1) {
+        // Шар 1-го уровня в 2 раза меньше
+        actualRadius = radius / 2;
+      } else if (level === 2) {
+        // Шар 2-го уровня на 25% меньше
+        actualRadius = radius * 0.75;
+      } else if (level === 3) {
+        // Шар 3-го уровня на 15% меньше
+        actualRadius = radius * 0.85;
+      } else if (level === 4) {
+        // Шар 4-го уровня на 10% меньше
+        actualRadius = radius * 0.9;
+      }
+      
       // Создаем физическое тело с улучшенными параметрами
       const body = this.world.createBody({
         type: 'dynamic',
         position: planck.Vec2(x, y),
-        angularDamping: 0.1,
-        linearDamping: 0.1,
-        bullet: true, // Включаем улучшенное обнаружение столкновений для быстрых объектов
-        fixedRotation: false // Разрешаем вращение для реалистичной физики
+        angularDamping: 0.3,
+        linearDamping: 0.3,
+        bullet: true,
+        fixedRotation: false
       });
       
       // Проверяем, что тело создано успешно
@@ -91,27 +136,63 @@ export class PhysicsManager {
 
       // Создаем фикстуру (одним блоком для скорости)
       const fixture = body.createFixture({
-        shape: planck.Circle(radius),
+        shape: planck.Circle(actualRadius),
         density: 1.0,
-        friction: 0.3,
-        restitution: 0.6, // Коэффициент упругости при столкновениях
+        friction: 0.5, // Увеличенное трение для большей стабильности
+        restitution: 0.35, // Коэффициент упругости при столкновениях (уменьшен для меньшего отскока)
       });
-      
-      if (!fixture) {
-        console.error('Ошибка: не удалось создать фикстуру');
-        this.world.destroyBody(body);
-        return null;
-      }
       
       // Устанавливаем информацию о шаре в данные фикстуры
       fixture.setUserData({ id, level, type: 'ball' });
 
       // Определяем размер спрайта (в пикселях)
-      const ballSize = radius * 2 * SCALE;
+      const ballSize = actualRadius * 2 * SCALE;
 
       // Создаем спрайт шара с изображением, соответствующим уровню
       const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, `ball${level}`);
       sprite.setDisplaySize(ballSize, ballSize);
+      
+      // Дополнительные настройки для сглаживания
+      sprite.setInteractive();
+      sprite.setPipeline('TextureTintPipeline');
+      
+      // Применяем линейное сглаживание к текстуре
+      const texture = this.scene.textures.get(`ball${level}`);
+      if (texture) {
+        texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+        
+        // Улучшенные настройки миньмапов при наличии
+        if (texture.source && texture.source[0]) {
+          // Применяем дополнительные улучшения для WebGL
+          const source = texture.source[0];
+          if (source.glTexture && this.scene.game.renderer.type === Phaser.WEBGL) {
+            try {
+              const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+              const gl = renderer.gl;
+              gl.bindTexture(gl.TEXTURE_2D, source.glTexture);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+              gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+              gl.generateMipmap(gl.TEXTURE_2D);
+              gl.bindTexture(gl.TEXTURE_2D, null);
+            } catch (e) {
+              console.warn('Не удалось применить улучшенные WebGL-настройки к текстуре:', e);
+            }
+          }
+        }
+      }
+      
+      // Настройки для высокого качества рендеринга
+      sprite.setScale(sprite.scaleX, sprite.scaleY);
+      sprite.setOrigin(0.5, 0.5); // Устанавливаем точку вращения в центр
+      sprite.setData('smoothed', true);
+      
+      // Дополнительные настройки для лучшего сглаживания
+      if (this.scene.game.renderer.type === Phaser.WEBGL) {
+        // В WebGL режиме добавляем специальный шейдер для сглаживания
+        sprite.preFX?.addBlur(1, 1, 0, 0.1);
+      }
       
       // Явно устанавливаем уровень как свойство спрайта
       sprite.setData('level', level);
@@ -142,9 +223,10 @@ export class PhysicsManager {
       const body = this.world.createBody({
         type: 'dynamic',
         position: planck.Vec2(x, y),
-        angularDamping: 0.1,
-        linearDamping: 0.1,
-        bullet: true // Улучшенное обнаружение коллизий для быстрых объектов
+        angularDamping: 0.3, // Увеличено для быстрого замедления вращения
+        linearDamping: 0.3, // Увеличено для быстрого замедления движения
+        bullet: true, // Улучшенное обнаружение коллизий для быстрых объектов
+        fixedRotation: false // Разрешаем вращение для реалистичной физики
       });
       
       // Проверяем, что тело создано успешно
@@ -158,8 +240,8 @@ export class PhysicsManager {
         const fixture = body.createFixture({
           shape: planck.Circle(radius),
           density: 1.0,
-          friction: 0.3,
-          restitution: 0.6,
+          friction: 0.5, // Увеличенное трение для большей стабильности
+          restitution: 0.35, // Коэффициент упругости при столкновениях (уменьшен для меньшего отскока)
           userData: { type }
         });
         
@@ -181,6 +263,50 @@ export class PhysicsManager {
         // Создаем спрайт шара с соответствующим изображением
         const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, type.toLowerCase());
         sprite.setDisplaySize(ballSize, ballSize);
+        
+        // Дополнительные настройки для сглаживания
+        sprite.setInteractive();
+        sprite.setPipeline('TextureTintPipeline');
+        
+        // Применяем линейное сглаживание к текстуре
+        const texture = this.scene.textures.get(type.toLowerCase());
+        if (texture) {
+          texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+          
+          // Улучшенные настройки миньмапов при наличии
+          if (texture.source && texture.source[0]) {
+            // Применяем дополнительные улучшения для WebGL
+            const source = texture.source[0];
+            if (source.glTexture && this.scene.game.renderer.type === Phaser.WEBGL) {
+              try {
+                const renderer = this.scene.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+                const gl = renderer.gl;
+                gl.bindTexture(gl.TEXTURE_2D, source.glTexture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.generateMipmap(gl.TEXTURE_2D);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+              } catch (e) {
+                console.warn('Не удалось применить улучшенные WebGL-настройки к текстуре:', e);
+              }
+            }
+          }
+        }
+        
+        // Настройки для высокого качества рендеринга
+        sprite.setScale(sprite.scaleX, sprite.scaleY);
+        sprite.setOrigin(0.5, 0.5); // Устанавливаем точку вращения в центр
+        sprite.setData('smoothed', true);
+        
+        // Дополнительные настройки для лучшего сглаживания
+        if (this.scene.game.renderer.type === Phaser.WEBGL) {
+          // В WebGL режиме добавляем специальный шейдер для сглаживания
+          sprite.preFX?.addBlur(0.5, 0.5, 0, 0.1);
+        }
+        
+        // Сохраняем тип спрайта
         sprite.setData('type', type);
 
         // Создаем тело и добавляем его в список тел
@@ -219,5 +345,45 @@ export class PhysicsManager {
         bodyData.sprite.rotation = angle;
       }
     }
+  }
+  
+  /**
+   * Очищает все физические тела
+   */
+  public reset(): void {
+    // Удаляем все спрайты и физические тела
+    for (const id in this.bodies) {
+      if (this.bodies[id]) {
+        if (this.bodies[id].sprite) {
+          this.bodies[id].sprite.destroy();
+        }
+        if (this.bodies[id].body) {
+          this.world.destroyBody(this.bodies[id].body);
+        }
+      }
+    }
+    
+    // Очищаем словарь тел
+    this.bodies = {};
+    
+    // Сбрасываем счетчик ID
+    this.nextId = 1;
+  }
+
+  /**
+   * Устанавливает новый физический мир
+   * @param world Новый физический мир
+   */
+  public setWorld(world: planck.World): void {
+    // Сохраняем ссылку на новый мир
+    this.world = world;
+    
+    // Очищаем словарь тел, так как они относились к старому миру
+    this.bodies = {};
+    
+    // Сбрасываем счетчик ID
+    this.nextId = 1;
+    
+    console.log('Обновлена ссылка на физический мир в PhysicsManager');
   }
 }

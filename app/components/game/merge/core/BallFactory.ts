@@ -51,8 +51,25 @@ export class BallFactory {
     
     // Получаем радиус шара для текущего уровня
     const radius = gameUtils.getRadiusByLevel(this.nextBallLevel);
+    
+    // Изменяем радиус в зависимости от уровня
+    let actualRadius = radius;
+    if (this.nextBallLevel === 1) {
+      // Шар 1-го уровня в 2 раза меньше
+      actualRadius = radius / 2;
+    } else if (this.nextBallLevel === 2) {
+      // Шар 2-го уровня на 25% меньше
+      actualRadius = radius * 0.75;
+    } else if (this.nextBallLevel === 3) {
+      // Шар 3-го уровня на 15% меньше
+      actualRadius = radius * 0.85;
+    } else if (this.nextBallLevel === 4) {
+      // Шар 4-го уровня на 10% меньше
+      actualRadius = radius * 0.9;
+    }
+    
     // Физический размер шара (в пикселях)
-    const ballSize = radius * 2 * SCALE;
+    const ballSize = actualRadius * 2 * SCALE;
     
     // Создаем спрайт шара с изображением, соответствующим уровню
     this.nextBall = this.scene.add.sprite(coinKingX, ballY, `ball${this.nextBallLevel}`);

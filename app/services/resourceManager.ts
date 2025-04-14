@@ -40,6 +40,7 @@ export interface ResourceOperationResult {
  */
 export class ResourceManager {
   private resources: GameResources;
+  
   private readonly defaultResources: GameResources = {
     snot: 0,
     snotCoins: 0,
@@ -50,6 +51,22 @@ export class ResourceManager {
     fillingSpeedLevel: 1,
     collectionEfficiency: 1.0,
     lastUpdateTimestamp: Date.now() as number
+  };
+  
+  private initialResources: GameResources = { ...this.defaultResources };
+  
+  // Добавляем переменные для отслеживания изменений ресурсов
+  private resourcesHistory: Map<keyof GameResources, {value: number, timestamp: number}[]> = new Map();
+  private maxHistorySize: number = 10;
+  private maxResourceIncreaseThreshold: {[key in keyof GameResources]?: number} = {
+    snot: 1000,
+    snotCoins: 500,
+    containerSnot: 200
+  };
+  private maxResourceIncreaseRatePerSecond: {[key in keyof GameResources]?: number} = {
+    snot: 2000,
+    snotCoins: 1000,
+    containerSnot: 500
   };
 
   constructor(initialResources?: Partial<GameResources>) {
@@ -93,6 +110,11 @@ export class ResourceManager {
     }
     
     console.log('[ResourceManager] Инициализирован с ресурсами:', { ...this.resources });
+    
+    // Инициализируем историю для каждого ресурса
+    Object.keys(this.resources).forEach((key) => {
+      this.resourcesHistory.set(key as keyof GameResources, []);
+    });
   }
 
   /**
@@ -120,7 +142,7 @@ export class ResourceManager {
    */
   public setResource(resourceType: keyof GameResources, value: number): ResourceOperationResult {
     console.log(`[ResourceManager] setResource вызван для ${resourceType}:`, { 
-      currentValue: this.resources[resourceType],
+      oldValue: this.resources[resourceType],
       newValue: value,
       allResources: { ...this.resources }
     });
@@ -135,6 +157,29 @@ export class ResourceManager {
       };
     }
 
+    if (value < 0) {
+      return {
+        success: false,
+        resourceType,
+        oldValue: this.resources[resourceType],
+        error: 'Cannot set negative resource value',
+        operation: 'set',
+        timestamp: Date.now()
+      };
+    }
+
+    // Проверка на подозрительно большое значение
+    const threshold = this.maxResourceIncreaseThreshold[resourceType];
+    const currentValue = this.resources[resourceType];
+    
+    if (threshold && value > currentValue + threshold) {
+      console.warn(`[ResourceManager] Подозрительное изменение ресурса ${resourceType}: +${value - currentValue}. Применяем ограничение.`);
+      value = currentValue + threshold;
+    }
+    
+    // Добавляем текущее значение в историю перед изменением
+    this.addToResourceHistory(resourceType, currentValue, Date.now());
+    
     const oldValue = this.resources[resourceType] || 0;
     // Устанавливаем значение ресурса в объекте resources используя свойство resourceType
     this.resources[resourceType] = value;
@@ -164,7 +209,7 @@ export class ResourceManager {
   public addResource(resourceType: keyof GameResources, amount: number): ResourceOperationResult {
     try {
       console.log(`[ResourceManager] addResource вызван для ${resourceType}:`, { 
-        currentValue: this.resources[resourceType],
+        oldValue: this.resources[resourceType],
         amount,
         allResources: { ...this.resources }
       });
@@ -173,6 +218,26 @@ export class ResourceManager {
         return {
           success: false,
           error: 'Недопустимое количество для добавления',
+          resourceType,
+          operation: 'add',
+          timestamp: Date.now()
+        };
+      }
+
+      // Проверка на подозрительно большое добавление
+      const threshold = this.maxResourceIncreaseThreshold[resourceType];
+      if (threshold && amount > threshold) {
+        console.warn(`[ResourceManager] Подозрительное добавление ресурса ${resourceType}: +${amount}. Применяем ограничение.`);
+        amount = threshold;
+      }
+      
+      // Проверка скорости изменения ресурса
+      const isChangeValid = this.validateResourceChange(resourceType, amount);
+      if (!isChangeValid) {
+        console.warn(`[ResourceManager] Обнаружено подозрительно быстрое изменение ресурса ${resourceType}. Игнорируем.`);
+        return {
+          success: false,
+          error: 'Подозрительное изменение ресурса',
           resourceType,
           operation: 'add',
           timestamp: Date.now()
@@ -222,6 +287,9 @@ export class ResourceManager {
           timestamp: Date.now()
         };
       }
+      
+      // Добавляем текущее значение в историю перед изменением
+      this.addToResourceHistory(resourceType, oldValue, Date.now());
       
       // Устанавливаем значение ресурса в объекте resources используя ключ resourceType
       this.resources[resourceType] = newValue;
@@ -308,6 +376,9 @@ export class ResourceManager {
       };
     }
 
+    // Добавляем текущее значение в историю перед изменением
+    this.addToResourceHistory(resourceType, oldValue, Date.now());
+    
     const newValue = allowNegative ? oldValue - amount : Math.max(0, oldValue - amount);
     this.resources[resourceType] = newValue;
 
@@ -349,6 +420,20 @@ export class ResourceManager {
         oldSnotValue = 0;
       }
       
+      // Применяем защиту от резких изменений
+      const threshold = this.maxResourceIncreaseThreshold['snot'];
+      if (threshold && containerSnot > threshold) {
+        console.warn(`[ResourceManager] Подозрительно большое значение в контейнере: ${containerSnot}. Применяем ограничение.`);
+        containerSnot = threshold;
+      }
+      
+      // Проверяем скорость изменения ресурса
+      const isChangeValid = this.validateResourceChange('snot', containerSnot);
+      if (!isChangeValid) {
+        console.warn(`[ResourceManager] Обнаружено подозрительно быстрое изменение ресурса snot при сборе. Применяем ограничение.`);
+        containerSnot = this.maxResourceIncreaseRatePerSecond['snot'] || containerSnot;
+      }
+      
       // Суммируем значения
       const newSnotValue = oldSnotValue + containerSnot;
       
@@ -364,6 +449,9 @@ export class ResourceManager {
           timestamp: Date.now()
         };
       }
+      
+      // Добавляем текущее значение в историю перед изменением
+      this.addToResourceHistory('snot', oldSnotValue, Date.now());
       
       // Обновляем оба ресурса
       this.resources.snot = newSnotValue;
@@ -445,8 +533,19 @@ export class ResourceManager {
     const containerCapacity = this.resources.containerCapacity || 1;
     
     // Расчет прироста на основе времени (в секундах)
-    const elapsedTimeSeconds = elapsedTimeMs / 1000;
+    let elapsedTimeSeconds = elapsedTimeMs / 1000;
+    
+    // Проверка на подозрительно большое значение времени
+    const MAX_VALID_TIME_SECONDS = 30; // Максимально допустимое время
+    if (elapsedTimeSeconds > MAX_VALID_TIME_SECONDS) {
+      console.warn(`[ResourceManager] Подозрительно большое значение времени: ${elapsedTimeSeconds}с. Применяем ограничение.`);
+      elapsedTimeSeconds = MAX_VALID_TIME_SECONDS;
+    }
+    
     const increase = fillingSpeed * elapsedTimeSeconds;
+    
+    // Добавляем текущее значение в историю перед изменением
+    this.addToResourceHistory('containerSnot', oldValue, Date.now());
     
     // Ограничиваем новое значение вместимостью контейнера
     const newValue = Math.min(containerCapacity, oldValue + increase);
@@ -671,6 +770,125 @@ export class ResourceManager {
     } catch (error) {
       console.error('Ошибка при восстановлении из бэкапа:', error);
       return false;
+    }
+  }
+
+  /**
+   * Добавляет запись в историю изменений ресурса
+   * @param resourceType Имя ресурса
+   * @param value Текущее значение
+   * @param timestamp Временная метка
+   */
+  private addToResourceHistory(
+    resourceType: keyof GameResources, 
+    value: number, 
+    timestamp: number
+  ): void {
+    const history = this.resourcesHistory.get(resourceType) || [];
+    history.push({value, timestamp});
+    
+    // Удаляем старые записи, если превышен размер истории
+    if (history.length > this.maxHistorySize) {
+      history.shift();
+    }
+    
+    this.resourcesHistory.set(resourceType, history);
+  }
+  
+  /**
+   * Проверяет валидность изменения ресурса на основе истории
+   * @param resourceType Имя ресурса
+   * @param amount Количество добавляемого ресурса
+   * @returns true если изменение валидно, false если подозрительно
+   */
+  private validateResourceChange(
+    resourceType: keyof GameResources, 
+    amount: number
+  ): boolean {
+    const history = this.resourcesHistory.get(resourceType) || [];
+    const currentTime = Date.now();
+    
+    // Если история пуста - считаем валидным
+    if (history.length === 0) return true;
+    
+    // Проверяем скорость изменения ресурса за последнюю секунду
+    const recentEntries = history.filter(
+      entry => currentTime - entry.timestamp <= 1000
+    );
+    
+    if (recentEntries.length > 0) {
+      // Считаем сумму всех изменений за последнюю секунду
+      const totalRecentIncrease = recentEntries.reduce(
+        (sum, entry, index, array) => {
+          if (index === 0) return 0;
+          return sum + Math.max(0, entry.value - (array[index - 1]?.value || 0));
+        }, 
+        0
+      );
+      
+      // Если сумма изменений + текущее изменение превышает порог - считаем подозрительным
+      const maxRate = this.maxResourceIncreaseRatePerSecond[resourceType];
+      if (maxRate && totalRecentIncrease + amount > maxRate) {
+        console.warn(`[ResourceManager] Превышен лимит скорости изменения ${resourceType}: ${totalRecentIncrease} + ${amount} > ${maxRate} за последнюю секунду`);
+        
+        // Дополнительный мониторинг подозрительной активности
+        const suspiciousActivity = {
+          resourceType,
+          currentAmount: amount,
+          totalRecentIncrease,
+          maxAllowedRate: maxRate,
+          historyEntries: recentEntries,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.error('[ResourceManager] Подозрительная активность:', JSON.stringify(suspiciousActivity));
+        this.logSuspiciousActivity(suspiciousActivity);
+        
+        return false;
+      }
+    }
+    
+    // Проверяем величину одиночного изменения
+    const maxThreshold = this.maxResourceIncreaseThreshold[resourceType];
+    if (maxThreshold && amount > maxThreshold) {
+      console.warn(`[ResourceManager] Превышен порог величины изменения ${resourceType}: ${amount} > ${maxThreshold}`);
+      
+      const suspiciousActivity = {
+        resourceType,
+        currentAmount: amount,
+        maxAllowedThreshold: maxThreshold,
+        timestamp: new Date().toISOString()
+      };
+      
+      this.logSuspiciousActivity(suspiciousActivity);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  private logSuspiciousActivity(activity: any): void {
+    try {
+      // Получаем существующие записи из localStorage
+      const storedLogs = localStorage.getItem('resource-suspicious-activities');
+      const logs = storedLogs ? JSON.parse(storedLogs) : [];
+      
+      // Добавляем новую запись
+      logs.push({
+        ...activity,
+        currentResources: { ...this.resources },
+        userAgent: navigator.userAgent,
+      });
+      
+      // Ограничиваем количество записей для предотвращения переполнения localStorage
+      const maxLogs = 50;
+      const trimmedLogs = logs.slice(-maxLogs);
+      
+      // Сохраняем обратно в localStorage
+      localStorage.setItem('resource-suspicious-activities', JSON.stringify(trimmedLogs));
+      
+    } catch (error) {
+      console.error('[ResourceManager] Ошибка при сохранении записи о подозрительной активности:', error);
     }
   }
 } 

@@ -96,11 +96,13 @@ export class ShootingManager {
     if (isSpecial) {
       // Создаем специальный шар (Bull, Bomb и т.д.)
       const result = this.physicsManager.createSpecialCircle(x, y, radius, isSpecial);
-      id = String(result.id);
+      id = result ? String(result.id) : '';
     } else {
       // Создаем обычный шар соответствующего уровня
+      // Радиус для шаров 1-го уровня уже уменьшается в методе createCircle,
+      // поэтому нам не нужно здесь явно уменьшать радиус
       const result = this.physicsManager.createCircle(x, y, radius, nextBallLevel);
-      id = String(result.id);
+      id = result ? String(result.id) : '';
     }
     
     // Добавляем созданный шар в список недавних с отметкой времени

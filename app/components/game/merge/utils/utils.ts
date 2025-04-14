@@ -13,7 +13,16 @@ export const GAME_CONFIG = {
 
 // Функция для получения радиуса шара по его уровню
 export function getRadiusByLevel(level: number): number {
-  return GAME_CONFIG.BASE_RADIUS + (level - 1) * 0.13; // Увеличение радиуса с каждым уровнем
+  // Базовый расчет радиуса
+  const baseRadius = GAME_CONFIG.BASE_RADIUS + (level - 1) * 0.13;
+  
+  // Примечание по изменению размеров:
+  // - Шары 1-го уровня отображаются в 2 раза меньше (radius / 2)
+  // - Шары 2-го уровня отображаются на 25% меньше (radius * 0.75)
+  // - Шары 3-го уровня отображаются на 15% меньше (radius * 0.85)
+  // - Шары 4-го уровня отображаются на 10% меньше (radius * 0.9)
+  // - Эти изменения реализованы в PhysicsManager и BallFactory
+  return baseRadius;
 }
 
 // Функция для получения цвета шара по его уровню

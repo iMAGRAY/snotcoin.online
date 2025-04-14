@@ -35,7 +35,7 @@ function cleanupPhaserInstances() {
       const promise = new Promise<void>((resolve) => {
         // Сначала останавливаем все сцены
         try {
-          const scenes = window.__PHASER_SINGLETON.scene.scenes;
+          const scenes = window.__PHASER_SINGLETON?.scene?.scenes;
           if (scenes && scenes.length > 0) {
             scenes.forEach(scene => {
               if (scene.scene && scene.scene.key) {
@@ -52,7 +52,7 @@ function cleanupPhaserInstances() {
         setTimeout(() => {
           try {
             window.__PHASER_SINGLETON?.destroy(true, false);
-            window.__PHASER_SINGLETON = undefined;
+            window.__PHASER_SINGLETON = undefined as unknown as Phaser.Game;
             console.log('Синглтон Phaser успешно уничтожен');
           } catch (error) {
             console.error('Ошибка при уничтожении синглтона Phaser:', error);
@@ -204,11 +204,11 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     // Очищаем существующие экземпляры Phaser перед созданием нового
     cleanupPhaserInstances();
 
-    // Определяем базовые размеры с соотношением 7:10
-    const BASE_WIDTH = 7 * 60;  // 420px
-    const BASE_HEIGHT = 10 * 60; // 600px
+    // Определяем базовые размеры с соотношением 425:558
+    const BASE_WIDTH = 425;  // 425px
+    const BASE_HEIGHT = 558; // 558px
     
-    // Рассчитываем новые размеры с учетом пропорций 7:10
+    // Рассчитываем новые размеры с учетом пропорций 425:558
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight - 140;
     
@@ -225,7 +225,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
 
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
+      type: Phaser.CANVAS,
       width: gameWidth,
       height: gameHeight,
       backgroundColor: 'transparent',
@@ -240,22 +240,35 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       antialias: true,
       scene: [MergeGameScene],
       transparent: true,
-      canvasStyle: 'display: block; touch-action: none; margin: 0 auto;',
+      canvasStyle: 'display: block; touch-action: none; margin: 0 auto; image-rendering: high-quality; image-rendering: crisp-edges;',
       disableContextMenu: true,
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: BASE_WIDTH,
         height: BASE_HEIGHT,
+        min: {
+          width: BASE_WIDTH / 2,
+          height: BASE_HEIGHT / 2
+        },
+        max: {
+          width: BASE_WIDTH * 2,
+          height: BASE_HEIGHT * 2
+        }
       },
-      // Важные настройки для предотвращения проблем с WebGL
+      // Улучшенные настройки рендеринга для максимального сглаживания
       render: {
         powerPreference: 'high-performance',
-        batchSize: 2048, // Увеличиваем размер пакета для рендеринга
+        batchSize: 4096, // Увеличиваем для эффективности
         clearBeforeRender: true,
-        antialias: true, // Убедимся, что антиалиасинг включен
-        preserveDrawingBuffer: false, // Для лучшей производительности
-        premultipliedAlpha: true, // Оптимизация для WebGL
+        antialias: true,
+        preserveDrawingBuffer: false, 
+        premultipliedAlpha: true,
+        antialiasGL: true,
+        mipmapFilter: 'LINEAR_MIPMAP_LINEAR', // Лучшее качество миньмапов
+        roundPixels: false, // Отключаем для сглаженных линий
+        maxTextures: 8192, // Максимальное количество текстур
+        desynchronized: false // Синхронизированный режим для лучшего качества
       },
       // Не используем кастомную конфигурацию плагинов, полагаемся на дефолтные настройки Phaser
       audio: {
@@ -383,7 +396,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
             
             // Очищаем глобальный синглтон, если это наша игра
             if (window.__PHASER_SINGLETON === game) {
-              window.__PHASER_SINGLETON = undefined;
+              window.__PHASER_SINGLETON = undefined as unknown as Phaser.Game;
               console.log('Очищен глобальный синглтон Phaser');
             }
             
@@ -437,14 +450,14 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
                 console.log(`Версия Phaser: ${phaserVersion}`);
                 
                 // В более новых версиях используются разные параметры
-                if (parseInt(phaserVersion.split('.')[0]) >= 3) {
+                if (phaserVersion && phaserVersion.split('.').length > 0 && parseInt(phaserVersion.split('.')[0] || '0') >= 3) {
                   // Для Phaser 3+: (removeCanvas, noReturn)
                   // removeCanvas - удаляет canvas элемент
                   // noReturn - предотвращает повторное использование объекта
                   game.destroy(true, true);
                 } else {
                   // Для старых версий
-                  game.destroy();
+                  game.destroy(true);
                 }
               } catch (error) {
                 console.error('Ошибка при уничтожении игры:', error);
@@ -472,6 +485,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         } catch (innerError) {
           console.error('Ошибка при отложенной инициализации Phaser:', innerError);
           setIsLoaded(true); // Помечаем как загруженный, чтобы скрыть экран загрузки
+          return undefined;
         }
       }, 300); // Ждем 300мс перед созданием нового инстанса
     } catch (error) {
