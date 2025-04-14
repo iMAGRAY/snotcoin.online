@@ -364,13 +364,6 @@ const HomeContent: React.FC = () => {
         </div>
         
         {shouldShowInterface && <SaveIndicator />}
-        
-        {/* Farcaster Mini App интеграция - только кнопка уведомлений */}
-        <div className={`farcaster-buttons fixed top-4 right-4 z-50 ${isMergeGameActive ? 'opacity-0 pointer-events-none' : ''}`}>
-          <FarcasterButtons 
-            notificationButtonLabel="Уведомления" 
-          />
-        </div>
       </MotionDiv>
     </ErrorBoundary>
   );

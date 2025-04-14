@@ -93,6 +93,15 @@ export class UIManager {
   }
 
   /**
+   * Скрывает вертикальную направляющую линию
+   */
+  public hideVerticalGuideLine(): void {
+    if (this.verticalGuideLine) {
+      this.verticalGuideLine.clear();
+    }
+  }
+
+  /**
    * Очистка ресурсов
    */
   public cleanup(): void {

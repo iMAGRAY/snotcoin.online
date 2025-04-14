@@ -72,8 +72,11 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   create() {
-    // Получаем размеры игрового холста
+    // Получаем размеры игрового холста с учетом пропорций 7:10
     const { width, height } = this.game.canvas;
+    
+    // Настраиваем физический мир и границы с учетом пропорций 7:10
+    this.world.setGravity(planck.Vec2(0, 45));
     
     // Инициализируем менеджеры
     this.physicsManager = new PhysicsManager(this, this.world);
@@ -106,16 +109,16 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     // Настраиваем фон и получаем позицию горизонтальной линии
     const lineY = this.backgroundManager.setupBackground(width, height);
     
-    // Инициализируем UI элементы
+    // Инициализируем UI элементы с учетом пропорций
     this.uiManager.setupUI(width, height);
     
     // Инициализируем счет
     this.scoreManager.setup();
     
-    // Настраиваем зону для определения Game Over
+    // Настраиваем зону для определения Game Over с учетом пропорций
     this.gameOverManager.setupGameOverZone(width, lineY);
     
-    // Настраиваем ShootingManager
+    // Настраиваем ShootingManager с учетом пропорций
     this.shootingManager.setup(width, lineY);
     
     // Обновляем ссылки на игровые объекты для соответствия интерфейсу
@@ -123,7 +126,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.nextBall = this.shootingManager.getNextBall();
     this.nextBallLevel = this.ballFactory.getNextBallLevel();
     
-    // Создаем границы игрового мира
+    // Создаем границы игрового мира с учетом пропорций
     this.createBoundaries(width, height);
     
     // Устанавливаем время начала игры
@@ -131,12 +134,13 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   createBoundaries(width: number, height: number) {
-    // Основные границы мира
+    // Основные границы мира с учетом пропорций 7:10
     this.physicsManager.createBoundary(0, height / SCALE, width / SCALE, height / SCALE, 'bottom');
     this.physicsManager.createBoundary(0, 0, 0, height / SCALE);
     this.physicsManager.createBoundary(width / SCALE, 0, width / SCALE, height / SCALE);
     
     // Дополнительные невидимые стены внутри игровой зоны
+    // Используем процентное соотношение для сохранения пропорций
     const wallOffset = width * 0.05 / SCALE;
     
     // Левая внутренняя стена
@@ -235,10 +239,14 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this.uiManager.updateAimLine(pointer.x, pointer.y);
     }
     
-    // Обновляем вертикальную направляющую линию
+    // Обновляем вертикальную направляющую линию только если:
+    // 1. Игра не окончена
+    // 2. Есть сохраненная позиция X (больше 0)
     if (!this.gameOverManager.isOver()) {
       const currentX = this.inputManager.getVerticalGuideX();
+      // Проверяем, что currentX больше 0, иначе не рисуем линию
       if (currentX > 0) {
+        // Обновляем линию только если есть сохраненная позиция
         this.uiManager.updateVerticalGuideLine(currentX, 75, this.game.canvas.height);
       }
     }
@@ -270,13 +278,25 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       if (this.mergeProcessor) {
         this.mergeProcessor.reset();
       }
+
+      // Получаем размеры игрового холста с учетом пропорций 7:10
+      const { width, height } = this.game.canvas;
+      
+      // Рассчитываем позицию линии с учетом пропорций
+      // Используем примерно 10% от высоты как расстояние для линии от верха
+      const lineY = Math.round(height * 0.10);
+      
+      // Сбрасываем shooting manager, если он существует
+      if (this.shootingManager) {
+        this.shootingManager.reset(width, lineY);
+      }
       
       // Сбрасываем счет и флаги игры
       this.score = 0;
       this.isPaused = false;
       this.nextBallLevel = 1;
       
-      // Пересоздаем физический мир
+      // Пересоздаем физический мир с сохранением пропорций
       this.world = planck.World({
         gravity: planck.Vec2(0, 45)
       });
@@ -405,13 +425,25 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.coinKing = null;
     
     // Очищаем ресурсы менеджеров (с проверкой существования)
-    if (this.uiManager && typeof this.uiManager.cleanup === 'function') {
+    if (this.uiManager && 'cleanup' in this.uiManager) {
       this.uiManager.cleanup();
     }
     
-    if (this.shootingManager && typeof this.shootingManager.cleanup === 'function') {
+    if (this.shootingManager && 'cleanup' in this.shootingManager) {
       this.shootingManager.cleanup();
     }
+
+    // Очищаем ресурсы остальных менеджеров, если метод cleanup существует
+    if (this.mergeProcessor && 'reset' in this.mergeProcessor) {
+      this.mergeProcessor.reset();
+    }
+
+    if (this.gameOverManager && 'reset' in this.gameOverManager) {
+      this.gameOverManager.reset();
+    }
+
+    // Очищаем и удаляем все физические тела
+    this.bodies = {};
   }
 
   // Обработчик контактов между телами

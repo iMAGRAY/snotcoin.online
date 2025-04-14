@@ -21,7 +21,9 @@ const GameHeader: React.FC<GameHeaderProps> = ({ inventory, onPauseClick }) => {
         backgroundImage: "url('/images/merge/Game/ui/Header.webp')",
         backgroundRepeat: "repeat-x",
         backgroundSize: "auto 100%",
-        backgroundPosition: "center"
+        backgroundPosition: "center",
+        position: "relative",
+        zIndex: 1010
       }}
     >
       {/* Левая часть с кнопкой паузы */}

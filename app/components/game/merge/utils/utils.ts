@@ -6,14 +6,14 @@ import { SCALE } from './types';
 export const GAME_CONFIG = {
   MAX_LEVEL: 12,        // Максимальный уровень шара
   MAX_RANDOM_LEVEL: 6,  // Максимальный уровень для случайных шаров
-  BASE_RADIUS: 0.8,     // Базовый радиус для шара 1 уровня
+  BASE_RADIUS: 0.85,    // Базовый радиус для шара 1 уровня
   SHOOT_DELAY: 500,     // Задержка между выстрелами в миллисекундах 
   NEW_BALL_GRACE_PERIOD: 320, // Период игнорирования для новых шаров (мс)
 };
 
 // Функция для получения радиуса шара по его уровню
 export function getRadiusByLevel(level: number): number {
-  return 0.8 + (level - 1) * 0.12; // Увеличение радиуса с каждым уровнем
+  return GAME_CONFIG.BASE_RADIUS + (level - 1) * 0.13; // Увеличение радиуса с каждым уровнем
 }
 
 // Функция для получения цвета шара по его уровню

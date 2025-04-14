@@ -29,7 +29,9 @@ const AbilitiesBar: React.FC<AbilitiesBarProps> = ({
         backgroundImage: "url('/images/merge/Game/ui/Footer.webp')",
         backgroundRepeat: "repeat-x",
         backgroundSize: "auto 100%",
-        backgroundPosition: "center"
+        backgroundPosition: "center",
+        position: "relative",
+        zIndex: 1010
       }}
     >
       <div className="relative w-full px-6">

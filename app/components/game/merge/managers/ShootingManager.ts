@@ -42,8 +42,9 @@ export class ShootingManager {
    */
   public setup(width: number, lineY: number): void {
     // Добавляем CoinKing в верхнюю часть игровой зоны
-    this.coinKing = this.scene.add.image(width / 2, 45, 'coinKing');
-    this.coinKing.setScale(0.085);
+    // Позиционируем немного выше линии для соотношения 7:10
+    this.coinKing = this.scene.add.image(width / 2, lineY - 15, 'coinKing');
+    this.coinKing.setScale(0.09);
     
     // Устанавливаем CoinKing в InputManager
     this.inputManager.setCoinKing(this.coinKing);
@@ -64,7 +65,8 @@ export class ShootingManager {
     
     // Устанавливаем начальную вертикальную направляющую линию
     this.inputManager.setVerticalGuideX(width / 2);
-    this.uiManager.updateVerticalGuideLine(width / 2, lineY, this.scene.game.canvas.height);
+    const coinKingBottomY = this.coinKing.y + 20;
+    this.uiManager.updateVerticalGuideLine(width / 2, coinKingBottomY, this.scene.game.canvas.height);
   }
 
   /**
@@ -109,15 +111,11 @@ export class ShootingManager {
     this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
     this.nextBall = this.ballFactory.getNextBall();
     
-    // Обновляем фиксированную направляющую линию от CoinKing до самого низа экрана
-    const guideLine = this.uiManager.getVerticalGuideLine();
-    if (guideLine) {
-      this.uiManager.updateVerticalGuideLine(
-        currentGuideX, 
-        75, 
-        this.scene.game.canvas.height
-      );
-    }
+    // Скрываем направляющую линию после выстрела
+    this.uiManager.hideVerticalGuideLine();
+    
+    // Сбрасываем сохраненную позицию вертикальной линии
+    this.inputManager.setVerticalGuideX(0);
   }
 
   /**

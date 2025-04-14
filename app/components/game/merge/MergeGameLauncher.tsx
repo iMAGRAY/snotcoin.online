@@ -191,7 +191,11 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
   return (
     <div 
       className="w-full h-screen relative flex flex-col"
-      style={backgroundStyle}
+      style={{
+        ...backgroundStyle,
+        position: "relative",
+        zIndex: 1005 // Выше, чем у TabBar (1000), но ниже чем у AbilitiesBar и GameHeader (1010)
+      }}
     >
       {/* Верхний бар */}
       {gameHeader}

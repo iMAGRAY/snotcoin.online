@@ -29,12 +29,29 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
   // Обработчик для перезапуска игры
   useEffect(() => {
     if (shouldRestart && gameRef.current) {
-      // Перезапускаем игру
-      restartGameAction();
-      
-      // Уведомляем родительский компонент, что перезапуск завершен
-      if (onRestartComplete) {
-        onRestartComplete();
+      try {
+        // Перезапускаем игру
+        restartGameAction();
+        
+        // Обновляем время начала игры
+        gameRef.current.registry.set('gameStartTime', Date.now());
+        
+        // Сбрасываем статус окончания игры и финальный счет
+        gameRef.current.registry.set('gameOver', false);
+        gameRef.current.registry.set('finalScore', 0);
+        gameRef.current.registry.set('gameScore', 0);
+        
+        // Уведомляем родительский компонент, что перезапуск завершен
+        if (onRestartComplete) {
+          onRestartComplete();
+        }
+      } catch (error) {
+        console.error('Ошибка при автоматическом перезапуске игры:', error);
+        
+        // Уведомляем родительский компонент о завершении, даже если произошла ошибка
+        if (onRestartComplete) {
+          onRestartComplete();
+        }
       }
     }
     
@@ -71,12 +88,31 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     // Предотвращаем повторную инициализацию игры
     if (gameRef.current) return undefined;
 
+    // Определяем базовые размеры с соотношением 7:10
+    const BASE_WIDTH = 7 * 60;  // 420px
+    const BASE_HEIGHT = 10 * 60; // 600px
+    
+    // Рассчитываем новые размеры с учетом пропорций 7:10
+    const containerWidth = window.innerWidth;
+    const containerHeight = window.innerHeight - 140;
+    
+    // Определяем, какая сторона ограничивает
+    const scaleWidth = containerWidth / BASE_WIDTH;
+    const scaleHeight = containerHeight / BASE_HEIGHT;
+    
+    // Используем меньший масштаб для сохранения пропорций
+    const scale = Math.min(scaleWidth, scaleHeight);
+    
+    // Вычисляем итоговые размеры с сохранением пропорций
+    const gameWidth = Math.floor(BASE_WIDTH * scale);
+    const gameHeight = Math.floor(BASE_HEIGHT * scale);
+
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: window.innerWidth,
-      height: window.innerHeight - 140, // Уменьшаем высоту для учета верхнего и нижнего бара
-      backgroundColor: 'transparent', // Прозрачный фон вместо синего
+      width: gameWidth,
+      height: gameHeight,
+      backgroundColor: 'transparent',
       parent: gameContainerRef.current,
       physics: {
         default: 'arcade',
@@ -85,10 +121,15 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         },
       },
       scene: [MergeGameScene],
-      transparent: true, // Делаем канвас прозрачным
-      // Предотвращаем повторное создание канваса
-      canvasStyle: 'display: block; touch-action: none;',
-      disableContextMenu: true
+      transparent: true,
+      canvasStyle: 'display: block; touch-action: none; margin: 0 auto;',
+      disableContextMenu: true,
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: BASE_WIDTH,
+        height: BASE_HEIGHT,
+      }
     };
 
     // Используем try/catch для более безопасной инициализации Phaser
@@ -109,7 +150,37 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       const handleResize = () => {
         try {
           if (game && game.scale) {
-            game.scale.resize(window.innerWidth, window.innerHeight - 140);
+            // Рассчитываем новые размеры с учетом пропорций
+            const containerWidth = window.innerWidth;
+            const containerHeight = window.innerHeight - 140;
+            
+            // Устанавливаем размеры контейнера
+            if (gameContainerRef.current) {
+              gameContainerRef.current.style.width = `${containerWidth}px`;
+              gameContainerRef.current.style.height = `${containerHeight}px`;
+            }
+            
+            // Обновляем размер родительского контейнера
+            if (game.scale.parent) {
+              // Определяем, какая сторона ограничивает
+              const scaleWidth = containerWidth / BASE_WIDTH;
+              const scaleHeight = containerHeight / BASE_HEIGHT;
+              
+              // Используем меньший масштаб для сохранения пропорций
+              const scale = Math.min(scaleWidth, scaleHeight);
+              
+              // Вычисляем итоговые размеры с сохранением пропорций
+              const newWidth = Math.floor(BASE_WIDTH * scale);
+              const newHeight = Math.floor(BASE_HEIGHT * scale);
+              
+              // Центрируем игру
+              const canvas = game.canvas;
+              if (canvas && canvas.parentElement) {
+                canvas.parentElement.style.width = `${newWidth}px`;
+                canvas.parentElement.style.height = `${newHeight}px`;
+                canvas.parentElement.style.margin = '0 auto';
+              }
+            }
           }
         } catch (error) {
           console.error('Ошибка при изменении размера:', error);
@@ -194,20 +265,37 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       gameRef.current.registry.set('gameOver', false);
       gameRef.current.registry.set('finalScore', 0);
       gameRef.current.registry.set('gameScore', 0);
+      
+      // Оповещаем родительский компонент о завершении перезапуска
+      if (onRestartComplete) {
+        onRestartComplete();
+      }
     } catch (error) {
       console.error('Ошибка при перезапуске игры:', error);
       
-      // Резервный сценарий: останавливаем текущую игру
-      gameRef.current.scene.stop('MergeGameScene');
-      
-      // Удаляем сцену перед добавлением новой
-      gameRef.current.scene.remove('MergeGameScene');
-      
-      // Создаем новую сцену
-      gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
-      
-      // Сохраняем время начала игры
-      gameRef.current.registry.set('gameStartTime', Date.now());
+      try {
+        // Резервный сценарий: останавливаем текущую игру
+        gameRef.current.scene.stop('MergeGameScene');
+        
+        // Удаляем сцену перед добавлением новой
+        gameRef.current.scene.remove('MergeGameScene');
+        
+        // Создаем новую сцену
+        gameRef.current.scene.add('MergeGameScene', MergeGameScene, true);
+        
+        // Сохраняем время начала игры
+        gameRef.current.registry.set('gameStartTime', Date.now());
+        gameRef.current.registry.set('gameOver', false);
+        gameRef.current.registry.set('finalScore', 0);
+        gameRef.current.registry.set('gameScore', 0);
+        
+        // Оповещаем родительский компонент о завершении перезапуска
+        if (onRestartComplete) {
+          onRestartComplete();
+        }
+      } catch (nestedError) {
+        console.error('Критическая ошибка при перезапуске игры:', nestedError);
+      }
     }
   };
 
@@ -216,11 +304,17 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       {/* Игровой контейнер без обводки */}
       <div 
         ref={gameContainerRef} 
-        className="flex-grow outline-none" 
+        className="flex-grow outline-none flex items-center justify-center" 
         style={{
           willChange: 'transform', // Подсказка для оптимизации
           position: 'relative',
-          touchAction: 'none' // Предотвращает масштабирование и скролл на мобильных устройствах
+          touchAction: 'none', // Предотвращает масштабирование и скролл на мобильных устройствах
+          overflow: 'hidden',
+          width: '100%',
+          height: 'calc(100vh - 140px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       />
       
