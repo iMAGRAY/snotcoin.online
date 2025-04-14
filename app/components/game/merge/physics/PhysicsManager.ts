@@ -15,6 +15,10 @@ export class PhysicsManager {
     this.world = world;
   }
 
+  public getWorld(): planck.World {
+    return this.world;
+  }
+
   public getBodies(): { [key: string]: GameBody } {
     return this.bodies;
   }
@@ -59,78 +63,146 @@ export class PhysicsManager {
   }
 
   createCircle(x: number, y: number, radius: number, level: number = 1) {
-    // Создаем физическое тело с улучшенными параметрами
-    const body = this.world.createBody({
-      type: 'dynamic',
-      position: planck.Vec2(x, y),
-      angularDamping: 0.1,
-      linearDamping: 0.1,
-      bullet: true, // Включаем улучшенное обнаружение столкновений для быстрых объектов
-      fixedRotation: false // Разрешаем вращение для реалистичной физики
-    });
+    try {
+      // Проверяем, что мир существует
+      if (!this.world) {
+        console.error('Ошибка: физический мир не инициализирован');
+        return null;
+      }
+      
+      // Создаем физическое тело с улучшенными параметрами
+      const body = this.world.createBody({
+        type: 'dynamic',
+        position: planck.Vec2(x, y),
+        angularDamping: 0.1,
+        linearDamping: 0.1,
+        bullet: true, // Включаем улучшенное обнаружение столкновений для быстрых объектов
+        fixedRotation: false // Разрешаем вращение для реалистичной физики
+      });
+      
+      // Проверяем, что тело создано успешно
+      if (!body) {
+        console.error('Ошибка: не удалось создать физическое тело');
+        return null;
+      }
 
-    // Добавляем круглую форму с оптимизированными параметрами
-    body.createFixture({
-      shape: planck.Circle(radius),
-      density: 1.0,
-      friction: 0.3,
-      restitution: 0.6, // Коэффициент упругости при столкновениях
-      userData: { level, type: 'ball' }
-    });
+      // Важно сначала получить id, чтобы использовать его в userData
+      const id = String(this.nextId++);
 
-    // Определяем размер спрайта (в пикселях)
-    const ballSize = radius * 2 * SCALE;
+      // Создаем фикстуру (одним блоком для скорости)
+      const fixture = body.createFixture({
+        shape: planck.Circle(radius),
+        density: 1.0,
+        friction: 0.3,
+        restitution: 0.6, // Коэффициент упругости при столкновениях
+      });
+      
+      if (!fixture) {
+        console.error('Ошибка: не удалось создать фикстуру');
+        this.world.destroyBody(body);
+        return null;
+      }
+      
+      // Устанавливаем информацию о шаре в данные фикстуры
+      fixture.setUserData({ id, level, type: 'ball' });
 
-    // Создаем спрайт шара с изображением, соответствующим уровню
-    const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, `ball${level}`);
-    sprite.setDisplaySize(ballSize, ballSize);
-    sprite.setData('level', level);
+      // Определяем размер спрайта (в пикселях)
+      const ballSize = radius * 2 * SCALE;
 
-    // Создаем тело и добавляем его в список тел
-    const gameBody: GameBody = { body, sprite };
-    const id = this.addBody(gameBody);
+      // Создаем спрайт шара с изображением, соответствующим уровню
+      const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, `ball${level}`);
+      sprite.setDisplaySize(ballSize, ballSize);
+      
+      // Явно устанавливаем уровень как свойство спрайта
+      sprite.setData('level', level);
 
-    // Устанавливаем данные для определения столкновений
-    body.setUserData({ id, level, type: 'ball' });
+      // Создаем тело и добавляем его в список тел
+      const gameBody: GameBody = { body, sprite };
+      this.addBody(gameBody, id);
 
-    return { id, body, sprite };
+      // Устанавливаем данные для определения столкновений
+      body.setUserData({ id, level, type: 'ball' });
+
+      return { id, body, sprite };
+    } catch (error) {
+      console.error('Критическая ошибка при создании шара:', error);
+      return null;
+    }
   }
 
   createSpecialCircle(x: number, y: number, radius: number, type: string) {
-    // Создаем физическое тело
-    const body = this.world.createBody({
-      type: 'dynamic',
-      position: planck.Vec2(x, y),
-      angularDamping: 0.1,
-      linearDamping: 0.1,
-      bullet: true // Улучшенное обнаружение коллизий для быстрых объектов
-    });
+    try {
+      // Проверяем, что мир существует
+      if (!this.world) {
+        console.error('Ошибка: физический мир не инициализирован');
+        return null;
+      }
+      
+      // Создаем физическое тело
+      const body = this.world.createBody({
+        type: 'dynamic',
+        position: planck.Vec2(x, y),
+        angularDamping: 0.1,
+        linearDamping: 0.1,
+        bullet: true // Улучшенное обнаружение коллизий для быстрых объектов
+      });
+      
+      // Проверяем, что тело создано успешно
+      if (!body) {
+        console.error('Ошибка: не удалось создать физическое тело для специального шара');
+        return null;
+      }
 
-    // Добавляем круглую форму
-    body.createFixture({
-      shape: planck.Circle(radius),
-      density: 1.0,
-      friction: 0.3,
-      restitution: 0.6,
-      userData: { type }
-    });
+      try {
+        // Добавляем круглую форму
+        const fixture = body.createFixture({
+          shape: planck.Circle(radius),
+          density: 1.0,
+          friction: 0.3,
+          restitution: 0.6,
+          userData: { type }
+        });
+        
+        if (!fixture) {
+          console.error('Ошибка: не удалось создать фикстуру для специального шара');
+          this.world.destroyBody(body);
+          return null;
+        }
+      } catch (error) {
+        console.error('Ошибка при создании фикстуры специального шара:', error);
+        this.world.destroyBody(body);
+        return null;
+      }
 
-    // Определяем размер спрайта (в пикселях)
-    const ballSize = radius * 2 * SCALE;
+      try {
+        // Определяем размер спрайта (в пикселях)
+        const ballSize = radius * 2 * SCALE;
 
-    // Создаем спрайт шара с соответствующим изображением
-    const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, type.toLowerCase());
-    sprite.setDisplaySize(ballSize, ballSize);
-    sprite.setData('type', type);
+        // Создаем спрайт шара с соответствующим изображением
+        const sprite = this.scene.add.sprite(x * SCALE, y * SCALE, type.toLowerCase());
+        sprite.setDisplaySize(ballSize, ballSize);
+        sprite.setData('type', type);
 
-    // Создаем тело и добавляем его в список тел
-    const gameBody: GameBody = { body, sprite };
-    const id = this.addBody(gameBody);
+        // Создаем тело и добавляем его в список тел
+        const gameBody: GameBody = { body, sprite };
+        const id = this.addBody(gameBody);
 
-    // Устанавливаем данные для определения столкновений
-    body.setUserData({ id, type });
+        // Устанавливаем данные для определения столкновений
+        body.setUserData({ id, type });
 
-    return { id, body, sprite };
+        return { id, body, sprite };
+      } catch (error) {
+        console.error('Ошибка при создании спрайта или добавлении специального шара:', error);
+        // Очищаем созданное тело при ошибке
+        if (body) {
+          this.world.destroyBody(body);
+        }
+        return null;
+      }
+    } catch (error) {
+      console.error('Критическая ошибка при создании специального шара:', error);
+      return null;
+    }
   }
 
   public update(): void {

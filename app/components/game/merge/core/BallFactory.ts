@@ -79,15 +79,45 @@ export class BallFactory {
   }
 
   public createMergedBall(newX: number, newY: number, newLevel: number): void {
-    // Проверяем, не превышает ли новый уровень максимальный
-    if (newLevel > this.maxLevel) {
-      return;
+    try {
+      // Проверяем, не превышает ли новый уровень максимальный
+      if (newLevel > this.maxLevel) {
+        console.error('Невозможно создать шар: превышен максимальный уровень');
+        return;
+      }
+      
+      // Проверяем, что физический менеджер существует
+      if (!this.physicsManager) {
+        console.error('Ошибка: PhysicsManager не инициализирован');
+        return;
+      }
+      
+      // Проверяем, что мир существует
+      if (!this.physicsManager.getWorld()) {
+        console.error('Ошибка: Физический мир не инициализирован');
+        return;
+      }
+      
+      // Получаем радиус для нового шара
+      const radius = gameUtils.getRadiusByLevel(newLevel);
+      
+      // Приоритезируем создание шара
+      // Использовать requestAnimationFrame для создания шара в следующем кадре рендеринга
+      requestAnimationFrame(() => {
+        try {
+          // Создаем новый шар через PhysicsManager
+          const result = this.physicsManager.createCircle(newX, newY, radius, newLevel);
+          
+          // Проверяем результат создания
+          if (!result || !result.body) {
+            console.error('Ошибка: Не удалось создать физическое тело шара');
+          }
+        } catch (innerError) {
+          console.error('Ошибка при создании шара в requestAnimationFrame:', innerError);
+        }
+      });
+    } catch (error) {
+      console.error('Критическая ошибка при создании шара слияния:', error);
     }
-    
-    // Получаем радиус для нового шара
-    const radius = gameUtils.getRadiusByLevel(newLevel);
-    
-    // Создаем новый шар через PhysicsManager
-    this.physicsManager.createCircle(newX, newY, radius, newLevel);
   }
 } 

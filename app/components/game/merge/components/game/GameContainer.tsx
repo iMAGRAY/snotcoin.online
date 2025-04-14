@@ -8,6 +8,110 @@ import { MergeGameSceneType } from "../../utils/types";
 import MergeGameScene from "../../MergeGameScene";
 import { setGameInstance, restartGame as restartGameAction } from './gameActions';
 
+// Расширяем интерфейс Window для поддержки хранения экземпляров Phaser
+declare global {
+  interface Window {
+    __PHASER_INSTANCES?: Phaser.Game[];
+    __PHASER_SINGLETON?: Phaser.Game;
+    __PHASER_IS_DESTROYING?: boolean;
+    gc?: () => void;
+  }
+}
+
+// Глобальная функция для проверки и очистки существующих экземпляров Phaser
+function cleanupPhaserInstances() {
+  // Если уже идет процесс уничтожения, пропускаем
+  if (window.__PHASER_IS_DESTROYING) return;
+  
+  window.__PHASER_IS_DESTROYING = true;
+  console.log('Очистка существующих инстансов Phaser перед созданием нового');
+  
+  // Более аккуратное уничтожение синглтона с задержкой
+  const cleanupPromises = [];
+  
+  if (window.__PHASER_SINGLETON) {
+    try {
+      console.log('Уничтожение глобального синглтона Phaser');
+      const promise = new Promise<void>((resolve) => {
+        // Сначала останавливаем все сцены
+        try {
+          const scenes = window.__PHASER_SINGLETON.scene.scenes;
+          if (scenes && scenes.length > 0) {
+            scenes.forEach(scene => {
+              if (scene.scene && scene.scene.key) {
+                console.log(`Останавливаем сцену ${scene.scene.key}`);
+                window.__PHASER_SINGLETON?.scene.stop(scene.scene.key);
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Ошибка при остановке сцен:', error);
+        }
+        
+        // Добавляем небольшую задержку перед уничтожением
+        setTimeout(() => {
+          try {
+            window.__PHASER_SINGLETON?.destroy(true, false);
+            window.__PHASER_SINGLETON = undefined;
+            console.log('Синглтон Phaser успешно уничтожен');
+          } catch (error) {
+            console.error('Ошибка при уничтожении синглтона Phaser:', error);
+          }
+          resolve();
+        }, 100);
+      });
+      
+      cleanupPromises.push(promise);
+    } catch (error) {
+      console.error('Ошибка при уничтожении синглтона Phaser:', error);
+    }
+  }
+  
+  if (window.__PHASER_INSTANCES && window.__PHASER_INSTANCES.length > 0) {
+    console.log(`Найдено ${window.__PHASER_INSTANCES.length} активных инстансов Phaser, очищаем...`);
+    
+    // Очищаем все существующие экземпляры
+    window.__PHASER_INSTANCES.forEach((instance, index) => {
+      if (instance && instance !== window.__PHASER_SINGLETON) {
+        try {
+          console.log(`Уничтожение инстанса Phaser #${index}`);
+          
+          const promise = new Promise<void>((resolve) => {
+            setTimeout(() => {
+              try {
+                instance.destroy(true, false);
+                console.log(`Инстанс Phaser #${index} успешно уничтожен`);
+              } catch (error) {
+                console.error(`Ошибка при уничтожении инстанса Phaser #${index}:`, error);
+              }
+              resolve();
+            }, 50 * index); // Небольшая задержка между уничтожениями
+          });
+          
+          cleanupPromises.push(promise);
+        } catch (error) {
+          console.error(`Ошибка при уничтожении инстанса Phaser #${index}:`, error);
+        }
+      }
+    });
+    
+    // Ждем завершения всех операций очистки
+    Promise.all(cleanupPromises)
+      .then(() => {
+        // Сбрасываем массив и флаг уничтожения
+        window.__PHASER_INSTANCES = [];
+        window.__PHASER_IS_DESTROYING = false;
+        console.log('Очистка всех инстансов Phaser завершена');
+      })
+      .catch(error => {
+        console.error('Ошибка при очистке инстансов Phaser:', error);
+        window.__PHASER_IS_DESTROYING = false;
+      });
+  } else {
+    window.__PHASER_IS_DESTROYING = false;
+  }
+}
+
 export interface GameContainerProps {
   onScoreUpdate: (score: number) => void;
   onGameOver: (finalScore: number) => void;
@@ -25,6 +129,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
   const gameContainerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const mountedRef = useRef(false);
   
   // Обработчик для перезапуска игры
   useEffect(() => {
@@ -82,17 +187,28 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     return undefined;
   }, [onScoreUpdate, onGameOver]);
   
+  // Создание игры при монтировании компонента
   useEffect(() => {
-    if (!gameContainerRef.current) return undefined;
+    if (!gameContainerRef.current || mountedRef.current) return undefined;
+    
+    // Отмечаем, что компонент смонтирован
+    mountedRef.current = true;
+    console.log('Монтирование GameContainer, инициализируем Phaser');
     
     // Предотвращаем повторную инициализацию игры
-    if (gameRef.current) return undefined;
-
-    // Определяем базовые размеры с соотношением 85:112
-    const BASE_WIDTH = 85 * 5;  // 425px
-    const BASE_HEIGHT = 112 * 5; // 560px
+    if (gameRef.current) {
+      console.log('Игра уже инициализирована, пропускаем создание');
+      return undefined;
+    }
     
-    // Рассчитываем новые размеры с учетом соотношения сторон 85:112
+    // Очищаем существующие экземпляры Phaser перед созданием нового
+    cleanupPhaserInstances();
+
+    // Определяем базовые размеры с соотношением 7:10
+    const BASE_WIDTH = 7 * 60;  // 420px
+    const BASE_HEIGHT = 10 * 60; // 600px
+    
+    // Рассчитываем новые размеры с учетом пропорций 7:10
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight - 140;
     
@@ -100,18 +216,18 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     const scaleWidth = containerWidth / BASE_WIDTH;
     const scaleHeight = containerHeight / BASE_HEIGHT;
     
-    // Используем меньший масштаб для сохранения соотношения сторон
+    // Используем меньший масштаб для сохранения пропорций
     const scale = Math.min(scaleWidth, scaleHeight);
     
-    // Вычисляем итоговые размеры с сохранением соотношения сторон
-    const newWidth = Math.floor(BASE_WIDTH * scale);
-    const newHeight = Math.floor(BASE_HEIGHT * scale);
+    // Вычисляем итоговые размеры с сохранением пропорций
+    const gameWidth = Math.floor(BASE_WIDTH * scale);
+    const gameHeight = Math.floor(BASE_HEIGHT * scale);
 
     // Создаём игру Phaser
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: newWidth,
-      height: newHeight,
+      width: gameWidth,
+      height: gameHeight,
       backgroundColor: 'transparent',
       parent: gameContainerRef.current,
       physics: {
@@ -120,6 +236,8 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
           debug: false,
         },
       },
+      pixelArt: false,
+      antialias: true,
       scene: [MergeGameScene],
       transparent: true,
       canvasStyle: 'display: block; touch-action: none; margin: 0 auto;',
@@ -129,96 +247,233 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: BASE_WIDTH,
         height: BASE_HEIGHT,
+      },
+      // Важные настройки для предотвращения проблем с WebGL
+      render: {
+        powerPreference: 'high-performance',
+        batchSize: 2048, // Увеличиваем размер пакета для рендеринга
+        clearBeforeRender: true,
+        antialias: true, // Убедимся, что антиалиасинг включен
+        preserveDrawingBuffer: false, // Для лучшей производительности
+        premultipliedAlpha: true, // Оптимизация для WebGL
+      },
+      // Не используем кастомную конфигурацию плагинов, полагаемся на дефолтные настройки Phaser
+      audio: {
+        disableWebAudio: false,
+        noAudio: false
+      },
+      banner: {
+        hidePhaser: false,
+        text: '#ffffff',
+        background: ['#000000']
+      },
+      callbacks: {
+        postBoot: (game) => {
+          console.log('Phaser успешно инициализирован');
+          
+          // Сохраняем как глобальный синглтон
+          window.__PHASER_SINGLETON = game;
+          
+          // Также добавляем в массив инстансов для обратной совместимости
+          if (!window.__PHASER_INSTANCES) {
+            window.__PHASER_INSTANCES = [];
+          }
+          window.__PHASER_INSTANCES.push(game);
+        }
       }
     };
 
     // Используем try/catch для более безопасной инициализации Phaser
     try {
-      const game = new Phaser.Game(config);
-      gameRef.current = game;
+      // Добавляем задержку перед созданием нового инстанса, чтобы дать время браузеру очистить предыдущие ресурсы
+      console.log('Ожидаем перед созданием нового инстанса Phaser.Game...');
       
-      // Регистрируем экземпляр игры в gameActions
-      setGameInstance(game);
-      
-      // Сохраняем время начала игры
-      game.registry.set('gameStartTime', Date.now());
-      
-      // Добавляем ведущее начало обновления счета
-      const gameUpdateInterval = setInterval(handleGameUpdate, 500);
-      
-      // Обработчик изменения размера окна
-      const handleResize = () => {
+      // Вместо немедленного создания Phaser.Game, добавляем задержку
+      setTimeout(() => {
         try {
-          if (game && game.scale) {
-            // Рассчитываем новые размеры с учетом соотношения сторон 85:112
-            const containerWidth = window.innerWidth;
-            const containerHeight = window.innerHeight - 140;
-            
-            // Устанавливаем размеры контейнера
-            if (gameContainerRef.current) {
-              gameContainerRef.current.style.width = `${containerWidth}px`;
-              gameContainerRef.current.style.height = `${containerHeight}px`;
-            }
-            
-            // Обновляем размер родительского контейнера
-            if (game.scale.parent) {
-              // Определяем, какая сторона ограничивает
-              const scaleWidth = containerWidth / BASE_WIDTH;
-              const scaleHeight = containerHeight / BASE_HEIGHT;
-              
-              // Используем меньший масштаб для сохранения соотношения сторон
-              const scale = Math.min(scaleWidth, scaleHeight);
-              
-              // Вычисляем итоговые размеры с сохранением соотношения сторон
-              const newWidth = Math.floor(BASE_WIDTH * scale);
-              const newHeight = Math.floor(BASE_HEIGHT * scale);
-              
-              // Центрируем игру
-              const canvas = game.canvas;
-              if (canvas && canvas.parentElement) {
-                canvas.parentElement.style.width = `${newWidth}px`;
-                canvas.parentElement.style.height = `${newHeight}px`;
-                canvas.parentElement.style.margin = '0 auto';
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка при изменении размера:', error);
-        }
-      };
-      
-      window.addEventListener('resize', handleResize);
-      setIsLoaded(true);
-      
-      // Очистка при размонтировании
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        clearInterval(gameUpdateInterval);
-        
-        if (game) {
-          try {
-            // Вызываем явную очистку, если метод доступен
-            const scene = game.scene.getScene('MergeGameScene');
-            if (scene && typeof (scene as any).cleanup === 'function') {
-              try {
-                (scene as any).cleanup();
-              } catch (error) {
-                console.error('Ошибка при вызове cleanup:', error);
-              }
-            }
-          } catch (error) {
-            console.error('Ошибка при получении сцены:', error);
+          console.log('Создаем новый инстанс Phaser.Game');
+          const game = new Phaser.Game(config);
+          gameRef.current = game;
+          
+          // Проверяем количество созданных инстансов
+          if (window.__PHASER_INSTANCES) {
+            console.log(`Активных инстансов Phaser: ${window.__PHASER_INSTANCES.length}`);
           }
           
-          // В любом случае уничтожаем игру
-          try {
-            game.destroy(true);
-          } catch (error) {
-            console.error('Ошибка при уничтожении игры:', error);
-          }
-          gameRef.current = null;
+          // Регистрируем экземпляр игры в gameActions
+          setGameInstance(game);
+          
+          // Сохраняем время начала игры
+          game.registry.set('gameStartTime', Date.now());
+          
+          // Добавляем ведущее начало обновления счета
+          const gameUpdateInterval = setInterval(handleGameUpdate, 500);
+          
+          // Обработчик изменения размера окна
+          const handleResize = () => {
+            try {
+              if (game && game.scale) {
+                // Рассчитываем новые размеры с учетом пропорций
+                const containerWidth = window.innerWidth;
+                const containerHeight = window.innerHeight - 140;
+                
+                // Устанавливаем размеры контейнера
+                if (gameContainerRef.current) {
+                  gameContainerRef.current.style.width = `${containerWidth}px`;
+                  gameContainerRef.current.style.height = `${containerHeight}px`;
+                }
+                
+                // Обновляем размер родительского контейнера
+                if (game.scale.parent) {
+                  // Определяем, какая сторона ограничивает
+                  const scaleWidth = containerWidth / BASE_WIDTH;
+                  const scaleHeight = containerHeight / BASE_HEIGHT;
+                  
+                  // Используем меньший масштаб для сохранения пропорций
+                  const scale = Math.min(scaleWidth, scaleHeight);
+                  
+                  // Вычисляем итоговые размеры с сохранением пропорций
+                  const newWidth = Math.floor(BASE_WIDTH * scale);
+                  const newHeight = Math.floor(BASE_HEIGHT * scale);
+                  
+                  // Центрируем игру
+                  const canvas = game.canvas;
+                  if (canvas && canvas.parentElement) {
+                    canvas.parentElement.style.width = `${newWidth}px`;
+                    canvas.parentElement.style.height = `${newHeight}px`;
+                    canvas.parentElement.style.margin = '0 auto';
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Ошибка при изменении размера:', error);
+            }
+          };
+          
+          window.addEventListener('resize', handleResize);
+          setIsLoaded(true);
+          
+          // Очистка при размонтировании
+          return () => {
+            console.log('Размонтирование GameContainer, очищаем ресурсы');
+            
+            // Сбрасываем флаг монтирования
+            mountedRef.current = false;
+            
+            // Удаляем обработчик resize и интервал обновления счета
+            window.removeEventListener('resize', handleResize);
+            clearInterval(gameUpdateInterval);
+            
+            // Проверяем, что игра еще существует
+            if (!gameRef.current) {
+              console.log('Инстанс игры уже удален, пропускаем очистку');
+              return;
+            }
+            
+            const game = gameRef.current;
+            
+            // Принудительно удаляем инстанс из списка активных
+            if (window.__PHASER_INSTANCES) {
+              const index = window.__PHASER_INSTANCES.indexOf(game);
+              if (index > -1) {
+                window.__PHASER_INSTANCES.splice(index, 1);
+                console.log(`Удален инстанс Phaser из списка активных. Осталось: ${window.__PHASER_INSTANCES.length}`);
+              }
+            }
+            
+            // Очищаем глобальный синглтон, если это наша игра
+            if (window.__PHASER_SINGLETON === game) {
+              window.__PHASER_SINGLETON = undefined;
+              console.log('Очищен глобальный синглтон Phaser');
+            }
+            
+            try {
+              // Вызываем явную очистку, если метод доступен
+              const scene = game.scene.getScene('MergeGameScene');
+              if (scene && typeof (scene as any).cleanup === 'function') {
+                try {
+                  console.log('Вызываем метод cleanup на сцене');
+                  (scene as any).cleanup();
+                } catch (error) {
+                  console.error('Ошибка при вызове cleanup:', error);
+                }
+              }
+              
+              // Останавливаем все сцены
+              try {
+                game.scene.scenes.forEach(scene => {
+                  if (scene.scene && scene.scene.key) {
+                    console.log(`Останавливаем сцену ${scene.scene.key}`);
+                    game.scene.stop(scene.scene.key);
+                  }
+                });
+              } catch (error) {
+                console.error('Ошибка при остановке сцен:', error);
+              }
+              
+              // Уничтожаем все текстуры и кэши
+              try {
+                if (game.textures) {
+                  console.log('Очищаем текстуры игры');
+                  // Просто логируем, что не можем очистить текстуры
+                  // Phaser сам должен очистить их при destroy()
+                  console.log('Полагаемся на game.destroy() для очистки текстур');
+                }
+                
+                if (game.cache) {
+                  console.log('Очищаем кэш игры');
+                  // Также полагаемся на game.destroy()
+                  console.log('Полагаемся на game.destroy() для очистки кэша');
+                }
+              } catch (error) {
+                console.error('Ошибка при очистке ресурсов игры:', error);
+              }
+              
+              // В любом случае уничтожаем игру
+              try {
+                console.log('Уничтожаем инстанс Phaser.Game');
+                // Проверяем версию Phaser для совместимости
+                const phaserVersion = Phaser.VERSION || '';
+                console.log(`Версия Phaser: ${phaserVersion}`);
+                
+                // В более новых версиях используются разные параметры
+                if (parseInt(phaserVersion.split('.')[0]) >= 3) {
+                  // Для Phaser 3+: (removeCanvas, noReturn)
+                  // removeCanvas - удаляет canvas элемент
+                  // noReturn - предотвращает повторное использование объекта
+                  game.destroy(true, true);
+                } else {
+                  // Для старых версий
+                  game.destroy();
+                }
+              } catch (error) {
+                console.error('Ошибка при уничтожении игры:', error);
+              }
+              
+              // Освобождаем ссылку на игру
+              gameRef.current = null;
+              
+              // Принудительная очистка для сборщика мусора
+              setTimeout(() => {
+                if (typeof window.gc === 'function') {
+                  try {
+                    console.log('Принудительный запуск сборщика мусора');
+                    window.gc();
+                  } catch (error) {
+                    console.error('Ошибка при запуске сборщика мусора:', error);
+                  }
+                }
+              }, 100);
+            } catch (error) {
+              console.error('Общая ошибка при очистке ресурсов:', error);
+              gameRef.current = null;
+            }
+          };
+        } catch (innerError) {
+          console.error('Ошибка при отложенной инициализации Phaser:', innerError);
+          setIsLoaded(true); // Помечаем как загруженный, чтобы скрыть экран загрузки
         }
-      };
+      }, 300); // Ждем 300мс перед созданием нового инстанса
     } catch (error) {
       console.error('Ошибка при инициализации Phaser:', error);
       setIsLoaded(true); // Помечаем как загруженный, чтобы скрыть экран загрузки
@@ -311,9 +566,7 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
           touchAction: 'none', // Предотвращает масштабирование и скролл на мобильных устройствах
           overflow: 'hidden',
           width: '100%',
-          // Устанавливаем соотношение сторон 85:112
-          height: 'calc((100vw * 112 / 85) - 140px)',
-          maxHeight: 'calc(100vh - 140px)', // Ограничение максимальной высоты
+          height: 'calc(100vh - 140px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'

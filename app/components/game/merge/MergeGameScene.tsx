@@ -19,7 +19,8 @@ import * as gameUtils from './utils/utils';
 class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   // Физический мир и тела
   world: planck.World;
-  bodies: { [key: string]: GameBody } = {};
+  // Удаляем прямую инициализацию bodies, так как будем получать его из PhysicsManager
+  // bodies: { [key: string]: GameBody } = {};
   
   // Менеджеры для различных аспектов игры
   physicsManager!: PhysicsManager;
@@ -55,6 +56,19 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     
     // Настраиваем обработчик контактов для обнаружения соприкосновений шаров
     this.world.on('begin-contact', this.handleContact.bind(this));
+    
+    // Добавляем другие обработчики для отладки
+    this.world.on('end-contact', (contact) => {
+      // Событие окончания контакта
+    });
+    
+    this.world.on('pre-solve', (contact) => {
+      // Событие перед решением контакта
+    });
+    
+    this.world.on('post-solve', (contact) => {
+      // Событие после решения контакта
+    });
   }
 
   preload() {
@@ -72,10 +86,14 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   create() {
-    // Получаем размеры игрового холста с учетом соотношения сторон 85:112
+    // Получаем размеры игрового холста с учетом пропорций 7:10
     const { width, height } = this.game.canvas;
     
-    // Настраиваем физический мир и границы с учетом соотношения сторон 85:112
+    // Добавляем обработчики потери и восстановления контекста WebGL
+    this.game.renderer.on('contextlost', this.handleContextLost, this);
+    this.game.renderer.on('contextrestored', this.handleContextRestored, this);
+    
+    // Настраиваем физический мир и границы с учетом пропорций 7:10
     this.world.setGravity(planck.Vec2(0, 45));
     
     // Инициализируем менеджеры
@@ -102,23 +120,22 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this, 
       this.ballFactory, 
       this.physicsManager, 
-      this.effectsManager, 
-      this.bodies
+      this.effectsManager
     );
     
     // Настраиваем фон и получаем позицию горизонтальной линии
     const lineY = this.backgroundManager.setupBackground(width, height);
     
-    // Инициализируем UI элементы с учетом соотношения сторон
+    // Инициализируем UI элементы с учетом пропорций
     this.uiManager.setupUI(width, height);
     
     // Инициализируем счет
     this.scoreManager.setup();
     
-    // Настраиваем зону для определения Game Over с учетом соотношения сторон
+    // Настраиваем зону для определения Game Over с учетом пропорций
     this.gameOverManager.setupGameOverZone(width, lineY);
     
-    // Настраиваем ShootingManager с учетом соотношения сторон
+    // Настраиваем ShootingManager с учетом пропорций
     this.shootingManager.setup(width, lineY);
     
     // Обновляем ссылки на игровые объекты для соответствия интерфейсу
@@ -126,7 +143,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.nextBall = this.shootingManager.getNextBall();
     this.nextBallLevel = this.ballFactory.getNextBallLevel();
     
-    // Создаем границы игрового мира с учетом соотношения сторон
+    // Создаем границы игрового мира с учетом пропорций
     this.createBoundaries(width, height);
     
     // Устанавливаем время начала игры
@@ -134,7 +151,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   createBoundaries(width: number, height: number) {
-    // Основные границы мира с соотношением сторон 85:112
+    // Основные границы мира с учетом пропорций 7:10
     this.physicsManager.createBoundary(0, height / SCALE, width / SCALE, height / SCALE, 'bottom');
     this.physicsManager.createBoundary(0, 0, 0, height / SCALE);
     this.physicsManager.createBoundary(width / SCALE, 0, width / SCALE, height / SCALE);
@@ -221,7 +238,11 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     if (this.gameOverManager.isOver() || this.isPaused) return;
     
     // Обновляем физику мира
-    this.world.step(1/60);
+    // Вызываем Step с включенными колбеками обработки контактов
+    this.world.step(1/60, 10, 8);
+    
+    // Проверяем коллизии после обновления физики
+    this.checkCollisions();
     
     // Обновляем позиции спрайтов на основе физики
     this.physicsManager.update();
@@ -257,6 +278,16 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.nextBallLevel = this.ballFactory.getNextBallLevel();
   }
 
+  // Проверка коллизий вручную
+  checkCollisions() {
+    // Получаем все пары контактов из мира
+    for (let contact = this.world.getContactList(); contact; contact = contact.getNext()) {
+      if (contact.isTouching()) {
+        this.handleContact(contact);
+      }
+    }
+  }
+
   // Метод для активации способностей (Bull, Bomb, Earthquake)
   activateAbility(ability: string) {
     if (this.abilityManager) {
@@ -279,12 +310,12 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
         this.mergeProcessor.reset();
       }
 
-      // Получаем размеры игрового холста с учетом соотношения сторон 85:112
+      // Получаем размеры игрового холста с учетом пропорций 7:10
       const { width, height } = this.game.canvas;
       
-      // Рассчитываем позицию линии с учетом соотношения сторон
-      // Используем примерно 9% от высоты как расстояние для линии от верха
-      const lineY = Math.round(height * 0.09);
+      // Рассчитываем позицию линии с учетом пропорций
+      // Используем примерно 10% от высоты как расстояние для линии от верха
+      const lineY = Math.round(height * 0.10);
       
       // Сбрасываем shooting manager, если он существует
       if (this.shootingManager) {
@@ -296,7 +327,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this.isPaused = false;
       this.nextBallLevel = 1;
       
-      // Пересоздаем физический мир с сохранением соотношения сторон
+      // Пересоздаем физический мир с сохранением пропорций
       this.world = planck.World({
         gravity: planck.Vec2(0, 45)
       });
@@ -448,11 +479,24 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
 
   // Обработчик контактов между телами
   handleContact(contact: planck.Contact) {
+    // Если игра на паузе или контекст потерян, не обрабатываем столкновения
+    if (this.isPaused) {
+      return;
+    }
+    
     const fixtureA = contact.getFixtureA();
     const fixtureB = contact.getFixtureB();
     
+    if (!fixtureA || !fixtureB) {
+      return;
+    }
+    
     const bodyA = fixtureA.getBody();
     const bodyB = fixtureB.getBody();
+    
+    if (!bodyA || !bodyB) {
+      return;
+    }
     
     const userDataA = bodyA.getUserData() as any;
     const userDataB = bodyB.getUserData() as any;
@@ -472,14 +516,71 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       const shotTimeA = recentlyShot[userDataA.id];
       const shotTimeB = recentlyShot[userDataB.id];
       
-      if (shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) return;
-      if (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod) return;
+      if (shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) {
+        return;
+      }
       
-      // Планируем слияние шаров
-      this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);
+      if (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod) {
+        return;
+      }
+      
+      // Для мгновенного слияния, запускаем слияние непосредственно через requestAnimationFrame
+      requestAnimationFrame(() => {
+        // Проверяем уровни шаров напрямую из this.bodies для дополнительной проверки
+        const bodyDataA = this.bodies[userDataA.id];
+        const bodyDataB = this.bodies[userDataB.id];
+        
+        // Планируем слияние шаров только если оба тела все еще существуют
+        if (bodyDataA && bodyDataB) {
+          this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);
+        }
+      });
     }
-    // Дополнительная логика для специальных типов шаров...
-    // Обработка других типов контактов, если необходимо
+  }
+
+  /**
+   * Обработка потери WebGL контекста
+   */
+  handleContextLost() {
+    console.error('WebGL контекст потерян. Приостанавливаем физику и логику игры.');
+    // Ставим игру на паузу
+    this.isPaused = true;
+  }
+
+  /**
+   * Обработка восстановления WebGL контекста
+   */
+  handleContextRestored() {
+    console.error('WebGL контекст восстановлен. Возобновляем физику и логику игры.');
+    
+    // Восстанавливаем все объекты, которые могли быть повреждены при потере контекста
+    try {
+      // Проверяем и сбрасываем соединения шаров
+      this.mergeProcessor.reset();
+      
+      // Возобновляем игру
+      this.isPaused = false;
+      
+      // Принудительно обновляем все спрайты
+      const bodies = this.bodies;
+      for (const id in bodies) {
+        const bodyData = bodies[id];
+        if (bodyData && bodyData.body) {
+          const position = bodyData.body.getPosition();
+          bodyData.sprite.x = position.x * SCALE;
+          bodyData.sprite.y = position.y * SCALE;
+          const angle = bodyData.body.getAngle();
+          bodyData.sprite.rotation = angle;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при восстановлении контекста WebGL:', error);
+    }
+  }
+
+  // Вспомогательный метод для доступа к телам из PhysicsManager
+  get bodies(): { [key: string]: GameBody } {
+    return this.physicsManager.getBodies();
   }
 }
 

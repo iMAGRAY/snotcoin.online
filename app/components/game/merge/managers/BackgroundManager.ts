@@ -31,9 +31,9 @@ export class BackgroundManager {
     this.horizontalLine = this.scene.add.graphics();
     this.horizontalLine.lineStyle(2, 0xFFFF00, 0.8);
     
-    // Определяем позицию линии с учетом соотношения сторон 85:112
-    // Используем примерно 9% от высоты экрана для линии сверху
-    const lineY = Math.round(height * 0.09);
+    // Определяем позицию линии с учетом пропорций 7:10
+    // Используем примерно 10% от высоты экрана для линии сверху
+    const lineY = Math.round(height * 0.10);
     
     // Рисуем горизонтальную пунктирную линию
     this.drawHorizontalDashedLine(10, width - 10, lineY, 15, 8);
@@ -75,9 +75,9 @@ export class BackgroundManager {
    * @returns Позиция Y линии или значение по умолчанию
    */
   public getLineY(): number {
-    // Возвращаем позицию линии с учетом соотношения сторон 85:112
+    // Возвращаем позицию линии с учетом пропорций 7:10
     const { height } = this.scene.game.canvas;
-    return Math.round(height * 0.09);
+    return Math.round(height * 0.10);
   }
 
   /**
