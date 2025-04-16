@@ -62,9 +62,9 @@ const AbilityButton: React.FC<AbilityButtonProps> = ({
   
   const style = getButtonStyles();
   
-  const buttonClassName = `w-14 h-14 rounded-full overflow-hidden flex items-center justify-center
+  const buttonClassName = `w-12 h-12 rounded-full overflow-hidden flex items-center justify-center
     ${isSelected 
-      ? `ring-4 ${style.ringSelected} ${style.shadow} scale-110` 
+      ? `ring-3 ${style.ringSelected} ${style.shadow} scale-110` 
       : !isDisabled
         ? `ring-2 ${style.ringDefault} hover:${style.ringHover} shadow-lg hover:${style.hoverShadow} hover:scale-105`
         : 'ring-2 ring-gray-700 opacity-60 cursor-not-allowed'} 
@@ -83,15 +83,15 @@ const AbilityButton: React.FC<AbilityButtonProps> = ({
             <Image
               src={`/images/merge/abilities/${type.toLowerCase()}.webp`}
               alt={type}
-              width={42}
-              height={42}
+              width={36}
+              height={36}
               className="w-full h-full object-cover rounded-full"
               priority
             />
           </div>
         </TouchButton>
         {/* Индикатор стоимости - независимый элемент */}
-        <div className={`absolute -top-3 -left-3 bg-gradient-to-br ${style.iconGradient} text-white text-sm font-bold rounded-full h-8 w-8 flex items-center justify-center shadow-lg border-2 ${style.iconBorder} z-20`}>
+        <div className={`absolute -top-2 -left-2 bg-gradient-to-br ${style.iconGradient} text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg border-2 ${style.iconBorder} z-20`}>
           {cost.toFixed(1)}
         </div>
       </div>

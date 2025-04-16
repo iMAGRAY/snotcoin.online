@@ -213,6 +213,13 @@ export class GameOverManager {
     }
   }
 
+  /**
+   * Публичный метод для принудительного завершения игры
+   */
+  public forceGameOver(): void {
+    this.triggerGameOver();
+  }
+
   // Добавляет визуальные эффекты при Game Over
   private addGameOverEffects(): void {
     // 1. Затемнение экрана

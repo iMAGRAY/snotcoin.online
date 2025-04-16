@@ -12,7 +12,7 @@ export class EffectsManager {
   // Отображение полученных очков
   public showScorePoints(x: number, y: number, points: number, isCombo: boolean = false): void {
     // Создаем текст с отображением очков
-    const pointsText = this.scene.add.text(x, y - 80, `+${points}`, {
+    const pointsText = this.scene.add.text(x, y - 150, `+${points}`, {
       fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
       fontSize: isCombo ? '64px' : '56px',
       fontStyle: 'bold',
@@ -30,7 +30,7 @@ export class EffectsManager {
     });
     
     // Добавляем обводку золотом
-    const glow = this.scene.add.text(x, y - 80, `+${points}`, {
+    const glow = this.scene.add.text(x, y - 150, `+${points}`, {
       fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
       fontSize: isCombo ? '64px' : '56px',
       fontStyle: 'bold',
@@ -58,10 +58,10 @@ export class EffectsManager {
         // Анимация поднятия и исчезновения текста
         this.scene.tweens.add({
           targets: [pointsText, glow],
-          y: y - (isCombo ? 250 : 200),
+          y: y - (isCombo ? 350 : 300),
           alpha: 0,
-          scale: 0.8, // Уменьшаемся при исчезновении
-          duration: 800, // Более короткая анимация для динамичности
+          scale: 0.8,
+          duration: 1200,
           ease: 'Power2',
           onComplete: () => {
             pointsText.destroy();
@@ -85,7 +85,7 @@ export class EffectsManager {
       const size = 3 + Math.random() * (isCombo ? 6 : 4); // Увеличиваем размер частиц
       
       const particleX = x + Math.cos(angle) * 5;
-      const particleY = y - 80 + Math.sin(angle) * 5;
+      const particleY = y - 150 + Math.sin(angle) * 5;
       
       const color = colors[Math.floor(Math.random() * colors.length)];
       
@@ -97,11 +97,11 @@ export class EffectsManager {
       this.scene.tweens.add({
         targets: particle,
         x: particleX + Math.cos(angle) * distance,
-        y: particleY + Math.sin(angle) * distance - (isCombo ? 30 : 20),
+        y: particleY + Math.sin(angle) * distance - (isCombo ? 50 : 40),
         alpha: { from: 0, to: 0.8, duration: 200 },
-        scale: { from: 0.5, to: isCombo ? 2.5 : 2 }, // Увеличиваем масштаб частиц
+        scale: { from: 0.5, to: isCombo ? 2.5 : 2 },
         delay: delay,
-        duration: 700,
+        duration: 900,
         onComplete: () => {
           // Анимация исчезновения
           this.scene.tweens.add({
@@ -361,94 +361,53 @@ export class EffectsManager {
     const comboText = this.scene.add
       .text(rightWallX, rightWallY, "COMBO", {
         fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-        fontSize: '72px',
+        fontSize: '96px',
         fontStyle: 'bold',
-        color: '#FF5500', // Оранжевый цвет для комбо
+        color: '#FF5500',
         stroke: '#000000',
-        strokeThickness: 5,
+        strokeThickness: 6,
         shadow: {
-          offsetX: 2,
-          offsetY: 2,
+          offsetX: 3,
+          offsetY: 3,
           color: '#000',
-          blur: 3,
+          blur: 4,
           stroke: true,
           fill: true
         }
       })
-      .setOrigin(1, 0) // Привязка к правому верхнему углу
+      .setOrigin(1, 0)
       .setDepth(1000);
     comboText.setName('combo-text');
 
-    // Создаем обводку золотом для текста COMBO, как у вылетающих очков
-    const comboGlow = this.scene.add
-      .text(rightWallX, rightWallY, "COMBO", {
-        fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-        fontSize: '72px',
-        fontStyle: 'bold',
-        color: '#FFFFFF00', // Прозрачный цвет текста
-        stroke: '#FF8C00', // Оранжево-золотая обводка
-        strokeThickness: 8
-      })
-      .setOrigin(1, 0) // Привязка к правому верхнему углу
-      .setDepth(999);
-    comboGlow.setName('combo-glow');
-    comboGlow.setAlpha(0.5);
-
-    // Создаем текст множителя в том же стиле
+    // Создаем текст множителя
     const multiplierText = this.scene.add
       .text(
         rightWallX,
-        rightWallY + 80,
+        rightWallY + 100,
         `${multiplier.toFixed(1)}x`,
         {
           fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-          fontSize: '80px',
+          fontSize: '108px',
           fontStyle: 'bold',
-          color: '#FFDD00', // Золотой цвет
+          color: '#FFDD00',
           stroke: '#000000',
-          strokeThickness: 5,
+          strokeThickness: 6,
           shadow: {
-            offsetX: 2,
-            offsetY: 2,
+            offsetX: 3,
+            offsetY: 3,
             color: '#000',
-            blur: 3,
+            blur: 4,
             stroke: true,
             fill: true
           }
         }
       )
-      .setOrigin(1, 0) // Привязка к правому краю
+      .setOrigin(1, 0)
       .setDepth(1000);
     multiplierText.setName('combo-multiplier');
 
-    // Создаем текст счетчика в едином стиле с увеличенным размером
-    const countText = this.scene.add
-      .text(
-        rightWallX,
-        rightWallY + 160,
-        `${count}`,
-        {
-          fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-          fontSize: '64px',
-          color: '#FFFFFF',
-          stroke: '#000000',
-          strokeThickness: 3,
-          shadow: {
-            offsetX: 1,
-            offsetY: 1,
-            color: '#000',
-            blur: 2,
-            stroke: true,
-            fill: true
-          }
-        }
-      )
-      .setOrigin(1, 0) // Привязка к правому краю
-      .setDepth(1000);
-    countText.setName('combo-counter');
-    
     // Создаем массив для всех элементов комбо
-    const elements = [comboText, comboGlow, multiplierText, countText];
+    const elements = [comboText, multiplierText];
     
     // Добавляем анимацию для всех элементов комбо
     elements.forEach(el => el.setScale(0));
@@ -485,7 +444,7 @@ export class EffectsManager {
         const size = 2 + Math.random() * 3;
         
         const particleX = rightWallX - 30 + Math.cos(angle) * 5;
-        const particleY = rightWallY + 80 + Math.sin(angle) * 5;
+        const particleY = rightWallY + 100 + Math.sin(angle) * 5;
         
         const color = colors[Math.floor(Math.random() * colors.length)];
         
@@ -503,7 +462,7 @@ export class EffectsManager {
           alpha: { from: 0, to: 0.8, duration: 200 },
           scale: { from: 0.5, to: 1.5 },
           delay: delay,
-          duration: 700,
+          duration: 900,
           onComplete: () => {
             // Анимация исчезновения
             this.scene.tweens.add({

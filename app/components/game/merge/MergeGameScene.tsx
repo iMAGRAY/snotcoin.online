@@ -358,6 +358,9 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     // Обновляем позиции спрайтов на основе физики
     this.physicsManager.update();
     
+    // Проверяем, нет ли шаров в запретной зоне
+    this.inputManager.checkBallsInGameOverZone(Object.values(this.physicsManager.getBodies()));
+    
     // Обрабатываем отложенные слияния и удаления
     this.mergeProcessor.processPendingMerges(this.increaseScore.bind(this));
     this.processPendingDeletions();
@@ -946,6 +949,21 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this.abilitiesManager.setup();
     } else {
       console.warn('AbilityManager.setup is not available');
+    }
+  }
+
+  /**
+   * Вызывает завершение игры с проигрышем
+   */
+  gameOver(): void {
+    if (this.gameOverManager && !this.gameOverManager.isOver()) {
+      // Отображаем сообщение о причине проигрыша
+      if (this.uiManager) {
+        this.uiManager.showMessage('Шар попал в красную зону!', 0xFF0000, 32, 2000);
+      }
+      
+      // Вызываем обработку завершения игры
+      this.gameOverManager.forceGameOver();
     }
   }
 }

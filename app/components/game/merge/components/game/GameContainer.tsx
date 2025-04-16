@@ -573,16 +573,16 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       {/* Игровой контейнер без обводки */}
       <div 
         ref={gameContainerRef} 
-        className="flex-grow outline-none flex items-center justify-center" 
+        className="flex-grow outline-none" 
         style={{
-          willChange: 'transform', // Подсказка для оптимизации
+          willChange: 'transform',
           position: 'relative',
-          touchAction: 'none', // Предотвращает масштабирование и скролл на мобильных устройствах
+          touchAction: 'none',
           overflow: 'hidden',
           width: '100%',
           height: 'calc(100vh - 140px)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           justifyContent: 'center'
         }}
       />

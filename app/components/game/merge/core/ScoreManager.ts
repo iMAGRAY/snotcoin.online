@@ -29,17 +29,18 @@ export class ScoreManager {
       20, 20,
       '0',
       {
-        fontFamily: '"Russo One", "Arial", sans-serif',
-        fontSize: '48px',
+        fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
+        fontSize: '64px',
+        fontStyle: 'bold',
         color: '#FFD700',
         stroke: '#000000',
-        strokeThickness: 6,
+        strokeThickness: 8,
         shadow: { 
           color: '#000000', 
           fill: true, 
-          offsetX: 2, 
-          offsetY: 2, 
-          blur: 4 
+          offsetX: 3,
+          offsetY: 3,
+          blur: 5
         }
       }
     );

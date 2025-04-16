@@ -194,14 +194,19 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       style={{
         ...backgroundStyle,
         position: "relative",
-        zIndex: 1005 // Выше, чем у TabBar (1000), но ниже чем у AbilitiesBar и GameHeader (1010)
+        zIndex: 1005,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh"
       }}
     >
       {/* Верхний бар */}
       {gameHeader}
       
       {/* Игровой контейнер */}
-      {gameContainer}
+      <div className="flex-grow flex items-end">
+        {gameContainer}
+      </div>
       
       {/* Нижний бар с кнопками способностей */}
       {abilitiesBar}

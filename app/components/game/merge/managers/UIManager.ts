@@ -242,4 +242,64 @@ export class UIManager {
     // Реальная реализация оверлея паузы находится в компонентах React
     console.log('Скрываем оверлей паузы');
   }
+
+  /**
+   * Показывает сообщение в игре
+   * @param message Текст сообщения
+   * @param color Цвет текста (в формате 0xRRGGBB)
+   * @param fontSize Размер шрифта в пикселях
+   * @param duration Продолжительность отображения в миллисекундах
+   */
+  public showMessage(message: string, color: number = 0xFFFFFF, fontSize: number = 24, duration: number = 1500): void {
+    const { width } = this.scene.game.canvas;
+    
+    // Создаем текст сообщения
+    const textObject = this.scene.add.text(
+      width / 2, 
+      100, 
+      message, 
+      { 
+        fontSize: `${fontSize}px`,
+        fontFamily: 'Impact, Arial, sans-serif',
+        fontStyle: 'bold',
+        color: this.rgbToHex(color),
+        stroke: '#000000',
+        strokeThickness: 4,
+        shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 2, stroke: true, fill: true }
+      }
+    ).setOrigin(0.5).setDepth(1000);
+    
+    // Анимация появления
+    this.scene.tweens.add({
+      targets: textObject,
+      alpha: { from: 0, to: 1 },
+      y: { from: 50, to: 100 },
+      ease: 'Power2',
+      duration: 300
+    });
+    
+    // Таймер для удаления сообщения
+    this.scene.time.delayedCall(duration, () => {
+      // Анимация исчезновения
+      this.scene.tweens.add({
+        targets: textObject,
+        alpha: 0,
+        y: 50,
+        ease: 'Power2',
+        duration: 300,
+        onComplete: () => {
+          textObject.destroy();
+        }
+      });
+    });
+  }
+  
+  /**
+   * Преобразует числовое представление цвета в шестнадцатеричную строку
+   * @param color Цвет в формате 0xRRGGBB
+   * @returns Строка цвета в формате '#RRGGBB'
+   */
+  private rgbToHex(color: number): string {
+    return `#${color.toString(16).padStart(6, '0')}`;
+  }
 } 
