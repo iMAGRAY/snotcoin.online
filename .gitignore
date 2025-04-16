@@ -40,3 +40,14 @@ snotcoin.online/
 *.zip
 *.zip
 1.zip
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+yarn-debug.log*
+yarn-error.log*

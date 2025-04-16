@@ -12,7 +12,9 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "dev:nolint": "DISABLE_ESLINT_PLUGIN=true next dev",
-    "build:nolint": "DISABLE_ESLINT_PLUGIN=true next build"
+    "build:nolint": "DISABLE_ESLINT_PLUGIN=true next build",
+    "clean": "rimraf .next node_modules",
+    "install:clean": "yarn clean && yarn install"
   },
   "dependencies": {
     "@coinbase/onchainkit": "^0.38.0",
@@ -131,7 +133,9 @@
     "postcss-import": "^16.1.0",
     "postcss-loader": "^8.1.1",
     "resolve-url-loader": "^5.0.0",
+    "rimraf": "^6.0.1",
     "sass": "^1.86.3",
+    "sass-loader": "^16.0.5",
     "style-loader": "^4.0.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.3",

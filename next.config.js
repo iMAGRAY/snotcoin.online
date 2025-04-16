@@ -59,50 +59,6 @@ const nextConfig = {
     ],
   },
 
-  // Настройка webpack для правильной обработки CSS
-  webpack: (config) => {
-    // Добавляем правило для CSS если оно отсутствует
-    const cssRule = config.module.rules.find(
-      (rule) => rule.test && rule.test.toString().includes('css')
-    );
-
-    if (!cssRule) {
-      config.module.rules.push({
-        test: /\.css$/,
-        use: [
-          'style-loader',
-          'css-loader',
-          {
-            loader: 'postcss-loader',
-            options: {
-              postcssOptions: {
-                plugins: ['tailwindcss', 'autoprefixer'],
-              },
-            },
-          },
-        ],
-      });
-    } else {
-      // Если правило существует, проверяем наличие необходимых loader'ов
-      const hasPostCSSLoader = cssRule.use.some(
-        (loader) => loader.loader && loader.loader.includes('postcss-loader')
-      );
-
-      if (!hasPostCSSLoader) {
-        cssRule.use.push({
-          loader: 'postcss-loader',
-          options: {
-            postcssOptions: {
-              plugins: ['tailwindcss', 'autoprefixer'],
-            },
-          },
-        });
-      }
-    }
-
-    return config;
-  },
-
   // Обработка .well-known папки для Farcaster
   // Используем API маршрут только как запасной вариант, если файл не существует
   async rewrites() {

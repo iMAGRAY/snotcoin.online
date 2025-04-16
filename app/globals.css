@@ -14,12 +14,10 @@ body {
   background: rgb(var(--background-rgb));
 }
 
-/* Удаляем стили для контейнера кнопки в нижней части экрана */
-
 /* Стили для контейнера кнопки Collect */
 .collect-button-container {
   position: fixed;
-  bottom: 120px; /* Расположение на том же уровне, что и кнопка OpenChest */
+  bottom: 120px;
   left: 0;
   right: 0;
   display: flex;
