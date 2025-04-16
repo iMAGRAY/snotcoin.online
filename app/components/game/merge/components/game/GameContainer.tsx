@@ -569,31 +569,30 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
   };
 
   return (
-    <>
-      {/* Игровой контейнер без обводки */}
-      <div 
-        ref={gameContainerRef} 
-        className="flex-grow outline-none" 
-        style={{
-          willChange: 'transform',
-          position: 'relative',
-          touchAction: 'none',
-          overflow: 'hidden',
-          width: '100%',
-          height: 'calc(100vh - 140px)',
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'center'
-        }}
-      />
-      
-      {/* Индикатор загрузки */}
-      {!isLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1a2b3d] z-10">
-          <div className="text-white text-2xl">Загрузка игры...</div>
-        </div>
-      )}
-    </>
+    <div 
+      ref={gameContainerRef} 
+      data-game="true"
+      className="h-full w-full flex-grow relative"
+      style={{ 
+        minHeight: '300px',
+        maxHeight: '100vh',
+        flex: 1
+      }}
+    >
+      {/* индикатор загрузки */}
+      <AnimatePresence>
+        {!isLoaded && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center" 
+            style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
+          >
+            <div className="bg-white rounded-lg p-4 shadow-lg">
+              <p>Загрузка игры...</p>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 });
 

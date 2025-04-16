@@ -191,6 +191,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
   return (
     <div 
       className="w-full h-screen relative flex flex-col"
+      data-game="true"
       style={{
         ...backgroundStyle,
         position: "relative",
@@ -204,7 +205,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       {gameHeader}
       
       {/* Игровой контейнер */}
-      <div className="flex-grow flex items-end">
+      <div className="flex-grow flex items-end" data-game="true">
         {gameContainer}
       </div>
       

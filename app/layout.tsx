@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import ImageProtection from "./components/common/ImageProtection";
 // import Script from "next/script";
 
 // Данные для SEO
@@ -73,6 +74,8 @@ export default function RootLayout({
       </head>
       <body>
         <Providers>
+          {/* Добавляем компонент для защиты изображений */}
+          <ImageProtection />
           {/* Добавляем компонент для управления звуком */}
           {children}
         </Providers>

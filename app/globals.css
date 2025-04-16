@@ -12,6 +12,39 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
+  -webkit-user-select: none;  /* Safari */
+  -moz-user-select: none;     /* Firefox */
+  -ms-user-select: none;      /* IE/Edge */
+  user-select: none;          /* Standard */
+}
+
+/* Защита изображений от перетаскивания, сохранения и выделения */
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
+}
+
+/* Разрешаем взаимодействие с игровым canvas */
+canvas {
+  pointer-events: auto !important;
+  touch-action: auto !important;
+  user-select: none !important;
+}
+
+/* Разрешаем все взаимодействия для игровых элементов */
+[data-game="true"],
+[data-game="true"] * {
+  pointer-events: auto !important;
+  touch-action: auto !important;
+  -webkit-user-drag: auto !important;
+  -khtml-user-drag: auto !important;
+  -moz-user-drag: auto !important;
+  -o-user-drag: auto !important;
+  user-drag: auto !important;
 }
 
 /* Стили для контейнера кнопки Collect */

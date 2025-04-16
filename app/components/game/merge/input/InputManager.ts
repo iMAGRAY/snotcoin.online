@@ -198,7 +198,7 @@ export class InputManager {
   }
   
   /**
-   * Запускает отсчет 3 секунд до проигрыша
+   * Запускает отсчет 6 секунд до проигрыша
    */
   private startGameOverCountdown(): void {
     if (this.isGameOverCountdownActive) return;
@@ -210,7 +210,7 @@ export class InputManager {
       this.gameOverText = this.scene.add.text(
         this.scene.game.canvas.width / 2, 
         this.scene.game.canvas.height / 2, 
-        '3', 
+        '6', 
         { 
           fontSize: '120px', 
           color: '#FF3333',
@@ -235,7 +235,7 @@ export class InputManager {
         }
       }
     } else {
-      this.gameOverText.setText('3');
+      this.gameOverText.setText('6');
       this.gameOverText.setVisible(true);
     }
     
@@ -245,13 +245,13 @@ export class InputManager {
       scale: { from: 0.8, to: 1.2 },
       yoyo: true,
       duration: 500,
-      repeat: 5, // Повторяем 5 раз (на весь период отсчета)
+      repeat: 11, // Повторяем 11 раз (на весь период отсчета 6 секунд)
       ease: 'Sine.easeInOut'
     });
     
-    // Запускаем таймер на 3 секунды
+    // Запускаем таймер на 6 секунд
     this.gameOverCountdown = this.scene.time.addEvent({
-      delay: 3000,
+      delay: 6000,
       callback: () => {
         this.triggerGameOver();
       },
@@ -261,7 +261,7 @@ export class InputManager {
     // Обновляем текст отсчета каждую секунду с эффектами
     this.scene.time.addEvent({
       delay: 1000,
-      repeat: 2,
+      repeat: 5,
       callback: () => {
         if (!this.gameOverText || !this.isGameOverCountdownActive) return;
         
