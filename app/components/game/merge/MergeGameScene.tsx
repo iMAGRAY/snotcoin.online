@@ -48,8 +48,8 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   
   // Система блокировки контактов для предотвращения дублирующихся слияний
   private processedContacts: Set<string> = new Set();
-  private contactProcessingTimeout: number = 800; // Увеличиваем период хранения контакта для большей надежности
-  private lastMergeTime: number = 0; // Добавляем отслеживание времени последнего слияния
+  private contactProcessingTimeout: number = 100; // Уменьшаем время хранения контакта
+  private lastMergeTime: number = 0;
 
   // Добавим новый массив для хранения тел, которые нужно удалить после обновления физики
   private pendingBodyDeletions: string[] = [];
@@ -705,7 +705,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
 
   // Обработчик контактов между телами
   handleContact(contact: planck.Contact) {
-    // Если игра на паузе или контекст потерян, не обрабатываем столкновения
+    // Если игра на паузе, не обрабатываем столкновения
     if (this.isPaused) {
       return;
     }
@@ -727,20 +727,20 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     const userDataA = bodyA.getUserData() as any;
     const userDataB = bodyB.getUserData() as any;
     
-    // Пропускаем контакты между специальными телами или границами
-    if (!userDataA || !userDataB || !userDataA.id || !userDataB.id) {
+    // Проверяем только наличие ID
+    if (!userDataA?.id || !userDataB?.id) {
       return;
     }
     
-    // Проверяем, что оба тела - шары (не спец. шары и не границы)
+    // Проверяем, что оба тела - шары
     if (userDataA.type === 'ball' && userDataB.type === 'ball') {
       try {
-        // Пропускаем контакты для шаров, помеченных на удаление
+        // Пропускаем только если шары помечены на удаление
         if (userDataA.markedForDeletion || userDataB.markedForDeletion) {
           return;
         }
         
-        // Если это недавно созданные шары, пропускаем их
+        // Проверяем время после выстрела
         const currentTime = this.time.now;
         const recentlyShot = this.shootingManager.getRecentlyShot();
         const gracePeriod = this.shootingManager.getNewBallGracePeriod();
@@ -748,34 +748,27 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
         const shotTimeA = recentlyShot[userDataA.id];
         const shotTimeB = recentlyShot[userDataB.id];
         
-        if (shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) {
+        if ((shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) ||
+            (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod)) {
           return;
         }
         
-        if (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod) {
-          return;
-        }
+        // Создаем ключ контакта
+        const contactKey = [userDataA.id, userDataB.id].sort().join('-');
         
-        // Создаем уникальный идентификатор для этого контакта (по ID шаров)
-        // Сортируем ID, чтобы контакт A-B считался тем же, что и B-A
-        const contactIds = [userDataA.id, userDataB.id].sort();
-        const contactKey = contactIds.join('-');
-        
-        // Если этот контакт уже обработан, пропускаем его
+        // Пропускаем уже обработанные контакты
         if (this.processedContacts.has(contactKey)) {
           return;
         }
         
-        // Проверяем уровни шаров напрямую
+        // Проверяем уровни шаров
         const levelA = userDataA.level;
         const levelB = userDataB.level;
         
-        // Проверяем, имеют ли шары одинаковый уровень, только в этом случае объединяем
-        if (levelA !== undefined && levelB !== undefined && levelA === levelB) {
-          // Проверяем, прошло ли достаточно времени с последнего слияния
-          // Это предотвращает слишком частые слияния, которые могут вызвать проблемы с физикой
+        if (levelA === levelB) {
+          // Минимальная задержка между слияниями
           const now = Date.now();
-          if (now - this.lastMergeTime < 50) { // Минимальная задержка между слияниями 50 мс
+          if (now - this.lastMergeTime < 10) { // Уменьшаем задержку до 10 мс
             return;
           }
           this.lastMergeTime = now;
@@ -783,20 +776,17 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
           // Добавляем контакт в обработанные
           this.processedContacts.add(contactKey);
           
-          // Устанавливаем таймер для удаления контакта из обработанных через время
+          // Удаляем контакт из обработанных через короткое время
           setTimeout(() => {
             this.processedContacts.delete(contactKey);
           }, this.contactProcessingTimeout);
           
-          // Проверяем существование тел перед планированием слияния
-          // Дополнительная проверка на наличие обоих шаров и их компонентов
-          if (this.bodies[userDataA.id]?.body && this.bodies[userDataB.id]?.body &&
-              this.bodies[userDataA.id]?.sprite && this.bodies[userDataB.id]?.sprite) {
-            
-            // Воспроизводим звук слияния монет
+          // Проверяем существование тел
+          if (this.bodies[userDataA.id]?.body && this.bodies[userDataB.id]?.body) {
+            // Воспроизводим звук
             this.sound.play('coinMergeSound');
             
-            // Вызываем слияние напрямую, без requestAnimationFrame для лучшей синхронизации
+            // Вызываем слияние
             this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);
           }
         }

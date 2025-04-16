@@ -12,9 +12,9 @@ export class EffectsManager {
   // Отображение полученных очков
   public showScorePoints(x: number, y: number, points: number, isCombo: boolean = false): void {
     // Создаем текст с отображением очков
-    const pointsText = this.scene.add.text(x, y - 20, `+${points}`, {
+    const pointsText = this.scene.add.text(x, y - 80, `+${points}`, {
       fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-      fontSize: isCombo ? '32px' : '28px', // Увеличиваем размер для комбо
+      fontSize: isCombo ? '64px' : '56px',
       fontStyle: 'bold',
       color: isCombo ? '#FF5500' : '#FFDD00', // Оранжевый цвет для комбо
       stroke: '#000000',
@@ -30,9 +30,9 @@ export class EffectsManager {
     });
     
     // Добавляем обводку золотом
-    const glow = this.scene.add.text(x, y - 20, `+${points}`, {
+    const glow = this.scene.add.text(x, y - 80, `+${points}`, {
       fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-      fontSize: isCombo ? '32px' : '28px',
+      fontSize: isCombo ? '64px' : '56px',
       fontStyle: 'bold',
       color: '#FFFFFF00', // Прозрачный цвет текста
       stroke: isCombo ? '#FF8C00' : '#FFA500',  // Оранжево-золотая обводка, ярче для комбо
@@ -51,14 +51,14 @@ export class EffectsManager {
     // Анимация появления с масштабированием
     this.scene.tweens.add({
       targets: [pointsText, glow],
-      scale: isCombo ? 1.4 : 1.2, // Больший масштаб для комбо
+      scale: isCombo ? 2.8 : 2.4,
       duration: 200,
       ease: 'Back.out',
       onComplete: () => {
         // Анимация поднятия и исчезновения текста
         this.scene.tweens.add({
           targets: [pointsText, glow],
-          y: y - (isCombo ? 100 : 80), // Поднимаемся выше для комбо
+          y: y - (isCombo ? 250 : 200),
           alpha: 0,
           scale: 0.8, // Уменьшаемся при исчезновении
           duration: 800, // Более короткая анимация для динамичности
@@ -76,16 +76,16 @@ export class EffectsManager {
       [0xFF5500, 0xFF8C00, 0xFFAA00, 0xFFFFFF] : // Огненные цвета для комбо
       [0xFFD700, 0xFFA500, 0xFFFF00, 0xFFFFFF]; // Стандартные золотые цвета
     
-    const particleCount = 5 + Math.min(isCombo ? 15 : 10, points / 10); // Больше частиц для комбо
+    const particleCount = 8 + Math.min(isCombo ? 20 : 15, points / 10); // Увеличиваем количество частиц
     
     for (let i = 0; i < particleCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = 15 + Math.random() * (isCombo ? 25 : 15); // Больший разброс для комбо
+      const distance = 20 + Math.random() * (isCombo ? 35 : 25); // Увеличиваем разброс частиц
       const delay = Math.random() * 100;
-      const size = 2 + Math.random() * (isCombo ? 4 : 3); // Крупнее частицы для комбо
+      const size = 3 + Math.random() * (isCombo ? 6 : 4); // Увеличиваем размер частиц
       
       const particleX = x + Math.cos(angle) * 5;
-      const particleY = y - 20 + Math.sin(angle) * 5;
+      const particleY = y - 80 + Math.sin(angle) * 5;
       
       const color = colors[Math.floor(Math.random() * colors.length)];
       
@@ -99,7 +99,7 @@ export class EffectsManager {
         x: particleX + Math.cos(angle) * distance,
         y: particleY + Math.sin(angle) * distance - (isCombo ? 30 : 20),
         alpha: { from: 0, to: 0.8, duration: 200 },
-        scale: { from: 0.5, to: isCombo ? 2 : 1.5 },
+        scale: { from: 0.5, to: isCombo ? 2.5 : 2 }, // Увеличиваем масштаб частиц
         delay: delay,
         duration: 700,
         onComplete: () => {
@@ -361,7 +361,7 @@ export class EffectsManager {
     const comboText = this.scene.add
       .text(rightWallX, rightWallY, "COMBO", {
         fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-        fontSize: '28px', // Увеличенный размер с 24px до 28px
+        fontSize: '72px',
         fontStyle: 'bold',
         color: '#FF5500', // Оранжевый цвет для комбо
         stroke: '#000000',
@@ -383,7 +383,7 @@ export class EffectsManager {
     const comboGlow = this.scene.add
       .text(rightWallX, rightWallY, "COMBO", {
         fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-        fontSize: '28px', // Увеличенный размер с 24px до 28px
+        fontSize: '72px',
         fontStyle: 'bold',
         color: '#FFFFFF00', // Прозрачный цвет текста
         stroke: '#FF8C00', // Оранжево-золотая обводка
@@ -398,11 +398,11 @@ export class EffectsManager {
     const multiplierText = this.scene.add
       .text(
         rightWallX,
-        rightWallY + 30,
+        rightWallY + 80,
         `${multiplier.toFixed(1)}x`,
         {
           fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-          fontSize: '32px',
+          fontSize: '80px',
           fontStyle: 'bold',
           color: '#FFDD00', // Золотой цвет
           stroke: '#000000',
@@ -425,11 +425,11 @@ export class EffectsManager {
     const countText = this.scene.add
       .text(
         rightWallX,
-        rightWallY + 70,
+        rightWallY + 160,
         `${count}`,
         {
           fontFamily: '"Russo One", "Impact", "Arial Black", sans-serif',
-          fontSize: '26px', // Увеличенный размер
+          fontSize: '64px',
           color: '#FFFFFF',
           stroke: '#000000',
           strokeThickness: 3,
@@ -485,7 +485,7 @@ export class EffectsManager {
         const size = 2 + Math.random() * 3;
         
         const particleX = rightWallX - 30 + Math.cos(angle) * 5;
-        const particleY = rightWallY + 30 + Math.sin(angle) * 5;
+        const particleY = rightWallY + 80 + Math.sin(angle) * 5;
         
         const color = colors[Math.floor(Math.random() * colors.length)];
         

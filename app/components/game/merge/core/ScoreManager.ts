@@ -26,38 +26,50 @@ export class ScoreManager {
   public setup(): void {
     // Создаем текстовое поле для отображения счета
     this.scoreText = this.scene.add.text(
-      10, 10, 
-      'Score: 0', 
-      { 
-        fontFamily: 'Arial', 
-        fontSize: '24px', 
-        color: '#ffffff',
+      20, 20,
+      '0',
+      {
+        fontFamily: '"Russo One", "Arial", sans-serif',
+        fontSize: '48px',
+        color: '#FFD700',
         stroke: '#000000',
-        strokeThickness: 4,
-        shadow: { color: '#000000', fill: true, offsetX: 2, offsetY: 2, blur: 4 }
+        strokeThickness: 6,
+        shadow: { 
+          color: '#000000', 
+          fill: true, 
+          offsetX: 2, 
+          offsetY: 2, 
+          blur: 4 
+        }
       }
     );
     
-    // Устанавливаем Z-индекс, чтобы текст был поверх всех элементов
+    // Устанавливаем Z-индекс
     this.scoreText.setDepth(100);
     
-    // Создаем текст для отображения комбо-бонуса (изначально невидимый)
+    // Создаем текст для отображения комбо-бонуса
     this.comboText = this.scene.add.text(
-      10, 40, // Располагаем под основным счетом
-      '', 
-      { 
-        fontFamily: '"Russo One", "Arial", sans-serif', 
-        fontSize: '20px', 
-        color: '#00FF00', // Зеленый цвет для бонуса
+      20, 80,
+      '',
+      {
+        fontFamily: '"Russo One", "Arial", sans-serif',
+        fontSize: '32px',
+        color: '#00FF00',
         stroke: '#000000',
         strokeThickness: 3,
-        shadow: { color: '#000000', fill: true, offsetX: 1, offsetY: 1, blur: 2 }
+        shadow: { 
+          color: '#000000', 
+          fill: true, 
+          offsetX: 1, 
+          offsetY: 1, 
+          blur: 2 
+        }
       }
     );
     this.comboText.setDepth(100);
-    this.comboText.setAlpha(0); // Скрываем до первого комбо
+    this.comboText.setAlpha(0);
     
-    // Обновляем счет в регистре игры для отображения в конце игры
+    // Обновляем счет в регистре игры
     this.scene.game.registry.set('gameScore', this.score);
   }
 
@@ -65,54 +77,65 @@ export class ScoreManager {
   public increaseScore(points: number, isComboActive: boolean = false): void {
     const currentTime = Date.now();
     
-    // Проверка на резкое изменение счета
-    if (points > this.maxScoreIncreaseThreshold) {
-      console.warn(`[ScoreManager] Обнаружено подозрительное изменение счета: +${points}. Применяем ограничение.`);
-      points = this.maxScoreIncreaseThreshold;
-    }
-    
-    // Проверяем скорость изменения счета
-    const isScoreChangeValid = this.validateScoreChange(points, currentTime);
-    if (!isScoreChangeValid) {
-      console.warn(`[ScoreManager] Обнаружено подозрительно быстрое изменение счета. Игнорируем.`);
-      return;
-    }
-    
-    // Получаем базовые очки (без учета комбо)
-    // Предполагаем, что баллы переданы уже с учетом множителя комбо
-    const basePoints = isComboActive ? Math.floor(points / (1 + Math.floor((currentTime - this.lastComboTime > this.comboTimeWindow ? 1 : this.currentComboBonus/50 + 1) / 2) * 0.5)) : points;
-    const comboBonus = points - basePoints;
-    
-    // Если это комбо, обновляем суммарный бонус и время последнего комбо
-    if (isComboActive && comboBonus > 0) {
-      // Проверяем, истекло ли окно комбо
-      if (currentTime - this.lastComboTime > this.comboTimeWindow) {
-        this.currentComboBonus = comboBonus; // Начинаем новое комбо
-      } else {
-        this.currentComboBonus += comboBonus; // Добавляем к текущему комбо
-      }
-      
-      this.lastComboTime = currentTime;
-      
-      // Отображаем текущий бонус за комбо
-      this.updateComboText();
-    }
-    
     // Добавляем запись в историю
     this.addToScoreHistory(this.score, currentTime);
     
     this.score += points;
     
-    // Обновляем текстовое поле
+    // Обновляем текстовое поле с анимацией
     if (this.scoreText) {
-      this.scoreText.setText(`Score: ${this.score}`);
+      // Создаем временный текст для анимации
+      const scorePopup = this.scene.add.text(
+        this.scoreText.x,
+        this.scoreText.y - 50, // Начальная позиция выше основного счета
+        `+${points}`,
+        {
+          fontFamily: '"Russo One", "Arial", sans-serif',
+          fontSize: '32px',
+          color: '#FFD700',
+          stroke: '#000000',
+          strokeThickness: 4,
+          shadow: { 
+            color: '#000000', 
+            fill: true, 
+            offsetX: 2, 
+            offsetY: 2, 
+            blur: 4 
+          }
+        }
+      );
+      scorePopup.setDepth(100);
+
+      // Анимация появления и исчезновения
+      this.scene.tweens.add({
+        targets: scorePopup,
+        y: scorePopup.y - 30, // Поднимаем текст выше
+        alpha: 0,
+        duration: 2000, // Увеличиваем длительность с 1000 до 2000 мс
+        ease: 'Power2',
+        onComplete: () => {
+          scorePopup.destroy();
+        }
+      });
+
+      // Анимация основного счета
+      this.scene.tweens.add({
+        targets: this.scoreText,
+        scale: 1.5,
+        duration: 150,
+        yoyo: true,
+        ease: 'Bounce.out',
+        onStart: () => {
+          this.scoreText?.setText(this.formatScore(this.score));
+        }
+      });
     }
     
-    // Обновляем счет в регистре игры для отображения в конце игры
+    // Обновляем счет в регистре игры
     this.scene.game.registry.set('gameScore', this.score);
     this.scene.game.registry.set('finalScore', this.score);
     
-    // Обновляем лучший счет, если текущий превышает предыдущий
+    // Обновляем лучший счет
     try {
       const savedBestScore = localStorage.getItem('mergeGameBestScore');
       const bestScore = savedBestScore ? parseInt(savedBestScore) : 0;
@@ -269,5 +292,10 @@ export class ScoreManager {
     }
     
     return true;
+  }
+
+  // Добавляем метод для форматирования счета
+  private formatScore(score: number): string {
+    return score.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
   }
 } 

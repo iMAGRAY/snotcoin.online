@@ -119,8 +119,8 @@ export class PhysicsManager {
       const body = this.world.createBody({
         type: 'dynamic',
         position: planck.Vec2(x, y),
-        angularDamping: 0.3,
-        linearDamping: 0.3,
+        angularDamping: 0.1, // Уменьшаем затухание вращения
+        linearDamping: 0.1, // Уменьшаем затухание движения
         bullet: true,
         fixedRotation: false
       });
@@ -147,8 +147,8 @@ export class PhysicsManager {
       const fixture = body.createFixture({
         shape: planck.Circle(actualRadius),
         density: 1.0,
-        friction: 0.5, // Увеличенное трение для большей стабильности
-        restitution: 0.35, // Коэффициент упругости при столкновениях (уменьшен для меньшего отскока)
+        friction: 0.2, // Уменьшаем трение для более быстрого слияния
+        restitution: 0.2, // Уменьшаем упругость для более быстрого слияния
       });
       
       // Устанавливаем информацию о шаре в данные фикстуры
