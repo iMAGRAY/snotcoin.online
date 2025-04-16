@@ -87,6 +87,26 @@ export class ShootingManager {
     const nextBallLevel = this.ballFactory.getNextBallLevel();
     const isSpecial = this.nextBall.getData('special');
     
+    // Меняем текстуру CoinKing на анимацию броска
+    this.coinKing.setTexture('coinKingThrow');
+    
+    // Временно скрываем позицию для следующего шара
+    if (this.nextBall) {
+      this.nextBall.visible = false;
+    }
+    
+    // Через 350 мс возвращаем обычную текстуру и создаем новый шар
+    this.scene.time.delayedCall(350, () => {
+      if (this.coinKing) {
+        this.coinKing.setTexture('coinKing');
+        
+        // Генерируем новый шар для следующего выстрела только через 350 мс
+        this.ballFactory.generateNextBallLevel();
+        this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
+        this.nextBall = this.ballFactory.getNextBall();
+      }
+    });
+    
     // Создаем шар в физическом мире
     const radius = gameUtils.getRadiusByLevel(nextBallLevel);
     const x = this.coinKing.x / SCALE;
@@ -109,11 +129,6 @@ export class ShootingManager {
     
     // Добавляем созданный шар в список недавних с отметкой времени
     this.recentlyShot[id] = time;
-    
-    // Генерируем новый шар для следующего выстрела
-    this.ballFactory.generateNextBallLevel();
-    this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
-    this.nextBall = this.ballFactory.getNextBall();
     
     // Сохраняем позицию вертикальной линии
     this.inputManager.setVerticalGuideX(this.coinKing.x);

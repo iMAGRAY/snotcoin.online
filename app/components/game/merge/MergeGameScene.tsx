@@ -110,6 +110,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     
     // Загружаем изображения интерфейса и специальных шаров
     this.load.image('coinKing', '/images/merge/Game/ui/CoinKing.webp');
+    this.load.image('coinKingThrow', '/images/merge/Game/ui/CoinKingThrow.webp');
     this.load.image('background', '/images/merge/background/merge-background.webp');
     this.load.image('trees', '/images/merge/background/trees.webp');
     this.load.image('bull', '/images/merge/Balls/Bull.webp');
