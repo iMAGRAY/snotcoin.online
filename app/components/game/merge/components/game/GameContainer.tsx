@@ -204,11 +204,11 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
     // Очищаем существующие экземпляры Phaser перед созданием нового
     cleanupPhaserInstances();
 
-    // Определяем базовые размеры с соотношением 425:558
-    const BASE_WIDTH = 425;  // 425px
-    const BASE_HEIGHT = 558; // 558px
+    // Определяем базовые размеры с соотношением 11.5:16
+    const BASE_WIDTH = 1200;   // 1200px для ширины (11.5)
+    const BASE_HEIGHT = 1600; // 1600px для высоты (16)
     
-    // Рассчитываем новые размеры с учетом пропорций 425:558
+    // Рассчитываем новые размеры с учетом пропорций 11.5:16
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight - 140;
     
@@ -248,8 +248,8 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         width: BASE_WIDTH,
         height: BASE_HEIGHT,
         min: {
-          width: BASE_WIDTH / 2,
-          height: BASE_HEIGHT / 2
+          width: BASE_WIDTH / 4,
+          height: BASE_HEIGHT / 4
         },
         max: {
           width: BASE_WIDTH * 2,

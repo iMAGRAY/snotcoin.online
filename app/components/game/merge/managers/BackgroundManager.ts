@@ -15,9 +15,10 @@ export class BackgroundManager {
    * Настройка фоновых элементов
    * @param width Ширина экрана
    * @param height Высота экрана
+   * @param customLineY Пользовательская позиция Y горизонтальной линии
    * @returns Позиция Y горизонтальной линии
    */
-  public setupBackground(width: number, height: number): number {
+  public setupBackground(width: number, height: number, customLineY?: number): number {
     // Убираем основной фон, так как он уже установлен в MergeGameLauncher
     // Основной фон (нижний слой) уже добавлен в MergeGameLauncher, 
     // поэтому не добавляем его здесь, чтобы избежать перекрытия
@@ -29,14 +30,13 @@ export class BackgroundManager {
     
     // Добавляем горизонтальную пунктирную линию желтого цвета
     this.horizontalLine = this.scene.add.graphics();
-    this.horizontalLine.lineStyle(2, 0xFFFF00, 0.8);
+    this.horizontalLine.lineStyle(4, 0xFFFF00, 0.8);
     
-    // Определяем позицию линии с учетом пропорций 7:10
-    // Используем примерно 10% от высоты экрана для линии сверху
-    const lineY = Math.round(height * 0.10);
+    // Определяем позицию линии: используем переданную позицию или вычисляем по умолчанию
+    const lineY = customLineY !== undefined ? customLineY : Math.round(height * 0.10);
     
     // Рисуем горизонтальную пунктирную линию
-    this.drawHorizontalDashedLine(10, width - 10, lineY, 15, 8);
+    this.drawHorizontalDashedLine(10, width - 10, lineY, 20, 10);
     
     return lineY;
   }
@@ -75,9 +75,9 @@ export class BackgroundManager {
    * @returns Позиция Y линии или значение по умолчанию
    */
   public getLineY(): number {
-    // Возвращаем позицию линии с учетом пропорций 7:10
+    // Возвращаем позицию линии с учетом пропорций
     const { height } = this.scene.game.canvas;
-    return Math.round(height * 0.10);
+    return Math.round(height * 0.05);
   }
 
   /**

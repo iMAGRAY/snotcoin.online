@@ -25,7 +25,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   // Менеджеры для различных аспектов игры
   physicsManager!: PhysicsManager;
   effectsManager!: EffectsManager;
-  abilityManager!: AbilityManager;
+  abilitiesManager!: AbilityManager;
   inputManager!: InputManager;
   gameOverManager!: GameOverManager;
   scoreManager!: ScoreManager;
@@ -53,6 +53,13 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
 
   // Добавим новый массив для хранения тел, которые нужно удалить после обновления физики
   private pendingBodyDeletions: string[] = [];
+
+  // Новые свойства для изменения порядка инициализации
+  private aspectRatio: number = 16/9; // Стандартное соотношение сторон
+  private fpsMultiplier: number = 1; // Стандартный множитель FPS
+  private restartTriggered: boolean = false;
+  private finalScore: number = 0;
+  private activeSprite: Phaser.Physics.Arcade.Sprite | null = null;
 
   constructor() {
     super({ key: 'MergeGameScene' });
@@ -160,92 +167,49 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   }
 
   create() {
-    // Получаем размеры игрового холста с учетом пропорций 425:558
-    const { width: originalWidth, height: originalHeight } = this.game.canvas;
-    
-    // Устанавливаем соотношение сторон 425:558
-    const aspectRatio = 425 / 558;
-    
-    // Пересчитываем размеры с учетом соотношения сторон
-    let width, height;
-    
-    if (originalWidth / originalHeight > aspectRatio) {
-      // Если экран шире, чем нужно, ограничиваем по высоте
-      height = originalHeight;
-      width = height * aspectRatio;
-    } else {
-      // Если экран уже, чем нужно, ограничиваем по ширине
-      width = originalWidth;
-      height = width / aspectRatio;
+    try {
+      console.log('MergeGameScene:create - Инициализация игровой сцены');
+      
+      // Сбрасываем флаги
+      this.isPaused = false;
+      this.restartTriggered = false;
+      
+      // Инициализируем состояние игры
+      this.score = 0;
+      this.finalScore = 0;
+      this.pendingDeletions = [];
+      
+      // Получаем размеры с учетом соотношения сторон 12:16
+      const { width: originalWidth, height: originalHeight } = this.game.canvas;
+      
+      // Для соответствия соотношению сторон 11.5:16, определяем, какая сторона ограничивает
+      const aspectRatio = 12 / 16;
+      
+      let width, height;
+      let offsetX = 0;
+      
+      if (originalWidth / originalHeight > aspectRatio) {
+        // Ширина слишком большая, ограничиваем по высоте
+        height = originalHeight;
+        width = height * aspectRatio;
+        // Центрируем по горизонтали
+        offsetX = (originalWidth - width) / 2;
+      } else {
+        // Высота слишком большая или соотношение точное, ограничиваем по ширине
+        width = originalWidth;
+        height = width / aspectRatio;
+      }
+      
+      // Настраиваем игру с использованием нового метода
+      this.setupGame(width, height, offsetX);
+      
+      // Завершаем загрузку звуков
+      this.initAudioService();
+      
+      console.log('MergeGameScene:create - Инициализация завершена');
+    } catch (error) {
+      console.error('MergeGameScene:create - Критическая ошибка:', error);
     }
-    
-    // Центрируем игровую зону
-    const offsetX = (originalWidth - width) / 2;
-    
-    // Добавляем обработчики потери и восстановления контекста WebGL
-    this.game.renderer.on('contextlost', this.handleContextLost, this);
-    this.game.renderer.on('contextrestored', this.handleContextRestored, this);
-    
-    // Настраиваем физический мир и границы с учетом пропорций 425:558
-    this.world.setGravity(planck.Vec2(0, 45));
-    
-    // Инициализируем менеджеры
-    this.physicsManager = new PhysicsManager(this, this.world);
-    this.effectsManager = new EffectsManager(this);
-    this.abilityManager = new AbilityManager(this);
-    this.inputManager = new InputManager(this);
-    this.gameOverManager = new GameOverManager(this);
-    this.scoreManager = new ScoreManager(this);
-    this.ballFactory = new BallFactory(this, this.physicsManager);
-    this.backgroundManager = new BackgroundManager(this);
-    this.uiManager = new UIManager(this);
-    
-    // Задаем соотношение сторон в игровых данных для использования другими менеджерами
-    this.game.registry.set('gameWidth', width);
-    this.game.registry.set('gameHeight', height);
-    this.game.registry.set('gameOffsetX', offsetX);
-    
-    // Инициализируем менеджеры, зависящие от других
-    this.shootingManager = new ShootingManager(
-      this, 
-      this.ballFactory, 
-      this.physicsManager, 
-      this.inputManager,
-      this.uiManager
-    );
-    
-    this.mergeProcessor = new MergeProcessor(
-      this, 
-      this.ballFactory, 
-      this.physicsManager, 
-      this.effectsManager
-    );
-    
-    // Настраиваем фон и получаем позицию горизонтальной линии
-    const lineY = this.backgroundManager.setupBackground(width, height);
-    
-    // Инициализируем UI элементы с учетом пропорций
-    this.uiManager.setupUI(width, height);
-    
-    // Инициализируем счет
-    this.scoreManager.setup();
-    
-    // Настраиваем зону для определения Game Over с учетом пропорций
-    this.gameOverManager.setupGameOverZone(width, lineY);
-    
-    // Настраиваем ShootingManager с учетом пропорций
-    this.shootingManager.setup(width, lineY);
-    
-    // Обновляем ссылки на игровые объекты для соответствия интерфейсу
-    this.coinKing = this.shootingManager.getCoinKing();
-    this.nextBall = this.shootingManager.getNextBall();
-    this.nextBallLevel = this.ballFactory.getNextBallLevel();
-    
-    // Создаем границы игрового мира с учетом пропорций
-    this.createBoundaries(width, height, offsetX);
-    
-    // Устанавливаем время начала игры
-    this.game.registry.set('gameStartTime', Date.now());
   }
 
   createBoundaries(width: number, height: number, offsetX: number = 0) {
@@ -410,16 +374,31 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       this.uiManager.updateAimLine(pointer.x, pointer.y);
     }
     
-    // Обновляем вертикальную направляющую линию только если:
-    // 1. Игра не окончена
-    // 2. Есть сохраненная позиция X (больше 0)
-    if (!this.gameOverManager.isOver()) {
-      const currentX = this.inputManager.getVerticalGuideX();
-      // Проверяем, что currentX больше 0, иначе не рисуем линию
-      if (currentX > 0) {
-        // Обновляем линию только если есть сохраненная позиция
-        this.uiManager.updateVerticalGuideLine(currentX, 75, this.game.canvas.height);
-      }
+    // Отображение вертикальной направляющей линии
+    if (this.activeSprite && this.activeSprite.body && 
+        this.activeSprite.body.velocity && 
+        this.activeSprite.body.velocity.x === 0 && 
+        this.activeSprite.body.velocity.y === 0) {
+      // Получаем CoinKing для точного позиционирования линии
+      const coinKing = this.shootingManager.getCoinKing();
+      if (!coinKing) return;
+
+      // Скрываем линию перед обновлением, чтобы избежать мерцания
+      this.uiManager.hideVerticalGuideLine();
+      
+      // Получаем границы активного спрайта и игровой зоны
+      const sprite = this.activeSprite;
+      const spriteX = sprite.x;
+      
+      // Обновляем положение вертикальной направляющей
+      this.uiManager.updateVerticalGuideLine(
+        spriteX,
+        coinKing.y + coinKing.displayHeight / 2, // Начинаем от нижней части CoinKing
+        this.game.canvas.height // До нижней части экрана
+      );
+    } else {
+      // Скрываем линию, если нет активного спрайта или он движется
+      this.uiManager.hideVerticalGuideLine();
     }
     
     // Обновляем ссылки на объекты из менеджеров
@@ -492,8 +471,8 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
 
   // Метод для активации способностей (Bull, Bomb, Earthquake)
   activateAbility(ability: string) {
-    if (this.abilityManager) {
-      this.abilityManager.activateAbility(ability);
+    if (this.abilitiesManager) {
+      this.abilitiesManager.activateAbility(ability);
     }
   }
 
@@ -872,6 +851,112 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
   // Вспомогательный метод для доступа к телам из PhysicsManager
   get bodies(): { [key: string]: GameBody } {
     return this.physicsManager.getBodies();
+  }
+
+  setupGame(width: number, height: number, offsetX: number = 0) {
+    try {
+      // Настраиваем соотношение сторон 11.5:16 для игровой зоны
+      this.aspectRatio = 11.5 / 16;
+      
+      // Получаем мультипликатор FPS для нормализации скорости при разных FPS
+      this.fpsMultiplier = 60 / this.game.loop.targetFps;
+      
+      // Инициализируем базовые менеджеры
+      this.configurePhysicsWorld();
+      this.setupManagers();
+      
+      // Настраиваем соотношение сторон
+      this.scale.setGameSize(width, height);
+      
+      // Инициализируем ShootingManager перед BackgroundManager, чтобы получить позицию CoinKing
+      const initialLineY = Math.round(height * 0.05); // Начальная позиция, поднята выше
+      this.shootingManager.setup(width, initialLineY);
+      
+      // Позиция CoinKing для размещения горизонтальной линии под ним
+      const coinKing = this.shootingManager.getCoinKing();
+      const coinKingBottomY = coinKing ? coinKing.y + coinKing.displayHeight / 2 : initialLineY;
+      
+      // Настраиваем фон с горизонтальной линией под CoinKing
+      const lineY = this.backgroundManager.setupBackground(width, height, coinKingBottomY);
+      
+      // Настраиваем интерфейс UI
+      this.uiManager.setupUI(width, height);
+      
+      // Настраиваем зону окончания игры
+      this.gameOverManager.setupGameOverZone(width, lineY);
+      
+      // Добавляем границы игры
+      this.createBoundaries(width, height, offsetX);
+      
+      // Инициализируем менеджер способностей
+      this.abilitiesManager.setup();
+
+      // Инициализируем счет
+      this.scoreManager.setup();
+      
+      // Устанавливаем время начала игры
+      this.game.registry.set('gameStartTime', Date.now());
+    } catch (error) {
+      console.error('Ошибка при настройке игры:', error);
+    }
+  }
+
+  private configurePhysicsWorld(): void {
+    // Настраиваем физический мир
+    this.world.setGravity(planck.Vec2(0, 45));
+    
+    // Добавляем обработчики потери и восстановления контекста WebGL
+    this.game.renderer.on('contextlost', this.handleContextLost, this);
+    this.game.renderer.on('contextrestored', this.handleContextRestored, this);
+  }
+  
+  private setupManagers(): void {
+    // Инициализируем менеджеры
+    this.physicsManager = new PhysicsManager(this, this.world);
+    this.effectsManager = new EffectsManager(this);
+    this.abilitiesManager = new AbilityManager(this);
+    this.inputManager = new InputManager(this);
+    this.gameOverManager = new GameOverManager(this);
+    this.scoreManager = new ScoreManager(this);
+    this.ballFactory = new BallFactory(this, this.physicsManager);
+    this.backgroundManager = new BackgroundManager(this);
+    this.uiManager = new UIManager(this);
+    
+    // Инициализируем менеджеры, зависящие от других
+    this.shootingManager = new ShootingManager(
+      this, 
+      this.ballFactory, 
+      this.physicsManager, 
+      this.inputManager,
+      this.uiManager
+    );
+    
+    this.mergeProcessor = new MergeProcessor(
+      this, 
+      this.ballFactory, 
+      this.physicsManager, 
+      this.effectsManager
+    );
+  }
+
+  // Добавляем метод loadAudioService
+  private initAudioService(): void {
+    this.audioService = {
+      playSound: (key: string) => {
+        // Воспроизведение звука через Phaser
+        this.sound.play(key);
+      }
+    };
+  }
+
+  // Добавляем метод setup в AbilityManager если его нет
+  // Убедитесь, что этот метод определен в классе AbilityManager
+  setupAbilities() {
+    if (this.abilitiesManager && typeof this.abilitiesManager.setup === 'function') {
+      this.abilitiesManager.setup();
+    } else {
+      console.warn('AbilityManager.setup is not available');
+    }
   }
 }
 

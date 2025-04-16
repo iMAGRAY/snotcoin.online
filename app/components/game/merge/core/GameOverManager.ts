@@ -21,14 +21,15 @@ export class GameOverManager {
 
   // Настройка зоны опасности (Game Over)
   public setupGameOverZone(width: number, lineY: number): void {
-    this.dangerZoneY = lineY;
+    // Устанавливаем зону опасности прямо над горизонтальной линией
+    this.dangerZoneY = lineY - 5; // Устанавливаем зону чуть выше линии
     
     // Создаем невидимую зону для определения Game Over
     this.gameOverZone = this.scene.add.rectangle(
       width / 2, 
-      lineY / 2, 
+      lineY / 2 - 5, // Поднимаем зону выше
       width, 
-      lineY, 
+      lineY - 10, // Уменьшаем высоту зоны
       0xFF0000, 
       0 // Полностью прозрачная
     );
@@ -47,7 +48,7 @@ export class GameOverManager {
       if (bodyData && bodyData.body) {
         // Получаем текущую позицию шара
         const position = bodyData.body.getPosition();
-        const yPos = position.y * 30; // 30 - масштаб для перевода физических единиц в пиксели
+        const yPos = position.y * 120; // 120 - масштаб для перевода физических единиц в пиксели (обновлено с 30)
         
         // Если шар выше опасной линии
         if (yPos < this.dangerZoneY) {

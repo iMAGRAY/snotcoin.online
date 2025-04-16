@@ -18,6 +18,13 @@ export class AbilityManager {
     this.earthquake = new Earthquake(scene);
   }
 
+  // Метод инициализации способностей
+  public setup(): void {
+    // Инициализация способностей
+    // Пока оставляем пустым, так как setup не определен в классах способностей
+    console.log('AbilityManager: инициализация способностей');
+  }
+
   // Метод активации способности
   public activateAbility(ability: string): void {
     switch (ability) {

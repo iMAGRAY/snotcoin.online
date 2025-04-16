@@ -17,15 +17,36 @@ export class UIManager {
    * @param canvasHeight Высота игрового холста
    */
   public setupUI(canvasWidth: number, canvasHeight: number): void {
-    // Получаем смещение игровой зоны, если оно задано
-    const offsetX = this.scene.game.registry.get('gameOffsetX') || 0;
+    // Очищаем существующие линии, если они уже были созданы
+    if (this.aimLine) {
+      this.aimLine.clear();
+      this.aimLine.destroy();
+      this.aimLine = null;
+    }
     
-    // Создаем линию прицеливания
-    this.aimLine = this.scene.add.graphics();
-    this.updateAimLine(offsetX + canvasWidth / 2, canvasHeight);
+    if (this.verticalGuideLine) {
+      this.verticalGuideLine.clear();
+      this.verticalGuideLine.destroy();
+      this.verticalGuideLine = null;
+    }
     
-    // Создаем вертикальную направляющую линию
-    this.verticalGuideLine = this.scene.add.graphics();
+    try {
+      // Создаем линию прицеливания без начальной отрисовки
+      this.aimLine = this.scene.add.graphics();
+      this.aimLine.visible = false; // Изначально скрыта
+      
+      // Создаем вертикальную направляющую линию без начальной отрисовки
+      this.verticalGuideLine = this.scene.add.graphics();
+      this.verticalGuideLine.visible = false; // Изначально скрыта
+      
+      // Сохраняем размеры холста в registry для последующего использования
+      this.scene.game.registry.set('gameWidth', canvasWidth);
+      this.scene.game.registry.set('gameHeight', canvasHeight);
+      
+      console.log('UI Manager: линии прицеливания инициализированы успешно');
+    } catch (error) {
+      console.error('Ошибка при инициализации линий прицеливания:', error);
+    }
   }
 
   /**
@@ -36,15 +57,15 @@ export class UIManager {
   public updateAimLine(x: number, height: number): void {
     if (!this.aimLine) return;
     
-    this.aimLine.clear();
-    this.aimLine.lineStyle(2, 0xFFFFFF, 0.5);
-    
-    // Проверяем, что переданные координаты валидны
+    // Проверяем валидность координат
     if (isNaN(x) || !isFinite(x) || isNaN(height) || !isFinite(height)) {
-      console.error('Ошибка в updateAimLine: получены некорректные координаты', { x, height });
-      return; // Прерываем выполнение, если координаты некорректны
+      return;
     }
     
+    this.aimLine.clear();
+    this.aimLine.lineStyle(4, 0xFFFFFF, 0.5); // Увеличил толщину с 2 до 4
+    
+    // Получаем позицию CoinKing (для начала линии)
     // Учитываем смещение игровой зоны
     const offsetX = this.scene.game.registry.get('gameOffsetX') || 0;
     const gameWidth = this.scene.game.registry.get('gameWidth') || this.scene.cameras.main.width;
@@ -88,46 +109,59 @@ export class UIManager {
   public updateVerticalGuideLine(x: number, startY: number, endY: number): void {
     if (!this.verticalGuideLine) return;
     
+    // Полностью очищаем предыдущую линию
     this.verticalGuideLine.clear();
-    this.verticalGuideLine.lineStyle(2, 0xFFFFFF, 0.2);
+    
+    // Округляем координаты до целых чисел для предотвращения раздваивания линии
+    x = Math.round(x);
+    startY = Math.round(startY);
+    endY = Math.round(endY);
     
     // Проверяем, что переданные координаты валидны
     if (isNaN(x) || !isFinite(x) || isNaN(startY) || !isFinite(startY) || isNaN(endY) || !isFinite(endY)) {
       console.error('Ошибка в updateVerticalGuideLine: получены некорректные координаты', { x, startY, endY });
-      return; // Прерываем выполнение, если координаты некорректны
+      this.hideVerticalGuideLine(); // Скрываем линию при некорректных координатах
+      return;
     }
+    
+    // Устанавливаем стиль линии - делаем её толще и более заметной
+    this.verticalGuideLine.lineStyle(6, 0xFFFFFF, 0.7); // Увеличиваем толщину и прозрачность
     
     // Учитываем смещение игровой зоны
     const offsetX = this.scene.game.registry.get('gameOffsetX') || 0;
     const gameWidth = this.scene.game.registry.get('gameWidth') || this.scene.cameras.main.width;
     
-    // Ограничиваем x в пределах игровой зоны
-    x = Math.max(offsetX, Math.min(offsetX + gameWidth, x));
+    // Ограничиваем x в пределах игровой зоны и округляем
+    x = Math.round(Math.max(offsetX, Math.min(offsetX + gameWidth, x)));
     
-    // Рисуем пунктирную вертикальную линию сегментами
-    const segmentLength = 10;
-    const gapLength = 10;
-    let currentY = startY;
+    // Убедимся, что startY < endY
+    if (startY >= endY) {
+      console.warn('updateVerticalGuideLine: startY >= endY, корректирую значения', { startY, endY });
+      const temp = startY;
+      startY = Math.min(startY, endY);
+      endY = Math.max(temp, endY);
+    }
     
-    while (currentY < endY) {
-      // Безопасно вычисляем конец сегмента
-      const segmentEnd = Math.min(currentY + segmentLength, endY);
+    try {
+      // Рисуем сплошную вертикальную линию
+      this.verticalGuideLine.beginPath();
+      this.verticalGuideLine.moveTo(x, startY);
+      this.verticalGuideLine.lineTo(x, endY);
+      this.verticalGuideLine.strokePath();
       
-      // Проверяем, что сегмент имеет положительную длину
-      if (segmentEnd > currentY) {
-        try {
-          this.verticalGuideLine.beginPath();
-          this.verticalGuideLine.moveTo(x, currentY);
-          this.verticalGuideLine.lineTo(x, segmentEnd);
-          this.verticalGuideLine.strokePath();
-        } catch (error) {
-          console.error('Ошибка при отрисовке вертикальной направляющей:', error);
-          // Прерываем цикл, если произошла ошибка
-          break;
+      // После успешной отрисовки делаем линию видимой
+      this.verticalGuideLine.visible = true;
+      this.verticalGuideLine.alpha = 1;
+      
+      // Применяем изменения немедленно
+      this.scene.children.each((child: Phaser.GameObjects.GameObject) => {
+        if (child.active) {
+          child.update();
         }
-      }
-      
-      currentY = segmentEnd + gapLength;
+      });
+    } catch (error) {
+      console.error('Ошибка при отрисовке вертикальной направляющей:', error);
+      this.hideVerticalGuideLine(); // В случае ошибки скрываем линию
     }
   }
 
@@ -150,7 +184,19 @@ export class UIManager {
    */
   public hideVerticalGuideLine(): void {
     if (this.verticalGuideLine) {
+      // Очистка графического объекта
       this.verticalGuideLine.clear();
+      // Скрываем объект
+      this.verticalGuideLine.visible = false;
+      // Сбрасываем альфа-канал для надежности
+      this.verticalGuideLine.alpha = 1;
+      
+      // Применяем изменения немедленно
+      this.scene.children.each((child: Phaser.GameObjects.GameObject) => {
+        if (child.active) {
+          child.update();
+        }
+      });
     }
   }
 
@@ -158,14 +204,24 @@ export class UIManager {
    * Очистка ресурсов
    */
   public cleanup(): void {
-    if (this.aimLine) {
-      this.aimLine.destroy();
-      this.aimLine = null;
-    }
-    
-    if (this.verticalGuideLine) {
-      this.verticalGuideLine.destroy();
-      this.verticalGuideLine = null;
+    try {
+      if (this.aimLine) {
+        this.aimLine.clear();
+        this.aimLine.visible = false;
+        this.aimLine.destroy();
+        this.aimLine = null;
+      }
+      
+      if (this.verticalGuideLine) {
+        this.verticalGuideLine.clear();
+        this.verticalGuideLine.visible = false;
+        this.verticalGuideLine.destroy();
+        this.verticalGuideLine = null;
+      }
+      
+      console.log('UI Manager: ресурсы успешно очищены');
+    } catch (error) {
+      console.error('Ошибка при очистке ресурсов UI Manager:', error);
     }
   }
 

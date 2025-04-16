@@ -125,6 +125,15 @@ export class PhysicsManager {
         fixedRotation: false
       });
       
+      // Добавляем небольшую случайную силу
+      const randomForceX = (Math.random() - 0.5) * 0.2; // Случайная сила по X от -0.1 до 0.1
+      const randomForceY = Math.random() * 0.1; // Небольшая случайная сила вниз от 0 до 0.1
+      body.applyLinearImpulse(planck.Vec2(randomForceX, randomForceY), body.getWorldCenter());
+      
+      // Добавляем небольшое случайное вращение
+      const randomTorque = (Math.random() - 0.5) * 0.1; // Случайное вращение от -0.05 до 0.05
+      body.applyTorque(randomTorque);
+      
       // Проверяем, что тело создано успешно
       if (!body) {
         console.error('Ошибка: не удалось создать физическое тело');
@@ -228,6 +237,15 @@ export class PhysicsManager {
         bullet: true, // Улучшенное обнаружение коллизий для быстрых объектов
         fixedRotation: false // Разрешаем вращение для реалистичной физики
       });
+
+      // Добавляем небольшую случайную силу
+      const randomForceX = (Math.random() - 0.5) * 0.2; // Случайная сила по X от -0.1 до 0.1
+      const randomForceY = Math.random() * 0.1; // Небольшая случайная сила вниз от 0 до 0.1
+      body.applyLinearImpulse(planck.Vec2(randomForceX, randomForceY), body.getWorldCenter());
+      
+      // Добавляем небольшое случайное вращение
+      const randomTorque = (Math.random() - 0.5) * 0.1; // Случайное вращение от -0.05 до 0.05
+      body.applyTorque(randomTorque);
       
       // Проверяем, что тело создано успешно
       if (!body) {

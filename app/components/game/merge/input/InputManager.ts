@@ -23,24 +23,21 @@ export class InputManager {
     
     // Добавляем обработчики для перемещения CoinKing
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.coinKing) {
-        // Для мобильных устройств перемещаем CoinKing только при зажатом пальце
-        // Для компьютера перемещаем всегда при движении мыши
-        if (!isMobileDevice || (isMobileDevice && this.isPointerDown)) {
-          // Обновляем только позицию X, Y остается фиксированной
-          const { width } = this.scene.game.canvas;
-          const newX = Phaser.Math.Clamp(pointer.x, 50, width - 50);
-          this.coinKing.x = newX;
-          
-          // Перемещаем следующий шар вместе с CoinKing
-          const mergeScene = this.scene as any;
-          if (mergeScene.nextBall) {
-            mergeScene.nextBall.x = newX;
-          }
-          
-          // Обновляем линию прицеливания
-          updateAimLine(newX, this.scene.game.canvas.height);
+      if (this.coinKing && this.isPointerDown) {
+        // Перемещаем CoinKing только при зажатой кнопке/пальце
+        const { width } = this.scene.game.canvas;
+        const newX = Phaser.Math.Clamp(pointer.x, 50, width - 50);
+        this.coinKing.x = newX;
+        
+        // Перемещаем следующий шар вместе с CoinKing
+        const mergeScene = this.scene as any;
+        if (mergeScene.nextBall) {
+          mergeScene.nextBall.x = newX;
         }
+        
+        this.verticalGuideX = newX;
+        // Обновляем линию прицеливания
+        updateAimLine(newX, this.scene.game.canvas.height);
       }
     });
     
@@ -49,34 +46,31 @@ export class InputManager {
       this.isPointerDown = true;
       
       if (this.coinKing) {
-        this.verticalGuideX = this.coinKing.x;
-        // Обновляем линию с зафиксированной позицией
-        updateVerticalGuideLine(this.verticalGuideX, 75, this.scene.game.canvas.height);
-      }
-      
-      // На компьютере стреляем сразу при клике, на мобильных - только при отпускании
-      if (!isMobileDevice) {
-        // Выстрел из CoinKing
-        const currentTime = this.scene.time.now;
-        if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
-          shootFromCoinKing();
-          this.lastShootTime = currentTime;
+        // Начальное положение при нажатии
+        const { width } = this.scene.game.canvas;
+        const newX = Phaser.Math.Clamp(pointer.x, 50, width - 50);
+        this.coinKing.x = newX;
+        
+        // Перемещаем следующий шар вместе с CoinKing
+        const mergeScene = this.scene as any;
+        if (mergeScene.nextBall) {
+          mergeScene.nextBall.x = newX;
         }
+        
+        this.verticalGuideX = newX;
+        // Обновляем линию прицеливания
+        updateAimLine(newX, this.scene.game.canvas.height);
       }
     });
     
     this.scene.input.on('pointerup', () => {
-      // На мобильных устройствах стреляем при отпускании пальца
-      if (isMobileDevice) {
-        if (this.coinKing) {
-          this.verticalGuideX = this.coinKing.x;
-          // Обновляем линию с зафиксированной позицией
-          updateVerticalGuideLine(this.verticalGuideX, 75, this.scene.game.canvas.height);
-        }
+      if (this.coinKing) {
+        this.verticalGuideX = this.coinKing.x;
+        // Обновление вертикальной линии теперь выполняется в update() в MergeGameScene
         
-        // Выстрел из CoinKing при отпускании пальца
+        // Выстрел из CoinKing при отпускании кнопки мыши/пальца
         const currentTime = this.scene.time.now;
-        if (currentTime - this.lastShootTime > this.shootDelay && this.coinKing) {
+        if (currentTime - this.lastShootTime > this.shootDelay) {
           shootFromCoinKing();
           this.lastShootTime = currentTime;
         }

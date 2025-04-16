@@ -42,9 +42,9 @@ export class ShootingManager {
    */
   public setup(width: number, lineY: number): void {
     // Добавляем CoinKing в верхнюю часть игровой зоны
-    // Позиционируем немного выше линии для соотношения 7:10
-    this.coinKing = this.scene.add.image(width / 2, lineY - 15, 'coinKing');
-    this.coinKing.setScale(0.09);
+    // Позиционируем ниже линии 
+    this.coinKing = this.scene.add.image(width / 2, lineY + 45, 'coinKing');
+    this.coinKing.setScale(0.8);
     
     // Устанавливаем CoinKing в InputManager
     this.inputManager.setCoinKing(this.coinKing);
@@ -63,10 +63,12 @@ export class ShootingManager {
       this.shootFromCoinKing.bind(this)
     );
     
-    // Устанавливаем начальную вертикальную направляющую линию
+    // Устанавливаем начальную вертикальную направляющую линию,
+    // но не рисуем её сразу, это будет делать update() в MergeGameScene
     this.inputManager.setVerticalGuideX(width / 2);
-    const coinKingBottomY = this.coinKing.y + 20;
-    this.uiManager.updateVerticalGuideLine(width / 2, coinKingBottomY, this.scene.game.canvas.height);
+    
+    // Больше не вызываем здесь updateVerticalGuideLine напрямую
+    // this.uiManager.updateVerticalGuideLine(width / 2, coinKingBottomY, this.scene.game.canvas.height);
   }
 
   /**
@@ -88,7 +90,7 @@ export class ShootingManager {
     // Создаем шар в физическом мире
     const radius = gameUtils.getRadiusByLevel(nextBallLevel);
     const x = this.coinKing.x / SCALE;
-    const y = (this.coinKing.y + 20) / SCALE;
+    const y = (this.coinKing.y + this.coinKing.displayHeight / 2) / SCALE;
     
     // Создаем физическое тело шара
     let id = '';

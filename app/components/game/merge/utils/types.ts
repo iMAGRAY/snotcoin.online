@@ -4,7 +4,7 @@ import * as Phaser from 'phaser';
 import * as planck from "planck";
 
 // Масштаб для перевода между физическими единицами и пикселями
-export const SCALE = 30; 
+export const SCALE = 100; 
 
 // Типы для игры
 export interface MergeGameAttemptsData {
