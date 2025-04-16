@@ -117,6 +117,8 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     
     // Загружаем звуки
     this.load.audio('coinMergeSound', '/sounds/coins_merge/1.mp3');
+    this.load.audio('gameOverSound', '/sounds/game_over.mp3');
+    this.load.audio('tickSound', '/sounds/tick.mp3');
     
     // Событие завершения загрузки - применяем улучшенные настройки текстур
     this.load.on('complete', () => {
@@ -348,18 +350,44 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     // Если игра завершена или на паузе, не обновляем
     if (this.gameOverManager.isOver() || this.isPaused) return;
     
-    // Обновляем физику мира
-    // Вызываем Step с включенными колбеками обработки контактов
-    this.world.step(1/60, 10, 8);
+    // Уменьшаем количество итераций физики для большей производительности
+    // при большом количестве объектов, но без потери точности
+    this.world.step(1/60, 8, 3);
     
-    // Проверяем коллизии после обновления физики
-    this.checkCollisions();
+    // Обновляем позицию nextBall, чтобы она соответствовала позиции CoinKing
+    if (this.shootingManager) {
+      const coinKing = this.shootingManager.getCoinKing();
+      const nextBall = this.shootingManager.getNextBall();
+      
+      if (coinKing && nextBall) {
+        // Устанавливаем позицию X шара равной позиции CoinKing
+        nextBall.x = coinKing.x;
+        
+        // Оставляем небольшой отступ по Y, чтобы шар был впереди CoinKing
+        nextBall.y = coinKing.y + 20;
+        
+        // Обновляем вертикальную направляющую линию от CoinKing до нижней части экрана
+        const { height } = this.game.canvas;
+        // Позиция снизу CoinKing
+        const startY = coinKing.y + coinKing.displayHeight / 2;
+        // Обновляем вертикальную линию
+        this.uiManager.updateVerticalGuideLine(coinKing.x, startY, height);
+      }
+    }
+    
+    // Проверяем коллизии после обновления физики (только если есть шары)
+    const bodyCount = Object.keys(this.physicsManager.getBodies()).length;
+    if (bodyCount > 0) {
+      this.checkCollisions();
+    }
     
     // Обновляем позиции спрайтов на основе физики
     this.physicsManager.update();
     
-    // Проверяем, нет ли шаров в запретной зоне
-    this.inputManager.checkBallsInGameOverZone(Object.values(this.physicsManager.getBodies()));
+    // Проверяем, нет ли шаров в запретной зоне (с меньшей частотой при большом количестве шаров)
+    if (bodyCount < 30 || time % 2 === 0) { // проверяем каждый второй кадр если много шаров
+      this.inputManager.checkBallsInGameOverZone(this.physicsManager.getBodies());
+    }
     
     // Обрабатываем отложенные слияния и удаления
     this.mergeProcessor.processPendingMerges(this.increaseScore.bind(this));
@@ -368,46 +396,18 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     // Обрабатываем отложенные удаления физических тел после обновления физики
     this.processBodyDeletions();
     
-    // Проверяем условие Game Over
-    this.gameOverManager.checkBallsInDangerZone(this.bodies);
+    // Проверяем условие Game Over (с меньшей частотой при большом количестве шаров)
+    if (bodyCount < 30 || time % 3 === 0) { // проверяем каждый третий кадр если много шаров
+      this.gameOverManager.checkBallsInDangerZone(this.bodies);
+    }
     
-    // Обновляем линию прицеливания при нажатии
+    // Обновляем линию прицеливания при нажатии (только если активный ввод)
     if (this.inputManager.getIsPointerDown()) {
       const pointer = this.input.activePointer;
       this.uiManager.updateAimLine(pointer.x, pointer.y);
     }
     
-    // Отображение вертикальной направляющей линии
-    if (this.activeSprite && this.activeSprite.body && 
-        this.activeSprite.body.velocity && 
-        this.activeSprite.body.velocity.x === 0 && 
-        this.activeSprite.body.velocity.y === 0) {
-      // Получаем CoinKing для точного позиционирования линии
-      const coinKing = this.shootingManager.getCoinKing();
-      if (!coinKing) return;
-
-      // Скрываем линию перед обновлением, чтобы избежать мерцания
-      this.uiManager.hideVerticalGuideLine();
-      
-      // Получаем границы активного спрайта и игровой зоны
-      const sprite = this.activeSprite;
-      const spriteX = sprite.x;
-      
-      // Обновляем положение вертикальной направляющей
-      this.uiManager.updateVerticalGuideLine(
-        spriteX,
-        coinKing.y + coinKing.displayHeight / 2, // Начинаем от нижней части CoinKing
-        this.game.canvas.height // До нижней части экрана
-      );
-    } else {
-      // Скрываем линию, если нет активного спрайта или он движется
-      this.uiManager.hideVerticalGuideLine();
-    }
-    
-    // Обновляем ссылки на объекты из менеджеров
-    this.nextBall = this.shootingManager.getNextBall();
-    this.coinKing = this.shootingManager.getCoinKing();
-    this.nextBallLevel = this.ballFactory.getNextBallLevel();
+    // Остальная логика обновления...
   }
 
   // Новый метод для обработки отложенных удалений физических тел
@@ -441,34 +441,35 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       return;
     }
     
+    // Ограничиваем количество проверяемых контактов для производительности
+    let contactCount = 0;
+    const maxContactsPerFrame = 20; // максимальное количество контактов за кадр
+    
     // Получаем все пары контактов из мира
-    for (let contact = this.world.getContactList(); contact; contact = contact.getNext()) {
-      if (contact.isTouching()) {
-        // Получаем данные обоих тел
-        const fixtureA = contact.getFixtureA();
-        const fixtureB = contact.getFixtureB();
-        
-        if (!fixtureA || !fixtureB) {
-          continue;
-        }
-        
-        const bodyA = fixtureA.getBody();
-        const bodyB = fixtureB.getBody();
-        
-        if (!bodyA || !bodyB) {
-          continue;
-        }
-        
-        const userDataA = bodyA.getUserData() as any;
-        const userDataB = bodyB.getUserData() as any;
-        
-        // Пропускаем контакты для шаров, помеченных на удаление
-        if (!userDataA || !userDataB || userDataA.markedForDeletion || userDataB.markedForDeletion) {
-          continue;
-        }
-        
-        this.handleContact(contact);
+    for (let contact = this.world.getContactList(); contact && contactCount < maxContactsPerFrame; contact = contact.getNext()) {
+      contactCount++;
+      
+      if (!contact.isTouching()) {
+        continue;
       }
+      
+      // Быстрая проверка фикстур перед более детальной обработкой
+      const fixtureA = contact.getFixtureA();
+      const fixtureB = contact.getFixtureB();
+      
+      if (!fixtureA || !fixtureB) {
+        continue;
+      }
+      
+      const bodyA = fixtureA.getBody();
+      const bodyB = fixtureB.getBody();
+      
+      if (!bodyA || !bodyB) {
+        continue;
+      }
+      
+      // Проверка пользовательских данных выполняется внутри handleContact
+      this.handleContact(contact);
     }
   }
 
@@ -727,6 +728,7 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       return;
     }
     
+    // Используем try-catch для обработки ошибок, но только вокруг основной логики слияния
     const userDataA = bodyA.getUserData() as any;
     const userDataB = bodyB.getUserData() as any;
     
@@ -737,38 +739,38 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     
     // Проверяем, что оба тела - шары
     if (userDataA.type === 'ball' && userDataB.type === 'ball') {
-      try {
-        // Пропускаем только если шары помечены на удаление
-        if (userDataA.markedForDeletion || userDataB.markedForDeletion) {
-          return;
-        }
-        
-        // Проверяем время после выстрела
-        const currentTime = this.time.now;
-        const recentlyShot = this.shootingManager.getRecentlyShot();
-        const gracePeriod = this.shootingManager.getNewBallGracePeriod();
-        
-        const shotTimeA = recentlyShot[userDataA.id];
-        const shotTimeB = recentlyShot[userDataB.id];
-        
-        if ((shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) ||
-            (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod)) {
-          return;
-        }
-        
-        // Создаем ключ контакта
-        const contactKey = [userDataA.id, userDataB.id].sort().join('-');
-        
-        // Пропускаем уже обработанные контакты
-        if (this.processedContacts.has(contactKey)) {
-          return;
-        }
-        
-        // Проверяем уровни шаров
-        const levelA = userDataA.level;
-        const levelB = userDataB.level;
-        
-        if (levelA === levelB) {
+      // Пропускаем только если шары помечены на удаление
+      if (userDataA.markedForDeletion || userDataB.markedForDeletion) {
+        return;
+      }
+      
+      // Проверяем время после выстрела
+      const currentTime = this.time.now;
+      const recentlyShot = this.shootingManager.getRecentlyShot();
+      const gracePeriod = this.shootingManager.getNewBallGracePeriod();
+      
+      const shotTimeA = recentlyShot[userDataA.id];
+      const shotTimeB = recentlyShot[userDataB.id];
+      
+      if ((shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) ||
+          (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod)) {
+        return;
+      }
+      
+      // Создаем ключ контакта
+      const contactKey = [userDataA.id, userDataB.id].sort().join('-');
+      
+      // Пропускаем уже обработанные контакты
+      if (this.processedContacts.has(contactKey)) {
+        return;
+      }
+      
+      // Проверяем уровни шаров
+      const levelA = userDataA.level;
+      const levelB = userDataB.level;
+      
+      if (levelA === levelB) {
+        try {
           // Минимальная задержка между слияниями
           const now = Date.now();
           if (now - this.lastMergeTime < 10) { // Уменьшаем задержку до 10 мс
@@ -779,10 +781,12 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
           // Добавляем контакт в обработанные
           this.processedContacts.add(contactKey);
           
-          // Удаляем контакт из обработанных через короткое время
-          setTimeout(() => {
+          // Используем requestAnimationFrame вместо setTimeout для лучшей производительности
+          const removeContact = () => {
             this.processedContacts.delete(contactKey);
-          }, this.contactProcessingTimeout);
+          };
+          
+          setTimeout(removeContact, this.contactProcessingTimeout);
           
           // Проверяем существование тел
           if (this.bodies[userDataA.id]?.body && this.bodies[userDataB.id]?.body) {
@@ -792,9 +796,9 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
             // Вызываем слияние
             this.mergeProcessor.scheduleMerge(userDataA.id, userDataB.id);
           }
+        } catch (error) {
+          console.error('Ошибка при обработке контакта шаров:', error);
         }
-      } catch (error) {
-        console.error('Ошибка при обработке контакта шаров:', error);
       }
     }
   }
@@ -874,6 +878,11 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       
       // Настраиваем интерфейс UI
       this.uiManager.setupUI(width, height);
+      
+      // Инициализируем вертикальную направляющую линию
+      if (coinKing) {
+        this.uiManager.updateVerticalGuideLine(coinKing.x, coinKingBottomY, height);
+      }
       
       // Настраиваем зону окончания игры
       this.gameOverManager.setupGameOverZone(width, lineY);

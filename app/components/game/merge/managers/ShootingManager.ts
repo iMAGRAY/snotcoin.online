@@ -115,11 +115,8 @@ export class ShootingManager {
     this.ballFactory.createNextBall(this.coinKing.x, this.coinKing.y);
     this.nextBall = this.ballFactory.getNextBall();
     
-    // Скрываем направляющую линию после выстрела
-    this.uiManager.hideVerticalGuideLine();
-    
-    // Сбрасываем сохраненную позицию вертикальной линии
-    this.inputManager.setVerticalGuideX(0);
+    // Сохраняем позицию вертикальной линии
+    this.inputManager.setVerticalGuideX(this.coinKing.x);
   }
 
   /**

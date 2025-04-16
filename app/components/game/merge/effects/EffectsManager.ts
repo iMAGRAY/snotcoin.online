@@ -552,4 +552,32 @@ export class EffectsManager {
       });
     }
   }
+
+  /**
+   * Добавляет упрощенный эффект слияния (оптимизированный для большого количества шаров)
+   * @param x Координата X
+   * @param y Координата Y
+   */
+  public addSimpleMergeEffect(x: number, y: number): void {
+    // При большом количестве шаров используем упрощенный эффект
+    // без частиц для повышения производительности
+    
+    // Создаем свечение вместо частиц
+    const glow = this.scene.add.sprite(x, y, 'ball1');
+    glow.setScale(1.5);
+    glow.setTint(0xFFFF99);
+    glow.setAlpha(0.7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    
+    // Анимация свечения и исчезновения
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 2,
+      duration: 300,
+      onComplete: () => {
+        glow.destroy();
+      }
+    });
+  }
 }

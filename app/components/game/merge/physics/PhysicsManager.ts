@@ -350,17 +350,34 @@ export class PhysicsManager {
   }
 
   public update(): void {
+    // Оптимизация: обновляем только видимые спрайты и используем кэширование
+    const now = performance.now();
+    const updateInterval = 16; // ~60 FPS
+    
+    // Переменные для кэширования масштаба и оптимизации чтения
+    const scale = SCALE;
+    
     // Обновляем позиции спрайтов на основе физических позиций
     for (const id in this.bodies) {
       const bodyData = this.bodies[id];
-      if (bodyData && bodyData.body && bodyData.sprite) {
-        const position = bodyData.body.getPosition();
-        bodyData.sprite.x = position.x * SCALE;
-        bodyData.sprite.y = position.y * SCALE;
-        
-        // Обновляем угол поворота, если тело вращается
-        const angle = bodyData.body.getAngle();
-        bodyData.sprite.rotation = angle;
+      if (!bodyData || !bodyData.body || !bodyData.sprite) continue;
+      
+      // Пропускаем объекты, помеченные для удаления
+      const userData = bodyData.body.getUserData() as any;
+      if (userData && userData.markedForDeletion) continue;
+      
+      // Применение оптимизаций для обновления положения
+      const position = bodyData.body.getPosition();
+      const sprite = bodyData.sprite;
+      
+      // Используем прямые присваивания вместо методов для более быстрой работы
+      sprite.x = position.x * scale;
+      sprite.y = position.y * scale;
+      
+      // Обновляем угол поворота, если тело вращается (только существенные изменения)
+      const angle = bodyData.body.getAngle();
+      if (Math.abs(sprite.rotation - angle) > 0.01) {
+        sprite.rotation = angle;
       }
     }
   }

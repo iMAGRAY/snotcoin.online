@@ -124,8 +124,8 @@ export class UIManager {
       return;
     }
     
-    // Устанавливаем стиль линии - делаем её толще и более заметной
-    this.verticalGuideLine.lineStyle(6, 0xFFFFFF, 0.7); // Увеличиваем толщину и прозрачность
+    // Устанавливаем стиль линии - делаем её более заметной
+    this.verticalGuideLine.lineStyle(4, 0xFFFFFF, 0.8); // Увеличиваем толщину и непрозрачность
     
     // Учитываем смещение игровой зоны
     const offsetX = this.scene.game.registry.get('gameOffsetX') || 0;
@@ -143,15 +143,29 @@ export class UIManager {
     }
     
     try {
-      // Рисуем сплошную вертикальную линию
-      this.verticalGuideLine.beginPath();
-      this.verticalGuideLine.moveTo(x, startY);
-      this.verticalGuideLine.lineTo(x, endY);
-      this.verticalGuideLine.strokePath();
+      // Рисуем пунктирную вертикальную линию
+      const segmentLength = 12; // Длина сегмента линии
+      const gapLength = 8;     // Длина промежутка между сегментами
+      let currentY = startY;
       
-      // После успешной отрисовки делаем линию видимой
+      // Делаем линию видимой
       this.verticalGuideLine.visible = true;
       this.verticalGuideLine.alpha = 1;
+      
+      // Рисуем пунктирную линию от начальной до конечной точки
+      while (currentY < endY) {
+        // Определяем конец текущего сегмента
+        const segmentEnd = Math.min(currentY + segmentLength, endY);
+        
+        // Рисуем текущий сегмент
+        this.verticalGuideLine.beginPath();
+        this.verticalGuideLine.moveTo(x, currentY);
+        this.verticalGuideLine.lineTo(x, segmentEnd);
+        this.verticalGuideLine.strokePath();
+        
+        // Переходим к следующему сегменту
+        currentY = segmentEnd + gapLength;
+      }
       
       // Применяем изменения немедленно
       this.scene.children.each((child: Phaser.GameObjects.GameObject) => {

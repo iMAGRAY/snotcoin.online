@@ -228,21 +228,11 @@ export class MergeProcessor {
         // Получаем актуальный список тел
         const bodies = this.getActualBodies();
         
-        // Проверяем, что оба шара все еще существуют
-        if (!bodies[idA] || !bodies[idB]) {
-          console.warn(`Один из шаров для объединения не существует: ${!bodies[idA] ? idA : ''} ${!bodies[idB] ? idB : ''}`);
-          return;
-        }
+        // Быстрая проверка существования шаров
+        const bodyA = bodies[idA];
+        const bodyB = bodies[idB];
         
-        // Проверяем, что оба тела все еще активны
-        if (!bodies[idA].body || !bodies[idB].body) {
-          console.warn(`Тело одного из шаров уже удалено: ${!bodies[idA].body ? idA : ''} ${!bodies[idB].body ? idB : ''}`);
-          return;
-        }
-        
-        // Проверяем, что спрайты существуют
-        if (!bodies[idA].sprite || !bodies[idB].sprite) {
-          console.warn(`Спрайт одного из шаров уже удален: ${!bodies[idA].sprite ? idA : ''} ${!bodies[idB].sprite ? idB : ''}`);
+        if (!bodyA?.body || !bodyA?.sprite || !bodyB?.body || !bodyB?.sprite) {
           return;
         }
         
@@ -253,62 +243,82 @@ export class MergeProcessor {
         // Сохраняем информацию для создания нового шара
         const mergeInfo = { x: newX, y: newY, level: newLevel };
         
-        // Добавляем эффект слияния
+        // Добавляем эффект слияния с ограничением количества частиц при большом числе шаров
         const effectX = newX * SCALE;
         const effectY = newY * SCALE;
-        this.effectsManager.addMergeEffect(effectX, effectY);
         
-        // Рассчитываем очки с учетом комбо-множителя
-        const basePoints = newLevel * 10;
-        const comboPoints = Math.floor(basePoints * this.comboMultiplier);
+        // Определяем количество шаров для оптимизации эффектов
+        const bodyCount = Object.keys(bodies).length;
+        const isHighLoad = bodyCount > 20;
         
-        // Увеличиваем счет через сцену
-        if (this.scene && typeof (this.scene as any).increaseScore === 'function') {
-          (this.scene as any).increaseScore(comboPoints, this.comboMultiplier > 1);
+        // Уменьшаем количество эффектов при большой нагрузке
+        if (!isHighLoad) {
+          this.effectsManager.addMergeEffect(effectX, effectY);
+        } else {
+          this.effectsManager.addSimpleMergeEffect(effectX, effectY);
         }
         
-        // Показываем полученные очки
-        this.effectsManager.showScorePoints(effectX, effectY, comboPoints, this.comboMultiplier > 1);
-        
-        // Обновляем комбо-систему
-        this.updateCombo();
-        
-        // Помечаем старые шары для удаления
-        let bodiesMarkedForDeletion = false;
-        
-        const markExistingBodiesForDeletion = () => {
+        // Звуковой эффект слияния
+        if (typeof this.scene.sound !== 'undefined' && this.scene.sound.play) {
           try {
-            const currentBodies = this.getActualBodies();
-            
-            if (typeof (this.scene as any).markBodyForDeletion === 'function') {
-              if (currentBodies[idA]) {
-                (this.scene as any).markBodyForDeletion(idA);
-                bodiesMarkedForDeletion = true;
+            // Воспроизводим звук только если не слишком много слияний
+            if (!isHighLoad || Math.random() < 0.5) { // 50% шанс воспроизведения при высокой нагрузке
+              this.scene.sound.play('coinMergeSound', { volume: 0.5 });
+            }
+          } catch (e) {
+            console.warn('Не удалось воспроизвести звук слияния');
+          }
+        }
+        
+        // Пытаемся пометить оба шара на удаление
+        let bodiesMarkedForDeletion = false;
+        try {
+          // Помечаем шары на удаление
+          this.markBallsForDeletion(idA, idB);
+          bodiesMarkedForDeletion = true;
+          
+          // Увеличиваем счет игрока, вычисляя очки на основе уровня
+          this.updateComboAndScore(level, (points) => {
+            try {
+              if (typeof this.scene.registry !== 'undefined') {
+                // Увеличиваем счет
+                const currentScore = this.scene.registry.get('gameScore') || 0;
+                this.scene.registry.set('gameScore', currentScore + points);
               }
               
-              if (currentBodies[idB]) {
-                (this.scene as any).markBodyForDeletion(idB);
-                bodiesMarkedForDeletion = true;
+              // Вызываем колбэк для увеличения счета
+              const sceneAny = this.scene as any;
+              if (sceneAny.increaseScore) {
+                sceneAny.increaseScore(points);
               }
+              
+              // Показываем очки
+              this.effectsManager.showScorePoints(effectX, effectY, points, this.comboMultiplier > 1);
+            } catch (error) {
+              console.warn('Ошибка при обновлении счета:', error);
             }
-          } catch (error) {
-            console.error('Ошибка при пометке шаров для удаления:', error);
-            bodiesMarkedForDeletion = false;
-          }
-        };
-        
-        // Помечаем старые шары для удаления
-        markExistingBodiesForDeletion();
+          });
+        } catch (error) {
+          console.error('Ошибка при обработке слияния шаров:', error);
+        }
         
         // Если пометка прошла успешно, создаем новый шар
         if (bodiesMarkedForDeletion) {
-          setTimeout(() => {
+          // Используем requestAnimationFrame вместо setTimeout для лучшей производительности
+          const createBall = () => {
             try {
               this.ballFactory.createMergedBall(mergeInfo.x, mergeInfo.y, mergeInfo.level);
             } catch (error) {
               console.error('Ошибка при создании нового шара после слияния:', error);
             }
-          }, 0);
+          };
+          
+          // Планируем создание шара в следующем кадре
+          if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+            window.requestAnimationFrame(createBall);
+          } else {
+            setTimeout(createBall, 0);
+          }
         }
       }
     } catch (error) {
@@ -355,5 +365,50 @@ export class MergeProcessor {
     this.recentMerges.clear(); // Очищаем список недавних слияний
     this.mergeInProgress = false;
     this.lastErrorTime = 0;
+  }
+
+  /**
+   * Помечает шары на удаление после слияния
+   */
+  private markBallsForDeletion(idA: string, idB: string): void {
+    if (typeof (this.scene as any).markBodyForDeletion === 'function') {
+      const currentBodies = this.getActualBodies();
+      
+      if (currentBodies[idA]) {
+        (this.scene as any).markBodyForDeletion(idA);
+      }
+      
+      if (currentBodies[idB]) {
+        (this.scene as any).markBodyForDeletion(idB);
+      }
+    }
+  }
+  
+  /**
+   * Обновляет комбо и рассчитывает очки
+   */
+  private updateComboAndScore(level: number, callback: (points: number) => void): void {
+    // Обновляем комбо-систему
+    this.updateCombo();
+    
+    // Рассчитываем очки с учетом комбо-множителя
+    const basePoints = level * 10;
+    const comboPoints = Math.floor(basePoints * this.comboMultiplier);
+    
+    // Вызываем колбэк с очками
+    callback(comboPoints);
+  }
+  
+  /**
+   * Упрощенный эффект слияния (добавить в EffectsManager)
+   */
+  private addSimpleMergeEffect(x: number, y: number): void {
+    // Проверяем, доступен ли метод в EffectsManager
+    if (typeof this.effectsManager.addSimpleMergeEffect === 'function') {
+      this.effectsManager.addSimpleMergeEffect(x, y);
+    } else {
+      // Если метод недоступен, используем стандартный эффект
+      this.effectsManager.addMergeEffect(x, y);
+    }
   }
 } 
