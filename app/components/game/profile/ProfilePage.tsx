@@ -130,9 +130,7 @@ const ProfilePage: React.FC = () => {
   }
 
   const profileSectionsData: ProfileSection[] = [
-    { label: "stats", icon: BarChart2, color: "from-indigo-500 to-indigo-700", content: <StatsSection /> },
     { label: "inventory", icon: Package, color: "from-pink-500 to-pink-700", content: <InventorySection /> },
-    { label: "achievements", icon: Award, color: "from-amber-500 to-amber-700", content: <AchievementsSection /> },
   ]
 
   return (

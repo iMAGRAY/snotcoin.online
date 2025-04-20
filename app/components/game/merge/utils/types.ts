@@ -3,17 +3,16 @@
 import * as Phaser from 'phaser';
 import * as planck from "planck";
 
-// Масштаб для перевода между физическими единицами и пикселями
+// Scale for converting between physics units and pixels
 export const SCALE = 100; 
 
-// Типы для игры
+// Types for the game
 export interface MergeGameAttemptsData {
   attemptsLeft: number;
   lastAttemptTime: number;
-  nextRecoveryTime: number;
 }
 
-// Интерфейс пропсов для компонента лаунчера
+// Props interface for the launcher component
 export interface MergeGameLauncherProps {
   onBack: () => void;
   attemptsData?: MergeGameAttemptsData;
@@ -21,14 +20,14 @@ export interface MergeGameLauncherProps {
   remainingTime?: string;
 }
 
-// Тип для игрового тела в физическом мире
+// Type for a game body in the physics world
 export interface GameBody {
   body: planck.Body;
   sprite: Phaser.GameObjects.Sprite;
-  lastTimeInDangerZone?: number | null; // Добавляем поле для отслеживания времени в опасной зоне
+  lastTimeInDangerZone?: number | null; // Time spent in danger zone
 }
 
-// Интерфейс пропсов для кнопки с тач-эффектами
+// Props interface for a button with touch effects
 export interface TouchButtonProps {
   onClick: () => void;
   className?: string;
@@ -37,7 +36,7 @@ export interface TouchButtonProps {
   children: React.ReactNode;
 }
 
-// Состояние игры
+// Game state
 export interface MergeGameState {
   score: number;
   isGameOver: boolean;
@@ -46,7 +45,7 @@ export interface MergeGameState {
   bestScore: number;
 }
 
-// Расширенный интерфейс для сцены MergeGameScene
+// Extended interface for the MergeGameScene
 export interface MergeGameSceneType extends Phaser.Scene {
   bodies: { [key: string]: GameBody };
   nextBall: Phaser.GameObjects.Sprite | null;

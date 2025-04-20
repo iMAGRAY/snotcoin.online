@@ -727,58 +727,6 @@ export class GameProgressService {
     }
   }
 
-  /**
-   * Восстанавливает прогресс из истории
-   */
-  public async restoreFromHistory(historyId: number): Promise<boolean> {
-    try {
-      // Всегда используем относительный URL для избежания CORS-ошибок
-      const apiUrl = `/api/progress/restore`;
-
-      console.log('[GameProgressService] Restoring from:', apiUrl);
-
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            user_id: this.userId,
-            history_id: historyId
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.success === false) {
-          throw new Error(data.error || 'Unknown error in response');
-        }
-        
-        if (data.success) {
-          // Загрузка актуального состояния после восстановления
-          const newState = await this.loadFromDatabase();
-          if (newState) {
-            this.saveGameState(newState);
-            return true;
-          }
-        }
-        return false;
-      } catch (fetchError) {
-        console.error('[GameProgressService] Network error during restore:', fetchError);
-        throw fetchError;
-      }
-    } catch (error) {
-      console.error('[GameProgressService] Ошибка при восстановлении из истории:', error);
-      return false;
-    }
-  }
-
   public async createDatabaseBackup(reason = 'manual'): Promise<boolean> {
     try {
       const currentState = this.loadGameState();

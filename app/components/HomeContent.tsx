@@ -347,7 +347,7 @@ const HomeContent: React.FC = () => {
         }}
       >
         <Resources 
-          isVisible={shouldShowInterface}
+          isVisible={shouldShowInterface && gameState.activeTab !== 'quests'}
           activeTab={gameState.activeTab || "laboratory"}
           snot={gameState.inventory?.snot || 0}
           snotCoins={gameState.inventory?.snotCoins || 0}

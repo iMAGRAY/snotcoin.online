@@ -1,5 +1,11 @@
 import { PrismaClient } from '@prisma/client'
-import type { ExtendedPrismaClient, PrismaError, PrismaQueryEvent } from '@/app/types/prisma'
+import type { ExtendedPrismaClient } from '@/app/types/prisma'
+
+// Типы для обработки ошибок
+type PrismaError = {
+  code?: string;
+  message: string;
+}
 
 // Создаем и экспортируем экземпляр Prisma
 const prismaClientSingleton = () => {
@@ -20,21 +26,25 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Обработка ошибок подключения
-prisma.$on('error', (e: PrismaError) => {
-  console.error('Ошибка Prisma:', e)
+prisma.$on('error', (event: unknown) => {
+  const e = event as PrismaError | Error;
+  console.error('Ошибка Prisma:', e);
   
   // Пытаемся переподключиться при ошибке
-  if (e.code === 'P1001' || e.code === 'P1002') {
-    console.log('Попытка переподключения к базе данных...')
-    prisma.$connect()
+  if ('code' in e && (e.code === 'P1001' || e.code === 'P1002')) {
+    console.log('Попытка переподключения к базе данных...');
+    prisma.$connect();
   }
 });
 
 // Логирование запросов в development
 if (process.env.NODE_ENV === 'development') {
-  prisma.$on('query', (e: PrismaQueryEvent) => {
-    console.log('Query:', e.query)
-    console.log('Duration:', e.duration, 'ms')
+  type PrismaQueryEvent = { query: string; params: string; duration: number; target: string };
+  
+  prisma.$on('query', (event: unknown) => {
+    const e = event as PrismaQueryEvent;
+    console.log('Query:', e.query);
+    console.log('Duration:', e.duration, 'ms');
   });
 }
 

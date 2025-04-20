@@ -17,7 +17,7 @@ import { activateAbility, pauseGame, resumeGame } from './components/game/gameAc
 
 const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({ 
   onBack, 
-  attemptsData = { attemptsLeft: 0, lastAttemptTime: 0, nextRecoveryTime: 0 }, 
+  attemptsData = { attemptsLeft: 0, lastAttemptTime: 0 }, 
   maxAttempts = 3,
   remainingTime = ""
 }) => {
@@ -127,7 +127,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       setTimeout(() => setSelectedAbility(null), 500);
     } else {
       // Показываем уведомление о недостатке ресурсов
-      toast.error(`Недостаточно SnotCoin для ${ability}! Нужно ${cost.toFixed(1)} SnotCoin`);
+      toast.error(`Not enough SnotCoin for ${ability}! Need ${cost.toFixed(1)} SnotCoin`);
     }
   }, [inventory]);
 
@@ -242,7 +242,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
         onClick={handleBackClick}
         className="absolute bottom-4 right-4 opacity-0 w-1 h-1 overflow-hidden pointer-events-none"
       >
-        Назад
+        Back
       </button>
     </div>
   );

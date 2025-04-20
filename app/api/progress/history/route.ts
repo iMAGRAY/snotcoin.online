@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import prisma from '@/app/lib/prisma';
 
 interface ProgressHistoryEntry {
   id: number;
@@ -8,10 +8,6 @@ interface ProgressHistoryEntry {
   save_type: string;
   save_reason: string;
   created_at: Date;
-  progress?: {
-    version: number;
-    updated_at: Date;
-  } | null;
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -54,16 +50,7 @@ export async function GET(request: NextRequest) {
       const history = await prisma.progressHistory.findMany({
         where: { user_id: userId },
         orderBy: { created_at: 'desc' },
-        take: parseInt(limit, 10),
-        include: {
-          // Включаем связанные данные, если они есть
-          progress: {
-            select: {
-              version: true,
-              updated_at: true
-            }
-          }
-        }
+        take: parseInt(limit, 10)
       });
 
       return NextResponse.json({
@@ -73,9 +60,7 @@ export async function GET(request: NextRequest) {
           client_id: entry.client_id,
           save_type: entry.save_type,
           save_reason: entry.save_reason,
-          created_at: entry.created_at,
-          version: entry.progress?.version,
-          updated_at: entry.progress?.updated_at
+          created_at: entry.created_at
         })),
         success: true
       }, {

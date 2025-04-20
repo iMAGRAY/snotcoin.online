@@ -84,12 +84,12 @@ const ImageProtection = () => {
         e.preventDefault();
         return false;
       }
+      return true;
     };
     
     // Отключаем выделение текста
     const disableSelection = () => {
       document.documentElement.style.webkitUserSelect = "none";
-      document.documentElement.style.msUserSelect = "none";
       document.documentElement.style.userSelect = "none";
     };
 
@@ -102,8 +102,9 @@ const ImageProtection = () => {
     // Дополнительное отключение перетаскивания для всех изображений, кроме игровых
     const images = document.getElementsByTagName("img");
     for (let i = 0; i < images.length; i++) {
-      if (!isGameElement(images[i])) {
-        images[i].setAttribute("draggable", "false");
+      const image = images[i];
+      if (image && !isGameElement(image)) {
+        image.setAttribute("draggable", "false");
       }
     }
 

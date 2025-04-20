@@ -150,7 +150,7 @@ export class InputManager {
    * @param balls Массив шаров на игровом поле
    */
   public checkBallsInGameOverZone(balls: Array<any> | Record<string, any>): void {
-    if (!balls || Object.keys(balls).length === 0 || !this.gameOverZone) return;
+    if (!balls) return;
     
     const currentTime = this.scene.time.now;
     const mergeScene = this.scene as any;
@@ -159,7 +159,9 @@ export class InputManager {
     
     // Проверяем каждый шар
     for (const key in balls) {
-      const ball = balls[key];
+      if (!Object.prototype.hasOwnProperty.call(balls, key)) continue;
+      
+      const ball = balls[key as keyof typeof balls];
       if (!ball || !ball.sprite) continue;
       
       // Получаем ID шара

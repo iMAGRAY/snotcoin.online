@@ -27,8 +27,7 @@ const MergeGameLauncher = dynamic(() => import("./MergeGameLauncher"), {
 // Интерфейс для данных о попытках
 interface MergeGameAttemptsData {
   attemptsLeft: number;
-  lastAttemptTime: number; // время последней использованной попытки
-  nextRecoveryTime: number; // время восстановления следующей попытки
+  lastAttemptTime: number;
 }
 
 const Merge: React.FC = () => {
@@ -44,8 +43,7 @@ const Merge: React.FC = () => {
   // Состояния для системы попыток
   const [attemptsData, setAttemptsData] = useState<MergeGameAttemptsData>({
     attemptsLeft: MAX_MERGE_ATTEMPTS,
-    lastAttemptTime: 0,
-    nextRecoveryTime: 0
+    lastAttemptTime: 0
   });
   const [remainingTime, setRemainingTime] = useState<string>("");
   
@@ -66,28 +64,11 @@ const Merge: React.FC = () => {
     }
   }, []);
 
-  // Функция для восстановления попытки
-  const handleAttemptRecovery = () => {
-    const now = Date.now();
-    const newAttemptsLeft = Math.min(attemptsData.attemptsLeft + 1, MAX_MERGE_ATTEMPTS);
-    const newNextRecoveryTime = newAttemptsLeft < MAX_MERGE_ATTEMPTS ? now + MERGE_ATTEMPT_RECOVERY_TIME : 0;
-    
-    const updatedData: MergeGameAttemptsData = {
-      attemptsLeft: newAttemptsLeft,
-      lastAttemptTime: now,
-      nextRecoveryTime: newNextRecoveryTime
-    };
-    
-    setAttemptsData(updatedData);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedData));
-  };
-
   // Функция для сброса данных о попытках
   const resetAttemptsData = () => {
     const initialData: MergeGameAttemptsData = {
       attemptsLeft: MAX_MERGE_ATTEMPTS,
-      lastAttemptTime: Date.now(),
-      nextRecoveryTime: 0
+      lastAttemptTime: Date.now()
     };
     setAttemptsData(initialData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
@@ -96,17 +77,20 @@ const Merge: React.FC = () => {
   // Обновление таймера для восстановления попыток
   useEffect(() => {
     const updateRemainingTime = () => {
-      if (attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && attemptsData.nextRecoveryTime > 0) {
-        const timeRemaining = Math.max(0, attemptsData.nextRecoveryTime - Date.now());
+      if (attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS) {
+        const timeRemaining = Math.max(0, MERGE_ATTEMPT_RECOVERY_TIME - (Date.now() - attemptsData.lastAttemptTime));
         
         if (timeRemaining <= 0) {
           // Если время восстановления истекло, добавляем попытку
-          handleAttemptRecovery();
+          // handleAttemptRecovery();
         } else {
-          // Форматируем оставшееся время
-          const minutes = Math.floor(timeRemaining / 60000);
-          const seconds = Math.floor((timeRemaining % 60000) / 1000);
-          setRemainingTime(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+          // Форматируем оставшееся время в формате '1h 58m', только минуты или только часы, если что-то из них 0
+          const hours = Math.floor(timeRemaining / 3600000);
+          const minutes = Math.floor((timeRemaining % 3600000) / 60000);
+          let formatted = '';
+          if (hours > 0) formatted += `${hours}h`;
+          if (minutes > 0) formatted += (hours > 0 ? ' ' : '') + `${minutes}m`;
+          setRemainingTime(formatted);
         }
       } else {
         setRemainingTime("");
@@ -130,8 +114,7 @@ const Merge: React.FC = () => {
     
     const updatedData: MergeGameAttemptsData = {
       attemptsLeft: newAttemptsLeft,
-      lastAttemptTime: now,
-      nextRecoveryTime: now + MERGE_ATTEMPT_RECOVERY_TIME
+      lastAttemptTime: now
     };
     
     setAttemptsData(updatedData);
@@ -180,61 +163,57 @@ const Merge: React.FC = () => {
         backgroundRepeat: "no-repeat"
       }}
     >
-      <div className="w-full max-w-md bg-black bg-opacity-60 rounded-xl p-6 text-center">
-        <h1 className="text-3xl font-bold text-yellow-400 mb-4">Merge Game</h1>
-        <p className="text-white mb-6">Объединяй шары и зарабатывай SnotCoin!</p>
+      <div className="w-full max-w-md rounded-xl p-6 text-center relative border-2 border-yellow-700 shadow-lg"
+        style={{
+          background: 'linear-gradient(to right, rgba(42, 33, 18, 0.9), rgba(58, 44, 10, 0.9), rgba(24, 21, 16, 0.9))',
+          boxShadow: '0 2px 8px #000',
+          position: 'relative'
+        }}
+      >
+        <div className="pointer-events-none absolute z-20 -top-2 -left-2 w-10 h-10 bg-[url('/images/ui/corner-tl.webp')] bg-no-repeat bg-contain" />
+        <div className="pointer-events-none absolute z-20 -top-2 -right-2 w-10 h-10 bg-[url('/images/ui/corner-tr.webp')] bg-no-repeat bg-contain" />
+        <div className="pointer-events-none absolute z-20 -bottom-2 -left-2 w-10 h-10 bg-[url('/images/ui/corner-bl.webp')] bg-no-repeat bg-contain" />
+        <div className="pointer-events-none absolute z-20 -bottom-2 -right-2 w-10 h-10 bg-[url('/images/ui/corner-br.webp')] bg-no-repeat bg-contain" />
+        
+        <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 mb-4" style={{fontFamily: 'Friz Quadrata, serif'}}>Merge Game</h1>
+        <p className="text-yellow-200/80 mb-6">Merge balls and earn SnotCoin!</p>
         
         <div className="flex flex-col space-y-4">
           <motion.button
             onClick={handlePlayClick}
-            className={`w-full px-6 py-4 rounded-xl font-bold text-xl text-black relative overflow-hidden
+            className={`w-full px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden
               ${attemptsData.attemptsLeft > 0 
-                ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700' 
-                : 'bg-gray-500 cursor-not-allowed'}`}
+                ? 'bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-300 text-[#2a1c0a] shadow-[0_0_8px_2px_#FFD70099] border-2 border-yellow-600' 
+                : 'bg-gradient-to-r from-gray-800/90 via-gray-900/95 to-gray-950/95 border-2 border-gray-700 text-gray-400 opacity-80'}`}
             whileHover={attemptsData.attemptsLeft > 0 ? { scale: 1.05 } : {}}
             whileTap={attemptsData.attemptsLeft > 0 ? { scale: 0.95 } : {}}
             disabled={attemptsData.attemptsLeft <= 0}
+            style={{textShadow: attemptsData.attemptsLeft > 0 ? '0 1px 2px #fff8, 0 0 2px #000' : '0 1px 2px #0008'}}
           >
             {attemptsData.attemptsLeft > 0 
               ? (
                 <div className="flex flex-col">
-                  <span>Играть <span className="text-sm font-normal bg-yellow-700 bg-opacity-50 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
+                  <span>Play <span className="text-sm font-normal bg-yellow-700 bg-opacity-50 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
                   {remainingTime && attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && (
-                    <span className="text-xs mt-1 font-normal">Следующая попытка через: {remainingTime}</span>
+                    <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
                   )}
                 </div>
               ) 
               : (
                 <div className="flex flex-col">
-                  <span>Нет попыток</span>
+                  <span>No attempts</span>
                   {remainingTime && (
-                    <span className="text-xs mt-1 font-normal">Следующая попытка через: {remainingTime}</span>
+                    <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
                   )}
                 </div>
               )}
           </motion.button>
           
-          {/* Кнопка восстановления попыток */}
-          {attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && (
-            <motion.button
-              onClick={() => handleAttemptRecovery()}
-              className="w-full px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <div className="flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Восстановить попытку</span>
-              </div>
-            </motion.button>
-          )}
-          
           {/* Кнопка PVP (Coming Soon) */}
           <motion.button
-            className="w-full px-6 py-4 rounded-xl font-bold text-xl text-black relative overflow-hidden bg-gray-500 cursor-not-allowed"
+            className="w-full px-6 py-4 rounded-xl font-bold text-xl text-gray-400 relative overflow-hidden bg-gradient-to-r from-gray-800/90 via-gray-900/95 to-gray-950/95 border-2 border-gray-700 opacity-80"
             disabled={true}
+            style={{textShadow: '0 1px 2px #0008'}}
           >
             <div className="flex items-center justify-center">
               <span>PVP</span>
@@ -243,16 +222,6 @@ const Merge: React.FC = () => {
           </motion.button>
           
           {/* Основной контент кнопок */}
-          
-          {/* <div className="flex items-center justify-center">
-            <span className="text-white mr-2">Онлайн режим:</span>
-            <div 
-              onClick={handleToggleOnline}
-              className={`w-12 h-6 rounded-full flex items-center cursor-pointer transition-all duration-300 ${isOnline ? 'bg-green-500 justify-end' : 'bg-gray-500 justify-start'}`}
-            >
-              <div className="w-5 h-5 bg-white rounded-full shadow-md mx-0.5"></div>
-            </div>
-          </div> */}
         </div>
       </div>
     </div>

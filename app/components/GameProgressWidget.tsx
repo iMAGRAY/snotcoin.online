@@ -155,33 +155,6 @@ export default function GameProgressWidget({
     }
   };
 
-  // Обработчик для восстановления из истории
-  const handleRestore = async (historyId: number) => {
-    setIsLoading(true);
-    setMessage({ text: 'Восстановление прогресса...', type: 'info' });
-    
-    try {
-      // Восстанавливаем из истории
-      const success = await gameProgressService.restoreFromHistory(historyId);
-      
-      if (success) {
-        setMessage({ text: 'Прогресс успешно восстановлен. Страница будет перезагружена.', type: 'success' });
-        
-        // Даем пользователю увидеть сообщение об успехе перед перезагрузкой
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        setMessage({ text: 'Не удалось восстановить прогресс', type: 'error' });
-      }
-    } catch (error) {
-      console.error('Ошибка при восстановлении прогресса:', error);
-      setMessage({ text: 'Ошибка при восстановлении прогресса', type: 'error' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Форматирование даты
   const formatDate = (date: string | Date) => {
     try {
@@ -292,7 +265,6 @@ export default function GameProgressWidget({
       {showHistory && (
         <div className="history-list mt-3">
           <h4 className="font-medium mb-2">История сохранений</h4>
-          
           {historyItems.length === 0 ? (
             <p className="text-gray-500">История сохранений пуста</p>
           ) : (
@@ -308,19 +280,11 @@ export default function GameProgressWidget({
                         {formatSaveType(item.save_type, item.save_reason)}
                       </p>
                     </div>
-                    <button 
-                      onClick={() => handleRestore(item.id)}
-                      disabled={isLoading}
-                      className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                    >
-                      Восстановить
-                    </button>
                   </div>
                 </li>
               ))}
             </ul>
           )}
-          
           <button 
             onClick={() => setShowHistory(false)} 
             className="mt-3 px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
