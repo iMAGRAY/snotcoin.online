@@ -7,7 +7,7 @@
 export const CHEST_IMAGES = {
   LEVEL1: '/images/merge/Chests/levels/common.webp',
   LEVEL2: '/images/merge/Chests/levels/uncommon.webp',
-  LEVEL3: '/images/merge/Chests/levels/epic.webp',
+  LEVEL3: '/images/merge/Chests/levels/rare.webp',
   LEVEL1_OPEN: '/images/merge/Chests/levels/level1open.webp',
   LEVEL2_OPEN: '/images/merge/Chests/levels/level2open.webp',
   LEVEL3_OPEN: '/images/merge/Chests/levels/level3open.webp',
