@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ICONS } from '@/app/constants/uiConstants';
 import InteractiveBall from '@/app/components/effects/InteractiveBall';
 
-interface SnotCoinRewardModalProps {
+interface KingCoinRewardModalProps {
   amount: number;
 }
 
-export const SnotCoinRewardModal: React.FC<SnotCoinRewardModalProps> = ({ amount }) => {
+export const KingCoinRewardModal: React.FC<KingCoinRewardModalProps> = ({ amount }) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export const SnotCoinRewardModal: React.FC<SnotCoinRewardModalProps> = ({ amount
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
             >
-              SnotCoin успешно добавлены в ваш баланс
+              KingCoin успешно добавлены в ваш баланс
             </motion.p>
           </motion.div>
         </motion.div>
@@ -70,4 +70,4 @@ export const SnotCoinRewardModal: React.FC<SnotCoinRewardModalProps> = ({ amount
   );
 };
 
-SnotCoinRewardModal.displayName = 'SnotCoinRewardModal'; 
+KingCoinRewardModal.displayName = 'KingCoinRewardModal'; 

@@ -17,37 +17,27 @@ export default function SaveIndicator({ className = '' }: SaveIndicatorProps) {
 
   // Обновление информации каждые 2 секунды
   useEffect(() => {
-    const updateStatus = () => {
-      if (typeof window === 'undefined') return;
+    const checkSyncStatus = () => {
+      // Получаем дату последней синхронизации из localStorage
+      const lastSync = localStorage.getItem('kingcoin_last_sync');
       
-      // Проверяем время последней синхронизации
-      const lastSync = localStorage.getItem('snotcoin_last_sync');
-      if (lastSync) {
-        const lastSyncDate = new Date(parseInt(lastSync, 10));
-        setLastSyncTime(lastSyncDate.toLocaleString());
-      }
+      // Если дата синхронизации есть и прошло не больше 2 секунд
+      setSyncStatus(lastSync && (Date.now() - parseInt(lastSync)) < 2000 ? 'saved' : 'none');
       
-      // Проверяем наличие ошибок в очереди синхронизации
-      const syncQueue = localStorage.getItem('snotcoin_sync_queue');
-      if (syncQueue) {
-        try {
-          const queue = JSON.parse(syncQueue);
-          const hasSyncErrors = queue.some((item: any) => item.status === 'failed');
-          const isSyncing = queue.some((item: any) => item.status === 'processing');
-          
-          setHasErrors(hasSyncErrors);
-          setSyncStatus(isSyncing ? 'syncing' : (hasSyncErrors ? 'error' : 'idle'));
-        } catch (e) {
-          console.error('Ошибка при обработке очереди синхронизации:', e);
-        }
+      // Проверяем наличие очереди синхронизации
+      const syncQueue = localStorage.getItem('kingcoin_sync_queue');
+      
+      // Если есть очередь синхронизации, показываем соответствующий статус
+      if (syncQueue && syncQueue !== '[]') {
+        setSyncStatus('pending');
       }
     };
     
     // Запускаем немедленное обновление
-    updateStatus();
+    checkSyncStatus();
     
     // Создаем интервал для обновления
-    const intervalId = setInterval(updateStatus, 2000);
+    const intervalId = setInterval(checkSyncStatus, 2000);
     
     // Очищаем интервал при размонтировании
     return () => clearInterval(intervalId);

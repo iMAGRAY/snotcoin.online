@@ -41,9 +41,9 @@ const ACHIEVEMENTS: Achievement[] = [
     condition: (gameState) => (gameState.containerLevel || 0) > 1,
   },
   {
-    id: "coin_collector",
+    id: "collect100coins",
     name: "Coin Collector",
-    description: "Collect 100 SnotCoins",
+    description: "Collect 100 KingCoins",
     icon: "/achievements/coin_collector.png",
     category: "general",
     condition: (gameState) => gameState.inventory.snotCoins >= 100,

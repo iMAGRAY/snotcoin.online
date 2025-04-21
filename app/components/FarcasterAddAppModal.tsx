@@ -17,7 +17,7 @@ interface FarcasterAddAppModalProps {
 const FarcasterAddAppModal: React.FC<FarcasterAddAppModalProps> = ({
   isOpen,
   onClose,
-  appName = 'Snotcoin',
+  appName = 'Kingcoin',
   appDescription = 'PLAY 2 SNOT - Merge, earn and progress in this addictive Farcaster game'
 }) => {
   const [isAdding, setIsAdding] = useState(false);

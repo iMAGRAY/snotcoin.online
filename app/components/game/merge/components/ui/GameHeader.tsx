@@ -57,8 +57,8 @@ const GameHeader: React.FC<GameHeaderProps> = ({ inventory, onPauseClick }) => {
         
         <div className="flex items-center">
           <Image
-            src="/images/common/icons/snotcoin-icon.webp"
-            alt="SnotCoin"
+            src="/images/common/icons/kingcoin-icon.webp"
+            alt="KingCoin"
             width={30}
             height={30}
             className="w-7 h-7 mr-2"

@@ -110,7 +110,7 @@ const Merge: React.FC = () => {
       const next = [...prev]; next[firstEmpty] = level; return next
     })
   }, [chestSlots])
-
+  
   // Главный хук для системы попыток
   useEffect(() => {
     const savedAttemptsDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -136,6 +136,19 @@ const Merge: React.FC = () => {
     };
     setAttemptsData(initialData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
+    showFeedback('Attempts restored!');
+  };
+
+  // Функция для добавления RoyalCoin
+  const addRoyalCoins = (amount: number = 100) => {
+    gameDispatch(prev => ({
+      ...prev,
+      inventory: {
+        ...prev.inventory,
+        kingCoins: (prev.inventory.kingCoins || 0) + amount
+      }
+    }));
+    showFeedback(`Added ${amount} RoyalCoins!`);
   };
 
   // Обновление таймера для восстановления попыток
@@ -219,7 +232,7 @@ const Merge: React.FC = () => {
   }
 
   if (isGameLaunched) {
-    return <MergeGameLauncher
+    return <MergeGameLauncher 
       onBack={handleBackToMenu} 
       attemptsData={attemptsData}
       maxAttempts={MAX_MERGE_ATTEMPTS}
@@ -237,59 +250,124 @@ const Merge: React.FC = () => {
         backgroundRepeat: "no-repeat"
       }}
     >
-      {/* Play and PVP buttons and chest cards (no wrapper) */}
-      <div className="flex w-full mb-4 gap-4">
+      {/* Fixed Fill Card, Reset Attempts, and RoyalCoin buttons at top */}
+      <div className="fixed left-0 right-0 top-4 flex justify-center gap-3 z-50">
         <motion.button
-          onClick={handlePlayClick}
-          className={`flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden
-            ${attemptsData.attemptsLeft > 0 
-              ? 'bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-300 text-[#2a1c0a] shadow-[0_0_8px_2px_#FFD70099] border-2 border-yellow-600' 
-              : 'bg-gradient-to-r from-gray-800/90 via-gray-900/95 to-gray-950/95 border-2 border-gray-700 text-gray-400 opacity-80'}`}
-          whileHover={attemptsData.attemptsLeft > 0 ? { scale: 1.05 } : {}}
-          whileTap={attemptsData.attemptsLeft > 0 ? { scale: 0.95 } : {}}
-          disabled={attemptsData.attemptsLeft <= 0}
-          style={{textShadow: attemptsData.attemptsLeft > 0 ? '0 1px 2px #fff8, 0 0 2px #000' : '0 1px 2px #0008'}}
+          onClick={handleFillCard}
+          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[4px] border-blue-700 shadow-lg"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
-          {attemptsData.attemptsLeft > 0 
-            ? (
-              <div className="flex flex-col">
-                <span>Solo <span className="text-sm font-normal bg-yellow-700 bg-opacity-50 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
-                {remainingTime && attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && (
-                  <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
-                )}
-              </div>
-            ) 
-            : (
-              <div className="flex flex-col">
-                <span>No attempts</span>
-                {remainingTime && (
-                  <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
-                )}
-              </div>
-            )}
+          {/* Add thin border */}
+          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
+            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
+          </div>
+        
+          <div className="flex items-center justify-center relative z-10">
+            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
+              Fill Card
+            </span>
+          </div>
+        </motion.button>
+
+        {/* Reset Attempts button */}
+        <motion.button
+          onClick={resetAttemptsData}
+          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-green-400 to-green-600 text-white border-b-[4px] border-green-700 shadow-lg"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          {/* Add thin border */}
+          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
+            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
+          </div>
+        
+          <div className="flex items-center justify-center relative z-10">
+            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
+              Reset Attempts
+            </span>
+          </div>
         </motion.button>
         
-        {/* Кнопка PVP (Coming Soon) */}
+        {/* Add RoyalCoins button */}
         <motion.button
-          className="flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-700 text-[#2a1c0a] border border-yellow-600 border-b-4 border-yellow-300 shadow-[0_7px_12px_-2px_rgba(0,0,0,0.8)]"
-          disabled={true}
-          style={{textShadow: '0 1px 2px #fff8, 0 0 2px #000'}}
+          onClick={() => addRoyalCoins(100)}
+          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-amber-400 to-amber-600 text-white border-b-[4px] border-amber-700 shadow-lg"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
-          <div className="flex items-center justify-center">
-            <span className="text-white text-4xl font-black" style={{textShadow: '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000'}}>
-              PVP
+          {/* Add thin border */}
+          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
+            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
+          </div>
+        
+          <div className="flex items-center justify-center gap-2 relative z-10">
+            <Image src={ICONS.KINGCOIN} alt="RoyalCoin" width={24} height={24} className="object-contain" />
+            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
+              +100 RoyalCoins
             </span>
           </div>
         </motion.button>
       </div>
-      
-      {/* Fixed Fill Card button at top */}
-      <div className="fixed left-0 right-0 top-4 flex justify-center z-50">
-        <button
-          onClick={handleFillCard}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow"
-        >Fill Card</button>
+
+      {/* Play and PVP buttons and chest cards (no wrapper) */}
+      <div className="flex w-full mb-4 gap-4">
+          <motion.button
+            onClick={handlePlayClick}
+            className={`flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden shadow-lg ${
+                attemptsData.attemptsLeft > 0 
+                ? 'bg-gradient-to-b from-yellow-400 to-yellow-600 text-white border-b-[6px] border-yellow-700' 
+                : 'bg-gradient-to-b from-gray-600 to-gray-800 text-gray-300 border-b-[6px] border-gray-900'
+            }`}
+            whileHover={attemptsData.attemptsLeft > 0 ? { scale: 1.05 } : {}}
+            whileTap={attemptsData.attemptsLeft > 0 ? { scale: 0.95 } : {}}
+            disabled={attemptsData.attemptsLeft <= 0}
+            style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}
+          >
+            {/* Add thin border */}
+            <div className="absolute inset-0 z-0 overflow-hidden rounded-xl">
+              <div className="absolute inset-0 border border-white/20 rounded-xl"></div>
+            </div>
+
+            <div className="relative z-10">
+              {attemptsData.attemptsLeft > 0 
+                ? (
+                  <div className="flex flex-col">
+                    <span className="text-[28px]">Solo <span className="text-sm font-normal bg-yellow-700 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
+                    {remainingTime && attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && (
+                      <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
+                    )}
+                  </div>
+                ) 
+                : (
+                  <div className="flex flex-col">
+                    <span>No attempts</span>
+                    {remainingTime && (
+                      <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
+                    )}
+                  </div>
+                )}
+            </div>
+          </motion.button>
+          
+          {/* Кнопка PVP (Coming Soon) */}
+          <motion.button
+            className="flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[6px] border-blue-700 shadow-lg"
+            disabled={true}
+          >
+            {/* Add thin border */}
+            <div className="absolute inset-0 z-0 overflow-hidden rounded-xl">
+              <div className="absolute inset-0 border border-white/20 rounded-xl"></div>
+            </div>
+          
+            <div className="flex items-center justify-center relative z-10">
+              <span className="text-white text-[32px] font-black" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                PVP
+              </span>
+            </div>
+          </motion.button>
       </div>
+      
       {/* Chest card slots fixed above TabBar */}
       <div className="fixed left-0 right-0 bottom-28 px-4 flex justify-center gap-4 z-40">
         {chestSlots.map((slot, idx) => {
@@ -298,8 +376,25 @@ const Merge: React.FC = () => {
           const hours = Math.floor(remainingMs / 3600000)
           const minutes = Math.floor((remainingMs % 3600000) / 60000)
           const timeLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
-          // Glassmorphic style for chest cards: semi-transparent blur, border, shadow
-          const containerClasses = 'bg-white/5 backdrop-blur-sm border border-white/15 shadow-lg shadow-black/40'
+          // Dynamic background color based on rarity
+          let bgColor = 'bg-white/10'
+          if (slot === 1) {
+            bgColor = 'bg-gray-700/80'
+          } else if (slot === 2) {
+            bgColor = 'bg-green-800/80'
+          } else if (slot === 3) {
+            bgColor = 'bg-purple-800/80'
+          }
+          // Updated glassmorphic style with rarity colors
+          const containerClasses = `${bgColor} backdrop-blur-sm border-2 ${
+            slot === 1 
+              ? 'border-gray-500/70'
+              : slot === 2
+                ? 'border-green-500/70'
+                : slot === 3
+                  ? 'border-purple-500/70'
+                  : 'border-white/30'
+          } shadow-lg shadow-black/60`
           return (
             <div
               key={idx}
@@ -311,11 +406,70 @@ const Merge: React.FC = () => {
                 }
               }}
               style={{ cursor: slot > 0 && chestUnlockTimes[idx] === 0 ? 'pointer' : 'default' }}
-              className={`relative w-28 h-36 ${containerClasses} rounded-xl overflow-hidden flex flex-col`}
+              className={`relative w-28 h-36 ${containerClasses} rounded-xl overflow-hidden flex flex-col shadow-lg hover:shadow-xl transition-all duration-300 ${
+                slot > 0 && chestUnlockTimes[idx] === 0 
+                  ? 'hover:scale-105 active:scale-95 transition-transform duration-200' 
+                  : ''
+              } ${slot > 0 ? 'ring-2 ring-opacity-70 ring-offset-0 ring-offset-transparent' + 
+                  (slot === 1 ? ' ring-gray-400' : 
+                   slot === 2 ? ' ring-green-400' : 
+                   ' ring-purple-400') : ''}`}
             >
+              {/* Add glossy effect */}
+              <div className="absolute inset-0 z-0 overflow-hidden rounded-xl">
+                {/* Subtle diagonal glossy sheen */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-transparent"></div>
+                
+                {/* Very thin top edge highlight */}
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/60"></div>
+                
+                {/* Subtle bottom shadow for minimal depth */}
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-black/30"></div>
+                
+                {/* Additional glow effect for occupied slots */}
+                {slot > 0 && (
+                  <div className={`absolute inset-0 opacity-30 ${
+                    slot === 1 
+                      ? 'bg-gradient-to-br from-gray-300/20 to-gray-700/20' 
+                      : slot === 2 
+                        ? 'bg-gradient-to-br from-green-300/20 to-green-700/20' 
+                        : 'bg-gradient-to-br from-purple-300/20 to-purple-700/20'
+                  }`}></div>
+                )}
+              </div>
+
+              {/* Locked badge for unavailable slots */}
+              {slot > 0 && chestUnlockTimes[idx] === 0 && chestUnlockTimes.some(time => time > now) && (
+                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-white text-xl font-semibold" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                  Locked
+                </div>
+              )}
               {slot > 0 ? (
                 <>
-                  <div className="relative flex-grow w-full h-full">
+                  <div className="relative flex-grow w-full h-full flex items-center justify-center">
+                    {/* Display time at the top for chests not being unlocked */}
+                    {chestUnlockTimes[idx] === 0 && !chestUnlockTimes.some(time => time > now) && (
+                      <div className="absolute top-1 z-10 text-white text-2xl font-black" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                        {slot === 1 
+                          ? <>3<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                          : slot === 2 
+                            ? <>9<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                            : <>36<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                        }
+                      </div>
+                    )}
+                    
+                    {/* Display countdown timer for chests being unlocked */}
+                    {chestUnlockTimes[idx] > now && (
+                      <div className="absolute top-1 z-10">
+                        <span className="text-amber-300 font-bold text-2xl" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                          {hours > 0 
+                            ? <>{hours}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>h</span> {minutes}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
+                            : <>{minutes}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
+                          }
+                        </span>
+                      </div>
+                    )}
                     <Image
                       src={CHEST_IMAGES_ARRAY[slot - 1]}
                       alt={`Chest Level ${slot}`}
@@ -323,14 +477,28 @@ const Merge: React.FC = () => {
                       sizes="100%"
                       style={{ objectFit: 'contain', padding: '0.5rem' }}
                       draggable={false}
+                      className={`
+                        ${slot === 1 
+                          ? 'drop-shadow-[0_0_6px_rgba(180,180,180,0.5)]' 
+                          : slot === 2 
+                            ? 'drop-shadow-[0_0_8px_rgba(74,222,128,0.4)]' 
+                            : 'drop-shadow-[0_0_8px_rgba(168,85,247,0.4)]'
+                        }
+                      `}
                     />
-                  </div>
-                  {remainingMs > 0 && (
-                    <div className="absolute inset-0 bg-gray-900/70 flex flex-col items-center justify-center space-y-1">
-                      <span className="text-white text-sm font-bold">{timeLabel}</span>
-                      <span className="text-white text-xs uppercase">Arena {slot}</span>
+                    {/* Add rarity label below chest */}
+                    <div className="absolute bottom-1 z-10">
+                      <span className={`text-sm font-bold px-3 py-1 rounded-full ${
+                        slot === 1 
+                          ? 'bg-gray-600/70 text-gray-200' 
+                          : slot === 2 
+                            ? 'bg-green-600/70 text-green-100' 
+                            : 'bg-purple-600/70 text-purple-100'
+                      }`}>
+                        {slot === 1 ? 'Common' : slot === 2 ? 'Uncommon' : 'Rare'}
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </>
               ) : (
                 <div className="flex-grow flex items-center justify-center">
@@ -395,9 +563,9 @@ const Merge: React.FC = () => {
                   onClick={() => {
                     // Check if another chest is already being unlocked
                     if (chestUnlockTimes.some(time => time > now)) {
-                      // If player doesn't have enough SnotCoin
+                      // If player doesn't have enough KingCoin
                       if (inventory.snot < 1) {
-                        showFeedback('Not enough SnotCoin.')
+                        showFeedback('Not enough KingCoin.')
                         return;
                       }
                       
@@ -431,15 +599,17 @@ const Merge: React.FC = () => {
                 >
                   {/* Gloss overlay */}
                   <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent rounded-t-xl pointer-events-none"></div>
-                  {chestUnlockTimes.some(time => time > now) ? (
-                    <div className="flex flex-col items-center">
-                      <span className="text-center">Open Now</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <span className="text-center">Open Now</span>
-                    </div>
-                  )}
+                  <div className="flex flex-col items-center">
+                    <span className="text-center text-4xl font-bold">Start Now</span>
+                    {chestUnlockTimes.some(time => time > now) ? (
+                      <div className="flex items-center space-x-1 text-amber-300 font-medium mt-1">
+                        <Image src={ICONS.KINGCOIN} alt="Coin" width={32} height={32} className="object-contain" />
+                        <span className="text-3xl font-black">1</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-green-300 font-medium mt-1">Free</span>
+                    )}
+                  </div>
                 </motion.button>
                 
                 <motion.button

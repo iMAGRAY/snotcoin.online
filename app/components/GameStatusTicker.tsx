@@ -88,21 +88,23 @@ export default function GameStatusTicker({ className = '' }: GameStatusTickerPro
     // Регистрируем обработчик событий
     window.addEventListener('game_event', handleGameEvent as EventListener);
     
-    // При первой загрузке показываем информационное сообщение
-    const savedState = localStorage.getItem('snotcoin_game_state');
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState);
-        const lastModified = state._lastModified;
-        
-        if (lastModified) {
-          const date = new Date(lastModified);
-          addMessage(`Последнее сохранение: ${date.toLocaleString()}`, 'info');
+    // Получаем последнее сохраненное состояние игры
+    const getLastSavedGameState = () => {
+      // Загружаем сохраненное состояние игры из localStorage
+      const savedState = localStorage.getItem('kingcoin_game_state');
+      
+      if (savedState) {
+        try {
+          const parsedState = JSON.parse(savedState);
+          addMessage(`Последнее сохранение: ${new Date(parsedState.lastSaveTime || Date.now()).toLocaleString()}`, 'info');
+        } catch (e) {
+          console.error('Ошибка при разборе сохраненного состояния:', e);
         }
-      } catch (e) {
-        console.error('Ошибка при чтении сохраненного состояния:', e);
       }
-    }
+    };
+    
+    // При первой загрузке показываем информационное сообщение
+    getLastSavedGameState();
     
     // Очищаем обработчик при размонтировании
     return () => {

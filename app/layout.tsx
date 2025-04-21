@@ -13,14 +13,14 @@ const lyonsFont = localFont({
 })
 
 // Данные для SEO
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://snotcoin.online";
-const title = "SnotCoin";
-const description = "PLAY 2 SNOT";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://kingcoin.online";
+const title = "KingCoin";
+const description = "Merge, Collect, and Earn in this addictive blockchain game!";
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "Snotcoin",
-  description: "PLAY 2 SNOT",
+  title: "Kingcoin",
+  description,
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title,
     description,
-    siteName: title,
+    siteName: "Kingcoin",
     images: [{ url: imageUrl }],
   },
   twitter: {
@@ -41,6 +41,10 @@ export const metadata: Metadata = {
     title,
     description,
     images: [imageUrl],
+  },
+  manifest: "/manifest.json",
+  alternates: {
+    canonical: siteUrl,
   },
 };
 
@@ -71,7 +75,7 @@ export default function RootLayout({
               title: "Play Game",
               action: {
                 type: "launch_frame",
-                name: "Snotcoin",
+                name: "Kingcoin",
                 url: siteUrl,
                 splashImageUrl: `${siteUrl}/game/Splashimage.webp`,
                 splashBackgroundColor: "#0F172A"

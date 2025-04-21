@@ -9,8 +9,8 @@ import { initFarcasterPatches } from './utils/farcasterPatches';
 import { initWagmiPatches } from './utils/wagmiPatches';
 import AudioController from './components/AudioController';
 
-// Ключ для localStorage
-const USER_ID_STORAGE_KEY = 'snotcoin_persistent_user_id';
+// Constant for the user ID storage key
+const USER_ID_STORAGE_KEY = 'kingcoin_persistent_user_id';
 
 // Компонент для предотвращения ошибок гидратации
 const ClientOnly = ({ children }: { children: React.ReactNode }) => {
@@ -54,14 +54,14 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
     
     // Проверяем наличие сохраненного userId в localStorage
     try {
-      const storedUserId = localStorage.getItem('snot_user_id');
+      const storedUserId = localStorage.getItem(USER_ID_STORAGE_KEY);
       if (storedUserId) {
         setPersistentUserId(storedUserId);
         console.log(`[GameProviderWrapper] Loaded persistent userId: ${storedUserId}`);
       } else if (desktop) {
         // На десктопе сразу создаем анонимный ID, если нет сохраненного
         const anonymousId = `anonymous_${Date.now()}`;
-        localStorage.setItem('snot_user_id', anonymousId);
+        localStorage.setItem(USER_ID_STORAGE_KEY, anonymousId);
         setPersistentUserId(anonymousId);
         console.log(`[GameProviderWrapper] Created desktop anonymous userId: ${anonymousId}`);
       }
@@ -97,7 +97,7 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
       setPersistentUserId(newUserId);
       
       try {
-        localStorage.setItem('snot_user_id', newUserId);
+        localStorage.setItem(USER_ID_STORAGE_KEY, newUserId);
         console.log(`[GameProviderWrapper] Saved userId to localStorage: ${newUserId}`);
       } catch (e) {
         console.warn('[GameProviderWrapper] Error saving userId to localStorage:', e);

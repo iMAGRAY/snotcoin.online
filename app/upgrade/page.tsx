@@ -148,42 +148,33 @@ const UpgradePageContent: React.FC = React.memo(() => {
     router.push("/")
   }, [gameDispatch, router])
 
-  const handleCapacityUpgrade = useCallback(() => {
-    if (gameState.inventory?.snotCoins >= capacityCost) {
-      gameDispatch(prevState => {
-        const newLevel = (prevState.inventory?.containerCapacityLevel || 1) + 1;
-        return {
-          ...prevState,
-          inventory: {
-            ...prevState.inventory,
-            containerCapacity: calculateContainerCapacity(newLevel),
-            containerCapacityLevel: newLevel,
-            snotCoins: (prevState.inventory?.snotCoins || 0) - capacityCost
-          }
-        };
-      });
+  const handleUpgradeCapacity = useCallback(() => {
+    if (gameState.inventory?.kingCoins >= capacityCost) {
+      gameDispatch(prevState => ({
+        ...prevState,
+        inventory: {
+          ...prevState.inventory,
+          containerCapacity: calculateContainerCapacity(prevState.inventory.containerCapacity || 1),
+          kingCoins: (prevState.inventory?.kingCoins || 0) - capacityCost
+        }
+      }));
     }
-  }, [gameState.inventory?.snotCoins, gameDispatch, capacityCost, calculateContainerCapacity])
+  }, [gameState.inventory?.kingCoins, gameDispatch, capacityCost, calculateContainerCapacity])
 
-  const handleSpeedUpgrade = useCallback(() => {
-    if (gameState.inventory?.snotCoins !== undefined && gameState.inventory.snotCoins >= speedCost) {
-      gameDispatch(prevState => {
-        const currentLevel = prevState.inventory?.fillingSpeedLevel || 1;
-        const newLevel = currentLevel + 1;
-        return {
-          ...prevState,
-          inventory: {
-            ...prevState.inventory,
-            fillingSpeed: calculateFillingSpeed(newLevel),
-            fillingSpeedLevel: newLevel,
-            snotCoins: (prevState.inventory?.snotCoins || 0) - speedCost
-          }
-        };
-      });
+  const handleUpgradeSpeed = useCallback(() => {
+    if (gameState.inventory?.kingCoins !== undefined && gameState.inventory.kingCoins >= speedCost) {
+      gameDispatch(prevState => ({
+        ...prevState,
+        inventory: {
+          ...prevState.inventory,
+          fillingSpeed: calculateFillingSpeed(prevState.inventory.fillingSpeed || 1),
+          kingCoins: (prevState.inventory?.kingCoins || 0) - speedCost
+        }
+      }));
       setShowUpgradeEffect(true)
       setTimeout(() => setShowUpgradeEffect(false), 1000)
     }
-  }, [gameState.inventory?.snotCoins, gameDispatch, speedCost, calculateFillingSpeed])
+  }, [gameState.inventory?.kingCoins, gameDispatch, speedCost, calculateFillingSpeed])
 
   useEffect(() => {
     router.prefetch('/')
@@ -212,7 +203,7 @@ const UpgradePageContent: React.FC = React.memo(() => {
           <div className="relative w-8 h-8">
             <InteractiveBall width={32} height={32} />
           </div>
-          <span className="text-lg font-bold text-white">{formatSnotValue(gameState.inventory?.snotCoins ?? 0)}</span>
+          <span className="text-lg font-bold text-white">{formatSnotValue(gameState.inventory?.kingCoins ?? 0)}</span>
         </div>
       </motion.div>
       <div className="flex-grow overflow-y-auto p-4">
@@ -225,8 +216,8 @@ const UpgradePageContent: React.FC = React.memo(() => {
               currentEffect={`${gameState.inventory?.containerCapacity || 1}`}
               nextEffect={calculateContainerCapacity((gameState.containerLevel || 1) + 1)}
               cost={capacityCost}
-              onUpgrade={handleCapacityUpgrade}
-              canAfford={gameState.inventory?.snotCoins >= capacityCost}
+              onUpgrade={handleUpgradeCapacity}
+              canAfford={gameState.inventory?.kingCoins >= capacityCost}
               icon={<Database className="w-8 h-8" />}
             />
           </motion.div>
@@ -238,8 +229,8 @@ const UpgradePageContent: React.FC = React.memo(() => {
               currentLevel={gameState.inventory?.fillingSpeedLevel || 1}
               currentEffect={(24 * 60 * 60 * (gameState.fillingSpeed || 1)).toFixed(2)}
               nextEffect={((gameState.inventory?.fillingSpeedLevel || 1) + 1).toFixed(2)}
-              onUpgrade={handleSpeedUpgrade}
-              canAfford={(gameState.inventory?.snotCoins ?? 0) >= speedCost}
+              onUpgrade={handleUpgradeSpeed}
+              canAfford={(gameState.inventory?.kingCoins ?? 0) >= speedCost}
               icon={<Zap className="w-8 h-8" />}
             />
           </motion.div>

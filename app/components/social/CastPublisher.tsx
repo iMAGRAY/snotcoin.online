@@ -16,7 +16,7 @@ interface CastPublisherProps {
 
 export default function CastPublisher({
   defaultText = '',
-  placeholder = 'Сказать что-то о Snotcoin...',
+  placeholder = 'Сказать что-то о Kingcoin...',
   buttonText = 'Опубликовать',
   onSuccess,
   onError,

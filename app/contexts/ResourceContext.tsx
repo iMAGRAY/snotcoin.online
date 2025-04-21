@@ -8,7 +8,7 @@ import { saveGameState } from '../services/storage';
 import { ExtendedGameState } from '../types/gameTypes';
 
 // Константы для хранения
-const STORAGE_PREFIX = 'snotcoin_';
+const STORAGE_PREFIX = 'kingcoin_';
 const GAME_STATE_KEY = 'game_state_';
 const BACKUP_KEY = 'backup_';
 

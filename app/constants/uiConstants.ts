@@ -7,7 +7,7 @@
 
 // Пути к иконкам и изображениям
 export const ICONS = {
-  SNOTCOIN: '/images/common/icons/snotcoin.webp',
+  KINGCOIN: '/images/common/icons/kingcoin.webp',
   SNOT: '/images/common/icons/snot.webp',
   ENERGY: '/images/common/icons/energy.webp',
   PLACEHOLDER: '/images/common/placeholder.svg',
@@ -64,7 +64,7 @@ export const ICONS = {
 // Цветовые классы
 export const COLORS = {
   SNOT: "text-[#bbeb25]",
-  SNOTCOIN: "text-yellow-400",
+  KINGCOIN: "text-yellow-400",
   DEFAULT: ""
 }
 

@@ -227,11 +227,11 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
     
     return [
       {
-        id: "snotCoins",
-        label: t("SNOT COINS"),
-        value: gameState.inventory?.snotCoins ?? 0,
+        id: "kingCoins",
+        label: t("KING COINS"),
+        value: gameState.inventory?.kingCoins ?? 0,
         maxValue: undefined,
-        icon: ICONS.SNOTCOIN,
+        icon: ICONS.KINGCOIN,
         color: "yellow",
         className: "flex-1 lg:flex-none",
         onClick: undefined
@@ -247,7 +247,7 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
         onClick: undefined
       }
     ];
-  }, [resources, gameState.inventory?.snotCoins, gameState.inventory?.snot]);
+  }, [resources, gameState.inventory?.kingCoins, gameState.inventory?.snot]);
 
   // Определяем классы для контейнера в зависимости от темы
   const containerClasses = cn(

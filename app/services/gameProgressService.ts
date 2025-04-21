@@ -6,8 +6,8 @@ import { saveGameState, loadGameState, clearAllData } from './storage';
 // Ключи для localStorage
 const GAME_STATE_KEY = 'game_state';
 const GAME_STATE_BACKUP_KEY = 'game_state_backup';
-const LAST_SYNC_KEY = 'snotcoin_last_sync';
-const SYNC_QUEUE_KEY = 'snotcoin_sync_queue';
+const LAST_SYNC_KEY = 'kingcoin_last_sync';
+const SYNC_QUEUE_KEY = 'kingcoin_sync_queue';
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 минут в миллисекундах
 const SYNC_RETRY_INTERVAL = 60 * 1000; // 1 минута в миллисекундах
 const MAX_RETRY_ATTEMPTS = 3;
@@ -183,7 +183,7 @@ export class GameProgressService {
       user: null,
       inventory: {
         snot: 0,
-        snotCoins: 0,
+        kingCoins: 0,
         containerSnot: 0.05,
         containerCapacity: 1,
         containerCapacityLevel: 1,
@@ -788,7 +788,7 @@ export class GameProgressService {
         timestamp: Date.now(),
         version: 1
       };
-      localStorage.setItem('snotcoin_game_state_backup', JSON.stringify(backup));
+      localStorage.setItem('kingcoin_game_state_backup', JSON.stringify(backup));
       console.log('[GameProgressService] Локальная резервная копия создана');
     } catch (error) {
       console.error('[GameProgressService] Ошибка при создании локальной резервной копии:', error);
@@ -832,7 +832,7 @@ export class GameProgressService {
       user: null,
       inventory: {
         snot: 0,
-        snotCoins: 0,
+        kingCoins: 0,
         containerSnot: 0.05,
         containerCapacity: 1,
         containerCapacityLevel: 1,

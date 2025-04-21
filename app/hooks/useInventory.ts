@@ -30,29 +30,29 @@ export const useInventory = () => {
   };
 
   /**
-   * Добавляет монеты (snotCoins) в инвентарь
+   * Добавляет монеты (kingCoins) в инвентарь
    * @param amount - количество монет для добавления
    */
-  const addSnotCoins = (amount: number) => {
+  const addKingCoins = (amount: number) => {
     dispatch({
       type: 'UPDATE_INVENTORY',
       payload: {
-        snotCoins: inventory.snotCoins + amount
+        kingCoins: inventory.kingCoins + amount
       }
     });
   };
 
   /**
-   * Тратит монеты (snotCoins) из инвентаря
+   * Тратит монеты (kingCoins) из инвентаря
    * @param amount - количество монет для траты
    * @returns {boolean} - true если монеты успешно потрачены, false если недостаточно монет
    */
-  const spendSnotCoins = (amount: number): boolean => {
-    if (inventory.snotCoins >= amount) {
+  const spendKingCoins = (amount: number): boolean => {
+    if (inventory.kingCoins >= amount) {
       dispatch({
         type: 'UPDATE_INVENTORY',
         payload: {
-          snotCoins: inventory.snotCoins - amount
+          kingCoins: inventory.kingCoins - amount
         }
       });
       return true;
@@ -93,8 +93,8 @@ export const useInventory = () => {
   return {
     inventory,
     addSnot,
-    addSnotCoins,
-    spendSnotCoins,
+    addKingCoins,
+    spendKingCoins,
     updateContainerCapacity,
     updateFillingSpeed
   };

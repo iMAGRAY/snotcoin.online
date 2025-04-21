@@ -267,7 +267,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                           <XIcon className="w-6 h-6" />
                         </motion.a>
                         <Link
-                          href="https://warpcast.com/~/channel/snotcoin" 
+                          href="https://warpcast.com/~/channel/kingcoin" 
                           target="_blank"
                           rel="noopener noreferrer" 
                           className="flex items-center bg-purple-600 text-white px-4 py-3 rounded-lg mb-2"

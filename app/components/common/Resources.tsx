@@ -17,10 +17,10 @@ import { validateContainerParams } from "../../utils/resourceUtils"
 interface ResourcesProps {
   isVisible: boolean
   activeTab: string
-  showOnlySnotCoin?: boolean
+  showOnlyKingCoin?: boolean
   showOnlySnot?: boolean
   snot: number
-  snotCoins: number
+  kingCoins: number
   // Параметры для StatusDisplay
   containerCapacity?: number
   containerLevel?: number
@@ -117,10 +117,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
   ({
     isVisible,
     activeTab,
-    showOnlySnotCoin = false,
+    showOnlyKingCoin = false,
     showOnlySnot = false,
     snot,
-    snotCoins,
+    kingCoins,
     containerCapacity,
     containerLevel,
     containerSnot,
@@ -144,10 +144,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
       
       const items: ResourceItemType[] = [
         {
-          icon: ICONS.SNOTCOIN,
-          value: snotCoins,
-          label: "SnotCoins",
-          colorClass: COLORS.SNOTCOIN,
+          icon: ICONS.KINGCOIN,
+          value: kingCoins,
+          label: "KingCoins",
+          colorClass: COLORS.KINGCOIN,
         },
         {
           icon: ICONS.SNOT,
@@ -157,10 +157,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
         }
       ];
       
-      if (showOnlySnotCoin) return items.filter(item => item.label === "SnotCoins");
+      if (showOnlyKingCoin) return items.filter(item => item.label === "KingCoins");
       if (showOnlySnot) return items.filter(item => item.label === "SNOT");
       return items;
-    }, [snotCoins, snot, showOnlySnotCoin, showOnlySnot]);
+    }, [kingCoins, snot, showOnlyKingCoin, showOnlySnot]);
 
     // Проверка условий для отображения StatusDisplay - перенесено сюда
     const isLaboratoryTab = (activeTab || 'laboratory') === 'laboratory';

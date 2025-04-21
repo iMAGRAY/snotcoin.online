@@ -37,38 +37,37 @@ export default function GameProgressWidget({
 
   // Обновление информации каждые 5 секунд
   useEffect(() => {
-    const updateInfo = () => {
-      // Получаем время последней синхронизации из localStorage
-      if (typeof window !== 'undefined') {
-        const lastSync = localStorage.getItem('snotcoin_last_sync');
-        if (lastSync) {
-          const lastSyncDate = new Date(parseInt(lastSync, 10));
-          setLastSyncTime(lastSyncDate.toLocaleString());
-        }
-
-        // Получаем ошибки синхронизации
-        const syncQueue = localStorage.getItem('snotcoin_sync_queue');
-        if (syncQueue) {
-          try {
-            const queue = JSON.parse(syncQueue);
-            const errors = queue
-              .filter((item: any) => item.status === 'failed')
-              .map((item: any) => item.error || 'Неизвестная ошибка');
-            
-            setSyncErrors(errors);
-            setSyncStatus(errors.length > 0 ? 'error' : 'idle');
-          } catch (e) {
-            console.error('Ошибка при обработке очереди синхронизации:', e);
-          }
+    const updateSyncInfo = () => {
+      if (typeof window === 'undefined') return;
+      
+      // Проверяем время последней синхронизации
+      const lastSync = localStorage.getItem('kingcoin_last_sync');
+      if (lastSync) {
+        const lastSyncDate = new Date(parseInt(lastSync, 10));
+        setLastSyncTime(lastSyncDate.toLocaleString());
+      }
+      
+      // Проверяем наличие ошибок в очереди синхронизации
+      const syncQueue = localStorage.getItem('kingcoin_sync_queue');
+      if (syncQueue) {
+        try {
+          const queue = JSON.parse(syncQueue);
+          const hasSyncErrors = queue.some((item: any) => item.status === 'failed');
+          const isSyncing = queue.some((item: any) => item.status === 'processing');
+          
+          setSyncErrors(queue.map((item: any) => item.error || 'Неизвестная ошибка'));
+          setSyncStatus(isSyncing ? 'syncing' : (hasSyncErrors ? 'error' : 'idle'));
+        } catch (e) {
+          console.error('Ошибка при обработке очереди синхронизации:', e);
         }
       }
     };
 
     // Запускаем немедленное обновление
-    updateInfo();
+    updateSyncInfo();
     
     // Создаем интервал для обновления
-    const intervalId = setInterval(updateInfo, 5000);
+    const intervalId = setInterval(updateSyncInfo, 5000);
     
     // Очищаем интервал при размонтировании
     return () => clearInterval(intervalId);
@@ -88,7 +87,7 @@ export default function GameProgressWidget({
       setMessage({ text: 'Синхронизация завершена успешно', type: 'success' });
       
       // Обновляем время последней синхронизации
-      const lastSync = localStorage.getItem('snotcoin_last_sync');
+      const lastSync = localStorage.getItem('kingcoin_last_sync');
       if (lastSync) {
         const lastSyncDate = new Date(parseInt(lastSync, 10));
         setLastSyncTime(lastSyncDate.toLocaleString());
@@ -120,7 +119,7 @@ export default function GameProgressWidget({
         setMessage({ text: 'Резервная копия успешно создана', type: 'success' });
         
         // Обновляем время последней синхронизации
-        const lastSync = localStorage.getItem('snotcoin_last_sync');
+        const lastSync = localStorage.getItem('kingcoin_last_sync');
         if (lastSync) {
           const lastSyncDate = new Date(parseInt(lastSync, 10));
           setLastSyncTime(lastSyncDate.toLocaleString());

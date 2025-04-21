@@ -6,15 +6,15 @@
   },
   "frame": {
     "version": "1",
-    "name": "Snotcoin",
+    "name": "Kingcoin",
     "description": "PLAY 2 SNOT - Merge, earn and progress in this addictive Farcaster game",
-    "homeUrl": "https://snotcoin.online",
-    "iconUrl": "https://snotcoin.online/icon.png",
-    "imageUrl": "https://snotcoin.online/game/cast.webp",
+    "homeUrl": "https://kingcoin.online",
+    "iconUrl": "https://kingcoin.online/icon.png",
+    "imageUrl": "https://kingcoin.online/game/cast.webp",
     "buttonTitle": "Play Game",
-    "splashImageUrl": "https://snotcoin.online/game/Splashimage.webp",
+    "splashImageUrl": "https://kingcoin.online/game/Splashimage.webp",
     "splashBackgroundColor": "#0F172A",
     "permissions": ["notifications"],
-    "webhookUrl": "https://snotcoin.online/api/farcaster/webhook"
+    "webhookUrl": "https://kingcoin.online/api/farcaster/webhook"
   }
 } 

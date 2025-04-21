@@ -2,7 +2,7 @@
 
 import React from "react"
 import { motion } from "framer-motion"
-import { BarChart2, Trophy, Eye, Award, Zap, Clock } from "lucide-react"
+import { BarChart2, Trophy, Eye, Award, Zap, Clock, Star } from "lucide-react"
 import { useTranslation } from "../../../../i18n"
 import { useGameState } from "../../../../contexts/game/hooks"
 import { formatSnotValue } from "../../../../utils/formatters"
@@ -18,7 +18,7 @@ const StatsSection: React.FC<StatsSectionProps> = () => {
     { label: "Total SNOT collected", value: formatSnotValue(gameState.inventory?.snot || 0), icon: Trophy },
     { label: "Container capacity", value: formatSnotValue(gameState.inventory?.containerCapacity || 100), icon: Zap },
     { label: "Highest level reached", value: gameState.highestLevel?.toString() || "1", icon: Award },
-    { label: "Total SnotCoins collected", value: formatSnotValue(gameState.inventory?.snotCoins || 0), icon: Trophy },
+    { label: "Total KingCoins collected", value: formatSnotValue(gameState.inventory?.snotCoins || 0), icon: Trophy },
   ]
 
   return (

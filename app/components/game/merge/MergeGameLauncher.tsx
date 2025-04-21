@@ -126,8 +126,8 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       // Затем сбрасываем выбранную способность
       setTimeout(() => setSelectedAbility(null), 500);
     } else {
-      // Показываем уведомление о недостатке ресурсов
-      toast.error(`Not enough SnotCoin for ${ability}! Need ${cost.toFixed(1)} SnotCoin`);
+      // Недостаточно snotCoins для использования этой способности
+      toast.error(`Not enough KingCoin for ${ability}! Need ${cost.toFixed(1)} KingCoin`);
     }
   }, [inventory]);
 

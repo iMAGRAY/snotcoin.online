@@ -6,8 +6,8 @@
 import { GameState } from '@/app/types/gameTypes';
 import { ExtendedGameState } from '@/app/types/game';
 
-// Ключи для localStorage
-const STORAGE_PREFIX = 'snotcoin_';
+// Define a prefix for all storage keys to avoid conflicts with other apps
+const STORAGE_PREFIX = 'kingcoin_';
 const GAME_STATE_KEY = `${STORAGE_PREFIX}game_state`;
 const GAME_STATE_BACKUP_KEY = `${STORAGE_PREFIX}game_state_backup`;
 const LAST_SYNC_KEY = `${STORAGE_PREFIX}last_sync`;

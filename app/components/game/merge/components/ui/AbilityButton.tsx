@@ -76,7 +76,7 @@ const AbilityButton: React.FC<AbilityButtonProps> = ({
         <TouchButton
           onClick={() => onAbilityClick(type)}
           className={buttonClassName}
-          title={`Стоимость: ${cost.toFixed(1)} SnotCoin`}
+          title={`Стоимость: ${cost.toFixed(1)} KingCoin`}
           disabled={isDisabled}
         >
           <div className={`w-[92%] h-[92%] rounded-full overflow-hidden p-1 bg-gradient-to-br ${style.innerColor} flex items-center justify-center`}>

@@ -1,11 +1,34 @@
-"inventory": {
-  "snot": 0,
-  "snotCoins": 0,
-  "containerSnot": 0,
-  "containerCapacity": 1,
-  "containerCapacityLevel": 1,
-  "fillingSpeed": 1,
-  "fillingSpeedLevel": 1,
-  "collectionEfficiency": 1.0,
-  "lastUpdateTimestamp": 0
+{
+  "inventory": {
+    "snot": 0,
+    "kingCoins": 0,
+    "containerSnot": 0,
+    "containerCapacity": 1,
+    "fillingSpeedLevel": 1,
+    "chests": []
+  },
+  "gameSettings": {
+    "hapticFeedback": true,
+    "soundEffects": true,
+    "music": true,
+    "graphicsQuality": "high"
+  },
+  "gameStats": {
+    "totalClicks": 0,
+    "totalSnot": 0,
+    "totalKingCoins": 0,
+    "maxContainerLevel": 1,
+    "maxSpeedLevel": 1,
+    "lifetimeKingCoins": 0
+  },
+  "preferences": {
+    "activeBadge": null,
+    "activeAvatar": "/images/profile/avatar/default.webp",
+    "tutorial": {
+      "basic": false,
+      "laboratory": false,
+      "merge": false,
+      "quests": false
+    }
+  }
 } 

@@ -15,7 +15,7 @@ export function getSafeInventory(gameState: any): Inventory {
   if (!gameState || !gameState.inventory) {
     return {
       snot: 0,
-      snotCoins: 0,
+      kingCoins: 0,
       containerSnot: 0,
       containerCapacity: 1, // Уровень 1 соответствует емкости 1
       containerCapacityLevel: 1,
@@ -34,8 +34,8 @@ export function getSafeInventory(gameState: any): Inventory {
       ? inventory.snot 
       : 0,
       
-    snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) 
-      ? inventory.snotCoins 
+    kingCoins: typeof inventory.kingCoins === 'number' && !isNaN(inventory.kingCoins) 
+      ? inventory.kingCoins 
       : 0,
       
     containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) 
@@ -331,11 +331,11 @@ export function updateResourcesBasedOnTimePassed(
 }
 
 /**
- * Проверяет наличие необходимого количества snotCoins для покупки
+ * Проверяет наличие необходимого количества kingCoins для покупки
  * @param inventory Инвентарь игрока
  * @param cost Стоимость покупки
- * @returns Хватает ли snotCoins
+ * @returns Хватает ли kingCoins
  */
-export function hasEnoughSnotCoins(inventory: Inventory, cost: number): boolean {
-  return (inventory?.snotCoins || 0) >= cost;
+export function hasEnoughKingCoins(inventory: Inventory, cost: number): boolean {
+  return (inventory?.kingCoins || 0) >= cost;
 } 

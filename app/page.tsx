@@ -32,7 +32,7 @@ export default function Home() {
     setIsClient(true);
     
     // Устанавливаем заголовок страницы для всех устройств
-    document.title = "SnotCoin - Merge Game";
+    document.title = "KingCoin - Merge Game";
     
     // Проверяем, открыты ли мы из Farcaster фрейма
     const isFromFrame = typeof window !== 'undefined' && (

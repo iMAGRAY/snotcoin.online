@@ -7,7 +7,7 @@ import { ExtendedGameState } from '../types/gameTypes';
  */
 export interface GameResources {
   snot: number;
-  snotCoins: number;
+  kingCoins: number;
   containerSnot: number;
   containerCapacity: number;
   containerCapacityLevel: number;
@@ -43,7 +43,7 @@ export class ResourceManager {
   
   private readonly defaultResources: GameResources = {
     snot: 0,
-    snotCoins: 0,
+    kingCoins: 0,
     containerSnot: 0.05,
     containerCapacity: 1,
     containerCapacityLevel: 1, 
@@ -60,12 +60,12 @@ export class ResourceManager {
   private maxHistorySize: number = 10;
   private maxResourceIncreaseThreshold: {[key in keyof GameResources]?: number} = {
     snot: 1000,
-    snotCoins: 500,
+    kingCoins: 500,
     containerSnot: 200
   };
   private maxResourceIncreaseRatePerSecond: {[key in keyof GameResources]?: number} = {
     snot: 2000,
-    snotCoins: 1000,
+    kingCoins: 1000,
     containerSnot: 500
   };
 
@@ -667,7 +667,7 @@ export class ResourceManager {
   public static fromGameState(gameState: ExtendedGameState): GameResources {
     return {
       snot: gameState.inventory.snot || 0,
-      snotCoins: gameState.inventory.snotCoins || 0,
+      kingCoins: gameState.inventory.kingCoins || 0,
       containerSnot: gameState.inventory.containerSnot || 0.05,
       containerCapacity: gameState.inventory.containerCapacity || 1,
       containerCapacityLevel: gameState.inventory.containerCapacityLevel || 1,
@@ -690,7 +690,7 @@ export class ResourceManager {
     updatedState.inventory = {
       ...updatedState.inventory,
       snot: this.resources.snot,
-      snotCoins: this.resources.snotCoins,
+      kingCoins: this.resources.kingCoins,
       containerSnot: this.resources.containerSnot,
       containerCapacity: this.resources.containerCapacity,
       containerCapacityLevel: this.resources.containerCapacityLevel,

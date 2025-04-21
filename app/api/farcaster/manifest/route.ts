@@ -25,7 +25,7 @@ export async function GET() {
       });
     } else {
       // Если файл не существует, генерируем манифест динамически
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://snotcoin.online';
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://kingcoin.online';
       
       const manifest = {
         accountAssociation: {
@@ -38,7 +38,7 @@ export async function GET() {
         },
         frame: {
           version: 'next',
-          name: 'Snotcoin',
+          name: 'Kingcoin',
           description: 'PLAY 2 SNOT - Merge, earn and progress in this addictive Farcaster game',
           homeUrl: siteUrl,
           iconUrl: `${siteUrl}/icon.png`,
