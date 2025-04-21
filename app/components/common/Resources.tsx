@@ -198,7 +198,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     return (
       <ErrorBoundary fallback={<div className="text-red-500">Error loading resources</div>}>
         <motion.div
-          className={`${UI_CLASSES.PANEL.CONTAINER} w-full`}
+          className={`${UI_CLASSES.PANEL.CONTAINER} w-full shadow-[0_8px_30px_-10px_rgba(0,0,0,0.7)]`}
           {...ANIMATIONS.RESOURCE_PANEL}
         >
           <div className="flex flex-col w-full">

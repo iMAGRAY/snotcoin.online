@@ -1,0 +1,15 @@
+{
+  "frame": {
+    "version": "1",
+    "name": "RoyaleCoin",
+    "description": "PLAY 2 ROYAL - Merge, earn and progress in this addictive Farcaster game",
+    "homeUrl": "https://royalecoin.online",
+    "iconUrl": "https://royalecoin.online/icon.png",
+    "imageUrl": "https://royalecoin.online/game/cast.webp",
+    "buttonTitle": "Play Game",
+    "splashImageUrl": "https://royalecoin.online/game/Splashimage.webp",
+    "splashBackgroundColor": "#0F172A",
+    "permissions": ["notifications"],
+    "webhookUrl": "https://royalecoin.online/api/farcaster/webhook"
+  }
+} 

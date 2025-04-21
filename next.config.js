@@ -50,7 +50,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'snotcoin.online',
+        hostname: 'royalecoin.online',
       },
       {
         protocol: 'https',

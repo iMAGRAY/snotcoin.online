@@ -1,3 +1,12 @@
+/* Подключение пользовательского шрифта Lyons Secondary Bold */
+@font-face {
+  font-family: 'Lyons Secondary Bold';
+  src: url('/fonts/Lyons Secondary Bold_7742.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Tailwind CSS */
 @tailwind base;
 @tailwind components;
@@ -7,6 +16,8 @@
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
+  --font-lyons: 'Lyons Secondary Bold', sans-serif;
+  font-size: 18px; /* Увеличенный базовый размер шрифта */
 }
 
 html, body {
@@ -18,6 +29,18 @@ html, body {
   -moz-user-select: none;     /* Firefox */
   -ms-user-select: none;      /* IE/Edge */
   user-select: none;          /* Standard */
+  font-family: 'Lyons Secondary Bold', sans-serif;
+  font-size: 1.1rem; /* Увеличенный размер шрифта */
+}
+
+/* Применяем шрифт Lyons Secondary Bold ко всем элементам */
+* {
+  font-family: 'Lyons Secondary Bold', sans-serif;
+}
+
+/* Увеличиваем размер шрифта для кнопок и заголовков */
+button, .btn, h1, h2, h3, h4, h5, h6 {
+  font-size: 1.2rem;
 }
 
 /* Защита изображений от перетаскивания, сохранения и выделения */

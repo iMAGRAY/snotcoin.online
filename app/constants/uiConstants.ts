@@ -88,7 +88,7 @@ export const UI_CLASSES = {
   RESOURCE_ITEM: {
     CONTAINER: "flex items-center space-x-1.5 py-1 px-2 sm:px-3 rounded-lg hover:bg-[#2a3b4d]/30 transition-all duration-300",
     IMAGE_CONTAINER: "relative w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0",
-    TEXT: "text-base sm:text-lg font-bold leading-none"
+    TEXT: "text-lg sm:text-xl font-bold leading-none"
   }
 }
 

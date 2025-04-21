@@ -5,12 +5,12 @@
 
 // Пути к изображениям сундуков
 export const CHEST_IMAGES = {
-  LEVEL1: '/images/storage/levels/level1.webp',
-  LEVEL2: '/images/storage/levels/level2.webp',
-  LEVEL3: '/images/storage/levels/level3.webp',
-  LEVEL1_OPEN: '/images/storage/levels/level1open.webp',
-  LEVEL2_OPEN: '/images/storage/levels/level2open.webp',
-  LEVEL3_OPEN: '/images/storage/levels/level3open.webp',
+  LEVEL1: '/images/merge/Chests/levels/level1.webp',
+  LEVEL2: '/images/merge/Chests/levels/level2.webp',
+  LEVEL3: '/images/merge/Chests/levels/level3.webp',
+  LEVEL1_OPEN: '/images/merge/Chests/levels/level1open.webp',
+  LEVEL2_OPEN: '/images/merge/Chests/levels/level2open.webp',
+  LEVEL3_OPEN: '/images/merge/Chests/levels/level3open.webp',
 };
 
 // Массив для использования в компоненте карусели

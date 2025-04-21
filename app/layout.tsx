@@ -2,7 +2,15 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import ImageProtection from "./components/common/ImageProtection";
+import localFont from 'next/font/local'
 // import Script from "next/script";
+
+// Загрузка локального шрифта Lyons Secondary Bold
+const lyonsFont = localFont({ 
+  src: '../public/fonts/Lyons Secondary Bold_7742.ttf',
+  variable: '--font-lyons',
+  display: 'swap',
+})
 
 // Данные для SEO
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://snotcoin.online";
@@ -42,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={lyonsFont.className}>
       <head>
         {/* <meta name="darkreader-lock" /> */}
         <meta
@@ -72,7 +80,7 @@ export default function RootLayout({
           })}
         />
       </head>
-      <body>
+      <body className={lyonsFont.variable}>
         <Providers>
           {/* Добавляем компонент для защиты изображений */}
           <ImageProtection />

@@ -1,4 +1,4 @@
-# SnotCoin.online
+# RoyaleCoin.online
 
 Игровой проект с веб-интерфейсом на Next.js 14 и PostgreSQL.
 

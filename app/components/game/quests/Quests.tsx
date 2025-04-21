@@ -209,7 +209,6 @@ const QUESTS: Quest[] = [
 ];
 
 const QUESTS_STORAGE_KEY = 'snotcoin_quests_progress';
-const wowFont = 'font-["FrizQuadrata",_serif]';
 
 const Quests: React.FC = () => {
   const [quests, setQuests] = useState<Quest[]>(QUESTS);
@@ -252,7 +251,7 @@ const Quests: React.FC = () => {
           <div className="w-full flex flex-row justify-between border-b-4 border-[#7a5c2b] bg-gradient-to-b from-[#2a2112]/95 to-[#181510]/95">
             <button
               onClick={() => setActiveTab('Achievements')}
-              className={`w-1/2 py-2 rounded-t-lg font-bold text-lg tracking-wide transition-all duration-200 text-center ${wowFont} ${activeTab === 'Achievements'
+              className={`w-1/2 py-2 rounded-t-lg font-bold text-lg tracking-wide transition-all duration-200 text-center ${activeTab === 'Achievements'
                 ? 'bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-300 text-[#2a1c0a] shadow-[0_0_8px_2px_#FFD70099] border-x-2 border-t-2 border-yellow-600 -mb-1 z-10'
                 : 'bg-gradient-to-r from-[#2a2112]/80 to-[#181510]/80 text-yellow-200/80 hover:bg-yellow-900/30 border-x-2 border-t-2 border-transparent -mb-1'}`}
               style={{textShadow: activeTab === 'Achievements' ? '0 1px 2px #fff8, 0 0 2px #000' : '0 1px 2px #0008'}}
@@ -261,7 +260,7 @@ const Quests: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('Statistics')}
-              className={`w-1/2 py-2 rounded-t-lg font-bold text-lg tracking-wide transition-all duration-200 text-center ${wowFont} ${activeTab === 'Statistics'
+              className={`w-1/2 py-2 rounded-t-lg font-bold text-lg tracking-wide transition-all duration-200 text-center ${activeTab === 'Statistics'
                 ? 'bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-300 text-[#2a1c0a] shadow-[0_0_8px_2px_#FFD70099] border-x-2 border-t-2 border-yellow-600 -mb-1 z-10'
                 : 'bg-gradient-to-r from-[#2a2112]/80 to-[#181510]/80 text-yellow-200/80 hover:bg-yellow-900/30 border-x-2 border-t-2 border-transparent -mb-1'}`}
               style={{textShadow: activeTab === 'Statistics' ? '0 1px 2px #fff8, 0 0 2px #000' : '0 1px 2px #0008'}}
@@ -273,8 +272,8 @@ const Quests: React.FC = () => {
           <div className="flex-1 flex flex-col py-4 sm:py-6 w-full bg-gradient-to-b from-[#23221a]/95 to-[#181510]/95 relative">
             {activeTab === 'Achievements' && (
               <>
-                <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-2">
-                  <div className="text-xl sm:text-2xl font-extrabold text-yellow-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)] tracking-wide" style={{fontFamily: 'Friz Quadrata, serif'}}>Achievement Points <span className="ml-2 text-yellow-600 text-2xl sm:text-3xl align-middle">2410</span></div>
+                <div className="flex flex-col sm:flex-row items-center mb-4 gap-2">
+                  <div className="text-xl sm:text-2xl font-extrabold text-yellow-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)] tracking-wide">Achievement Points <span className="ml-2 text-yellow-600 text-2xl sm:text-3xl align-middle">2410</span></div>
                 </div>
                 <div className="flex flex-col gap-3 px-4 sm:px-6 md:px-8">
                   <AnimatePresence>
@@ -301,7 +300,7 @@ const Quests: React.FC = () => {
                         {/* Main info */}
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-lg sm:text-xl font-bold ${wowFont} ${quest.completed ? 'text-yellow-100' : 'text-gray-300'} truncate`}>{quest.title}</span>
+                            <span className={`text-lg sm:text-xl font-bold ${quest.completed ? 'text-yellow-100' : 'text-gray-300'} truncate`}>{quest.title}</span>
                           </div>
                           <div className={`${quest.completed ? 'text-yellow-200/80' : 'text-gray-400'} text-base italic mt-0.5 truncate sm:whitespace-normal`}>{quest.description}</div>
                           {quest.reward && quest.reward.length > 0 && (
