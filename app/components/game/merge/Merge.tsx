@@ -250,79 +250,72 @@ const Merge: React.FC = () => {
         backgroundRepeat: "no-repeat"
       }}
     >
-      {/* Fixed Fill Card, Reset Attempts, and RoyalCoin buttons at top */}
-      <div className="fixed left-0 right-0 top-4 flex justify-center gap-3 z-50">
+      {/* Ресурсы и кнопки в правом верхнем углу */}
+      <div className="fixed top-4 right-4 flex items-center gap-2 z-50">
+        <div className="flex items-center mr-2">
+          <Image
+            src="/images/common/icons/snot-icon.webp"
+            alt="Snot"
+            width={24}
+            height={24}
+            className="w-6 h-6 mr-1"
+          />
+          <span className="text-white font-bold text-sm">{(inventory.snot || 0).toFixed(2)}</span>
+        </div>
+        
+        <div className="flex items-center mr-3">
+          <Image
+            src="/images/common/icons/kingcoin-icon.webp"
+            alt="KingCoin"
+            width={24}
+            height={24}
+            className="w-6 h-6 mr-1"
+          />
+          <span className="text-white font-bold text-sm">{(inventory.snotCoins || 0).toFixed(2)}</span>
+        </div>
+        
         <motion.button
           onClick={handleFillCard}
-          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[4px] border-blue-700 shadow-lg"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className="px-2 py-1 rounded-md text-xs font-bold bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[2px] border-blue-700 shadow-sm"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          {/* Add thin border */}
-          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
-            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
-          </div>
-        
-          <div className="flex items-center justify-center relative z-10">
-            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
-              Fill Card
-            </span>
-          </div>
+          Fill Card
         </motion.button>
 
-        {/* Reset Attempts button */}
         <motion.button
           onClick={resetAttemptsData}
-          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-green-400 to-green-600 text-white border-b-[4px] border-green-700 shadow-lg"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className="px-2 py-1 rounded-md text-xs font-bold bg-gradient-to-b from-green-400 to-green-600 text-white border-b-[2px] border-green-700 shadow-sm"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          {/* Add thin border */}
-          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
-            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
-          </div>
-        
-          <div className="flex items-center justify-center relative z-10">
-            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
-              Reset Attempts
-            </span>
-          </div>
+          Reset
         </motion.button>
         
-        {/* Add RoyalCoins button */}
         <motion.button
           onClick={() => addRoyalCoins(100)}
-          className="px-4 py-3 rounded-lg font-bold text-base relative overflow-hidden bg-gradient-to-b from-amber-400 to-amber-600 text-white border-b-[4px] border-amber-700 shadow-lg"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          className="px-2 py-1 rounded-md text-xs font-bold bg-gradient-to-b from-amber-400 to-amber-600 text-white border-b-[2px] border-amber-700 shadow-sm flex items-center"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          {/* Add thin border */}
-          <div className="absolute inset-0 z-0 overflow-hidden rounded-lg">
-            <div className="absolute inset-0 border border-white/20 rounded-lg"></div>
-          </div>
-        
-          <div className="flex items-center justify-center gap-2 relative z-10">
-            <Image src={ICONS.KINGCOIN} alt="RoyalCoin" width={24} height={24} className="object-contain" />
-            <span className="text-white font-bold" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
-              +100 RoyalCoins
-            </span>
-          </div>
+          <Image src={ICONS.KINGCOIN} alt="RoyalCoin" width={16} height={16} className="w-4 h-4 mr-1" />
+          <span>+100</span>
         </motion.button>
       </div>
 
       {/* Play and PVP buttons and chest cards (no wrapper) */}
-      <div className="flex w-full mb-4 gap-4">
+      <div className="fixed left-0 right-0 bottom-[13.5rem] flex justify-center gap-4 px-4 z-30">
           <motion.button
             onClick={handlePlayClick}
-            className={`flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden shadow-lg ${
+            className={`flex-1 px-5 py-3 rounded-xl font-bold text-lg relative overflow-hidden shadow-lg max-w-[10rem] ${
                 attemptsData.attemptsLeft > 0 
-                ? 'bg-gradient-to-b from-yellow-400 to-yellow-600 text-white border-b-[6px] border-yellow-700' 
-                : 'bg-gradient-to-b from-gray-600 to-gray-800 text-gray-300 border-b-[6px] border-gray-900'
+                ? 'bg-gradient-to-b from-yellow-400 to-yellow-600 text-white border-b-[5px] border-yellow-700' 
+                : 'bg-gradient-to-b from-gray-600 to-gray-800 text-gray-300 border-b-[5px] border-gray-900'
             }`}
-            whileHover={attemptsData.attemptsLeft > 0 ? { scale: 1.05 } : {}}
+            whileHover={attemptsData.attemptsLeft > 0 ? { scale: 1.03 } : {}}
             whileTap={attemptsData.attemptsLeft > 0 ? { scale: 0.95 } : {}}
             disabled={attemptsData.attemptsLeft <= 0}
-            style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}
+            style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}
           >
             {/* Add thin border */}
             <div className="absolute inset-0 z-0 overflow-hidden rounded-xl">
@@ -333,7 +326,7 @@ const Merge: React.FC = () => {
               {attemptsData.attemptsLeft > 0 
                 ? (
                   <div className="flex flex-col">
-                    <span className="text-[28px]">Solo <span className="text-sm font-normal bg-yellow-700 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
+                    <span className="text-[24px]">Solo <span className="text-sm font-normal bg-yellow-700 px-2 py-1 rounded-xl ml-1">({attemptsData.attemptsLeft}/{MAX_MERGE_ATTEMPTS})</span></span>
                     {remainingTime && attemptsData.attemptsLeft < MAX_MERGE_ATTEMPTS && (
                       <span className="text-xs mt-1 font-normal">Next attempt in: {remainingTime}</span>
                     )}
@@ -352,7 +345,7 @@ const Merge: React.FC = () => {
           
           {/* Кнопка PVP (Coming Soon) */}
           <motion.button
-            className="flex-1 px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[6px] border-blue-700 shadow-lg"
+            className="flex-1 px-5 py-3 rounded-xl font-bold text-lg relative overflow-hidden bg-gradient-to-b from-blue-400 to-blue-600 text-white border-b-[5px] border-blue-700 shadow-lg max-w-[10rem]"
             disabled={true}
           >
             {/* Add thin border */}
@@ -361,7 +354,7 @@ const Merge: React.FC = () => {
             </div>
           
             <div className="flex items-center justify-center relative z-10">
-              <span className="text-white text-[32px] font-black" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+              <span className="text-white text-[26px] font-black" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
                 PVP
               </span>
             </div>
@@ -369,7 +362,7 @@ const Merge: React.FC = () => {
       </div>
       
       {/* Chest card slots fixed above TabBar */}
-      <div className="fixed left-0 right-0 bottom-28 px-4 flex justify-center gap-4 z-40">
+      <div className="fixed left-0 right-0 bottom-20 px-4 flex justify-center gap-2 z-40">
         {chestSlots.map((slot, idx) => {
           const unlockTime = chestUnlockTimes[idx] || 0
           const remainingMs = unlockTime ? unlockTime - now : 0
@@ -406,7 +399,7 @@ const Merge: React.FC = () => {
                 }
               }}
               style={{ cursor: slot > 0 && chestUnlockTimes[idx] === 0 ? 'pointer' : 'default' }}
-              className={`relative w-28 h-36 ${containerClasses} rounded-xl overflow-hidden flex flex-col shadow-lg hover:shadow-xl transition-all duration-300 ${
+              className={`relative w-24 h-28 ${containerClasses} rounded-xl overflow-hidden flex flex-col shadow-lg hover:shadow-xl transition-all duration-300 ${
                 slot > 0 && chestUnlockTimes[idx] === 0 
                   ? 'hover:scale-105 active:scale-95 transition-transform duration-200' 
                   : ''
@@ -449,12 +442,12 @@ const Merge: React.FC = () => {
                   <div className="relative flex-grow w-full h-full flex items-center justify-center">
                     {/* Display time at the top for chests not being unlocked */}
                     {chestUnlockTimes[idx] === 0 && !chestUnlockTimes.some(time => time > 0 && time > now) && (
-                      <div className="absolute top-1 z-10 text-white text-2xl font-black" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                      <div className="absolute top-1 z-10 text-white text-xl font-black" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
                         {slot === 1 
-                          ? <>3<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                          ? <>3<span className="text-sm inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
                           : slot === 2 
-                            ? <>9<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
-                            : <>36<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                            ? <>9<span className="text-sm inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
+                            : <>36<span className="text-sm inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
                         }
                       </div>
                     )}
@@ -462,10 +455,10 @@ const Merge: React.FC = () => {
                     {/* Display countdown timer for chests being unlocked */}
                     {chestUnlockTimes[idx] !== undefined && chestUnlockTimes[idx] > 0 && chestUnlockTimes[idx] > now && (
                       <div className="absolute top-1 z-10">
-                        <span className="text-amber-300 font-bold text-2xl" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
+                        <span className="text-amber-300 font-bold text-xl" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
                           {hours > 0 
-                            ? <>{hours}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>h</span> {minutes}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
-                            : <>{minutes}<span className="text-xl inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
+                            ? <>{hours}<span className="text-sm inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>h</span> {minutes}<span className="text-sm inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
+                            : <>{minutes}<span className="text-sm inline-block relative" style={{top: '0.3em', marginLeft: '0.15em'}}>m</span></>
                           }
                         </span>
                       </div>
@@ -488,7 +481,7 @@ const Merge: React.FC = () => {
                     />
                     {/* Add rarity label below chest */}
                     <div className="absolute bottom-1 z-10">
-                      <span className={`text-sm font-bold px-3 py-1 rounded-full ${
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                         slot === 1 
                           ? 'bg-gray-600/70 text-gray-200' 
                           : slot === 2 

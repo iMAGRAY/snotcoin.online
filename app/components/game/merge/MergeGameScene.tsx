@@ -112,7 +112,6 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
     this.load.image('coinKing', '/images/merge/Game/ui/CoinKing.webp');
     this.load.image('coinKingThrow', '/images/merge/Game/ui/CoinKingThrow.webp');
     this.load.image('background', '/images/merge/background/merge-background.webp');
-    this.load.image('trees', '/images/merge/background/trees.webp');
     this.load.image('bull', '/images/merge/Balls/Bull.webp');
     this.load.image('bomb', '/images/merge/Balls/bomb.webp');
     
@@ -185,18 +184,18 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       // Получаем размеры с учетом соотношения сторон 12:16
       const { width: originalWidth, height: originalHeight } = this.game.canvas;
       
-      // Для соответствия соотношению сторон 11.5:16, определяем, какая сторона ограничивает
+      // Для соответствия соотношению сторон 12:16, определяем, какая сторона ограничивает
       const aspectRatio = 12 / 16;
       
       let width, height;
-      let offsetX = 0;
+      // Удаляем смещение, чтобы игровая зона не была ограничена слева
+      const offsetX = 0;
       
       if (originalWidth / originalHeight > aspectRatio) {
         // Ширина слишком большая, ограничиваем по высоте
         height = originalHeight;
         width = height * aspectRatio;
-        // Центрируем по горизонтали
-        offsetX = (originalWidth - width) / 2;
+        // Игровая зона будет центрироваться автоматически через настройки Phaser.Scale
       } else {
         // Высота слишком большая или соотношение точное, ограничиваем по ширине
         width = originalWidth;
@@ -242,25 +241,8 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       height / SCALE
     );
     
-    // Дополнительные невидимые стены внутри игровой зоны
-    // Используем процентное соотношение для сохранения пропорций
-    const wallOffset = width * 0.05 / SCALE;
-    
-    // Левая внутренняя стена
-    this.physicsManager.createBoundary(
-      (offsetX / SCALE) + wallOffset, 
-      0, 
-      (offsetX / SCALE) + wallOffset, 
-      height / SCALE
-    );
-    
-    // Правая внутренняя стена
-    this.physicsManager.createBoundary(
-      (offsetX + width) / SCALE - wallOffset, 
-      0, 
-      (offsetX + width) / SCALE - wallOffset, 
-      height / SCALE
-    );
+    // Удаляем дополнительные невидимые стены внутри игровой зоны
+    // для обеспечения более свободного игрового пространства
   }
 
   // Метод для обработки слияний между шарами

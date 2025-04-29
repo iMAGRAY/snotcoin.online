@@ -240,11 +240,11 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
       antialias: true,
       scene: [MergeGameScene],
       transparent: true,
-      canvasStyle: 'display: block; touch-action: none; margin: 0 auto; image-rendering: high-quality; image-rendering: crisp-edges;',
+      canvasStyle: 'display: block; touch-action: none; margin: 0 auto; image-rendering: high-quality; image-rendering: crisp-edges; width: 100%; max-width: 100%; position: relative; left: 0; align-self: flex-end;',
       disableContextMenu: true,
       scale: {
         mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
         width: BASE_WIDTH,
         height: BASE_HEIGHT,
         min: {
@@ -254,7 +254,9 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
         max: {
           width: BASE_WIDTH * 2,
           height: BASE_HEIGHT * 2
-        }
+        },
+        autoRound: true,
+        expandParent: true
       },
       // Улучшенные настройки рендеринга для максимального сглаживания
       render: {
@@ -334,6 +336,9 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
                 if (gameContainerRef.current) {
                   gameContainerRef.current.style.width = `${containerWidth}px`;
                   gameContainerRef.current.style.height = `${containerHeight}px`;
+                  gameContainerRef.current.style.display = "flex";
+                  gameContainerRef.current.style.justifyContent = "center";
+                  gameContainerRef.current.style.alignItems = "flex-end";
                 }
                 
                 // Обновляем размер родительского контейнера
@@ -349,12 +354,26 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
                   const newWidth = Math.floor(BASE_WIDTH * scale);
                   const newHeight = Math.floor(BASE_HEIGHT * scale);
                   
-                  // Центрируем игру
+                  // Центрируем игру и устанавливаем в нижней части
                   const canvas = game.canvas;
                   if (canvas && canvas.parentElement) {
-                    canvas.parentElement.style.width = `${newWidth}px`;
+                    canvas.parentElement.style.width = `100%`;
                     canvas.parentElement.style.height = `${newHeight}px`;
                     canvas.parentElement.style.margin = '0 auto';
+                    canvas.parentElement.style.display = 'flex';
+                    canvas.parentElement.style.alignItems = 'flex-end';
+                    canvas.parentElement.style.justifyContent = 'center';
+                    
+                    // Убедимся, что канвас отображается по центру без ограничений слева и прижат к низу
+                    canvas.style.marginLeft = 'auto';
+                    canvas.style.marginRight = 'auto';
+                    canvas.style.marginTop = 'auto';
+                    canvas.style.display = 'block';
+                    canvas.style.position = 'relative';
+                    canvas.style.left = '0';
+                    canvas.style.width = '100%';
+                    canvas.style.maxWidth = '100%';
+                    canvas.style.alignSelf = 'flex-end';
                   }
                 }
               }
@@ -571,27 +590,25 @@ const GameContainer: React.FC<GameContainerProps> = memo(({
   return (
     <div 
       ref={gameContainerRef} 
-      data-game="true"
-      className="h-full w-full flex-grow relative"
+      className="game-container w-full" 
       style={{ 
-        minHeight: '300px',
-        maxHeight: '100vh',
-        flex: 1
+        minHeight: "calc(100vh - 140px)",
+        width: "100%",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-end",
+        marginBottom: "0",
+        padding: "0"
       }}
+      data-loaded={isLoaded ? "true" : "false"}
     >
-      {/* индикатор загрузки */}
-      <AnimatePresence>
-        {!isLoaded && (
-          <div 
-            className="absolute inset-0 flex items-center justify-center" 
-            style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
-          >
-            <div className="bg-white rounded-lg p-4 shadow-lg">
-              <p>Загрузка игры...</p>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Индикатор загрузки игры (показывается до инициализации Phaser) */}
+      {!isLoaded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
+          <div className="w-16 h-16 border-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin"></div>
+          <p className="mt-4 text-white font-bold">Загрузка игры...</p>
+        </div>
+      )}
     </div>
   );
 });

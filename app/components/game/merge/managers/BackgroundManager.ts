@@ -23,10 +23,7 @@ export class BackgroundManager {
     // Основной фон (нижний слой) уже добавлен в MergeGameLauncher, 
     // поэтому не добавляем его здесь, чтобы избежать перекрытия
     
-    // Деревья (верхний слой фона)
-    const trees = this.scene.add.image(width / 2, height / 2, 'trees');
-    trees.setDisplaySize(width, height);
-    trees.setDepth(-5);
+    // Удаляем деревья из фона
     
     // Добавляем горизонтальную пунктирную линию желтого цвета
     this.horizontalLine = this.scene.add.graphics();

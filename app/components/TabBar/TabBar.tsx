@@ -1,52 +1,54 @@
-"use client"
+"use client";
 
-import React, { useMemo, useCallback, useEffect } from "react"
-import { useGameState, useGameDispatch } from "../../contexts"
-import type { TabId } from "./types"
-import { tabs } from "./constants"
-import TabButton from "./TabButton"
-import { useTranslation } from "../../i18n"
-import { useRouter } from "next/navigation"
+import React, { useMemo, useCallback, useEffect } from "react";
+import { useGameState, useGameDispatch } from "../../contexts";
+import type { TabId } from "./types";
+import { tabs } from "./constants";
+import TabButton from "./TabButton";
+import { useTranslation } from "../../i18n";
+import { useRouter } from "next/navigation";
 
-type TabBarProps = {}
+type TabBarProps = {};
 
 const TabBar: React.FC<TabBarProps> = () => {
-  const { activeTab } = useGameState()
-  const dispatch = useGameDispatch()
-  const { t } = useTranslation()
-  const router = useRouter()
-  
+  const { activeTab } = useGameState();
+  const dispatch = useGameDispatch();
+  const { t } = useTranslation();
+  const router = useRouter();
+
   // Установка значения по умолчанию, если activeTab не определен или некорректен
   useEffect(() => {
     // Создаем массив допустимых идентификаторов вкладок
-    const validTabIds = tabs.map(tab => tab.id);
-    
+    const validTabIds = tabs.map((tab) => tab.id);
+
     // Проверяем, является ли activeTab допустимым TabId
     const isValidTab = activeTab && validTabIds.includes(activeTab as TabId);
-    
+
     if (!isValidTab) {
-      console.log(`[TabBar] Некорректное значение activeTab: "${activeTab}". Устанавливаем "laboratory"`);
-      dispatch(prevState => ({
+      console.log(
+        `[TabBar] Некорректное значение activeTab: "${activeTab}". Устанавливаем "laboratory"`,
+      );
+      dispatch((prevState) => ({
         ...prevState,
-        activeTab: "laboratory"
+        activeTab: "laboratory",
       }));
     }
   }, [activeTab, dispatch]);
 
   // Предварительно загружаем страницу улучшений для быстрого перехода
   useEffect(() => {
-    router.prefetch('/upgrade')
-  }, [router])
+    router.prefetch("/upgrade");
+  }, [router]);
 
   const handleTabClick = useCallback(
     (id: TabId) => {
-      dispatch(prevState => ({
+      dispatch((prevState) => ({
         ...prevState,
-        activeTab: id
-      }))
+        activeTab: id,
+      }));
     },
     [dispatch],
-  )
+  );
 
   const tabButtons = useMemo(
     () =>
@@ -61,18 +63,22 @@ const TabBar: React.FC<TabBarProps> = () => {
         />
       )),
     [activeTab, handleTabClick],
-  )
+  );
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 w-full bg-gradient-to-t from-[#1a2b3d] via-[#2a3b4d] to-[#3a4c62] border-t-2 border-[#4a7a9e] backdrop-blur-md shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.7)] z-50 pb-safe"
+      className="fixed bottom-0 left-0 right-0 w-full bg-gradient-to-t from-[#1a2b3d] via-[#2a3b4d] to-[#3a4c62] border-t-2 border-[#4a7a9e] backdrop-blur-md shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.7)] z-50 pb-safe overflow-visible"
       aria-label={t("mainNavigation")}
-      style={{ height: '5.5rem', maxHeight: '5.5rem', zIndex: 1000 }}
+      style={{ height: "4.4rem", maxHeight: "4.4rem", zIndex: 1000 }}
     >
-      <div className="flex justify-evenly h-full w-full mx-auto items-center" style={{ padding: '0 8px' }}>{tabButtons}</div>
+      <div
+        className="flex justify-evenly h-full w-full mx-auto items-center overflow-visible px-1 sm:px-4"
+        style={{ maxWidth: "100vw" }}
+      >
+        {tabButtons}
+      </div>
     </nav>
-  )
-}
+  );
+};
 
-export default React.memo(TabBar)
-
+export default React.memo(TabBar);

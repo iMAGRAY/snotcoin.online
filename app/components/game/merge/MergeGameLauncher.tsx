@@ -186,7 +186,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
 
   // Используем стабильный backgroundStyle для предотвращения перерисовок
   const backgroundStyle = useMemo(() => ({
-    backgroundImage: "url('/images/merge/background/merge-background.webp')",
+    backgroundImage: "url('/images/merge/Game/BackGround.webp')",
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
@@ -211,7 +211,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       {gameHeader}
       
       {/* Игровой контейнер */}
-      <div className="flex-grow flex items-end" data-game="true">
+      <div className="flex-grow w-full flex justify-center items-end" data-game="true" style={{ margin: "0", padding: "0" }}>
         {gameContainer}
       </div>
       

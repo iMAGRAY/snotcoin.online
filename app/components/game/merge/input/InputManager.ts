@@ -32,9 +32,9 @@ export class InputManager {
       if (this.coinKing && this.isPointerDown) {
         // Перемещаем CoinKing только при зажатой кнопке/пальце
         const { width, height } = this.scene.game.canvas;
-        // Уменьшаем зону перемещения, чтобы CoinKing не выходил за границы
-        const minX = width * 0.1; // 10% от ширины экрана
-        const maxX = width * 0.9; // 90% от ширины экрана
+        // Увеличиваем зону перемещения, уменьшая ограничения по краям
+        const minX = width * 0.05; // 5% от ширины экрана
+        const maxX = width * 0.95; // 95% от ширины экрана
         const newX = Phaser.Math.Clamp(pointer.x, minX, maxX);
         this.coinKing.x = newX;
         
@@ -70,8 +70,8 @@ export class InputManager {
         // Начальное положение при нажатии
         const { width, height } = this.scene.game.canvas;
         // Используем те же ограничения, что и при движении
-        const minX = width * 0.1;
-        const maxX = width * 0.9;
+        const minX = width * 0.05; // 5% от ширины экрана
+        const maxX = width * 0.95; // 95% от ширины экрана
         const newX = Phaser.Math.Clamp(pointer.x, minX, maxX);
         this.coinKing.x = newX;
         
