@@ -38,7 +38,13 @@ const ACHIEVEMENTS: Achievement[] = [
     description: "Upgrade your storage container",
     icon: "/achievements/storage_upgrade.png",
     category: "storage",
-    condition: (gameState) => (gameState.containerLevel || 0) > 1,
+    condition: (gameState) => {
+      const containerLevel = gameState.containerLevel || 
+                           gameState.container?.level || 
+                           gameState.upgrades?.containerLevel || 
+                           0;
+      return containerLevel > 1;
+    },
   },
   {
     id: "collect100coins",
@@ -93,13 +99,14 @@ const Achievements: React.FC = () => {
             >
               <div className="relative h-28 w-28 mb-3">
                 <Image
-                  src={achievement.icon || "/placeholder.svg"}
+                  src={achievement.icon || "/images/common/placeholder.svg"}
                   alt={achievement.name}
                   fill
                   sizes="7rem"
                   style={{ objectFit: "contain" }}
-                  quality={100}
+                  quality={80}
                   className={achievement.condition(gameState) ? "" : "grayscale"}
+                  unoptimized={achievement.icon.startsWith('/achievements/')}
                 />
               </div>
               <div>

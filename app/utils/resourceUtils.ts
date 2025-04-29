@@ -16,6 +16,7 @@ export function getSafeInventory(gameState: any): Inventory {
     return {
       snot: 0,
       kingCoins: 0,
+      snotCoins: 0,
       containerSnot: 0,
       containerCapacity: 1, // Уровень 1 соответствует емкости 1
       containerCapacityLevel: 1,
@@ -36,6 +37,10 @@ export function getSafeInventory(gameState: any): Inventory {
       
     kingCoins: typeof inventory.kingCoins === 'number' && !isNaN(inventory.kingCoins) 
       ? inventory.kingCoins 
+      : 0,
+      
+    snotCoins: typeof inventory.snotCoins === 'number' && !isNaN(inventory.snotCoins) 
+      ? inventory.snotCoins 
       : 0,
       
     containerSnot: typeof inventory.containerSnot === 'number' && !isNaN(inventory.containerSnot) 

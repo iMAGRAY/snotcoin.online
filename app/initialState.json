@@ -1,7 +1,7 @@
 {
   "inventory": {
     "snot": 0,
-    "kingCoins": 0,
+    "snotCoins": 0,
     "containerSnot": 0,
     "containerCapacity": 1,
     "fillingSpeedLevel": 1,
@@ -16,10 +16,10 @@
   "gameStats": {
     "totalClicks": 0,
     "totalSnot": 0,
-    "totalKingCoins": 0,
+    "totalSnotCoins": 0,
     "maxContainerLevel": 1,
     "maxSpeedLevel": 1,
-    "lifetimeKingCoins": 0
+    "lifetimeSnotCoins": 0
   },
   "preferences": {
     "activeBadge": null,

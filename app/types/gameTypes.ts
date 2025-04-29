@@ -63,6 +63,7 @@ export interface SoundSettings {
 export interface Inventory {
   snot: number;
   kingCoins: number;
+  snotCoins: number;
   containerSnot: number;
   containerCapacity: number;
   containerCapacityLevel: number;
@@ -162,7 +163,7 @@ export interface GameStateStats {
   startDate: string;
   highestLevel: number;
   totalSnot: number;
-  totalKingCoins: number;
+  totalSnotCoins: number;
   consecutiveLoginDays: number;
 }
 
@@ -402,6 +403,7 @@ export function createDefaultGameState(): GameState {
     inventory: {
       snot: initialSnot,
       kingCoins: initialKingCoins,
+      snotCoins: 0,
       containerCapacity: 1,
       containerSnot: 0.05,
       fillingSpeed: 0.01,
@@ -445,7 +447,7 @@ export function createDefaultGameState(): GameState {
       startDate: now,
       highestLevel: 1,
       totalSnot: initialSnot,
-      totalKingCoins: initialKingCoins,
+      totalSnotCoins: initialKingCoins,
       consecutiveLoginDays: 1
     },
     consecutiveLoginDays: 1,

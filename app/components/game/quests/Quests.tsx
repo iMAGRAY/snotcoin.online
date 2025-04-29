@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ICONS } from '../../../constants/uiConstants';
-import Image from 'next/image';
+import Image, { StaticImageData } from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { StaticImageData } from 'next/image';
 
 interface Quest {
   id: string;
@@ -12,7 +11,11 @@ interface Quest {
   icon: string | StaticImageData;
   points?: number;
   date?: string;
-  reward?: string;
+  reward?: {
+    type: string;
+    amount: number;
+    icon: string | StaticImageData;
+  } | string;
 }
 
 const QUESTS: Quest[] = [
@@ -373,8 +376,14 @@ const Quests: React.FC = () => {
                             <span className={`text-lg sm:text-xl font-bold ${quest.completed ? 'text-yellow-100' : 'text-gray-300'} truncate`}>{quest.title}</span>
                           </div>
                           <div className={`${quest.completed ? 'text-yellow-200/80' : 'text-gray-400'} text-base italic mt-0.5 truncate sm:whitespace-normal`}>{quest.description}</div>
-                          {quest.reward && quest.reward.length > 0 && (
-                            <div className="text-yellow-400 text-sm mt-1">Reward: <span className="font-bold">{quest.reward}</span></div>
+                          {quest.reward && (
+                            <div className="text-yellow-400 text-sm mt-1">Reward: 
+                              <span className="font-bold ml-1">
+                                {typeof quest.reward === 'string' 
+                                  ? quest.reward 
+                                  : `${quest.reward.amount} ${quest.reward.type === 'currency' ? 'KingCoins' : quest.reward.type}`}
+                              </span>
+                            </div>
                           )}
                         </div>
                         {/* Points (справа) */}

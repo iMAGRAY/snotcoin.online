@@ -15,6 +15,7 @@ export const createInitialGameState = (userId: string): ExtendedGameState => {
     user: null,
     inventory: {
       snot: 0,
+      kingCoins: 0,
       snotCoins: 0,
       containerSnot: 0.05,
       containerCapacity: 1,
@@ -114,12 +115,18 @@ export const createInitialGameState = (userId: string): ExtendedGameState => {
 export const GAME_VERSION = 1;
 
 /**
+ * Начальные значения игровых ресурсов
+ */
+export const STARTING_SNOT = 10;
+
+/**
  * Начальное состояние игры
  */
 export const initialState: GameState = {
   user: null,
   inventory: {
     snot: 0,
+    kingCoins: 0,
     snotCoins: 0,
     containerSnot: 0.05,
     containerCapacity: 1,
@@ -132,9 +139,9 @@ export const initialState: GameState = {
   container: {
     level: 1,
     capacity: 1,
-    currentAmount: 0,
-    fillRate: 1,
-    currentFill: 0,
+    currentAmount: 0.05,
+    fillRate: 0.01,
+    currentFill: 0.05,
     fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
     lastUpdateTimestamp: Date.now()
   },
@@ -338,4 +345,186 @@ function calculateContainerCapacity(level: number): number {
   
   // Проверяем, что значение определено
   return typeof capacity === 'number' ? capacity : 1;
-} 
+}
+
+export const INITIAL_GAME_STATE: GameState = {
+  user: null,
+  inventory: {
+    snot: 0,
+    kingCoins: 0,
+    snotCoins: 0,
+    containerCapacity: 100,
+    containerSnot: 0,
+    containerCapacityLevel: 1,
+    fillingSpeed: 0.2,
+    fillingSpeedLevel: 1,
+    collectionEfficiency: 1,
+    lastUpdateTimestamp: Date.now()
+  },
+  container: {
+    level: 1,
+    capacity: 1,
+    currentAmount: 0.05,
+    fillRate: 0.01,
+    currentFill: 0.05,
+    fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
+    lastUpdateTimestamp: Date.now()
+  },
+  upgrades: {
+    containerLevel: 1,
+    fillingSpeedLevel: 1,
+    clickPower: { level: 1, value: 1 },
+    passiveIncome: { level: 1, value: 0.1 },
+    collectionEfficiencyLevel: 1,
+    containerCapacity: {
+      level: 1,
+      cost: 0
+    },
+    fillingSpeed: {
+      level: 1,
+      cost: 0
+    }
+  },
+  _userId: '',
+  _lastModified: Date.now(),
+  _createdAt: new Date().toISOString(),
+  _tempData: null,
+  _lastActionTime: new Date().toISOString(),
+  _lastAction: 'RESET_GAME_STATE',
+  logs: [],
+  analytics: null,
+  items: [],
+  achievements: { unlockedAchievements: [] },
+  highestLevel: 1,
+  stats: {
+    clickCount: 0,
+    playTime: 0,
+    startDate: new Date().toISOString(),
+    highestLevel: 1,
+    totalSnot: 0,
+    totalSnotCoins: 0,
+    consecutiveLoginDays: 0
+  },
+  consecutiveLoginDays: 0,
+  settings: {
+    language: 'ru',
+    theme: 'light',
+    notifications: true,
+    tutorialCompleted: false,
+    musicEnabled: true,
+    soundEnabled: true,
+    notificationsEnabled: true
+  },
+  soundSettings: {
+    musicVolume: 0.5,
+    soundVolume: 0.5,
+    notificationVolume: 0.5,
+    clickVolume: 0.5,
+    effectsVolume: 0.5,
+    backgroundMusicVolume: 0.25,
+    isMuted: false,
+    isEffectsMuted: false,
+    isBackgroundMusicMuted: false
+  },
+  hideInterface: false,
+  activeTab: 'game',
+  fillingSpeed: 1,
+  containerLevel: 1,
+  isPlaying: false,
+  isGameInstanceRunning: false,
+  validationStatus: 'pending',
+  lastValidation: new Date().toISOString(),
+  gameStarted: false,
+  isLoading: false
+};
+
+export const DEFAULT_GAME_STATE: GameState = {
+  user: null,
+  inventory: {
+    snot: STARTING_SNOT,
+    kingCoins: 5,
+    snotCoins: 0,
+    containerCapacity: 100,
+    containerSnot: 0,
+    containerCapacityLevel: 1,
+    fillingSpeed: 0.5,
+    fillingSpeedLevel: 1,
+    collectionEfficiency: 1,
+    lastUpdateTimestamp: Date.now()
+  },
+  container: {
+    level: 1,
+    capacity: 1,
+    currentAmount: 0.05,
+    fillRate: 0.01,
+    currentFill: 0.05,
+    fillingSpeed: 1, // Скорость заполнения: 1 snot за 24 часа на уровне 1
+    lastUpdateTimestamp: Date.now()
+  },
+  upgrades: {
+    containerLevel: 1,
+    fillingSpeedLevel: 1,
+    clickPower: { level: 1, value: 1 },
+    passiveIncome: { level: 1, value: 0.1 },
+    collectionEfficiencyLevel: 1,
+    containerCapacity: {
+      level: 1,
+      cost: 0
+    },
+    fillingSpeed: {
+      level: 1,
+      cost: 0
+    }
+  },
+  _userId: '',
+  _lastModified: Date.now(),
+  _createdAt: new Date().toISOString(),
+  _tempData: null,
+  _lastActionTime: new Date().toISOString(),
+  _lastAction: 'RESET_GAME_STATE',
+  logs: [],
+  analytics: null,
+  items: [],
+  achievements: { unlockedAchievements: [] },
+  highestLevel: 1,
+  stats: {
+    clickCount: 0,
+    playTime: 0,
+    startDate: new Date().toISOString(),
+    highestLevel: 1,
+    totalSnot: 0,
+    totalSnotCoins: 0,
+    consecutiveLoginDays: 0
+  },
+  consecutiveLoginDays: 0,
+  settings: {
+    language: 'ru',
+    theme: 'light',
+    notifications: true,
+    tutorialCompleted: false,
+    musicEnabled: true,
+    soundEnabled: true,
+    notificationsEnabled: true
+  },
+  soundSettings: {
+    musicVolume: 0.5,
+    soundVolume: 0.5,
+    notificationVolume: 0.5,
+    clickVolume: 0.5,
+    effectsVolume: 0.5,
+    backgroundMusicVolume: 0.25,
+    isMuted: false,
+    isEffectsMuted: false,
+    isBackgroundMusicMuted: false
+  },
+  hideInterface: false,
+  activeTab: 'game',
+  fillingSpeed: 1,
+  containerLevel: 1,
+  isPlaying: false,
+  isGameInstanceRunning: false,
+  validationStatus: 'pending',
+  lastValidation: new Date().toISOString(),
+  gameStarted: false,
+  isLoading: false
+}; 

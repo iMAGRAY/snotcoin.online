@@ -18,7 +18,7 @@ interface SyncQueueItem {
   gameState: ExtendedGameState;
   timestamp: number;
   attemptCount: number;
-  status: 'pending' | 'processing' | 'failed';
+  status: 'pending' | 'processing' | 'failed' | 'success';
   error?: string;
 }
 
@@ -184,6 +184,7 @@ export class GameProgressService {
       inventory: {
         snot: 0,
         kingCoins: 0,
+        snotCoins: 0,
         containerSnot: 0.05,
         containerCapacity: 1,
         containerCapacityLevel: 1,
@@ -802,6 +803,18 @@ export class GameProgressService {
       // Остальные поля оставляем как есть
       // Указываем что user это null, чтобы соответствовать типам
       user: gameState.user || null,
+      inventory: {
+        snot: gameState.inventory?.snot || 0,
+        kingCoins: gameState.inventory?.kingCoins || 0,
+        snotCoins: gameState.inventory?.snotCoins || 0,
+        containerSnot: gameState.inventory?.containerSnot || 0,
+        containerCapacity: gameState.inventory?.containerCapacity || 100,
+        containerCapacityLevel: gameState.inventory?.containerCapacityLevel || 1,
+        fillingSpeed: gameState.inventory?.fillingSpeed || 0.1,
+        fillingSpeedLevel: gameState.inventory?.fillingSpeedLevel || 1,
+        collectionEfficiency: gameState.inventory?.collectionEfficiency || 1,
+        lastUpdateTimestamp: gameState.inventory?.lastUpdateTimestamp || Date.now()
+      },
       // ... остальные поля ...
     };
   }
@@ -833,6 +846,7 @@ export class GameProgressService {
       inventory: {
         snot: 0,
         kingCoins: 0,
+        snotCoins: 0,
         containerSnot: 0.05,
         containerCapacity: 1,
         containerCapacityLevel: 1,

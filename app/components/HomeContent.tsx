@@ -26,10 +26,8 @@ const logger = {
   log: (message: string, data?: any) => {
     // Выводим логи только если включены детальные логи или это важное сообщение
     if (ENABLE_DETAILED_LOGS || 
-        message.includes('Ошибка') || 
-        message.includes('Error') || 
-        message.includes('Первая инициализация') || 
-        (message.includes('ready()') && !message.includes('интерфейс'))) {
+        message.includes('ошибка') || 
+        message.includes('Error')) {
       console.log(message, data || '');
     }
   },
@@ -213,12 +211,22 @@ const HomeContent: React.FC = () => {
               // Небольшая задержка перед показом системного диалога
               setTimeout(async () => {
                 try {
-                  logger.log('[HomeContent] Showing system add app dialog');
-                  // Вызываем системное окно добавления приложения
-                  const result = await sdk.actions.addFrame();
-                  logger.log('[HomeContent] System add app result:', result);
+                  logger.log('[HomeContent] Checking SDK capability for adding app');
+                  // Проверяем наличие метода addFrame и его доступность
+                  if (sdk && sdk.actions && typeof sdk.actions.addFrame === 'function') {
+                    logger.log('[HomeContent] Showing system add app dialog');
+                    // Вызываем системное окно добавления приложения
+                    const result = await sdk.actions.addFrame();
+                    logger.log('[HomeContent] System add app result:', result);
+                  } else {
+                    // Если метод недоступен, логируем информацию
+                    logger.log('[HomeContent] SDK addFrame method is not available or not supported in this version');
+                    // В старых версиях SDK (до 0.0.31) может не быть метода addFrame
+                    // или он может иметь другую сигнатуру
+                  }
                 } catch (error) {
                   logger.error('[HomeContent] Error showing system add app dialog:', error);
+                  // Продолжаем работу приложения даже при ошибке
                 }
               }, 1000);
             }
@@ -350,7 +358,7 @@ const HomeContent: React.FC = () => {
           isVisible={shouldShowInterface && gameState.activeTab !== 'quests'}
           activeTab={gameState.activeTab || "laboratory"}
           snot={gameState.inventory?.snot || 0}
-          snotCoins={gameState.inventory?.snotCoins || 0}
+          kingCoins={gameState.inventory?.snotCoins || 0}
           containerCapacity={gameState.inventory?.containerCapacity}
           containerLevel={gameState.container?.level ?? 0}
           containerSnot={gameState.inventory?.containerSnot}

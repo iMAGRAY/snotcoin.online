@@ -47,6 +47,15 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
     
     console.log(`[GameProviderWrapper] Platform: ${desktop ? 'desktop' : 'mobile'}`);
     
+    // Добавляем страховку от ошибок инициализации Farcaster SDK
+    const farcasterTimeout = setTimeout(() => {
+      // Если статус все еще idle или loading после таймаута, продолжаем без него
+      if (sdkStatus === 'idle' || sdkStatus === 'loading') {
+        console.warn('[GameProviderWrapper] Farcaster SDK не инициализировался вовремя, продолжаем без него');
+        setForceContinue(true);
+      }
+    }, 3000); // 3 секунды ожидания SDK
+    
     // На десктопе сразу активируем принудительное продолжение для ускорения загрузки
     if (desktop) {
       setForceContinue(true);
@@ -83,12 +92,16 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
         setForceContinue(true);
       }, 5000);
       
-      return () => clearTimeout(forceTimeout);
+      return () => {
+        clearTimeout(forceTimeout);
+        clearTimeout(farcasterTimeout);
+      }
     }
     
-    // Явно возвращаем undefined для путей выполнения без функции очистки
-    return undefined;
-  }, []);
+    return () => {
+      clearTimeout(farcasterTimeout);
+    };
+  }, [sdkStatus]);
 
   // Обработка обновления persistentUserId при получении данных пользователя
   useEffect(() => {
@@ -136,7 +149,7 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  // Последний шанс - показываем экран загрузки для мобильных устройств
+  // Показываем экран загрузки для мобильных устройств
   if ((sdkStatus === 'idle' || sdkStatus === 'loading')) {
     console.log(`[GameProviderWrapper] Showing loading placeholder: SDK Status=${sdkStatus}`);
     return (
@@ -146,9 +159,42 @@ const GameProviderWrapper = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
+  // Дополнительно проверяем на ошибки SDK и используем базовый ID
+  if (sdkStatus === 'error') {
+    console.warn(`[GameProviderWrapper] SDK error detected, using fallback userId`);
+    
+    // Создаем запасной ID с пометкой об ошибке SDK
+    const errorFallbackId = `sdk_error_${Date.now()}`;
+    
+    // Сохраняем в localStorage для консистентности
+    if (isClient) {
+      try {
+        localStorage.setItem(USER_ID_STORAGE_KEY, errorFallbackId);
+      } catch (e) {
+        console.warn('[GameProviderWrapper] Error saving errorFallbackId to localStorage', e);
+      }
+    }
+    
+    return (
+      <GameProvider userId={errorFallbackId}>
+        {children}
+      </GameProvider>
+    );
+  }
+
   // Для всех остальных случаев создаем запасной анонимный ID
   const fallbackId = `fallback_${Date.now()}`;
   console.warn(`[GameProviderWrapper] Using fallback userId in unexpected state: ${fallbackId}`);
+  
+  // Добавляем сохранение fallbackId в localStorage, чтобы id сохранился при перезагрузке
+  if (isClient) {
+    try {
+      localStorage.setItem(USER_ID_STORAGE_KEY, fallbackId);
+      console.log(`[GameProviderWrapper] Сохранили fallback userId: ${fallbackId}`);
+    } catch (e) {
+      console.warn('[GameProviderWrapper] Ошибка при сохранении fallback userId:', e);
+    }
+  }
   
   return (
     <GameProvider userId={fallbackId}>

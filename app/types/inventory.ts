@@ -5,7 +5,7 @@ export interface Inventory {
   /** Количество соплей */
   snot: number;
   /** Количество монет */
-  kingCoins: number;
+  snotCoins: number;
   /** Текущая вместимость контейнера */
   containerCapacity: number;
   /** Текущее количество соплей в контейнере */

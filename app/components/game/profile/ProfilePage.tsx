@@ -84,7 +84,7 @@ const ProfilePage: React.FC = () => {
 
   const getUserProfileImage = () => {
     // Если уже была ошибка загрузки, возвращаем локальное изображение
-    if (imageError) return "/images/profile/background/avatar/default.webp"
+    if (imageError) return "/images/profile/avatar/default.webp"
     
     // Проверяем данные в разных местах
     if (sdkUser?.pfpUrl) return sdkUser.pfpUrl

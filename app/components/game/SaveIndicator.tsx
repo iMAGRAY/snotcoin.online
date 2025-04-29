@@ -9,7 +9,7 @@ interface SaveIndicatorProps {
 
 export default function SaveIndicator({ className = '' }: SaveIndicatorProps) {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'none' | 'pending' | 'error'>('idle');
   const [showDetails, setShowDetails] = useState(false);
   const [hasErrors, setHasErrors] = useState(false);
   

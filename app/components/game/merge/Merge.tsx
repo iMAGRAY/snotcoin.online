@@ -145,7 +145,7 @@ const Merge: React.FC = () => {
       ...prev,
       inventory: {
         ...prev.inventory,
-        kingCoins: (prev.inventory.kingCoins || 0) + amount
+        snotCoins: (prev.inventory.snotCoins || 0) + amount
       }
     }));
     showFeedback(`Added ${amount} RoyalCoins!`);
@@ -371,8 +371,8 @@ const Merge: React.FC = () => {
       {/* Chest card slots fixed above TabBar */}
       <div className="fixed left-0 right-0 bottom-28 px-4 flex justify-center gap-4 z-40">
         {chestSlots.map((slot, idx) => {
-          const unlockTime = chestUnlockTimes[idx]
-          const remainingMs = unlockTime - now
+          const unlockTime = chestUnlockTimes[idx] || 0
+          const remainingMs = unlockTime ? unlockTime - now : 0
           const hours = Math.floor(remainingMs / 3600000)
           const minutes = Math.floor((remainingMs % 3600000) / 60000)
           const timeLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
@@ -439,7 +439,7 @@ const Merge: React.FC = () => {
               </div>
 
               {/* Locked badge for unavailable slots */}
-              {slot > 0 && chestUnlockTimes[idx] === 0 && chestUnlockTimes.some(time => time > now) && (
+              {slot > 0 && chestUnlockTimes[idx] === 0 && chestUnlockTimes.some(time => time > 0 && time > now) && (
                 <div className="absolute top-2 left-1/2 transform -translate-x-1/2 text-white text-xl font-semibold" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
                   Locked
                 </div>
@@ -448,7 +448,7 @@ const Merge: React.FC = () => {
                 <>
                   <div className="relative flex-grow w-full h-full flex items-center justify-center">
                     {/* Display time at the top for chests not being unlocked */}
-                    {chestUnlockTimes[idx] === 0 && !chestUnlockTimes.some(time => time > now) && (
+                    {chestUnlockTimes[idx] === 0 && !chestUnlockTimes.some(time => time > 0 && time > now) && (
                       <div className="absolute top-1 z-10 text-white text-2xl font-black" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
                         {slot === 1 
                           ? <>3<span className="text-base inline-block relative" style={{top: '0.1em', marginLeft: '0.2em'}}>h</span></>
@@ -460,7 +460,7 @@ const Merge: React.FC = () => {
                     )}
                     
                     {/* Display countdown timer for chests being unlocked */}
-                    {chestUnlockTimes[idx] > now && (
+                    {chestUnlockTimes[idx] !== undefined && chestUnlockTimes[idx] > 0 && chestUnlockTimes[idx] > now && (
                       <div className="absolute top-1 z-10">
                         <span className="text-amber-300 font-bold text-2xl" style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}>
                           {hours > 0 
@@ -471,7 +471,7 @@ const Merge: React.FC = () => {
                       </div>
                     )}
                     <Image
-                      src={CHEST_IMAGES_ARRAY[slot - 1]}
+                      src={CHEST_IMAGES_ARRAY[slot - 1] || '/images/merge/chests/common.webp'}
                       alt={`Chest Level ${slot}`}
                       fill
                       sizes="100%"
@@ -538,12 +538,14 @@ const Merge: React.FC = () => {
               </div>
               
               {/* Show chest level info */}
-              {confirmSlot !== null && chestSlots[confirmSlot] > 0 && (
+              {confirmSlot !== null && chestSlots[confirmSlot] !== undefined && chestSlots[confirmSlot] > 0 && (
                 <div className="mb-6 flex flex-col items-center justify-center">
                   <div className="relative w-48 h-48 mb-2">
                     <Image
-                      src={CHEST_IMAGES_ARRAY[chestSlots[confirmSlot] - 1]}
-                      alt={`Chest Level ${chestSlots[confirmSlot]}`}
+                      src={confirmSlot !== null && chestSlots[confirmSlot] !== undefined ? 
+                        (CHEST_IMAGES_ARRAY[chestSlots[confirmSlot] - 1] || '/images/merge/chests/common.webp') : 
+                        '/images/merge/chests/common.webp'}
+                      alt={`Chest Level ${confirmSlot !== null && chestSlots[confirmSlot] !== undefined ? chestSlots[confirmSlot] : 1}`}
                       fill
                       sizes="100%"
                       style={{ objectFit: 'contain' }}
@@ -552,7 +554,7 @@ const Merge: React.FC = () => {
                     />
                   </div>
                   <div className="bg-yellow-600/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full">
-                    Arena {chestSlots[confirmSlot]}
+                    Arena {confirmSlot !== null && chestSlots[confirmSlot] !== undefined ? chestSlots[confirmSlot] : 1}
                   </div>
                 </div>
               )}
@@ -564,7 +566,7 @@ const Merge: React.FC = () => {
                     // Check if another chest is already being unlocked
                     if (chestUnlockTimes.some(time => time > now)) {
                       // If player doesn't have enough KingCoin
-                      if (inventory.snot < 1) {
+                      if (inventory.snotCoins < 1) {
                         showFeedback('Not enough KingCoin.')
                         return;
                       }
@@ -574,24 +576,30 @@ const Merge: React.FC = () => {
                         ...prev,
                         inventory: {
                           ...prev.inventory,
-                          snot: (prev.inventory.snot || 0) - 1
+                          snotCoins: (prev.inventory.snotCoins || 0) - 1
                         }
                       }))
                       
                       // Reset the unlock time for this chest (immediately unlock)
-                      handleOpenCard(confirmSlot!)
+                      if (confirmSlot !== null) {
+                        handleOpenCard(confirmSlot)
+                      }
                     } else {
                       // Normal unlock (start countdown)
-                      const level = chestSlots[confirmSlot!]
-                      setChestUnlockTimes(prev => {
-                        const next = [...prev]
-                        next[confirmSlot!] = Date.now() + DURATION_MS[level]
-                        return next
-                      })
-                      setConfirmSlot(null)
+                      if (confirmSlot !== null && chestSlots[confirmSlot]) {
+                        const level = chestSlots[confirmSlot]
+                        setChestUnlockTimes(prev => {
+                          const next = [...prev]
+                          if (confirmSlot !== null && level) {
+                            next[confirmSlot] = Date.now() + (DURATION_MS[level] || 10800000) // Используем 3 часа по умолчанию
+                          }
+                          return next
+                        })
+                        setConfirmSlot(null)
+                      }
                     }
                   }}
-                  disabled={chestUnlockTimes.some(time => time > now) && inventory.snot < 1}
+                  disabled={chestUnlockTimes.some(time => time > now) && inventory.snotCoins < 1}
                   className="w-full px-6 py-4 rounded-xl font-bold text-xl relative overflow-hidden bg-[#00ff00] text-white border-2 border-green-600 border-b-4 border-green-800 shadow-[0_7px_12px_-2px_rgba(0,0,0,0.8)] flex items-center justify-center transition-all duration-300"
                   style={{textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000'}}
                   whileHover={{ scale: 1.02, y: -1 }}

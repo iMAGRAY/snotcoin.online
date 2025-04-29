@@ -100,6 +100,10 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
         // 20% от вместимости контейнера без минимального порога
         cost = containerCapacity * 0.2;
         break;
+      default:
+        // Для любой другой неизвестной способности (защита от ошибок)
+        cost = containerCapacity * 0.1;
+        break;
     }
     
     // Проверяем достаточно ли snotCoins
@@ -121,7 +125,9 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       }
       
       // Активируем способность в игре
-      activateAbility(ability);
+      if (typeof activateAbility === 'function') {
+        activateAbility(ability);
+      }
       
       // Затем сбрасываем выбранную способность
       setTimeout(() => setSelectedAbility(null), 500);
@@ -129,7 +135,7 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
       // Недостаточно snotCoins для использования этой способности
       toast.error(`Not enough KingCoin for ${ability}! Need ${cost.toFixed(1)} KingCoin`);
     }
-  }, [inventory]);
+  }, [inventory, activateAbility, toast]);
 
   // Обработчик обновления счета
   const handleScoreUpdate = useCallback((newScore: number) => {

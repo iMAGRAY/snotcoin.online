@@ -84,6 +84,7 @@ const ResourceItem: React.FC<{
           alt={t(label)}
           className="object-contain transition-all duration-300"
           draggable="false"
+          style={{ height: 'auto' }}
           onContextMenu={(e) => e.preventDefault()}
         />
       </div>
