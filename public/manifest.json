@@ -1,7 +1,7 @@
 {
-  "name": "Snotcoin",
-  "short_name": "Snotcoin",
-  "description": "Snotcoin Web Application",
+  "name": "RoyaleWay",
+  "short_name": "RoyaleWay",
+  "description": "RoyaleWay Web Application",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -45,7 +45,7 @@ const AddToFavoritesModal: React.FC<AddToFavoritesModalProps> = ({ onConfirm, on
           </div>
           
           <h3 className="text-xl text-center font-bold text-white mb-2">
-            Добавить Kingcoin в избранное
+            Добавить RoyaleWay в избранное
           </h3>
           
           <p className="text-gray-300 text-center mb-6">

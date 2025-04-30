@@ -139,7 +139,7 @@ const Merge: React.FC = () => {
     showFeedback('Attempts restored!');
   };
 
-  // Функция для добавления RoyalCoin
+  // Функция для добавления RoyaleWay
   const addRoyalCoins = (amount: number = 100) => {
     gameDispatch(prev => ({
       ...prev,
@@ -148,7 +148,7 @@ const Merge: React.FC = () => {
         snotCoins: (prev.inventory.snotCoins || 0) + amount
       }
     }));
-    showFeedback(`Added ${amount} RoyalCoins!`);
+    showFeedback(`Added ${amount} RoyaleWay coins!`);
   };
 
   // Обновление таймера для восстановления попыток
@@ -250,6 +250,58 @@ const Merge: React.FC = () => {
         backgroundRepeat: "no-repeat"
       }}
     >
+      {/* Изображение ранга PVP в центре экрана */}
+      <div className="absolute top-1/3 transform -translate-y-1/2 z-20">
+        <div className="relative flex flex-col items-center">
+          <Image
+            src="/images/merge/pvp/rank/0.webp"
+            alt="PVP Rank"
+            width={200}
+            height={200}
+            className="object-contain drop-shadow-[0_0_10px_rgba(0,100,255,0.6)]"
+            draggable={false}
+          />
+          <div className="mt-3 text-center relative">
+            <motion.div
+              className="relative inline-block"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              {/* Светящийся фон */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 opacity-20 blur-md scale-110"></div>
+              
+              {/* Основной фон */}
+              <div className="relative px-6 py-1.5 rounded-full bg-gradient-to-r from-blue-900/80 to-indigo-900/80 backdrop-blur-md border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                
+                {/* Текст с усиленным градиентом и анимированными эффектами */}
+                <motion.span 
+                  className="text-transparent bg-clip-text bg-gradient-to-br from-white via-blue-200 to-indigo-300 text-[22px] font-black tracking-wide"
+                  style={{
+                    textShadow: '0 0 15px rgba(147,197,253,0.8), 0 0 5px rgba(147,197,253,0.5)',
+                    WebkitTextStroke: '0.5px rgba(96,165,250,0.3)'
+                  }}
+                  animate={{ 
+                    textShadow: [
+                      '0 0 15px rgba(147,197,253,0.8), 0 0 5px rgba(147,197,253,0.5)',
+                      '0 0 20px rgba(147,197,253,0.9), 0 0 7px rgba(147,197,253,0.7)',
+                      '0 0 15px rgba(147,197,253,0.8), 0 0 5px rgba(147,197,253,0.5)'
+                    ]
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                  }}
+                >
+                  UNRANKED
+                </motion.span>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
       {/* Ресурсы и кнопки в правом верхнем углу */}
       <div className="fixed top-4 right-4 flex items-center gap-2 z-50">
         <div className="flex items-center mr-2">
@@ -265,11 +317,11 @@ const Merge: React.FC = () => {
         
         <div className="flex items-center mr-3">
           <Image
-            src="/images/common/icons/kingcoin-icon.webp"
-            alt="KingCoin"
-            width={24}
-            height={24}
-            className="w-6 h-6 mr-1"
+            src="/images/common/icons/kingcoin.webp"
+            alt="Coin"
+            width={18}
+            height={18}
+            className="inline-block mr-1"
           />
           <span className="text-white font-bold text-sm">{(inventory.snotCoins || 0).toFixed(2)}</span>
         </div>
@@ -298,7 +350,7 @@ const Merge: React.FC = () => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <Image src={ICONS.KINGCOIN} alt="RoyalCoin" width={16} height={16} className="w-4 h-4 mr-1" />
+          <Image src={ICONS.KINGCOIN} alt="RoyaleWay" width={16} height={16} className="w-4 h-4 mr-1" />
           <span>+100</span>
         </motion.button>
       </div>
@@ -355,7 +407,7 @@ const Merge: React.FC = () => {
           
             <div className="flex items-center justify-center relative z-10">
               <span className="text-white text-[26px] font-black" style={{textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000'}}>
-                PVP
+                Battle
               </span>
             </div>
           </motion.button>
@@ -558,9 +610,9 @@ const Merge: React.FC = () => {
                   onClick={() => {
                     // Check if another chest is already being unlocked
                     if (chestUnlockTimes.some(time => time > now)) {
-                      // If player doesn't have enough KingCoin
+                      // If player doesn't have enough RoyaleWay coins
                       if (inventory.snotCoins < 1) {
-                        showFeedback('Not enough KingCoin.')
+                        showFeedback('Not enough RoyaleWay coins.')
                         return;
                       }
                       

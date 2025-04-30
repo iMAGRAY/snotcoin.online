@@ -19,7 +19,6 @@ import { createInitialGameState } from '../../../constants/gameConstants'
 
 // Import sections
 import StatsSection from "./sections/StatsSection"
-import InventorySection from "./sections/InventorySection"
 import AchievementsSection from "./sections/AchievementsSection"
 
 // Import modals
@@ -130,7 +129,7 @@ const ProfilePage: React.FC = () => {
   }
 
   const profileSectionsData: ProfileSection[] = [
-    { label: "inventory", icon: Package, color: "from-pink-500 to-pink-700", content: <InventorySection /> },
+    // Секция инвентаря удалена
   ]
 
   return (

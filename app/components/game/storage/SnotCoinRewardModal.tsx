@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ICONS } from '@/app/constants/uiConstants';
 import InteractiveBall from '@/app/components/effects/InteractiveBall';
 
-interface KingCoinRewardModalProps {
+interface RoyaleWayRewardModalProps {
   amount: number;
 }
 
-export const KingCoinRewardModal: React.FC<KingCoinRewardModalProps> = ({ amount }) => {
+export const RoyaleWayRewardModal: React.FC<RoyaleWayRewardModalProps> = ({ amount }) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export const KingCoinRewardModal: React.FC<KingCoinRewardModalProps> = ({ amount
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
             >
-              KingCoin успешно добавлены в ваш баланс
+              RoyaleWay успешно добавлены в ваш баланс
             </motion.p>
           </motion.div>
         </motion.div>
@@ -70,4 +70,4 @@ export const KingCoinRewardModal: React.FC<KingCoinRewardModalProps> = ({ amount
   );
 };
 
-KingCoinRewardModal.displayName = 'KingCoinRewardModal'; 
+RoyaleWayRewardModal.displayName = 'RoyaleWayRewardModal'; 

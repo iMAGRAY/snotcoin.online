@@ -17,7 +17,7 @@ const SplashScreen: React.FC = () => {
       <div className="relative w-full h-full">
         <Image
           src={ICONS.COMMON.LOADING}
-          alt="KingCoin Splash Screen"
+          alt="RoyaleWay Splash Screen"
           fill
           sizes="100vw"
           style={{ objectFit: "contain" }}

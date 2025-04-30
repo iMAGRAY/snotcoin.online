@@ -252,11 +252,7 @@ const UniversalStatusDisplay: React.FC<UniversalStatusDisplayProps> = ({
   // Определяем классы для контейнера в зависимости от темы
   const containerClasses = cn(
     position === "fixed" ? "fixed top-0 left-0 right-0 z-50" : `${position} z-10`,
-    theme === "dark" 
-      ? "bg-gradient-to-b from-[#3a4c62] to-[#2a3b4d] shadow-lg border-b border-[#4a7a9e]" 
-      : theme === "light" 
-        ? "bg-gradient-to-b from-[#e0e0e0] to-[#c0c0c0] shadow-lg border-b border-[#a0a0a0]" 
-        : "bg-transparent",
+    "bg-transparent",
     className
   )
 

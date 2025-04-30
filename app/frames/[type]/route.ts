@@ -12,13 +12,13 @@ export async function GET(
   { params }: { params: { type: string } }
 ) {
   // Получаем домен сайта
-  const host = request.headers.get('host') || 'kingcoin.online';
+  const host = request.headers.get('host') || 'royaleway.top';
   const protocol = request.headers.get('x-forwarded-proto') || 'https';
   const baseUrl = `${protocol}://${host}`;
   
   // Параметры фрейма по умолчанию
   let frameParams = {
-    title: 'Kingcoin',
+    title: 'RoyaleWay',
     description: 'PLAY 2 SNOT - Merge Game',
     image: `${baseUrl}/game/cast.webp`,
     buttonText: 'Play Game',
@@ -32,7 +32,7 @@ export async function GET(
     case 'laboratory':
       frameParams = {
         ...frameParams,
-        title: 'Kingcoin Laboratory',
+        title: 'RoyaleWay Laboratory',
         description: 'Create more snot in the laboratory',
         image: `${baseUrl}/game/laboratory.webp`,
         buttonText: 'Enter Laboratory',
@@ -43,7 +43,7 @@ export async function GET(
     case 'merge':
       frameParams = {
         ...frameParams,
-        title: 'Kingcoin Merge',
+        title: 'RoyaleWay Merge',
         description: 'Merge your snots to level up',
         image: `${baseUrl}/game/merge.webp`,
         buttonText: 'Merge Snots',
@@ -54,7 +54,7 @@ export async function GET(
     case 'storage':
       frameParams = {
         ...frameParams,
-        title: 'Kingcoin Storage',
+        title: 'RoyaleWay Storage',
         description: 'Check your storage of snot',
         image: `${baseUrl}/game/storage.webp`,
         buttonText: 'Open Storage',

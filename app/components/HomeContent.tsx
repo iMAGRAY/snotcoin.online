@@ -38,10 +38,10 @@ const logger = {
 };
 
 // Dynamically import components that use browser APIs
-const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
-  ssr: false,
-  loading: () => <LoadingScreen progress={25} statusMessage="Loading Laboratory..." />,
-})
+// const Laboratory = dynamic(() => import("./game/laboratory/laboratory"), {
+//   ssr: false,
+//   loading: () => <LoadingScreen progress={25} statusMessage="Loading Laboratory..." />,
+// })
 
 const Storage = dynamic(() => import("./game/storage/Storage"), {
   ssr: false,
@@ -79,11 +79,10 @@ const SaveIndicator = dynamic(() => import("./game/SaveIndicator"), {
 
 // Маппинг активных вкладок на соответствующие компоненты
 const TABS: Record<string, JSX.Element> = {
-  laboratory: <Laboratory />,
   merge: <Merge />,
   storage: <Storage />,
-  profile: <ProfilePage />,
-  quests: <Quests />
+  quests: <Quests />,
+  profile: <ProfilePage />
 };
 
 const HomeContent: React.FC = () => {
@@ -123,15 +122,14 @@ const HomeContent: React.FC = () => {
   
   // Проверка и установка активной вкладки при монтировании
   useEffect(() => {
-    const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
+    const validTabs = ["merge", "storage", "quests", "profile"];
     const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
     
     if (!isValidTab) {
-      logger.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
-      // Устанавливаем лабораторию как активную вкладку по умолчанию
+      logger.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "merge"`);
       dispatch(prevState => ({
         ...prevState,
-        activeTab: "laboratory"
+        activeTab: "merge"
       }));
     }
   }, [gameState.activeTab, dispatch]);
@@ -216,8 +214,18 @@ const HomeContent: React.FC = () => {
                   if (sdk && sdk.actions && typeof sdk.actions.addFrame === 'function') {
                     logger.log('[HomeContent] Showing system add app dialog');
                     // Вызываем системное окно добавления приложения
-                    const result = await sdk.actions.addFrame();
-                    logger.log('[HomeContent] System add app result:', result);
+                    try {
+                      const result = await sdk.actions.addFrame();
+                      // Проверяем, что результат определен и имеет правильную структуру
+                      if (result && typeof result === 'object') {
+                        logger.log('[HomeContent] System add app result:', result); 
+                      } else {
+                        logger.log('[HomeContent] System add app completed, no result data');
+                      }
+                    } catch (addFrameError) {
+                      logger.error('[HomeContent] Error in sdk.actions.addFrame():', addFrameError);
+                      // Продолжаем работу приложения
+                    }
                   } else {
                     // Если метод недоступен, логируем информацию
                     logger.log('[HomeContent] SDK addFrame method is not available or not supported in this version');
@@ -356,7 +364,7 @@ const HomeContent: React.FC = () => {
       >
         <Resources 
           isVisible={shouldShowInterface && gameState.activeTab !== 'quests'}
-          activeTab={gameState.activeTab || "laboratory"}
+          activeTab={gameState.activeTab || "merge"}
           snot={gameState.inventory?.snot || 0}
           kingCoins={gameState.inventory?.snotCoins || 0}
           containerCapacity={gameState.inventory?.containerCapacity}

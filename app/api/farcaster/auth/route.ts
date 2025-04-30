@@ -13,7 +13,7 @@ const TOKEN_EXPIRY = '1h';
 // Срок действия Refresh токена: 30 дней
 const REFRESH_EXPIRY = '30d';
 
-const BASE_URL = process.env.NEXT_PUBLIC_DOMAIN || 'https://snotcoin.online';
+const BASE_URL = process.env.NEXT_PUBLIC_DOMAIN || 'https://royaleway.top';
 
 /**
  * Генерирует JWT токен для пользователя
@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
           fid: fid,
           username: validUsername,
           displayName: validDisplayName,
-          pfp: validPfp || 'https://snotcoin.online/images/profile/avatar/default.webp',
+          pfp: validPfp || 'https://royaleway.top/images/profile/avatar/default.webp',
           verified: true // Пользователь прошел валидацию
         }
       });
@@ -311,7 +311,7 @@ export async function GET(request: NextRequest) {
         fid: Number(fid),
         username: `user${fid}`,
         displayName: `User ${fid}`,
-        pfp: 'https://snotcoin.online/images/default-avatar.png'
+        pfp: 'https://royaleway.top/images/default-avatar.png'
       }
     });
   } catch (error) {

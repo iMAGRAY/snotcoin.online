@@ -18,7 +18,7 @@ const StatsSection: React.FC<StatsSectionProps> = () => {
     { label: "Total SNOT collected", value: formatSnotValue(gameState.inventory?.snot || 0), icon: Trophy },
     { label: "Container capacity", value: formatSnotValue(gameState.inventory?.containerCapacity || 100), icon: Zap },
     { label: "Highest level reached", value: gameState.highestLevel?.toString() || "1", icon: Award },
-    { label: "Total KingCoins collected", value: formatSnotValue(gameState.inventory?.snotCoins || 0), icon: Trophy },
+    { label: "Total RoyaleWay collected", value: formatSnotValue(gameState.inventory?.snotCoins || 0), icon: Trophy },
   ]
 
   return (

@@ -7,7 +7,6 @@ import { useTranslation } from "../../i18n"
 import { ErrorBoundary } from "../ErrorBoundary"
 import Image from "next/image"
 import { formatSnotValue } from "../../utils/formatters"
-import StatusDisplay from "../game/laboratory/status-display"
 import { ICONS, COLORS, UI_CLASSES, ANIMATIONS, LAYOUT, RESOURCES } from "../../constants/uiConstants"
 import { validateContainerParams } from "../../utils/resourceUtils"
 
@@ -147,7 +146,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
         {
           icon: ICONS.KINGCOIN,
           value: kingCoins,
-          label: "KingCoins",
+          label: "RoyaleWay",
           colorClass: COLORS.KINGCOIN,
         },
         {
@@ -158,40 +157,10 @@ const Resources: React.FC<ResourcesProps> = React.memo(
         }
       ];
       
-      if (showOnlyKingCoin) return items.filter(item => item.label === "KingCoins");
+      if (showOnlyKingCoin) return items.filter(item => item.label === "RoyaleWay");
       if (showOnlySnot) return items.filter(item => item.label === "SNOT");
       return items;
     }, [kingCoins, snot, showOnlyKingCoin, showOnlySnot]);
-
-    // Проверка условий для отображения StatusDisplay - перенесено сюда
-    const isLaboratoryTab = (activeTab || 'laboratory') === 'laboratory';
-    const hasAllRequiredProps = 
-      containerCapacity !== undefined && 
-      containerLevel !== undefined && 
-      containerSnot !== undefined && 
-      containerFillingSpeed !== undefined &&
-      fillingSpeedLevel !== undefined;
-    
-    // Всегда вычисляем props для StatusDisplay через useMemo, независимо от условий
-    const statusDisplayProps = useMemo(() => {
-      if (!isLaboratoryTab || !hasAllRequiredProps) return null;
-      
-      return validateContainerParams({
-        containerCapacity: containerCapacity ?? RESOURCES.DEFAULTS.MIN_CAPACITY,
-        containerLevel: containerLevel ?? RESOURCES.DEFAULTS.MIN_LEVEL,
-        containerSnot: containerSnot ?? 0,
-        containerFillingSpeed: containerFillingSpeed ?? RESOURCES.DEFAULTS.MIN_FILLING_SPEED,
-        fillingSpeedLevel: fillingSpeedLevel ?? RESOURCES.DEFAULTS.MIN_LEVEL
-      });
-    }, [
-      isLaboratoryTab, 
-      hasAllRequiredProps, 
-      containerCapacity, 
-      containerLevel, 
-      containerSnot, 
-      containerFillingSpeed, 
-      fillingSpeedLevel
-    ]);
 
     if (!isVisible) return null;
 
@@ -199,7 +168,7 @@ const Resources: React.FC<ResourcesProps> = React.memo(
     return (
       <ErrorBoundary fallback={<div className="text-red-500">Error loading resources</div>}>
         <motion.div
-          className={`${UI_CLASSES.PANEL.CONTAINER} w-full shadow-[0_8px_30px_-10px_rgba(0,0,0,0.7)]`}
+          className={`${UI_CLASSES.PANEL.CONTAINER} w-full`}
           {...ANIMATIONS.RESOURCE_PANEL}
         >
           <div className="flex flex-col w-full">
@@ -218,13 +187,6 @@ const Resources: React.FC<ResourcesProps> = React.memo(
                 ))}
               </div>
             </div>
-            
-            {/* StatusDisplay - отображается только в лаборатории */}
-            {statusDisplayProps && (
-              <div className="mt-2 px-2 pb-2">
-                <StatusDisplay {...statusDisplayProps} />
-              </div>
-            )}
           </div>
         </motion.div>
       </ErrorBoundary>

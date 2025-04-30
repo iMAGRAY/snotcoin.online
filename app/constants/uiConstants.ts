@@ -72,7 +72,7 @@ export const COLORS = {
 export const UI_CLASSES = {
   // Общие классы для панелей
   PANEL: {
-    CONTAINER: "z-50 fixed top-0 left-0 right-0 bg-gradient-to-b from-[#3a4c62] to-[#2a3b4d] shadow-lg border-b border-[#4a7a9e]",
+    CONTAINER: "z-50 fixed top-0 left-0 right-0 bg-transparent",
     TRANSPARENT: "z-50 bg-transparent",
   },
   

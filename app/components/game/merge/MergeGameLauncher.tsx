@@ -6,9 +6,10 @@ import { AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 import { useForceSave } from '../../../hooks/useForceSave';
 import { MergeGameLauncherProps } from './utils/types';
+import Image from 'next/image';
+import Resources from "../../common/Resources";
 
 // Импорт компонентов
-import GameHeader from './components/ui/GameHeader';
 import AbilitiesBar from './components/ui/AbilitiesBar';
 import GameContainer from './components/game/GameContainer';
 import GameOverDialog from './components/ui/GameOverDialog';
@@ -169,13 +170,6 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
   ), [handleScoreUpdate, handleGameOver, shouldRestart, handleRestartComplete]);
   
   // Мемоизируем компоненты UI
-  const gameHeader = useMemo(() => (
-    <GameHeader 
-      inventory={inventory} 
-      onPauseClick={handlePauseClick} 
-    />
-  ), [inventory, handlePauseClick]);
-  
   const abilitiesBar = useMemo(() => (
     <AbilitiesBar 
       inventory={inventory} 
@@ -207,8 +201,34 @@ const MergeGameLauncher: React.FC<MergeGameLauncherProps> = ({
         minHeight: "100vh"
       }}
     >
-      {/* Верхний бар */}
-      {gameHeader}
+      {/* Отдельная кнопка паузы */}
+      <button
+        onClick={handlePauseClick}
+        className="fixed top-2 right-2 w-10 h-10 rounded-full overflow-hidden flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 bg-gray-700/90 backdrop-filter backdrop-blur-sm border border-white/30 z-[100]" 
+      >
+        <Image
+          src="/images/merge/Game/ui/pause.webp"
+          alt="Пауза"
+          width={32}
+          height={32}
+          className="w-full h-full object-cover"
+        />
+      </button>
+      
+      {/* Ресурсы (такие же как на Merge странице) */}
+      <div className="absolute top-0 left-0 right-0 z-20">
+        <Resources 
+          isVisible={true}
+          activeTab="merge"
+          snot={inventory.snot || 0}
+          kingCoins={inventory.snotCoins || 0}
+          containerCapacity={inventory.containerCapacity}
+          containerLevel={inventory.containerCapacityLevel}
+          containerSnot={inventory.containerSnot}
+          containerFillingSpeed={inventory.fillingSpeed}
+          fillingSpeedLevel={inventory.fillingSpeedLevel}
+        />
+      </div>
       
       {/* Игровой контейнер */}
       <div className="flex-grow w-full flex justify-center items-end" data-game="true" style={{ margin: "0", padding: "0" }}>

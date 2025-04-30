@@ -51,8 +51,8 @@ const QUESTS: Quest[] = [
   },
   {
     id: 'collect_10',
-    title: 'Collect 10 KingCoins',
-    description: 'Collect a total of 10 KingCoins.',
+    title: 'Collect 10 RoyaleWay',
+    description: 'Collect a total of 10 RoyaleWay coins.',
     completed: false,
     icon: ICONS.KINGCOIN,
     points: 10,
@@ -92,7 +92,7 @@ const QUESTS: Quest[] = [
   {
     id: 'generous_donor',
     title: 'Generous Donor',
-    description: 'Spend 100 KingCoins on upgrades.',
+    description: 'Spend 100 RoyaleWay coins on upgrades.',
     completed: false,
     icon: ICONS.STORAGE.MAIN,
     points: 60,
@@ -102,7 +102,7 @@ const QUESTS: Quest[] = [
   {
     id: 'snot_millionaire',
     title: 'King Millionaire',
-    description: 'Collect a total of 1000 KingCoins.',
+    description: 'Collect a total of 1000 RoyaleWay coins.',
     completed: false,
     icon: ICONS.KINGCOIN,
     points: 100,
@@ -162,7 +162,7 @@ const QUESTS: Quest[] = [
   {
     id: 'snot_investor',
     title: 'King Investor',
-    description: 'Invest 500 KingCoins in upgrades.',
+    description: 'Invest 500 RoyaleWay coins in upgrades.',
     completed: false,
     icon: ICONS.KINGCOIN,
     points: 70,
@@ -192,7 +192,7 @@ const QUESTS: Quest[] = [
   {
     id: 'community_player',
     title: 'Community Player',
-    description: 'Invite a friend to play Snot Coin.',
+    description: 'Invite a friend to play RoyaleWay.',
     completed: false,
     icon: ICONS.PROFILE.AVATAR.DEFAULT,
     points: 60,
@@ -202,7 +202,7 @@ const QUESTS: Quest[] = [
   {
     id: 'snot_billionaire',
     title: 'Snot Billionaire',
-    description: 'Collect 10000 SnotCoins.',
+    description: 'Collect 10000 RoyaleWay coins.',
     completed: false,
     icon: ICONS.KINGCOIN,
     points: 150,

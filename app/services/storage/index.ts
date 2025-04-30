@@ -7,7 +7,7 @@ import { GameState } from '@/app/types/gameTypes';
 import { ExtendedGameState } from '@/app/types/game';
 
 // Define a prefix for all storage keys to avoid conflicts with other apps
-const STORAGE_PREFIX = 'kingcoin_';
+const STORAGE_PREFIX = 'royaleway_';
 const GAME_STATE_KEY = `${STORAGE_PREFIX}game_state`;
 const GAME_STATE_BACKUP_KEY = `${STORAGE_PREFIX}game_state_backup`;
 const LAST_SYNC_KEY = `${STORAGE_PREFIX}last_sync`;

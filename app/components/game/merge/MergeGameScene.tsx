@@ -735,8 +735,10 @@ class MergeGameScene extends Phaser.Scene implements MergeGameSceneType {
       const shotTimeA = recentlyShot[userDataA.id];
       const shotTimeB = recentlyShot[userDataB.id];
       
-      if ((shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod) ||
-          (shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod)) {
+      const isNewA = shotTimeA !== undefined && currentTime - shotTimeA < gracePeriod;
+      const isNewB = shotTimeB !== undefined && currentTime - shotTimeB < gracePeriod;
+      // пропускаем столкновения только если оба шара только что выстрелены
+      if (isNewA && isNewB) {
         return;
       }
       

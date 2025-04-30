@@ -19,13 +19,13 @@ export default function SaveIndicator({ className = '' }: SaveIndicatorProps) {
   useEffect(() => {
     const checkSyncStatus = () => {
       // Получаем дату последней синхронизации из localStorage
-      const lastSync = localStorage.getItem('kingcoin_last_sync');
+      const lastSync = localStorage.getItem('royaleway_last_sync');
       
       // Если дата синхронизации есть и прошло не больше 2 секунд
       setSyncStatus(lastSync && (Date.now() - parseInt(lastSync)) < 2000 ? 'saved' : 'none');
       
       // Проверяем наличие очереди синхронизации
-      const syncQueue = localStorage.getItem('kingcoin_sync_queue');
+      const syncQueue = localStorage.getItem('royaleway_sync_queue');
       
       // Если есть очередь синхронизации, показываем соответствующий статус
       if (syncQueue && syncQueue !== '[]') {

@@ -10,7 +10,7 @@ import { initWagmiPatches } from './utils/wagmiPatches';
 import AudioController from './components/AudioController';
 
 // Constant for the user ID storage key
-const USER_ID_STORAGE_KEY = 'kingcoin_persistent_user_id';
+const USER_ID_STORAGE_KEY = 'royaleway_persistent_user_id';
 
 // Компонент для предотвращения ошибок гидратации
 const ClientOnly = ({ children }: { children: React.ReactNode }) => {

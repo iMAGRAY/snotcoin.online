@@ -13,14 +13,20 @@ const lyonsFont = localFont({
 })
 
 // Данные для SEO
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://kingcoin.online";
-const title = "KingCoin";
-const description = "Merge, Collect, and Earn in this addictive blockchain game!";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://royaleway.top";
+const title = "RoyaleWay";
+const description = "Play and earn with Web3 game!";
 const imageUrl = `${siteUrl}/images/auth/authentication.webp`;
 
 export const metadata: Metadata = {
-  title: "Kingcoin",
+  title: "RoyaleWay",
   description,
+  authors: [
+    {
+      name: "RoyaleWay",
+      url: siteUrl,
+    },
+  ],
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -33,7 +39,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     title,
     description,
-    siteName: "Kingcoin",
+    siteName: "RoyaleWay",
     images: [{ url: imageUrl }],
   },
   twitter: {
@@ -75,7 +81,7 @@ export default function RootLayout({
               title: "Play Game",
               action: {
                 type: "launch_frame",
-                name: "Kingcoin",
+                name: "RoyaleWay",
                 url: siteUrl,
                 splashImageUrl: `${siteUrl}/game/Splashimage.webp`,
                 splashBackgroundColor: "#0F172A"

@@ -32,7 +32,7 @@ export default function Home() {
     setIsClient(true);
     
     // Устанавливаем заголовок страницы для всех устройств
-    document.title = "KingCoin - Merge Game";
+    document.title = "RoyaleWay - Merge Game";
     
     // Проверяем, открыты ли мы из Farcaster фрейма
     const isFromFrame = typeof window !== 'undefined' && (
@@ -63,14 +63,14 @@ export default function Home() {
       }
     }
     
-    const validTabs = ["merge", "laboratory", "storage", "quests", "profile"];
+    const validTabs = ["merge", "storage", "quests", "profile"];
     const isValidTab = gameState.activeTab && validTabs.includes(gameState.activeTab);
     
     if (!isValidTab) {
-      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "laboratory"`);
+      console.log(`[HomeContent] Некорректное значение activeTab: "${gameState.activeTab}". Устанавливаем "merge"`);
       dispatch(prevState => ({
         ...prevState,
-        activeTab: "laboratory"
+        activeTab: "merge"
       }));
     }
   }, [dispatch, gameState.activeTab]);

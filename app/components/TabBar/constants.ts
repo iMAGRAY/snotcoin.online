@@ -8,11 +8,6 @@ export const tabs: TabInfo[] = [
     icon: ICONS.MERGE.MAIN,
   },
   {
-    id: "laboratory",
-    label: "laboratoryTab",
-    icon: ICONS.LABORATORY.MAIN,
-  },
-  {
     id: "storage",
     label: "storageTab",
     icon: ICONS.STORAGE.MAIN,
@@ -24,8 +19,8 @@ export const tabs: TabInfo[] = [
   },
   {
     id: "profile",
-    label: "profile",
+    label: "profileTab",
     icon: ICONS.PROFILE.MAIN,
-  },
+  }
 ]
 
